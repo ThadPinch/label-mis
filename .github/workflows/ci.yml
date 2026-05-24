@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: labels_mis_test
+          POSTGRES_USER: labels_mis
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (warnings as errors)
+        run: dotnet build --no-restore --configuration Release /warnaserror
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
+        env:
+          ConnectionStrings__Default: "Host=localhost;Port=5432;Database=labels_mis_test;Username=labels_mis;Password=test_password"
+
+      - name: Install EF tools
+        run: dotnet tool install --global dotnet-ef
+
+      - name: Generate idempotent migration script (catches broken migrations)
+        run: |
+          dotnet ef migrations script \
+            --idempotent \
+            --project src/LabelsMis.Infrastructure \
+            --startup-project src/LabelsMis.Web \
+            --output migrations.sql
+          test -s migrations.sql || (echo "Migration script is empty" && exit 1)
+
+      - name: Upload migration script artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migrations-script
+          path: migrations.sql
