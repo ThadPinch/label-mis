@@ -10,13 +10,23 @@ Pre-alpha. Building out Tier 1 (MVP). See `docs/tier1-buildout.md` for the roadm
 
 ## Stack
 
-.NET 10 · ASP.NET Core (Razor Pages) · EF Core 9 · PostgreSQL 16 · Docker
+.NET 10 · ASP.NET Core (Razor Pages) · EF Core 10 · PostgreSQL 16 · Docker
+
+## Prerequisites
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) (see `global.json` for pinned version)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (for local PostgreSQL)
 
 ## Local development
 
 ```bash
+# Clone and restore
+git clone <repo-url>
+cd Label-MIS
+dotnet restore
+
 # Start Postgres
-docker-compose up -d
+docker compose up -d
 
 # Apply migrations
 dotnet ef database update --project src/LabelsMis.Infrastructure --startup-project src/LabelsMis.Web
@@ -25,7 +35,9 @@ dotnet ef database update --project src/LabelsMis.Infrastructure --startup-proje
 dotnet run --project src/LabelsMis.Web
 ```
 
-App runs at `https://localhost:5001`. Default seeded admin: `admin@labels-mis.local` / `ChangeMe!2026` (change on first login).
+App runs at `https://localhost:5001` (or the URL shown in the console). Default seeded admin: `admin@labels-mis.local` / `ChangeMe!2026` — you will be prompted to change the password on first login.
+
+On startup the app also applies pending migrations and seeds roles plus the default admin user when the database is empty.
 
 ## Tests
 
@@ -34,6 +46,20 @@ dotnet test
 ```
 
 CI runs the same on every PR (`.github/workflows/ci.yml`).
+
+## Solution layout
+
+```
+src/
+├── LabelsMis.Domain/          # entities, value objects, business rules
+├── LabelsMis.Infrastructure/  # EF DbContext, migrations, external clients
+└── LabelsMis.Web/             # Razor Pages UI
+
+tests/
+├── LabelsMis.Domain.Tests/
+├── LabelsMis.Infrastructure.Tests/
+└── LabelsMis.Web.Tests/
+```
 
 ## Documentation
 

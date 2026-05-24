@@ -1,0 +1,21 @@
+﻿@page
+@model LabelsMis.Web.Pages.IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Labels MIS</h1>
+    <p class="lead">Welcome, @Model.DisplayName.</p>
+    @if (Model.Roles.Count > 0)
+    {
+        <p>
+            <strong>Roles:</strong>
+            @string.Join(", ", Model.Roles)
+        </p>
+    }
+    else
+    {
+        <p><strong>Roles:</strong> none assigned</p>
+    }
+</div>
