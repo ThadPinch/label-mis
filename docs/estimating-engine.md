@@ -195,25 +195,29 @@ if white_ink_used:
 **Substrate cost**:
 ```
 total_web_length_in = impressions × repeat_length
-total_web_length_ft = total_web_length_in / 12
-total_msi = (impressions × repeat_length × stock_width_in) / 1000
-substrate_cost = total_msi × stock_cost_per_msi
+total_web_length_ft = round(total_web_length_in / 12, 1 decimal)
+total_msi = round_up((total_web_length_in × stock_width_in) / 1000, 1 decimal)
+substrate_cost = round(total_msi × stock_cost_per_msi, cents)
 ```
+
+MSI is rounded **up** to one decimal place so material consumption errs on the side of ordering enough stock.
 
 **Press time and labor**:
 ```
-press_run_minutes = total_web_length_ft / press_speed_fpm × 60
+press_run_minutes = round(total_web_length_ft / press_speed_fpm, 2 decimals)
 press_total_minutes = press_setup_minutes + press_run_minutes
-press_labor_cost = (press_total_minutes / 60) × press_cost_per_hour
+press_labor_cost = round((press_total_minutes / 60) × press_cost_per_hour, cents)
 ```
+
+Do not multiply by 60 — `fpm` already means feet per minute.
 
 ### Step 4: Finishing cost
 
 For each finishing operation in order:
 ```
-op_run_minutes = total_web_length_ft / op_run_speed_fpm × 60
-op_total_minutes = op_setup_minutes + op_run_minutes
-op_cost = (op_total_minutes / 60) × op_cost_per_hour
+op_run_minutes = round(total_web_length_ft / op_run_speed_fpm, 2 decimals)
+op_total_minutes = round(op_setup_minutes + op_run_minutes, 2 decimals)
+op_cost = round((op_total_minutes / 60) × op_cost_per_hour, cents)
 ```
 
 Sum across all operations → `total_finishing_cost`.
@@ -231,16 +235,29 @@ total_cost =
 ### Step 6: Pricing
 
 ```
-total_price = total_cost × (1 + customer_markup_pct)
-unit_price = total_price / quantity
-price_per_thousand = unit_price × 1000
+total_price = round(total_cost × (1 + customer_markup_pct), cents)
+unit_price = round(total_price / quantity, 4 decimals)
+price_per_thousand = round((total_price / quantity) × 1000, cents)
 margin_pct = (total_price - total_cost) / total_price
 below_minimum_margin = margin_pct < minimum_margin_pct
 ```
 
+Per-label unit prices can be below one cent, so `unit_price` keeps four decimal places. `price_per_thousand` is derived from the rounded total price, not from `unit_price × 1000`, to avoid drift.
+
 ### Step 7: Build the breakdown
 
-Every cost component above becomes one `EstimateLineItem` in `CostBreakdown` for transparency.
+Every cost component above becomes one `EstimateLineItem` in `CostBreakdown` for transparency. Press labor is split into separate setup and run line items.
+
+## Rounding rules
+
+| Value | Precision | Rule |
+|-------|-----------|------|
+| Money (costs, prices) | 2 decimals (cents) | `AwayFromZero` |
+| Unit price per label | 4 decimals | `AwayFromZero` |
+| MSI | 1 decimal | Round **up** (conservative material) |
+| Web length (ft) | 1 decimal | Standard round |
+| Run minutes | 2 decimals | Standard round, before labor cost |
+| Dimensions / ratios | 4 decimals | `AwayFromZero` |
 
 ## Worked example
 

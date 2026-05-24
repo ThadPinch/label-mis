@@ -17,7 +17,7 @@ A Management Information System for a narrow-web label printing shop. Single HP 
 - **.NET 10** (preview SDK pinned in `global.json`)
 - **C# 13**
 - **ASP.NET Core** with **Razor Pages** for UI
-- **Entity Framework Core 9** code-first
+- **Entity Framework Core 10** code-first
 - **PostgreSQL 16** as the database (via Npgsql)
 - **ASP.NET Identity** for auth
 - **QuestPDF** for PDF generation (quotes, invoices, job tickets)
