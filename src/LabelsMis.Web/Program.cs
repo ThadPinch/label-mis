@@ -23,7 +23,7 @@ if (!IsEfDesignTime())
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<LabelsMisDbContext>();
-    await db.Database.MigrateAsync();
+    // await db.Database.MigrateAsync();
     await IdentitySeeder.SeedAsync(app.Services);
     await MasterDataSeeder.SeedAsync(app.Services);
 }
