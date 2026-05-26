@@ -61,15 +61,20 @@ public class StockService(LabelsMisDbContext db, ICurrentUserService currentUser
     {
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
-        var stock = await db.Stocks.FirstOrDefaultAsync(s => s.Id == id, ct)
+        var stock = await db.Stocks
+            .Include(s => s.CostHistory)        // ← add this
+            .FirstOrDefaultAsync(s => s.Id == id, ct)
             ?? throw new InvalidOperationException("Stock not found.");
+
         if (stock.CostPerMsi != form.CostPerMsi)
         {
             stock.RecordCostChange(Guid.NewGuid(), form.CostPerMsi, now.Date, userId, now);
         }
+
         stock.Update(form.Code, form.Description, form.FaceMaterial, form.Adhesive, form.Liner,
             form.TotalCaliperMil, form.WidthIn, form.SupplierId, form.SupplierPartNumber,
             form.CostPerMsi, form.MinOrderQtyLf, userId, now);
+
         await db.SaveChangesAsync(ct);
     }
 
