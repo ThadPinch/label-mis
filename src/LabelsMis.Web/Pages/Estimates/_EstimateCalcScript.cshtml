@@ -1,0 +1,359 @@
+<script>
+(() => {
+    const form = document.getElementById('estimate-form');
+    if (!form) return;
+
+    const customerSelect = document.getElementById('customer-select');
+    const productFilterSelect = document.getElementById('product-filter-customer');
+    const linesContainer = document.getElementById('estimate-lines');
+    const addLineBtn = document.getElementById('add-line');
+    const lineTemplateEl = document.getElementById('estimate-line-template');
+
+    let debounceTimer = null;
+    let productsCacheKey = null;
+    let productsList = [];
+    const lineMarkupCache = new Map();
+
+    const markupToMargin = (markup) => markup / (1 + markup);
+    const marginToMarkup = (margin) => margin / (1 - margin);
+    const MARGIN_STEP = 0.01;
+    const MIN_MARGIN = 0;
+    const MAX_MARGIN = 0.85;
+
+    const getLineMarkup = (lineEl) => {
+        const input = lineEl.querySelector('.markup-override-input');
+        const raw = input?.value?.trim();
+        if (raw !== '' && raw !== undefined) {
+            const parsed = parseFloat(raw);
+            if (!Number.isNaN(parsed)) return parsed;
+        }
+        const idx = lineEl.dataset.lineIndex;
+        if (lineMarkupCache.has(idx)) return lineMarkupCache.get(idx);
+        return 0;
+    };
+
+    const setLineMarkup = (lineEl, markup) => {
+        const clampedMargin = Math.min(Math.max(markupToMargin(markup), MIN_MARGIN), MAX_MARGIN);
+        const clampedMarkup = marginToMarkup(clampedMargin);
+        const input = lineEl.querySelector('.markup-override-input');
+        if (input) input.value = clampedMarkup.toFixed(4);
+        updateMarginDisplay(lineEl, clampedMarkup);
+        return clampedMarkup;
+    };
+
+    const updateMarginDisplay = (lineEl, markup) => {
+        const display = lineEl.querySelector('.margin-display');
+        if (!display) return;
+        if (!markup && markup !== 0) {
+            display.textContent = '—';
+            return;
+        }
+        display.textContent = `${(markupToMargin(markup) * 100).toFixed(1)}%`;
+    };
+
+    const adjustLineMargin = (lineEl, delta) => {
+        const currentMarkup = getLineMarkup(lineEl);
+        const currentMargin = markupToMargin(currentMarkup);
+        const newMargin = Math.min(Math.max(currentMargin + delta, MIN_MARGIN), MAX_MARGIN);
+        setLineMarkup(lineEl, marginToMarkup(newMargin));
+        calculate();
+    };
+
+    const reindexLines = () => {
+        const lines = linesContainer.querySelectorAll('.estimate-line');
+        const newCache = new Map();
+        lines.forEach((line, idx) => {
+            const oldIdx = line.dataset.lineIndex;
+            if (lineMarkupCache.has(oldIdx)) {
+                newCache.set(String(idx), lineMarkupCache.get(oldIdx));
+            }
+            line.dataset.lineIndex = idx;
+            line.querySelector('.card-header strong').textContent = `Line ${idx + 1}`;
+            line.querySelectorAll('[name^="Input.Lines["]').forEach(el => {
+                el.name = el.name.replace(/Input\.Lines\[\d+\]/, `Input.Lines[${idx}]`);
+            });
+        });
+        lineMarkupCache.clear();
+        newCache.forEach((v, k) => lineMarkupCache.set(k, v));
+    };
+
+    const getProductFilterKey = () => {
+        if (!productFilterSelect) return 'all';
+        const value = productFilterSelect.value;
+        return value || 'all';
+    };
+
+    const buildProductsUrl = () => {
+        const key = getProductFilterKey();
+        return key === 'all'
+            ? '/estimates/products'
+            : `/estimates/products?customerId=${encodeURIComponent(key)}`;
+    };
+
+    const loadProducts = async () => {
+        const cacheKey = getProductFilterKey();
+        if (productsCacheKey === cacheKey) {
+            populateProductSelects();
+            return;
+        }
+
+        const response = await fetch(buildProductsUrl());
+        if (!response.ok) return;
+
+        productsList = await response.json();
+        productsCacheKey = cacheKey;
+        populateProductSelects();
+    };
+
+    const populateProductSelects = () => {
+        linesContainer.querySelectorAll('.source-product').forEach(sel => {
+            const currentVal = sel.value;
+            sel.innerHTML = '<option value="">(none — describe below)</option>';
+            productsList.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = `${p.internalSku} — ${p.description}`;
+                if (p.id === currentVal) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        });
+    };
+
+    const syncProductFilterToEstimateCustomer = () => {
+        if (!productFilterSelect || !customerSelect?.value) return;
+        const matchingOption = [...productFilterSelect.options].some(o => o.value === customerSelect.value);
+        if (matchingOption) {
+            productFilterSelect.value = customerSelect.value;
+            productsCacheKey = null;
+        }
+    };
+
+    const applyProductToLine = (lineEl, product) => {
+        const set = (selector, value) => {
+            const el = lineEl.querySelector(selector);
+            if (el) {
+                if (el.type === 'checkbox') el.checked = !!value;
+                else el.value = value ?? '';
+            }
+        };
+        set('[name$=".ProductDescription"]', product.description);
+        set('[name$=".LabelAcrossIn"]', product.labelAcrossIn);
+        set('[name$=".LabelAroundIn"]', product.labelAroundIn);
+        set('[name$=".CornerRadiusIn"]', product.cornerRadiusIn);
+        const substrateSel = lineEl.querySelector('.substrate-select');
+        if (substrateSel) substrateSel.value = product.substrateId;
+        const inkSetSel = lineEl.querySelector('[name$=".InkSet"]');
+        if (inkSetSel) inkSetSel.value = product.inkSet;
+
+        try {
+            const finishing = JSON.parse(product.finishingOperationsJson || '[]');
+            const selectedIds = new Set(finishing.map(f => f.OperationId || f.operationId));
+            lineEl.querySelectorAll('.finishing-toggle').forEach(cb => {
+                const checked = selectedIds.has(cb.dataset.opId);
+                cb.checked = checked;
+                const fields = cb.closest('.border').querySelector('.finishing-fields');
+                fields.classList.toggle('d-none', !checked);
+                fields.querySelectorAll('input').forEach(i => i.disabled = !checked);
+            });
+        } catch { /* ignore */ }
+    };
+
+    const collectLinePayload = (lineEl) => {
+        const get = (selector) => lineEl.querySelector(selector);
+        const val = (selector) => get(selector)?.value;
+        const num = (selector) => {
+            const v = val(selector);
+            return v === '' || v === undefined ? 0 : parseFloat(v);
+        };
+        const int = (selector) => {
+            const v = val(selector);
+            return v === '' || v === undefined ? 0 : parseInt(v, 10);
+        };
+        const finishing = [];
+        let sort = 0;
+        lineEl.querySelectorAll('.finishing-toggle:checked').forEach(cb => {
+            const container = cb.closest('.border');
+            finishing.push({
+                operationId: cb.dataset.opId,
+                setupMinutesOverride: container.querySelector('[name*="SetupMinutesOverride"]')?.value || null,
+                runSpeedFpmOverride: container.querySelector('[name*="RunSpeedFpmOverride"]')?.value || null,
+                sortOrder: sort++
+            });
+        });
+        const quantities = [...lineEl.querySelectorAll('.quantity-input')]
+            .map(i => parseInt(i.value, 10))
+            .filter(q => !Number.isNaN(q) && q > 0);
+
+        const whiteInk = lineEl.querySelector('[name$=".WhiteInkUsed"]');
+        return {
+            id: val('[name$=".Id"]') || null,
+            sourceProductId: val('[name$=".SourceProductId"]') || null,
+            productDescription: val('[name$=".ProductDescription"]') || '',
+            labelAcrossIn: num('[name$=".LabelAcrossIn"]'),
+            labelAroundIn: num('[name$=".LabelAroundIn"]'),
+            cornerRadiusIn: num('[name$=".CornerRadiusIn"]'),
+            gutterAcrossIn: num('[name$=".GutterAcrossIn"]'),
+            gutterAroundIn: num('[name$=".GutterAroundIn"]'),
+            bleedIn: num('[name$=".BleedIn"]'),
+            substrateId: val('.substrate-select'),
+            inkSet: int('[name$=".InkSet"]'),
+            whiteInkUsed: whiteInk?.checked === true,
+            setupWasteImpressions: num('[name$=".SetupWasteImpressions"]'),
+            runningWastePct: num('[name$=".RunningWastePct"]'),
+            lineNotes: val('[name$=".LineNotes"]') || null,
+            markupPctOverride: (() => {
+                const raw = val('.markup-override-input');
+                if (raw === '' || raw === undefined || raw === null) return null;
+                const parsed = parseFloat(raw);
+                return Number.isNaN(parsed) ? null : parsed;
+            })(),
+            finishingOperations: finishing,
+            quantities
+        };
+    };
+
+    const collectPayload = () => {
+        const customerId = customerSelect?.value;
+        const lines = [...linesContainer.querySelectorAll('.estimate-line')].map(collectLinePayload);
+        return {
+            customerId,
+            salesRepId: form.querySelector('[name="Input.SalesRepId"]')?.value || null,
+            notes: form.querySelector('[name="Input.Notes"]')?.value || null,
+            validUntilDate: form.querySelector('[name="Input.ValidUntilDate"]')?.value || null,
+            lines
+        };
+    };
+
+    const renderLineResults = (lineEl, lineResult) => {
+        const warnings = lineEl.querySelector('.calc-warnings');
+        const errors = lineEl.querySelector('.calc-errors');
+        const tbody = lineEl.querySelector('.calc-results tbody');
+        warnings.classList.toggle('d-none', !lineResult.warnings?.length);
+        errors.classList.toggle('d-none', !lineResult.errors?.length);
+        warnings.textContent = (lineResult.warnings || []).join('; ');
+        errors.textContent = (lineResult.errors || []).join('; ');
+        tbody.innerHTML = '';
+        (lineResult.quantityBreaks || []).forEach(row => {
+            const tr = document.createElement('tr');
+            if (row.belowMinimumMargin) tr.classList.add('table-warning');
+            tr.innerHTML = `<td>${row.quantity.toLocaleString()}</td>
+                <td>${Number(row.unitPrice).toFixed(4)}</td>
+                <td>${Number(row.totalPrice).toFixed(2)}</td>
+                <td>${(Number(row.marginPct) * 100).toFixed(1)}%${row.belowMinimumMargin ? ' ⚠' : ''}</td>`;
+            tbody.appendChild(tr);
+        });
+        if (lineResult.markupPctUsed !== undefined && lineResult.markupPctUsed !== null) {
+            lineEl.dataset.lineIndex = lineEl.dataset.lineIndex ?? '0';
+            lineMarkupCache.set(lineEl.dataset.lineIndex, Number(lineResult.markupPctUsed));
+            const hasOverride = lineEl.querySelector('.markup-override-input')?.value?.trim();
+            if (!hasOverride) {
+                updateMarginDisplay(lineEl, Number(lineResult.markupPctUsed));
+            } else {
+                updateMarginDisplay(lineEl, getLineMarkup(lineEl));
+            }
+        }
+    };
+
+    const calculate = async () => {
+        const payload = collectPayload();
+        if (!payload.customerId) return;
+        const response = await fetch('/estimates/calculate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        const lineEls = linesContainer.querySelectorAll('.estimate-line');
+        (data.lines || []).forEach(lr => {
+            const lineEl = lineEls[lr.lineIndex];
+            if (lineEl) renderLineResults(lineEl, { ...lr, markupPctUsed: lr.markupPctUsed });
+        });
+    };
+
+    const scheduleCalculate = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(calculate, 350);
+    };
+
+    const wireUp = (root) => {
+        root.querySelectorAll('.calc-trigger').forEach(el => {
+            el.addEventListener('input', scheduleCalculate);
+            el.addEventListener('blur', calculate);
+        });
+        root.querySelectorAll('.calc-immediate').forEach(el => {
+            el.addEventListener('change', calculate);
+        });
+        root.querySelectorAll('.finishing-toggle').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const fields = cb.closest('.border').querySelector('.finishing-fields');
+                fields.classList.toggle('d-none', !cb.checked);
+                fields.querySelectorAll('input').forEach(i => i.disabled = !cb.checked);
+                calculate();
+            });
+        });
+        root.querySelectorAll('.source-product').forEach(sel => {
+            sel.addEventListener('change', () => {
+                if (!sel.value) return;
+                const product = productsList.find(p => p.id === sel.value);
+                if (product) {
+                    const lineEl = sel.closest('.estimate-line');
+                    applyProductToLine(lineEl, product);
+                    calculate();
+                }
+            });
+        });
+        root.querySelectorAll('.remove-line').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const lineEl = btn.closest('.estimate-line');
+                if (linesContainer.querySelectorAll('.estimate-line').length <= 1) return;
+                lineMarkupCache.delete(lineEl.dataset.lineIndex);
+                lineEl.remove();
+                reindexLines();
+                calculate();
+            });
+        });
+        root.querySelectorAll('.margin-decrease').forEach(btn => {
+            btn.addEventListener('click', () => adjustLineMargin(btn.closest('.estimate-line'), -MARGIN_STEP));
+        });
+        root.querySelectorAll('.margin-increase').forEach(btn => {
+            btn.addEventListener('click', () => adjustLineMargin(btn.closest('.estimate-line'), MARGIN_STEP));
+        });
+        root.querySelectorAll('.estimate-line').forEach(lineEl => {
+            const override = lineEl.querySelector('.markup-override-input')?.value?.trim();
+            if (override) updateMarginDisplay(lineEl, parseFloat(override));
+        });
+    };
+
+    if (addLineBtn && lineTemplateEl) {
+        addLineBtn.addEventListener('click', () => {
+            const idx = linesContainer.querySelectorAll('.estimate-line').length;
+            const html = lineTemplateEl.innerHTML.replace(/__INDEX__/g, idx);
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = html.trim();
+            const newLine = wrapper.firstElementChild;
+            linesContainer.appendChild(newLine);
+            wireUp(newLine);
+            populateProductSelects();
+            calculate();
+        });
+    }
+
+    customerSelect?.addEventListener('change', () => {
+        syncProductFilterToEstimateCustomer();
+        loadProducts().then(calculate);
+    });
+
+    productFilterSelect?.addEventListener('change', () => {
+        productsCacheKey = null;
+        loadProducts().then(calculate);
+    });
+
+    wireUp(form);
+    syncProductFilterToEstimateCustomer();
+    loadProducts().then(calculate);
+})();
+</script>

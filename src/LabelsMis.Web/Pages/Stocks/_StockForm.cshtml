@@ -1,0 +1,58 @@
+@model LabelsMis.Web.Pages.Stocks.StockFormInput
+
+<div class="row g-3">
+    <div class="col-md-3">
+        <label asp-for="Code" class="form-label"></label>
+        <input asp-for="Code" class="form-control" />
+        <span asp-validation-for="Code" class="text-danger"></span>
+    </div>
+    <div class="col-md-9">
+        <label asp-for="Description" class="form-label"></label>
+        <input asp-for="Description" class="form-control" />
+        <span asp-validation-for="Description" class="text-danger"></span>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="FaceMaterial" class="form-label"></label>
+        <input asp-for="FaceMaterial" class="form-control" />
+        <span asp-validation-for="FaceMaterial" class="text-danger"></span>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="Adhesive" class="form-label"></label>
+        <input asp-for="Adhesive" class="form-control" />
+        <span asp-validation-for="Adhesive" class="text-danger"></span>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="Liner" class="form-label"></label>
+        <input asp-for="Liner" class="form-control" />
+        <span asp-validation-for="Liner" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="TotalCaliperMil" class="form-label"></label>
+        <input asp-for="TotalCaliperMil" class="form-control" />
+        <span asp-validation-for="TotalCaliperMil" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="WidthIn" class="form-label"></label>
+        <input asp-for="WidthIn" class="form-control" />
+        <span asp-validation-for="WidthIn" class="text-danger"></span>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="SupplierId" class="form-label"></label>
+        <select asp-for="SupplierId" asp-items="@(ViewData["SupplierOptions"] as IEnumerable<SelectListItem>)" class="form-select"></select>
+        <span asp-validation-for="SupplierId" class="text-danger"></span>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="SupplierPartNumber" class="form-label"></label>
+        <input asp-for="SupplierPartNumber" class="form-control" />
+    </div>
+    <div class="col-md-4">
+        <label asp-for="CostPerMsi" class="form-label"></label>
+        <input asp-for="CostPerMsi" class="form-control" />
+        <span asp-validation-for="CostPerMsi" class="text-danger"></span>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="MinOrderQtyLf" class="form-label"></label>
+        <input asp-for="MinOrderQtyLf" class="form-control" />
+        <span asp-validation-for="MinOrderQtyLf" class="text-danger"></span>
+    </div>
+</div>

@@ -1,0 +1,33 @@
+@page "/purchase-orders/create"
+@model LabelsMis.Web.Pages.PurchaseOrders.CreateModel
+@{ ViewData["Title"] = "New purchase order"; ViewData["BackNav"] = new BackNavModel(); }
+
+<h1 class="h3 mb-3">New purchase order</h1>
+<form method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="mb-3">
+        <label asp-for="Input.SupplierId" class="form-label">Supplier</label>
+        <select asp-for="Input.SupplierId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Suppliers"]!)"></select>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Input.ExpectedAt" class="form-label">Expected date</label>
+        <input asp-for="Input.ExpectedAt" class="form-control" type="date" />
+    </div>
+    <div class="mb-3">
+        <label asp-for="Input.Notes" class="form-label">Notes</label>
+        <textarea asp-for="Input.Notes" class="form-control" rows="2"></textarea>
+    </div>
+    <h2 class="h6">Lines</h2>
+    <div class="row g-2 mb-2">
+        <div class="col-md-5"><select asp-for="Input.Lines[0].StockId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Stocks"]!)"></select></div>
+        <div class="col-md-3">
+            <label asp-for="Input.Lines[0].QuantityLf" class="form-label">Quantity (LF)</label>
+            <input asp-for="Input.Lines[0].QuantityLf" class="form-control" />
+        </div>
+        <div class="col-md-3">
+            <label asp-for="Input.Lines[0].UnitCost" class="form-label">Unit cost</label>
+            <input asp-for="Input.Lines[0].UnitCost" class="form-control" />
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Create draft</button>
+</form>

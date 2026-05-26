@@ -1,0 +1,87 @@
+@using LabelsMis.Domain.Enums
+@model LabelsMis.Web.Pages.Jobs.DetailModel
+@if (Model.OperatorView?.CurrentOperation is null)
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2 class="h6">Shop floor</h2>
+            <p class="mb-0 text-muted">All operations are complete for this job.</p>
+        </div>
+    </div>
+}
+else
+{
+    var op = Model.OperatorView.CurrentOperation;
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Current step: @op.Sequence — @op.OperationType</strong>
+            <span class="badge @(Model.OperatorView.IsClockedOn ? "bg-success" : "bg-secondary")">
+                @(Model.OperatorView.IsClockedOn ? "Clocked on" : op.Status.ToString())
+            </span>
+        </div>
+        <div class="card-body">
+            @if (!string.IsNullOrWhiteSpace(Model.OperatorView.ScannedRollBarcode))
+            {
+                <p class="mb-3">Roll: <strong>@Model.OperatorView.ScannedRollBarcode</strong></p>
+            }
+
+            @if (op.OperationType == JobOperationType.Press && op.ScannedRollId is null)
+            {
+                <form method="post" asp-page-handler="ScanRoll" class="row g-2 align-items-end">
+                    <div class="col-md-6">
+                        <label class="form-label" for="RollBarcode">Scan roll barcode</label>
+                        <input asp-for="RollBarcode" class="form-control" autocomplete="off" />
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" class="btn btn-outline-primary">Link roll</button>
+                    </div>
+                </form>
+            }
+            else if (!Model.OperatorView.IsClockedOn)
+            {
+                <form method="post" asp-page-handler="ClockOn" class="mb-2">
+                    <button type="submit" class="btn btn-primary">Clock on</button>
+                </form>
+                @if (op.Status != JobOperationStatus.Complete)
+                {
+                    <form method="post" asp-page-handler="CompleteOperation">
+                        <button type="submit" class="btn btn-outline-secondary">Complete operation</button>
+                    </form>
+                }
+            }
+            else
+            {
+                <form method="post" asp-page-handler="ClockOff">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label asp-for="GoodCount" class="form-label">Good count</label>
+                            <input asp-for="GoodCount" class="form-control" type="number" min="0" />
+                        </div>
+                        <div class="col-md-3">
+                            <label asp-for="WasteCount" class="form-label">Waste count</label>
+                            <input asp-for="WasteCount" class="form-control" type="number" min="0" />
+                        </div>
+                        <div class="col-md-3">
+                            <label asp-for="DowntimeMinutes" class="form-label">Downtime (min)</label>
+                            <input asp-for="DowntimeMinutes" class="form-control" type="number" min="0" step="0.5" />
+                        </div>
+                        <div class="col-md-3">
+                            <label asp-for="DowntimeReason" class="form-label">Downtime reason</label>
+                            <select asp-for="DowntimeReason" class="form-select" asp-items="Html.GetEnumSelectList<DowntimeReasonCode>()">
+                                <option value="">—</option>
+                            </select>
+                        </div>
+                        @if (op.ScannedRollId is not null)
+                        {
+                            <div class="col-md-3">
+                                <label asp-for="ConsumedLf" class="form-label">LF consumed</label>
+                                <input asp-for="ConsumedLf" class="form-control" type="number" min="0" step="0.01" />
+                            </div>
+                        }
+                    </div>
+                    <button type="submit" class="btn btn-danger">Clock off</button>
+                </form>
+            }
+        </div>
+    </div>
+}

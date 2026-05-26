@@ -1,64 +1,150 @@
-﻿<!DOCTYPE html>
+﻿@using LabelsMis.Infrastructure.Identity
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - Labels MIS</title>
-    <script type="importmap"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/LabelsMis.Web.styles.css" asp-append-version="true" />
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container">
-                <a class="navbar-brand" asp-area="" asp-page="/Index">Labels MIS</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
+    <header class="app-header">
+        <nav class="navbar navbar-expand-lg app-navbar">
+            <div class="container-fluid px-3 px-lg-4">
+                <a class="navbar-brand" asp-area="" asp-page="/Index">
+                    <span class="brand-mark" aria-hidden="true">LM</span>
+                    <span>Labels <span class="brand-text-accent">MIS</span></span>
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#appNav"
+                        aria-controls="appNav" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        @if (User.Identity?.IsAuthenticated == true)
-                        {
+                <div class="collapse navbar-collapse" id="appNav">
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        <ul class="navbar-nav me-auto gap-lg-1">
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-page="/Index">Dashboard</a>
+                                <a class="nav-link" asp-area="" asp-page="/Index">Dashboard</a>
                             </li>
-                        }
-                    </ul>
-                    <ul class="navbar-nav">
-                        @if (User.Identity?.IsAuthenticated == true)
-                        {
-                            <li class="nav-item d-flex align-items-center me-2">
-                                <span class="navbar-text">@User.Identity.Name</span>
+
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Sales
+                                </a>
+                                <ul class="dropdown-menu app-dropdown-menu">
+                                    <li><h6 class="dropdown-header">Front office</h6></li>
+                                    <li><a class="dropdown-item" asp-page="/Estimates/Index">Estimates</a></li>
+                                    <li><a class="dropdown-item" asp-page="/Products/Index">Products</a></li>
+                                    <li><a class="dropdown-item" asp-page="/SalesOrders/Index">Sales orders</a></li>
+                                </ul>
                             </li>
+
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Production
+                                </a>
+                                <ul class="dropdown-menu app-dropdown-menu">
+                                    <li><h6 class="dropdown-header">Shop floor</h6></li>
+                                    <li><a class="dropdown-item" asp-page="/Jobs/Index">Jobs</a></li>
+                                </ul>
+                            </li>
+
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Inventory
+                                </a>
+                                <ul class="dropdown-menu app-dropdown-menu">
+                                    <li><h6 class="dropdown-header">Materials</h6></li>
+                                    <li><a class="dropdown-item" asp-page="/PurchaseOrders/Index">Purchase orders</a></li>
+                                    <li><a class="dropdown-item" asp-page="/Rolls/Index">Rolls</a></li>
+                                </ul>
+                            </li>
+
                             <li class="nav-item">
-                                <form method="post" asp-page="/Account/Logout" class="d-inline">
-                                    <button type="submit" class="btn btn-link nav-link text-dark">Log out</button>
-                                </form>
+                                <a class="nav-link" asp-page="/Shipments/Index">Shipping</a>
                             </li>
-                        }
-                        else
-                        {
+
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Finance
+                                </a>
+                                <ul class="dropdown-menu app-dropdown-menu">
+                                    <li><h6 class="dropdown-header">Accounts receivable</h6></li>
+                                    <li><a class="dropdown-item" asp-page="/Invoices/Index">Invoices</a></li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li><a class="dropdown-item" asp-page="/Reports/ArAging">AR aging report</a></li>
+                                </ul>
+                            </li>
+
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Setup
+                                </a>
+                                <ul class="dropdown-menu app-dropdown-menu">
+                                    <li><h6 class="dropdown-header">Customers &amp; vendors</h6></li>
+                                    <li><a class="dropdown-item" asp-page="/Customers/Index">Customers</a></li>
+                                    <li><a class="dropdown-item" asp-page="/Suppliers/Index">Suppliers</a></li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li><h6 class="dropdown-header">Materials &amp; tooling</h6></li>
+                                    <li><a class="dropdown-item" asp-page="/Stocks/Index">Stocks</a></li>
+                                    <li><a class="dropdown-item" asp-page="/Dies/Index">Dies</a></li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li><h6 class="dropdown-header">Press &amp; finishing</h6></li>
+                                    <li><a class="dropdown-item" asp-page="/Inks/Index">Inks</a></li>
+                                    <li><a class="dropdown-item" asp-page="/FinishingOperations/Index">Finishing operations</a></li>
+                                    <li><a class="dropdown-item" asp-page="/Presses/Index">Presses</a></li>
+                                    @if (User.IsInRole(AppRoles.Admin))
+                                    {
+                                        <li><hr class="dropdown-divider" /></li>
+                                        <li><h6 class="dropdown-header">Administration</h6></li>
+                                        <li><a class="dropdown-item" asp-page="/Settings/Storage">Settings</a></li>
+                                        <li><a class="dropdown-item" asp-page="/Users/Index">Users</a></li>
+                                    }
+                                </ul>
+                            </li>
+                        </ul>
+
+                        <div class="navbar-user ms-lg-3">
+                            <div class="d-none d-md-block text-end">
+                                <div class="user-label">Signed in</div>
+                                <div class="user-email" title="@User.Identity.Name">@User.Identity.Name</div>
+                            </div>
+                            <form method="post" asp-page="/Account/Logout" class="d-inline m-0">
+                                <button type="submit" class="btn btn-logout">Log out</button>
+                            </form>
+                        </div>
+                    }
+                    else
+                    {
+                        <ul class="navbar-nav ms-auto">
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-page="/Account/Login">Log in</a>
+                                <a class="nav-link btn-login" asp-area="" asp-page="/Account/Login">Log in</a>
                             </li>
-                        }
-                    </ul>
+                        </ul>
+                    }
                 </div>
             </div>
         </nav>
     </header>
-    <div class="container">
-        <main role="main" class="pb-3">
+
+    <div class="container app-main">
+        @if (ViewData["BackNav"] is LabelsMis.Web.Pages.Shared.BackNavModel backNav)
+        {
+            <partial name="Shared/_BackNav" model="backNav" />
+        }
+        <main role="main">
             @RenderBody()
         </main>
     </div>
 
-    <footer class="border-top footer text-muted">
+    <footer class="app-footer">
         <div class="container">
-            &copy; 2026 - Labels MIS
+            &copy; 2026 <span class="footer-accent">Labels MIS</span>
         </div>
     </footer>
 

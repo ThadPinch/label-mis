@@ -1,0 +1,27 @@
+@page "/invoices/export"
+@model LabelsMis.Web.Pages.Invoices.ExportModel
+@{ ViewData["Title"] = "Export invoices"; 
+    ViewData["BackNav"] = new BackNavModel();
+}
+
+<h1 class="h3 mb-3">QuickBooks CSV export</h1>
+<form method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <label asp-for="From" class="form-label">From</label>
+            <input asp-for="From" class="form-control" type="date" />
+        </div>
+        <div class="col-md-3">
+            <label asp-for="To" class="form-label">To</label>
+            <input asp-for="To" class="form-control" type="date" />
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <div class="form-check">
+                <input asp-for="ForceReexport" class="form-check-input" />
+                <label asp-for="ForceReexport" class="form-check-label">Include already exported invoices</label>
+            </div>
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Download CSV</button>
+</form>

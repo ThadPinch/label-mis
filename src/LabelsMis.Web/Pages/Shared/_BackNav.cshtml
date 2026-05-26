@@ -1,0 +1,7 @@
+@model LabelsMis.Web.Pages.Shared.BackNavModel
+<nav class="app-back-nav" aria-label="Back navigation">
+    <a href="@Url.Page(Model.Page, values: Model.RouteValues)" class="btn btn-back">
+        <span class="btn-back-icon" aria-hidden="true">←</span>
+        @Model.Text
+    </a>
+</nav>

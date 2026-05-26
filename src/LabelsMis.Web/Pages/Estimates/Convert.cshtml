@@ -1,0 +1,100 @@
+@page "/estimates/{id:guid}/convert"
+@model LabelsMis.Web.Pages.Estimates.ConvertModel
+@{
+    ViewData["Title"] = "Convert to sales order";
+    ViewData["BackNav"] = new BackNavModel("Back to estimate", "Edit") { RouteValues = new Dictionary<string, object?> { ["id"] = Model.Id } };
+}
+
+@if (Model.Detail is null)
+{
+    <p>Estimate not found.</p>
+}
+else
+{
+    <h1 class="h3 mb-1">Convert @Model.Detail.Estimate.EstimateNumber to sales order</h1>
+    <p class="text-muted mb-4">Pick the actual quantity and unit price for each line. The order will be created Open and ready for scheduling.</p>
+
+    <form method="post">
+        <div asp-validation-summary="All" class="text-danger mb-3"></div>
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <label class="form-label">Customer PO #</label>
+                <input asp-for="CustomerPoNumber" class="form-control" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Requested ship date</label>
+                <input asp-for="RequestedShipDate" type="date" class="form-control" />
+            </div>
+            <div class="col-12">
+                <label class="form-label">Order notes</label>
+                <textarea asp-for="Notes" class="form-control" rows="2"></textarea>
+            </div>
+        </div>
+
+        @for (var i = 0; i < Model.Lines.Count; i++)
+        {
+            var lineInput = Model.Lines[i];
+            var estLine = Model.Detail.Estimate.Lines.OrderBy(l => l.LineNumber).ElementAtOrDefault(i);
+            <div class="card mb-3">
+                <div class="card-header"><strong>Line @(i + 1)</strong> — @(estLine?.ProductDescription ?? "")</div>
+                <div class="card-body">
+                    <input type="hidden" asp-for="Lines[i].EstimateLineId" />
+                    @if (estLine is not null && estLine.QuantityBreaks.Count > 0)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Quantity tier</label>
+                            <div class="d-flex gap-3 flex-wrap">
+                                @foreach (var br in estLine.QuantityBreaks.OrderBy(q => q.Quantity))
+                                {
+                                    <label class="form-check-label border rounded p-2 qty-tier" data-qty="@br.Quantity" data-price="@br.UnitPrice">
+                                        <input type="checkbox" class="form-check-input me-1 qty-tier-checkbox" data-target-qty="Lines_@(i)__Quantity" data-target-price="Lines_@(i)__UnitPrice" />
+                                        @br.Quantity.ToString("N0") @@ @br.UnitPrice.ToString("C4") = @br.TotalPrice.ToString("C2")
+                                    </label>
+                                }
+                            </div>
+                        </div>
+                    }
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label">Order quantity</label>
+                            <input asp-for="Lines[i].Quantity" class="form-control" id="Lines_@(i)__Quantity" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Unit price</label>
+                            <input asp-for="Lines[i].UnitPrice" class="form-control" id="Lines_@(i)__UnitPrice" step="0.0001" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Line notes</label>
+                            <input asp-for="Lines[i].LineNotes" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success">Create sales order</button>
+            <a asp-page="Edit" asp-route-id="@Model.Id" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+    </form>
+}
+
+@section Scripts {
+    <script>
+    document.querySelectorAll('.qty-tier-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+            const label = checkbox.closest('.qty-tier');
+            const cardBody = checkbox.closest('.card-body');
+            if (checkbox.checked) {
+                cardBody.querySelectorAll('.qty-tier-checkbox').forEach(other => {
+                    if (other !== checkbox) other.checked = false;
+                });
+                const qInput = document.getElementById(checkbox.dataset.targetQty);
+                const pInput = document.getElementById(checkbox.dataset.targetPrice);
+                if (qInput) qInput.value = label.dataset.qty;
+                if (pInput) pInput.value = label.dataset.price;
+            }
+        });
+    });
+    </script>
+}

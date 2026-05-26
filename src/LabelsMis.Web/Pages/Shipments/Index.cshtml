@@ -1,0 +1,37 @@
+@page "/shipments"
+@model LabelsMis.Web.Pages.Shipments.IndexModel
+@{ ViewData["Title"] = "Shipments"; }
+
+<div class="d-flex justify-content-between mb-3">
+    <h1 class="h3 mb-0">Shipments</h1>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-3"><input asp-for="Search" class="form-control" placeholder="Search shipment or tracking" /></div>
+    <div class="col-md-2">
+        <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.ShipmentStatus>()"><option value="">All statuses</option></select>
+    </div>
+    <div class="col-md-3">
+        <select asp-for="CustomerId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["CustomerOptions"]!)"><option value="">All customers</option></select>
+    </div>
+    <div class="col-md-2"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
+</form>
+
+<table class="table table-striped">
+    <thead><tr><th>Shipment #</th><th>Customer</th><th>Ship date</th><th>Status</th><th>Carrier</th><th>Tracking</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var item in Model.Result.Items)
+    {
+        <tr>
+            <td>@item.ShipmentNumber</td><td>@item.CustomerName</td><td>@item.ShipDate.ToString("yyyy-MM-dd")</td>
+            <td>@item.Status</td><td>@item.Carrier</td><td>@(item.PrimaryTrackingNumber ?? "—")</td>
+            <td class="text-end"><a asp-page="Detail" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a></td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@await Html.PartialAsync("Shared/_Pager", new PagerModel(
+    Model.Result.Page,
+    Model.Result.TotalPages,
+    Model.Result.TotalCount))

@@ -1,0 +1,43 @@
+@page "/settings/storage"
+@model LabelsMis.Web.Pages.Settings.StorageModel
+@{
+    ViewData["Title"] = "Storage settings";
+    ViewData["BackNav"] = new BackNavModel();
+}
+<h1 class="h3 mb-3">Storage settings</h1>
+<p class="text-muted">Configure DigitalOcean Spaces for artwork storage. When Spaces is disabled or incomplete, files are stored locally under <code>data/artwork/</code>.</p>
+
+<form method="post">
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label asp-for="Input.ServiceUrl" class="form-label">Spaces endpoint URL</label>
+            <input asp-for="Input.ServiceUrl" class="form-control" placeholder="https://nyc3.digitaloceanspaces.com" />
+        </div>
+        <div class="col-md-6">
+            <label asp-for="Input.BucketName" class="form-label">Bucket name</label>
+            <input asp-for="Input.BucketName" class="form-control" />
+        </div>
+        <div class="col-md-6">
+            <label asp-for="Input.AccessKey" class="form-label">Access key</label>
+            <input asp-for="Input.AccessKey" class="form-control" autocomplete="off" />
+        </div>
+        <div class="col-md-6">
+            <label asp-for="Input.SecretKey" class="form-label">Secret key</label>
+            <input asp-for="Input.SecretKey" type="password" class="form-control" autocomplete="new-password" placeholder="@(Model.HasSecretKey ? "(unchanged)" : "")" />
+        </div>
+        <div class="col-md-4">
+            <label asp-for="Input.Region" class="form-label">Region (optional)</label>
+            <input asp-for="Input.Region" class="form-control" placeholder="nyc3" />
+        </div>
+        <div class="col-md-4">
+            <label asp-for="Input.ArtworkKeyPrefix" class="form-label">Artwork key prefix</label>
+            <input asp-for="Input.ArtworkKeyPrefix" class="form-control" />
+        </div>
+        <div class="col-md-4 form-check align-self-end">
+            <input asp-for="Input.UseLocalFallback" class="form-check-input" />
+            <label asp-for="Input.UseLocalFallback" class="form-check-label">Use local disk instead of Spaces</label>
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary mt-3">Save settings</button>
+</form>

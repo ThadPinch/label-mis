@@ -1,0 +1,67 @@
+@page "/rolls/{id:guid}"
+@model LabelsMis.Web.Pages.Rolls.DetailModel
+@{ ViewData["Title"] = Model.Detail?.Roll.RollBarcode ?? "Roll"; 
+    ViewData["BackNav"] = new BackNavModel();
+}
+
+@if (Model.Detail is null) { <p>Not found.</p>; return; }
+
+<h1 class="h3 mb-1">@Model.Detail.Roll.RollBarcode</h1>
+<p class="text-muted">@Model.Detail.StockDescription — @Model.Detail.Roll.Status</p>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <dl class="row mb-0">
+            <dt class="col-sm-4">Lot</dt><dd class="col-sm-8">@Model.Detail.Roll.SupplierLotNumber</dd>
+            <dt class="col-sm-4">Width</dt><dd class="col-sm-8">@Model.Detail.Roll.WidthIn.ToString("N2")"</dd>
+            <dt class="col-sm-4">Remaining</dt><dd class="col-sm-8">@Model.Detail.Roll.RemainingLengthLf.ToString("N2") LF</dd>
+            <dt class="col-sm-4">Location</dt><dd class="col-sm-8">@(Model.Detail.Roll.Location ?? "—")</dd>
+        </dl>
+    </div>
+    @if (Model.CanEdit)
+    {
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h2 class="h6">Stage</h2>
+                    <form method="post" asp-page-handler="Stage">
+                        <input asp-for="StageLocation" class="form-control mb-2" placeholder="Location" />
+                        <button type="submit" class="btn btn-sm btn-primary">Stage roll</button>
+                    </form>
+                </div>
+            </div>
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h2 class="h6">Split (2 rolls)</h2>
+                    <form method="post" asp-page-handler="Split">
+                        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                        <div class="row g-2 mb-2">
+                            <div class="col"><input asp-for="SplitWidth1" class="form-control" placeholder="Width 1 (in)" /></div>
+                            <div class="col"><input asp-for="SplitWidth2" class="form-control" placeholder="Width 2 (in)" /></div>
+                        </div>
+                        <input asp-for="SplitLocation" class="form-control mb-2" placeholder="Location" />
+                        <button type="submit" class="btn btn-sm btn-outline-primary">Split roll</button>
+                    </form>
+                </div>
+            </div>
+            <form method="post" asp-page-handler="Scrap">
+                <input asp-for="ScrapNotes" class="form-control mb-2" placeholder="Scrap reason" />
+                <button type="submit" class="btn btn-sm btn-outline-danger">Scrap roll</button>
+            </form>
+        </div>
+    }
+</div>
+
+<h2 class="h5">Movement history</h2>
+<table class="table table-sm table-striped">
+    <thead><tr><th>When</th><th>Type</th><th>Qty LF</th><th>Notes</th></tr></thead>
+    <tbody>
+    @foreach (var m in Model.Detail.Movements)
+    {
+        <tr>
+            <td>@m.MovedAt.ToString("yyyy-MM-dd HH:mm")</td><td>@m.MovementType</td>
+            <td>@m.QuantityLf.ToString("N2")</td><td>@(m.Notes ?? "—")</td>
+        </tr>
+    }
+    </tbody>
+</table>

@@ -1,0 +1,47 @@
+@model LabelsMis.Web.Pages.Products.ProductPageInput
+<div class="row g-3">
+    <div class="col-md-6">
+        <label class="form-label">Customers</label>
+        <select asp-for="CustomerIds" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)" multiple size="5"></select>
+        <div class="form-text">Hold Ctrl/Cmd to select multiple customers. The product appears in each customer's lists.</div>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="PrimaryCustomerId" class="form-label">Primary customer</label>
+        <select asp-for="PrimaryCustomerId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)"></select>
+        <div class="form-text">Used for internal SKU prefix (e.g. ACME-0001).</div>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="CustomerSku" class="form-label">Customer SKU</label>
+        <input asp-for="CustomerSku" class="form-control" />
+    </div>
+    <div class="col-md-8">
+        <label asp-for="Description" class="form-label">Description</label>
+        <input asp-for="Description" class="form-control" />
+    </div>
+    <div class="col-md-3"><label asp-for="LabelAcrossIn" class="form-label">Across (in)</label><input asp-for="LabelAcrossIn" class="form-control" /></div>
+    <div class="col-md-3"><label asp-for="LabelAroundIn" class="form-label">Around (in)</label><input asp-for="LabelAroundIn" class="form-control" /></div>
+    <div class="col-md-3"><label asp-for="CornerRadiusIn" class="form-label">Corner radius</label><input asp-for="CornerRadiusIn" class="form-control" /></div>
+    <div class="col-md-3">
+        <label asp-for="SubstrateId" class="form-label">Substrate</label>
+        <select asp-for="SubstrateId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Substrates"]!)"></select>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="InkSet" class="form-label">Ink set</label>
+        <select asp-for="InkSet" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.InkSet>()"></select>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="DieId" class="form-label">Die</label>
+        <select asp-for="DieId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Dies"]!)"><option value="">None</option></select>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="ArtworkFilePath" class="form-label">Artwork path</label>
+        <input asp-for="ArtworkFilePath" class="form-control" />
+    </div>
+    <div class="col-12"><hr /><h2 class="h5">Roll spec</h2></div>
+    <div class="col-md-2"><label asp-for="LabelsPerRoll" class="form-label">Labels/roll</label><input asp-for="LabelsPerRoll" class="form-control" /></div>
+    <div class="col-md-2"><label asp-for="CoreSizeIn" class="form-label">Core (in)</label><input asp-for="CoreSizeIn" class="form-control" /></div>
+    <div class="col-md-2"><label asp-for="UnwindPosition" class="form-label">Unwind</label><input asp-for="UnwindPosition" class="form-control" /></div>
+    <div class="col-md-2"><label asp-for="MaxOdIn" class="form-label">Max OD</label><input asp-for="MaxOdIn" class="form-control" /></div>
+    <div class="col-md-2"><label asp-for="RollsPerCase" class="form-label">Rolls/case</label><input asp-for="RollsPerCase" class="form-control" /></div>
+    <div class="col-md-4"><label asp-for="CaseLabelFormat" class="form-label">Case label format</label><input asp-for="CaseLabelFormat" class="form-control" /></div>
+</div>

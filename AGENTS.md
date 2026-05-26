@@ -21,6 +21,7 @@ A Management Information System for a narrow-web label printing shop. Single HP 
 - **PostgreSQL 16** as the database (via Npgsql)
 - **ASP.NET Identity** for auth
 - **QuestPDF** for PDF generation (quotes, invoices, job tickets)
+- **AWSSDK.S3** for DigitalOcean Spaces–compatible artwork storage
 - **xUnit** + **FluentAssertions** for tests
 - **Docker Compose** for local Postgres
 - **GitHub Actions** for CI
@@ -37,7 +38,8 @@ src/
 │                             NO references to Infrastructure or Web
 ├── LabelsMis.Infrastructure/ EF DbContext, migrations, external clients
 │                             NO references to Web
-└── LabelsMis.Web/            Razor Pages, controllers, views, Program.cs
+├── LabelsMis.Web/            Razor Pages, controllers, views, Program.cs
+└── LabelsMis.Tools/          CLI importers for cutover (Infrastructure only)
 
 tests/
 ├── LabelsMis.Domain.Tests/
@@ -107,8 +109,8 @@ Foreign keys always end in `Id`. Navigation properties never end in `Id`. Exampl
 ### Infrastructure layer
 - One `IEntityTypeConfiguration<T>` per entity, in `Persistence/Configurations/`
 - DbContext is `LabelsMisDbContext`, registered as scoped
-- External service clients live in subfolders: `Fedex/`, `QuickBooks/`, `Email/`
-- Each external client has an interface in Domain (`IFedexClient`) and implementation in Infrastructure (`FedexClient`)
+- External service clients live in subfolders: `Fedex/`, `QuickBooks/`, `Email/`, `Storage/`
+- Each external client has an interface in Domain (`IFedexClient`, `IFileStorageClient`) and implementation in Infrastructure
 
 ### Web layer
 - Razor Pages, not MVC controllers, unless there's a specific reason

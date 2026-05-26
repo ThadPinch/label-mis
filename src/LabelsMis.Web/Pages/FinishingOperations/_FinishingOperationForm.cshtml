@@ -1,0 +1,36 @@
+@model LabelsMis.Web.Pages.FinishingOperations.FinishingOperationFormInput
+@using LabelsMis.Domain.Enums
+
+<div class="row g-3">
+    <div class="col-md-3">
+        <label asp-for="Code" class="form-label"></label>
+        <input asp-for="Code" class="form-control" />
+        <span asp-validation-for="Code" class="text-danger"></span>
+    </div>
+    <div class="col-md-5">
+        <label asp-for="Description" class="form-label"></label>
+        <input asp-for="Description" class="form-control" />
+        <span asp-validation-for="Description" class="text-danger"></span>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="OperationType" class="form-label"></label>
+        <select asp-for="OperationType" asp-items="Html.GetEnumSelectList<FinishingOperationType>()" class="form-select"></select>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="EquipmentName" class="form-label"></label>
+        <input asp-for="EquipmentName" class="form-control" />
+        <span asp-validation-for="EquipmentName" class="text-danger"></span>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="DefaultSetupMinutes" class="form-label"></label>
+        <input asp-for="DefaultSetupMinutes" class="form-control" />
+    </div>
+    <div class="col-md-4">
+        <label asp-for="DefaultRunSpeedFpm" class="form-label"></label>
+        <input asp-for="DefaultRunSpeedFpm" class="form-control" />
+    </div>
+    <div class="col-md-4">
+        <label asp-for="CostPerHour" class="form-label"></label>
+        <input asp-for="CostPerHour" class="form-control" />
+    </div>
+</div>

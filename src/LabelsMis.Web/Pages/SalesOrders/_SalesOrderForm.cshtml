@@ -1,0 +1,60 @@
+@model LabelsMis.Web.Pages.SalesOrders.SalesOrderPageInput
+@{
+    var isLocked = ViewData["IsLocked"] as bool? ?? false;
+    var products = (IEnumerable<SelectListItem>?)ViewData["Products"] ?? Enumerable.Empty<SelectListItem>();
+}
+<div class="row g-3">
+    <div class="col-md-4">
+        <label class="form-label">Customer</label>
+        <select asp-for="CustomerId" id="customer-select" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)" disabled="@isLocked"></select>
+    </div>
+    <div class="col-md-4"><label asp-for="CustomerPoNumber" class="form-label">Customer PO #</label><input asp-for="CustomerPoNumber" class="form-control" readonly="@isLocked" /></div>
+    <div class="col-md-4"><label asp-for="RequestedShipDate" class="form-label">Requested ship date</label><input asp-for="RequestedShipDate" type="date" class="form-control" readonly="@isLocked" /></div>
+    <div class="col-12"><label asp-for="Notes" class="form-label">Notes</label><textarea asp-for="Notes" class="form-control" readonly="@isLocked"></textarea></div>
+</div>
+<h2 class="h5 mt-4">Line items</h2>
+@if (ViewData["ShowProductFilter"] as bool? == true)
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <label for="product-filter-customer" class="form-label">Pull from existing product — customer</label>
+            <select id="product-filter-customer" class="form-select">
+                <option value="">All products</option>
+                @foreach (var customer in (IEnumerable<SelectListItem>)ViewData["Customers"]!)
+                {
+                    <option value="@customer.Value">@customer.Text</option>
+                }
+            </select>
+            <div class="form-text">Filter product choices on each line. Defaults to the order customer when selected.</div>
+        </div>
+    </div>
+}
+<div class="row g-2 mb-1 text-muted small">
+    <div class="col-md-4">Product</div>
+    <div class="col-md-2">Qty</div>
+    <div class="col-md-2">Unit price</div>
+    <div class="col-md-2">Artwork</div>
+    <div class="col-md-2">Line notes</div>
+</div>
+@for (var i = 0; i < Model.Lines.Count; i++)
+{
+    var line = Model.Lines[i];
+    <div class="row g-2 mb-2 order-line">
+        <div class="col-md-4">
+            <select name="Input.Lines[@i].ProductId" class="form-select product-select" asp-items="products" disabled="@isLocked"><option value="">Select product</option></select>
+        </div>
+        <div class="col-md-2"><input name="Input.Lines[@i].Quantity" value="@line.Quantity" class="form-control line-qty" readonly="@isLocked" /></div>
+        <div class="col-md-2"><input name="Input.Lines[@i].UnitPrice" value="@line.UnitPrice" class="form-control line-price" readonly="@isLocked" /></div>
+        <div class="col-md-2">
+            @if (line.HasArtwork && line.ProductId != Guid.Empty)
+            {
+                <a asp-page="/Artwork/Download" asp-route-productId="@line.ProductId" target="_blank" class="small d-block mb-1">Download</a>
+            }
+            @if (!isLocked)
+            {
+                <input type="file" name="Input.Lines[@i].ArtworkFile" class="form-control form-control-sm" accept=".pdf,.ai,.eps,.png,.jpg,.jpeg,.tif,.tiff" />
+            }
+        </div>
+        <div class="col-md-2"><input name="Input.Lines[@i].LineNotes" value="@line.LineNotes" class="form-control" placeholder="Notes" readonly="@isLocked" /></div>
+    </div>
+}

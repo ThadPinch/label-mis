@@ -1,0 +1,26 @@
+@page "/suppliers/edit/{id:guid}"
+@model LabelsMis.Web.Pages.Suppliers.EditModel
+@{
+    ViewData["Title"] = "Edit supplier";
+
+    ViewData["BackNav"] = new BackNavModel();
+}
+
+<h1 class="h3 mb-3">Edit supplier</h1>
+<form method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <partial name="_SupplierForm" model="Model.Input" />
+    @if (Model.CanEdit)
+    {
+        <button type="submit" class="btn btn-primary">Save</button>
+        @if (Model.IsActive)
+        {
+            <button type="submit" asp-page-handler="Deactivate" class="btn btn-outline-danger"
+                    onclick="return confirm('Deactivate this supplier?');">Deactivate</button>
+        }
+    }
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

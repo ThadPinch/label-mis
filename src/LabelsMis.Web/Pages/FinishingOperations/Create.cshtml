@@ -1,0 +1,18 @@
+@page "/finishing-operations/create"
+@model LabelsMis.Web.Pages.FinishingOperations.CreateModel
+@{
+    ViewData["Title"] = "New finishing operation";
+
+    ViewData["BackNav"] = new BackNavModel();
+}
+
+<h1 class="h3 mb-3">New finishing operation</h1>
+<form method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <partial name="_FinishingOperationForm" model="Model.Input" />
+    <button type="submit" class="btn btn-primary">Create</button>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,78 @@
+@page "/jobs"
+@model LabelsMis.Web.Pages.Jobs.IndexModel
+@{ ViewData["Title"] = "Jobs"; }
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Jobs</h1>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-2">
+        <input asp-for="Search" class="form-control" placeholder="Search job, customer, product" />
+    </div>
+    <div class="col-md-2">
+        <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.JobStatus>()">
+            <option value="">All statuses</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select asp-for="CustomerId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["CustomerOptions"]!)">
+            <option value="">All customers</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select asp-for="PressId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["PressOptions"]!)">
+            <option value="">All presses</option>
+        </select>
+    </div>
+    <div class="col-md-1">
+        <input asp-for="DueFrom" class="form-control" type="date" placeholder="Due from" />
+    </div>
+    <div class="col-md-1">
+        <input asp-for="DueTo" class="form-control" type="date" />
+    </div>
+    <div class="col-md-1">
+        <input asp-for="ScheduledDate" class="form-control" type="date" title="Scheduled date" />
+    </div>
+    <div class="col-md-1">
+        <button type="submit" class="btn btn-outline-secondary w-100">Filter</button>
+    </div>
+</form>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Job #</th>
+            <th>Customer</th>
+            <th>Product</th>
+            <th>Status</th>
+            <th>Due</th>
+            <th>Scheduled</th>
+            <th>Qty</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var item in Model.Result.Items)
+    {
+        <tr>
+            <td>@item.JobNumber</td>
+            <td>@item.CustomerName</td>
+            <td>@item.ProductDescription</td>
+            <td>@item.Status</td>
+            <td>@(item.DueDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+            <td>@(item.ScheduledForDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+            <td>@item.QuantityOrdered.ToString("N0")</td>
+            <td class="text-end">
+                <a asp-page="Detail" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a>
+                <a asp-page="Ticket" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary">Ticket</a>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@await Html.PartialAsync("Shared/_Pager", new PagerModel(
+    Model.Result.Page,
+    Model.Result.TotalPages,
+    Model.Result.TotalCount))
