@@ -1,0 +1,24 @@
+name: labelsmis
+region: nyc # TODO: choose region (e.g. nyc, sfo, ams)
+
+services:
+  - name: labelsmis-web
+    github:
+      repo: ThadPinch/label-mis
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: src/LabelsMis.Web/Dockerfile
+    source_dir: .
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs # TODO: choose instance size
+    health_check:
+      http_path: /Account/Login
+      initial_delay_seconds: 30
+      period_seconds: 10
+      timeout_seconds: 5
+      failure_threshold: 3
+    envs:
+      - key: ConnectionStrings__Default
+        scope: RUN_TIME
+        type: SECRET
