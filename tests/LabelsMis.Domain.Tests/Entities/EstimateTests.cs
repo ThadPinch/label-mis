@@ -89,7 +89,7 @@ public class EstimateTests
         var line = EstimateLine.Create(
             Guid.NewGuid(), estimate.Id, 1, null, "Test labels",
             4, 3, 0.125m, 0.0625m, 0.0625m, 0.0625m,
-            Guid.NewGuid(), InkSet.CMYK, false, "[]", 30, 0.03m, null, null,
+            Guid.NewGuid(), InkSet.CMYK, false, "[]", 30, 0.03m, null, null, null, null,
             UserId, Now);
         estimate.AddLine(line);
         return estimate;

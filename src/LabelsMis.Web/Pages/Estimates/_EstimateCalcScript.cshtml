@@ -1,13 +1,14 @@
 <script>
 (() => {
     const form = document.getElementById('estimate-form');
-    if (!form) return;
-
+    const root = form || document.getElementById('estimate-readonly-root');
     const customerSelect = document.getElementById('customer-select');
     const productFilterSelect = document.getElementById('product-filter-customer');
     const linesContainer = document.getElementById('estimate-lines');
     const addLineBtn = document.getElementById('add-line');
     const lineTemplateEl = document.getElementById('estimate-line-template');
+
+    if (!root || !linesContainer) return;
 
     let debounceTimer = null;
     let productsCacheKey = null;
@@ -19,6 +20,314 @@
     const MARGIN_STEP = 0.01;
     const MIN_MARGIN = 0;
     const MAX_MARGIN = 0.85;
+
+    const fmtMoney = (value, decimals = 2) => {
+        const n = Number(value);
+        if (Number.isNaN(n)) return '—';
+        return `$${n.toFixed(decimals)}`;
+    };
+
+    const fmtPct = (value) => {
+        const n = Number(value);
+        if (Number.isNaN(n)) return '—';
+        return `${(n * 100).toFixed(1)}%`;
+    };
+
+    const fmtQty = (value, decimals = 0) => {
+        const n = Number(value);
+        if (Number.isNaN(n)) return '—';
+        return n.toLocaleString(undefined, {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals
+        });
+    };
+
+    const escapeHtml = (text) => String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+    const renderCostLineRows = (items) => (items || []).map(item => {
+        const qty = fmtQty(item.quantity, item.unit === 'MSI' || item.unit === 'minutes' ? 1 : 0);
+        const unitCost = fmtMoney(item.unitCost, item.unitCost < 1 ? 4 : 2);
+        return `<tr>
+            <td>${escapeHtml(item.category)}</td>
+            <td>${escapeHtml(item.description)}</td>
+            <td class="text-end">${qty}</td>
+            <td>${escapeHtml(item.unit)}</td>
+            <td class="text-end">${unitCost}</td>
+            <td class="text-end">${fmtMoney(item.lineCost)}</td>
+        </tr>`;
+    }).join('');
+
+    const renderImpositionDiagram = (layout, imposition, idSuffix = '0') => {
+        if (!layout || !imposition) return '';
+
+        const marginPatternId = `impositionMarginHatch-${idSuffix}`;
+        const trimPatternId = `impositionTrimHatch-${idSuffix}`;
+
+        const pressWeb = Number(layout.pressWebWidthIn);
+        const edgeMargin = Number(layout.pressEdgeMarginIn);
+        const stockWidth = Number(layout.stockWidthIn);
+        const labelAcross = Number(layout.labelAcrossIn);
+        const labelAround = Number(layout.labelAroundIn);
+        const gutterAcross = Number(layout.gutterAcrossIn);
+        const gutterAround = Number(layout.gutterAroundIn);
+        const labelsAcross = Number(imposition.labelsAcross);
+        const labelsAround = Number(imposition.labelsAround);
+        const repeatLength = Number(imposition.repeatLengthIn);
+
+        if ([pressWeb, stockWidth, labelAcross, labelAround, repeatLength].some(v => !v || Number.isNaN(v))) {
+            return '';
+        }
+
+        const canvasWidth = Math.max(stockWidth, pressWeb);
+        const canvasHeight = Math.max(repeatLength, 0.5);
+        const pressOffsetX = Math.max(0, (stockWidth - pressWeb) / 2);
+        const printableLeft = pressOffsetX + edgeMargin;
+        const printableRight = pressOffsetX + pressWeb - edgeMargin;
+        const printableWidth = printableRight - printableLeft;
+        const usedWidth = labelsAcross > 0
+            ? (labelsAcross * labelAcross) + (Math.max(labelsAcross - 1, 0) * gutterAcross)
+            : 0;
+        const wasteSide = Math.max(0, (printableWidth - usedWidth) / 2);
+        const labelsStartX = printableLeft + wasteSide;
+
+        // ViewBox padding (in inches) — leaves room for the bottom stock label,
+        // the web-direction arrow on the right, and a touch of breathing room.
+        const padL = 0.25;
+        const padR = 0.85;
+        const padT = 0.3;
+        const padB = 0.75;
+
+        const stockRect = `<rect x="0" y="0" width="${stockWidth}" height="${canvasHeight}" class="imposition-stock" fill="#e8e0d4" stroke="#a8a29e" stroke-width="0.04"/>`;
+        const pressRect = `<rect x="${pressOffsetX}" y="0" width="${pressWeb}" height="${canvasHeight}" fill="#ffffff" stroke="#525252" stroke-width="0.06"/>`;
+        const leftMargin = `<rect x="${pressOffsetX}" y="0" width="${edgeMargin}" height="${canvasHeight}" fill="url(#${marginPatternId})" stroke="none"/>`;
+        const rightMargin = `<rect x="${pressOffsetX + pressWeb - edgeMargin}" y="0" width="${edgeMargin}" height="${canvasHeight}" fill="url(#${marginPatternId})" stroke="none"/>`;
+
+        let stockTrim = '';
+        if (stockWidth > pressWeb) {
+            const trimLeft = pressOffsetX;
+            const trimRight = stockWidth - pressOffsetX - pressWeb;
+            if (trimLeft > 0.01) {
+                stockTrim += `<rect x="0" y="0" width="${trimLeft}" height="${canvasHeight}" fill="url(#${trimPatternId})" stroke="none"/>`;
+            }
+            if (trimRight > 0.01) {
+                stockTrim += `<rect x="${pressOffsetX + pressWeb}" y="0" width="${trimRight}" height="${canvasHeight}" fill="url(#${trimPatternId})" stroke="none"/>`;
+            }
+        }
+
+        // Unused web — split into two strips on either side of the centered labels.
+        let webWaste = '';
+        if (wasteSide > 0.05) {
+            webWaste = `<rect x="${printableLeft}" y="0" width="${wasteSide}" height="${canvasHeight}" fill="#fef9c3" stroke="none"/>
+                        <rect x="${labelsStartX + usedWidth}" y="0" width="${wasteSide}" height="${canvasHeight}" fill="#fef9c3" stroke="none"/>`;
+        }
+
+        const labelCornerRadius = Math.min(0.08, Math.min(labelAcross, labelAround) * 0.05);
+        let labels = '';
+        for (let row = 0; row < labelsAround; row++) {
+            for (let col = 0; col < labelsAcross; col++) {
+                const x = labelsStartX + col * (labelAcross + gutterAcross);
+                const y = row * (labelAround + gutterAround);
+                labels += `<rect x="${x}" y="${y}" width="${labelAcross}" height="${labelAround}" rx="${labelCornerRadius}" ry="${labelCornerRadius}" fill="rgba(249,115,22,0.35)" stroke="#ea580c" stroke-width="0.04"/>`;
+                if (labelsAcross * labelsAround <= 12) {
+                    labels += `<text x="${x + labelAcross / 2}" y="${y + labelAround / 2}" text-anchor="middle" dominant-baseline="central" font-size="${Math.min(labelAcross, labelAround) * 0.24}" fill="#7c2d12" font-weight="700">${row * labelsAcross + col + 1}</text>`;
+                }
+            }
+        }
+
+        // Web-direction arrow — vertical line + arrowhead to the right of the stock.
+        const arrowX = canvasWidth + 0.22;
+        const arrowTop = canvasHeight * 0.15;
+        const arrowBottom = canvasHeight * 0.85;
+        const arrowHeadHalf = 0.08;
+        const flowArrow = `
+            <g class="imposition-flow">
+                <line x1="${arrowX}" y1="${arrowTop}" x2="${arrowX}" y2="${arrowBottom - arrowHeadHalf}" stroke="#737373" stroke-width="0.04" stroke-linecap="round"/>
+                <polygon points="${arrowX - arrowHeadHalf},${arrowBottom - arrowHeadHalf * 1.6} ${arrowX + arrowHeadHalf},${arrowBottom - arrowHeadHalf * 1.6} ${arrowX},${arrowBottom}" fill="#737373"/>
+            </g>`;
+
+        // Bottom stock-width caliper.
+        const dimY = canvasHeight + 0.28;
+        const dimText = `
+            <g class="imposition-dim" stroke="#737373" stroke-width="0.025">
+                <line x1="0" y1="${dimY}" x2="${stockWidth}" y2="${dimY}"/>
+                <line x1="0" y1="${dimY - 0.08}" x2="0" y2="${dimY + 0.08}"/>
+                <line x1="${stockWidth}" y1="${dimY - 0.08}" x2="${stockWidth}" y2="${dimY + 0.08}"/>
+            </g>
+            <text x="${stockWidth / 2}" y="${dimY + 0.38}" text-anchor="middle" font-size="0.28" fill="#525252" font-weight="500">${stockWidth.toFixed(2)}" stock</text>`;
+
+        return `
+            <div class="imposition-diagram">
+                <div class="imposition-caption">One impression — labels on stock (top view, arrow shows web direction)</div>
+                <svg viewBox="${-padL} ${-padT} ${canvasWidth + padL + padR} ${canvasHeight + padT + padB}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Imposition diagram showing ${labelsAcross} labels across on ${stockWidth} inch stock">
+                    <defs>
+                        <pattern id="${marginPatternId}" width="0.15" height="0.15" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                            <rect width="0.15" height="0.15" fill="#fee2e2"/>
+                            <line x1="0" y1="0" x2="0" y2="0.15" stroke="#fca5a5" stroke-width="0.04"/>
+                        </pattern>
+                        <pattern id="${trimPatternId}" width="0.2" height="0.2" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                            <rect width="0.2" height="0.2" fill="#f5f5f4"/>
+                            <line x1="0" y1="0" x2="0" y2="0.2" stroke="#d6d3d1" stroke-width="0.03"/>
+                        </pattern>
+                    </defs>
+                    ${stockRect}
+                    ${stockTrim}
+                    ${pressRect}
+                    ${leftMargin}
+                    ${rightMargin}
+                    ${webWaste}
+                    ${labels}
+                    ${flowArrow}
+                    ${dimText}
+                </svg>
+                <div class="imposition-legend">
+                    <span><span class="legend-swatch legend-swatch--stock"></span>Stock</span>
+                    <span><span class="legend-swatch legend-swatch--press"></span>Press web</span>
+                    <span><span class="legend-swatch legend-swatch--margin"></span>Edge margin</span>
+                    <span><span class="legend-swatch legend-swatch--label"></span>Label</span>
+                    <span><span class="legend-swatch legend-swatch--waste"></span>Unused web</span>
+                </div>
+            </div>`;
+    };
+
+    const renderCalculationBreakdown = (lineEl, lineResult) => {
+        const container = lineEl.querySelector('.calc-breakdown');
+        if (!container) return;
+
+        const breaks = lineResult.quantityBreaks || [];
+        const imposition = lineResult.imposition;
+        const markupPct = Number(lineResult.markupPctUsed ?? 0);
+        const hasErrors = (lineResult.errors || []).length > 0;
+
+        if (hasErrors || breaks.length === 0 || !imposition) {
+            container.classList.add('d-none');
+            container.innerHTML = '';
+            return;
+        }
+
+        const impositionHtml = `
+            <section class="calc-imposition">
+                <h4 class="calc-step-title">Step 1 — Imposition</h4>
+                ${renderImpositionDiagram(lineResult.impositionLayout, imposition, lineEl.dataset.lineIndex ?? '0')}
+                <dl class="calc-dl">
+                    <dt>Labels across</dt>
+                    <dd>${imposition.labelsAcross}</dd>
+                    <dt>Labels around</dt>
+                    <dd>${imposition.labelsAround}</dd>
+                    <dt>Labels per impression</dt>
+                    <dd>${imposition.labelsPerImpression}</dd>
+                    <dt>Repeat length</dt>
+                    <dd>${fmtQty(imposition.repeatLengthIn, 4)}"</dd>
+                    <dt>Web utilization</dt>
+                    <dd>${fmtPct(imposition.utilizationPct)}</dd>
+                </dl>
+            </section>`;
+
+        const qtySections = breaks.map(row => {
+            const markupAmount = Number(row.totalPrice) - Number(row.totalCost);
+            const costRows = renderCostLineRows(row.costBreakdown);
+            const costTable = costRows
+                ? `<table class="table table-sm table-bordered calc-cost-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Description</th>
+                                <th class="text-end">Qty</th>
+                                <th>Unit</th>
+                                <th class="text-end">Unit cost</th>
+                                <th class="text-end">Line cost</th>
+                            </tr>
+                        </thead>
+                        <tbody>${costRows}</tbody>
+                        <tfoot>
+                            <tr class="fw-semibold">
+                                <td colspan="5">Total cost</td>
+                                <td class="text-end">${fmtMoney(row.totalCost)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>`
+                : '<p class="text-muted small mb-0">No cost lines calculated.</p>';
+
+            const marginClass = row.belowMinimumMargin ? ' calc-qty-stat--warn' : '';
+            const marginSuffix = row.belowMinimumMargin ? ' ⚠' : '';
+
+            return `
+                <details class="calc-qty-section">
+                    <summary class="calc-qty-summary">
+                        <span class="calc-qty-chevron" aria-hidden="true"></span>
+                        <span class="calc-qty-label">
+                            <span class="calc-qty-amount">${fmtQty(row.quantity)}</span>
+                            <span class="calc-qty-unit">labels</span>
+                        </span>
+                        <span class="calc-qty-stats">
+                            <span class="calc-qty-stat">
+                                <span class="calc-qty-stat-label">Unit price</span>
+                                <span class="calc-qty-stat-value">${fmtMoney(row.unitPrice, 4)}</span>
+                            </span>
+                            <span class="calc-qty-stat calc-qty-stat--total">
+                                <span class="calc-qty-stat-label">Total</span>
+                                <span class="calc-qty-stat-value">${fmtMoney(row.totalPrice)}</span>
+                            </span>
+                            <span class="calc-qty-stat${marginClass}">
+                                <span class="calc-qty-stat-label">Margin</span>
+                                <span class="calc-qty-stat-value">${fmtPct(row.marginPct)}${marginSuffix}</span>
+                            </span>
+                        </span>
+                    </summary>
+                    <div class="calc-qty-body">
+                        <section class="calc-step">
+                            <h5 class="calc-step-title">Step 2 — Production</h5>
+                            <dl class="calc-dl">
+                                <dt>Order quantity</dt>
+                                <dd>${fmtQty(row.quantity)} labels</dd>
+                                <dt>Impressions</dt>
+                                <dd>${fmtQty(row.impressions)} <span class="calc-dl-note">(includes setup + running waste)</span></dd>
+                                <dt>Web length</dt>
+                                <dd>${fmtQty(row.webLengthFt, 1)} ft</dd>
+                                <dt>Press run time</dt>
+                                <dd>${fmtQty(row.runTimeMinutes, 2)} min</dd>
+                            </dl>
+                        </section>
+                        <section class="calc-step">
+                            <h5 class="calc-step-title">Steps 3–5 — Cost components</h5>
+                            ${costTable}
+                        </section>
+                        <section class="calc-step">
+                            <h5 class="calc-step-title">Step 6 — Pricing</h5>
+                            <dl class="calc-dl">
+                                <dt>Total cost</dt>
+                                <dd>${fmtMoney(row.totalCost)}</dd>
+                                <dt>Markup (${fmtPct(markupPct)})</dt>
+                                <dd>${fmtMoney(markupAmount)}</dd>
+                                <dt>Total price</dt>
+                                <dd class="fw-semibold">${fmtMoney(row.totalPrice)}</dd>
+                                <dt>Unit price</dt>
+                                <dd>${fmtMoney(row.unitPrice, 4)} / label</dd>
+                                <dt>Price per thousand</dt>
+                                <dd>${fmtMoney(row.pricePerThousand)} / M</dd>
+                                <dt>Margin</dt>
+                                <dd${row.belowMinimumMargin ? ' class="text-warning fw-semibold"' : ''}>
+                                    ${fmtPct(row.marginPct)}${row.belowMinimumMargin ? ' (below minimum)' : ''}
+                                </dd>
+                            </dl>
+                        </section>
+                    </div>
+                </details>`;
+        }).join('');
+
+        container.classList.remove('d-none');
+        container.innerHTML = `
+            <div class="calc-breakdown-card">
+                <h3 class="calc-breakdown-title">Calculation breakdown</h3>
+                ${impositionHtml}
+                <div class="calc-qty-list">
+                    ${qtySections}
+                </div>
+            </div>`;
+    };
 
     const getLineMarkup = (lineEl) => {
         const input = lineEl.querySelector('.markup-override-input');
@@ -144,6 +453,10 @@
         if (substrateSel) substrateSel.value = product.substrateId;
         const inkSetSel = lineEl.querySelector('[name$=".InkSet"]');
         if (inkSetSel) inkSetSel.value = product.inkSet;
+        const acrossSel = lineEl.querySelector('.labels-across-select');
+        if (acrossSel) acrossSel.value = '';
+        const orientationSel = lineEl.querySelector('.orientation-select');
+        if (orientationSel) orientationSel.value = '';
 
         try {
             const finishing = JSON.parse(product.finishingOperationsJson || '[]');
@@ -180,6 +493,19 @@
                 sortOrder: sort++
             });
         });
+        if (finishing.length === 0) {
+            lineEl.querySelectorAll('[name*="FinishingOperations"][name*="OperationId"]').forEach(input => {
+                if (input.disabled || !input.value) return;
+                const name = input.name;
+                const prefix = name.replace(/\.OperationId$/, '');
+                finishing.push({
+                    operationId: input.value,
+                    setupMinutesOverride: lineEl.querySelector(`[name="${prefix}.SetupMinutesOverride"]`)?.value || null,
+                    runSpeedFpmOverride: lineEl.querySelector(`[name="${prefix}.RunSpeedFpmOverride"]`)?.value || null,
+                    sortOrder: sort++
+                });
+            });
+        }
         const quantities = [...lineEl.querySelectorAll('.quantity-input')]
             .map(i => parseInt(i.value, 10))
             .filter(q => !Number.isNaN(q) && q > 0);
@@ -207,41 +533,99 @@
                 const parsed = parseFloat(raw);
                 return Number.isNaN(parsed) ? null : parsed;
             })(),
+            maxLabelsAcrossOverride: (() => {
+                const raw = val('.labels-across-select');
+                if (raw === '' || raw === undefined || raw === null) return null;
+                const parsed = parseInt(raw, 10);
+                return Number.isNaN(parsed) ? null : parsed;
+            })(),
+            labelOrientationOverride: (() => {
+                const raw = val('.orientation-select');
+                if (raw === '' || raw === undefined || raw === null) return null;
+                const parsed = parseInt(raw, 10);
+                return Number.isNaN(parsed) ? null : parsed;
+            })(),
             finishingOperations: finishing,
             quantities
         };
     };
 
     const collectPayload = () => {
-        const customerId = customerSelect?.value;
+        const customerId = customerSelect?.value
+            || root.querySelector('[name="Input.CustomerId"]')?.value;
         const lines = [...linesContainer.querySelectorAll('.estimate-line')].map(collectLinePayload);
         return {
             customerId,
-            salesRepId: form.querySelector('[name="Input.SalesRepId"]')?.value || null,
-            notes: form.querySelector('[name="Input.Notes"]')?.value || null,
-            validUntilDate: form.querySelector('[name="Input.ValidUntilDate"]')?.value || null,
+            salesRepId: root.querySelector('[name="Input.SalesRepId"]')?.value || null,
+            notes: root.querySelector('[name="Input.Notes"]')?.value || null,
+            validUntilDate: root.querySelector('[name="Input.ValidUntilDate"]')?.value || null,
             lines
         };
+    };
+
+    const syncImpositionControls = (lineEl, imposition) => {
+        const acrossSel = lineEl.querySelector('.labels-across-select');
+        const maxLabel = lineEl.querySelector('.labels-across-max');
+        if (acrossSel) {
+            const max = Number(imposition?.maxLabelsAcross ?? 0);
+            const current = acrossSel.value;
+            if (max >= 1) {
+                const options = ['<option value="">Auto</option>'];
+                for (let n = 1; n <= max; n++) {
+                    const sel = current === String(n) ? ' selected' : '';
+                    options.push(`<option value="${n}"${sel}>${n} up</option>`);
+                }
+                acrossSel.innerHTML = options.join('');
+                if (current && parseInt(current, 10) > max) {
+                    acrossSel.value = '';
+                }
+                if (maxLabel) maxLabel.textContent = `(max ${max})`;
+            } else if (maxLabel) {
+                maxLabel.textContent = '(auto)';
+            }
+        }
+
+        const orientationSel = lineEl.querySelector('.orientation-select');
+        const orientationLabel = orientationSel?.previousElementSibling;
+        if (orientationLabel) {
+            const baseText = 'Orientation';
+            const chosen = Number(imposition?.orientation ?? 0);
+            const isAuto = orientationSel.value === '' || orientationSel.value === undefined;
+            if (isAuto && chosen === 1) {
+                orientationLabel.innerHTML = `${baseText} <span class="form-text d-inline">(auto: rotated)</span>`;
+            } else if (isAuto) {
+                orientationLabel.innerHTML = `${baseText} <span class="form-text d-inline">(auto: as entered)</span>`;
+            } else {
+                orientationLabel.textContent = baseText;
+            }
+        }
     };
 
     const renderLineResults = (lineEl, lineResult) => {
         const warnings = lineEl.querySelector('.calc-warnings');
         const errors = lineEl.querySelector('.calc-errors');
         const tbody = lineEl.querySelector('.calc-results tbody');
-        warnings.classList.toggle('d-none', !lineResult.warnings?.length);
-        errors.classList.toggle('d-none', !lineResult.errors?.length);
-        warnings.textContent = (lineResult.warnings || []).join('; ');
-        errors.textContent = (lineResult.errors || []).join('; ');
-        tbody.innerHTML = '';
-        (lineResult.quantityBreaks || []).forEach(row => {
-            const tr = document.createElement('tr');
-            if (row.belowMinimumMargin) tr.classList.add('table-warning');
-            tr.innerHTML = `<td>${row.quantity.toLocaleString()}</td>
-                <td>${Number(row.unitPrice).toFixed(4)}</td>
-                <td>${Number(row.totalPrice).toFixed(2)}</td>
-                <td>${(Number(row.marginPct) * 100).toFixed(1)}%${row.belowMinimumMargin ? ' ⚠' : ''}</td>`;
-            tbody.appendChild(tr);
-        });
+        syncImpositionControls(lineEl, lineResult.imposition);
+        if (warnings) {
+            warnings.classList.toggle('d-none', !lineResult.warnings?.length);
+            warnings.textContent = (lineResult.warnings || []).join('; ');
+        }
+        if (errors) {
+            errors.classList.toggle('d-none', !lineResult.errors?.length);
+            errors.textContent = (lineResult.errors || []).join('; ');
+        }
+        if (tbody) {
+            tbody.innerHTML = '';
+            (lineResult.quantityBreaks || []).forEach(row => {
+                const tr = document.createElement('tr');
+                if (row.belowMinimumMargin) tr.classList.add('table-warning');
+                tr.innerHTML = `<td>${row.quantity.toLocaleString()}</td>
+                    <td>${Number(row.unitPrice).toFixed(4)}</td>
+                    <td>${Number(row.totalPrice).toFixed(2)}</td>
+                    <td>${(Number(row.marginPct) * 100).toFixed(1)}%${row.belowMinimumMargin ? ' ⚠' : ''}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
         if (lineResult.markupPctUsed !== undefined && lineResult.markupPctUsed !== null) {
             lineEl.dataset.lineIndex = lineEl.dataset.lineIndex ?? '0';
             lineMarkupCache.set(lineEl.dataset.lineIndex, Number(lineResult.markupPctUsed));
@@ -252,6 +636,7 @@
                 updateMarginDisplay(lineEl, getLineMarkup(lineEl));
             }
         }
+        renderCalculationBreakdown(lineEl, lineResult);
     };
 
     const calculate = async () => {
@@ -270,7 +655,11 @@
         const lineEls = linesContainer.querySelectorAll('.estimate-line');
         (data.lines || []).forEach(lr => {
             const lineEl = lineEls[lr.lineIndex];
-            if (lineEl) renderLineResults(lineEl, { ...lr, markupPctUsed: lr.markupPctUsed });
+            if (lineEl) renderLineResults(lineEl, {
+                ...lr,
+                markupPctUsed: lr.markupPctUsed,
+                impositionLayout: lr.impositionLayout
+            });
         });
     };
 
@@ -352,7 +741,7 @@
         loadProducts().then(calculate);
     });
 
-    wireUp(form);
+    wireUp(root);
     syncProductFilterToEstimateCustomer();
     loadProducts().then(calculate);
 })();

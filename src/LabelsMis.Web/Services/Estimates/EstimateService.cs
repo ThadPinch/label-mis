@@ -193,10 +193,19 @@ public class EstimateService(
             {
                 var request = await calculationMapper.BuildRequestAsync(input.CustomerId, line, cancellationToken);
                 var result = estimatingService.Calculate(request);
+                var layout = new ImpositionLayoutView(
+                    request.PressWebWidthIn,
+                    request.PressEdgeMarginIn,
+                    request.StockWidthIn,
+                    result.Imposition?.EffectiveLabelAcrossIn ?? request.LabelAcrossIn,
+                    result.Imposition?.EffectiveLabelAroundIn ?? request.LabelAroundIn,
+                    request.GutterAcrossIn,
+                    request.GutterAroundIn);
                 responses.Add(new EstimateLineCalculationResponse(
                     i,
                     result.QuantityBreaks,
                     result.Imposition,
+                    layout,
                     result.Warnings,
                     result.Errors,
                     request.CustomerMarkupPct));
@@ -206,6 +215,7 @@ public class EstimateService(
                 responses.Add(new EstimateLineCalculationResponse(
                     i,
                     [],
+                    null,
                     null,
                     [],
                     [ex.Message],
@@ -425,6 +435,8 @@ public class EstimateService(
                 input.RunningWastePct,
                 input.LineNotes,
                 input.MarkupPctOverride,
+                input.MaxLabelsAcrossOverride,
+                input.LabelOrientationOverride,
                 userId,
                 now);
 

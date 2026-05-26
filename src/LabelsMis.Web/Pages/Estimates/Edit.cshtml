@@ -43,28 +43,8 @@ else
 
     @if (Model.IsReadOnly)
     {
-        <partial name="_EstimateForm" model="Model.Input" />
-        <div class="mt-4">
-            @foreach (var line in Model.Detail.Estimate.Lines.OrderBy(l => l.LineNumber))
-            {
-                <div class="mb-4">
-                    <h2 class="h6">Line @line.LineNumber — @line.ProductDescription</h2>
-                    <table class="table table-sm">
-                        <thead><tr><th>Qty</th><th>Unit price</th><th>Total</th><th>Margin %</th></tr></thead>
-                        <tbody>
-                        @foreach (var row in line.QuantityBreaks.OrderBy(q => q.Quantity))
-                        {
-                            <tr>
-                                <td>@row.Quantity.ToString("N0")</td>
-                                <td>@row.UnitPrice.ToString("C4")</td>
-                                <td>@row.TotalPrice.ToString("C2")</td>
-                                <td>@((row.MarginPct * 100m).ToString("F1"))%</td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
-            }
+        <div id="estimate-readonly-root">
+            <partial name="_EstimateForm" model="Model.Input" />
         </div>
         <div class="mt-3 d-flex flex-wrap gap-2">
             @if (Model.CanEdit)
@@ -122,10 +102,13 @@ else
         }
     }
 
-    @if (!Model.IsReadOnly)
+    @if (Model.Detail is not null)
     {
         @section Scripts {
-            <partial name="_ValidationScriptsPartial" />
+            @if (!Model.IsReadOnly)
+            {
+                <partial name="_ValidationScriptsPartial" />
+            }
             <partial name="Estimates/_EstimateCalcScript" />
         }
     }

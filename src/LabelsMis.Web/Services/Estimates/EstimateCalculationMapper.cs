@@ -37,7 +37,9 @@ public record EstimateLineFormInput(
     decimal RunningWastePct,
     string? LineNotes,
     IReadOnlyList<int> Quantities,
-    decimal? MarkupPctOverride);
+    decimal? MarkupPctOverride,
+    int? MaxLabelsAcrossOverride,
+    LabelOrientation? LabelOrientationOverride);
 
 public record EstimateFormInput(
     Guid CustomerId,
@@ -46,10 +48,20 @@ public record EstimateFormInput(
     DateOnly? ValidUntilDate,
     IReadOnlyList<EstimateLineFormInput> Lines);
 
+public record ImpositionLayoutView(
+    decimal PressWebWidthIn,
+    decimal PressEdgeMarginIn,
+    decimal StockWidthIn,
+    decimal LabelAcrossIn,
+    decimal LabelAroundIn,
+    decimal GutterAcrossIn,
+    decimal GutterAroundIn);
+
 public record EstimateLineCalculationResponse(
     int LineIndex,
     IReadOnlyList<QuantityBreakResult> QuantityBreaks,
     ImpositionResult? Imposition,
+    ImpositionLayoutView? ImpositionLayout,
     IReadOnlyList<string> Warnings,
     IReadOnlyList<string> Errors,
     decimal MarkupPctUsed);
@@ -132,7 +144,9 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             line.SetupWasteImpressions,
             line.RunningWastePct,
             line.MarkupPctOverride ?? customer.DefaultMarkupPct,
-            MinimumMarginPct);
+            MinimumMarginPct,
+            line.MaxLabelsAcrossOverride,
+            line.LabelOrientationOverride);
     }
 
     private async Task<decimal> GetClickRateAsync(

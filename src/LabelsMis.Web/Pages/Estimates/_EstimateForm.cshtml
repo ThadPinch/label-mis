@@ -1,5 +1,6 @@
 @model LabelsMis.Web.Pages.Estimates.EstimatePageInput
 @using LabelsMis.Domain.Entities
+@using LabelsMis.Domain.Enums
 @{
     var isReadOnly = (bool)(ViewData["IsReadOnly"] ?? false);
     var finishingOps = (IReadOnlyList<FinishingOperation>?)ViewData["FinishingOperations"] ?? Array.Empty<FinishingOperation>();
@@ -143,6 +144,24 @@
                         <label class="form-label">Running waste %</label>
                         <input name="Input.Lines[@i].RunningWastePct" value="@line.RunningWastePct" class="form-control calc-trigger" readonly="@isReadOnly" />
                     </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="line-@(i)-max-across">Labels across <span class="form-text d-inline labels-across-max">(auto)</span></label>
+                        <select id="line-@(i)-max-across" name="Input.Lines[@i].MaxLabelsAcrossOverride" class="form-select calc-immediate labels-across-select" disabled="@isReadOnly">
+                            <option value="" selected="@(!line.MaxLabelsAcrossOverride.HasValue)">Auto</option>
+                            @for (var n = 1; n <= 12; n++)
+                            {
+                                <option value="@n" selected="@(line.MaxLabelsAcrossOverride == n)">@n up</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="line-@(i)-orientation">Orientation</label>
+                        <select id="line-@(i)-orientation" name="Input.Lines[@i].LabelOrientationOverride" class="form-select calc-immediate orientation-select" disabled="@isReadOnly">
+                            <option value="" selected="@(!line.LabelOrientationOverride.HasValue)">Auto (best fit)</option>
+                            <option value="@((int)LabelOrientation.AsEntered)" selected="@(line.LabelOrientationOverride == LabelOrientation.AsEntered)">As entered</option>
+                            <option value="@((int)LabelOrientation.Rotated)" selected="@(line.LabelOrientationOverride == LabelOrientation.Rotated)">Rotated 90°</option>
+                        </select>
+                    </div>
                     <div class="col-12">
                         <label class="form-label">Finishing operations</label>
                         @if (!isReadOnly)
@@ -224,6 +243,30 @@
                             </thead>
                             <tbody></tbody>
                         </table>
+                        <div class="calc-breakdown mt-3 d-none"></div>
+                    </div>
+                }
+                else
+                {
+                    <div class="mt-3">
+                        <input type="hidden" name="Input.Lines[@i].MarkupPctOverride" value="@(line.MarkupPctOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")" class="markup-override-input" />
+                        @for (var j = 0; j < line.FinishingOperations.Count; j++)
+                        {
+                            var sel = line.FinishingOperations[j];
+                            <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].OperationId" value="@sel.OperationId" />
+                            <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].SortOrder" value="@j" />
+                            <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].SetupMinutesOverride" value="@(sel.SetupMinutesOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")" />
+                            <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].RunSpeedFpmOverride" value="@(sel.RunSpeedFpmOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")" />
+                        }
+                        <div class="calc-warnings alert alert-warning d-none"></div>
+                        <div class="calc-errors alert alert-danger d-none"></div>
+                        <table class="table table-sm calc-results">
+                            <thead>
+                                <tr><th>Qty</th><th>Unit price</th><th>Total</th><th>Margin %</th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <div class="calc-breakdown mt-3 d-none"></div>
                     </div>
                 }
             </div>

@@ -50,6 +50,11 @@ public class EstimateLinePageInput
     [Range(0, 10)]
     public decimal? MarkupPctOverride { get; set; }
 
+    [Range(1, 100)]
+    public int? MaxLabelsAcrossOverride { get; set; }
+
+    public LabelOrientation? LabelOrientationOverride { get; set; }
+
     public List<FinishingOperationSelectionInput> FinishingOperations { get; set; } = [];
 
     public List<int> Quantities { get; set; } = [5000, 10000, 25000];
@@ -72,7 +77,9 @@ public class EstimateLinePageInput
         RunningWastePct,
         LineNotes,
         Quantities.Where(q => q > 0).ToList(),
-        MarkupPctOverride);
+        MarkupPctOverride,
+        MaxLabelsAcrossOverride,
+        LabelOrientationOverride);
 
     public static EstimateLinePageInput FromLine(Domain.Entities.EstimateLine line)
     {
@@ -94,6 +101,8 @@ public class EstimateLinePageInput
             RunningWastePct = line.RunningWastePct,
             LineNotes = line.LineNotes,
             MarkupPctOverride = line.MarkupPctOverride,
+            MaxLabelsAcrossOverride = line.MaxLabelsAcrossOverride,
+            LabelOrientationOverride = line.LabelOrientationOverride,
             FinishingOperations = EstimateCalculationMapper
                 .DeserializeFinishingOperations(line.FinishingOperationsJson).ToList(),
             Quantities = line.QuantityBreaks.OrderBy(q => q.Quantity).Select(q => q.Quantity).ToList()

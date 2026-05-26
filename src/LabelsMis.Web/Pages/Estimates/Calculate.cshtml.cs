@@ -22,6 +22,7 @@ public class CalculateModel(EstimateService estimateService) : PageModel
                 lineIndex = l.LineIndex,
                 quantityBreaks = l.QuantityBreaks,
                 imposition = l.Imposition,
+                impositionLayout = l.ImpositionLayout,
                 warnings = l.Warnings,
                 errors = l.Errors,
                 markupPctUsed = l.MarkupPctUsed

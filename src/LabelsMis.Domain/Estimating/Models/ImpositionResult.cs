@@ -1,3 +1,5 @@
+using LabelsMis.Domain.Enums;
+
 namespace LabelsMis.Domain.Estimating.Models;
 
 public record ImpositionResult(
@@ -5,4 +7,8 @@ public record ImpositionResult(
     int LabelsAround,
     int LabelsPerImpression,
     decimal RepeatLengthIn,
-    decimal UtilizationPct);
+    decimal UtilizationPct,
+    LabelOrientation Orientation,
+    int MaxLabelsAcross,
+    decimal EffectiveLabelAcrossIn,
+    decimal EffectiveLabelAroundIn);

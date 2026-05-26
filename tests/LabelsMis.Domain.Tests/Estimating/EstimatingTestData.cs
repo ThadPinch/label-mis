@@ -1,3 +1,4 @@
+using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Estimating.Models;
 
 namespace LabelsMis.Domain.Tests.Estimating;
@@ -23,7 +24,9 @@ internal static class EstimatingTestData
         decimal? pressWebWidthIn = null,
         decimal? pressEdgeMarginIn = null,
         decimal? setupWasteImpressions = null,
-        decimal? runningWastePct = null)
+        decimal? runningWastePct = null,
+        int? maxLabelsAcrossOverride = null,
+        LabelOrientation? labelOrientationOverride = LabelOrientation.AsEntered)
     {
         return new EstimateRequest(
             LabelAcrossIn: labelAcrossIn ?? 4.0m,
@@ -51,7 +54,9 @@ internal static class EstimatingTestData
             SetupWasteImpressions: setupWasteImpressions ?? 30m,
             RunningWastePct: runningWastePct ?? 0.03m,
             CustomerMarkupPct: customerMarkupPct ?? 0.45m,
-            MinimumMarginPct: minimumMarginPct ?? 0.25m);
+            MinimumMarginPct: minimumMarginPct ?? 0.25m,
+            MaxLabelsAcrossOverride: maxLabelsAcrossOverride,
+            LabelOrientationOverride: labelOrientationOverride);
     }
 
     internal static IReadOnlyList<FinishingOperationRequest> DefaultFinishingOperations() =>

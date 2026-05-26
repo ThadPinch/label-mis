@@ -1,3 +1,4 @@
+using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Estimating.Models;
 
 namespace LabelsMis.Domain.Estimating.Calculations;
@@ -16,26 +17,47 @@ internal static class ImpositionCalculator
         var errors = new List<string>();
         var warnings = new List<string>();
 
-        if (request.LabelAcrossIn + (2 * request.PressEdgeMarginIn) > request.PressWebWidthIn)
+        var asEntered = TryOrientation(request, LabelOrientation.AsEntered, request.LabelAcrossIn, request.LabelAroundIn);
+        var rotated = TryOrientation(request, LabelOrientation.Rotated, request.LabelAroundIn, request.LabelAcrossIn);
+
+        Candidate? chosen;
+        if (request.LabelOrientationOverride is LabelOrientation forced)
         {
-            errors.Add("Label too wide for press");
+            chosen = forced == LabelOrientation.Rotated ? rotated : asEntered;
+            if (chosen.MaxLabelsAcross < 1)
+            {
+                errors.Add("Label too wide for press");
+                return new ImpositionCalculation(null!, errors, warnings);
+            }
+        }
+        else
+        {
+            var valid = new List<Candidate>();
+            if (asEntered.MaxLabelsAcross >= 1) valid.Add(asEntered);
+            if (rotated.MaxLabelsAcross >= 1) valid.Add(rotated);
+
+            if (valid.Count == 0)
+            {
+                errors.Add("Label too wide for press");
+                return new ImpositionCalculation(null!, errors, warnings);
+            }
+
+            chosen = valid
+                .OrderByDescending(c => c.MaxLabelsAcross)
+                .ThenBy(c => c.AroundIn)
+                .ThenBy(c => c.Orientation)
+                .First();
         }
 
-        var labelsAcross = CalculateLabelsAcross(request);
-        if (labelsAcross < 1)
-        {
-            errors.Add("Label too wide for press");
-        }
-
-        if (errors.Count > 0)
-        {
-            return new ImpositionCalculation(null!, errors, warnings);
-        }
+        var maxAcross = chosen.MaxLabelsAcross;
+        var clampedAcross = request.MaxLabelsAcrossOverride is int requested
+            ? Math.Clamp(requested, 1, maxAcross)
+            : maxAcross;
 
         const int labelsAround = 1;
-        var labelsPerImpression = labelsAcross * labelsAround;
-        var repeatLength = labelsAround * (request.LabelAroundIn + request.GutterAroundIn);
-        var utilizationPct = (labelsAcross * request.LabelAcrossIn) / request.PressWebWidthIn;
+        var labelsPerImpression = clampedAcross * labelsAround;
+        var repeatLength = labelsAround * (chosen.AroundIn + request.GutterAroundIn);
+        var utilizationPct = (clampedAcross * chosen.AcrossIn) / request.PressWebWidthIn;
 
         if (utilizationPct < LowUtilizationThreshold)
         {
@@ -43,22 +65,41 @@ internal static class ImpositionCalculator
         }
 
         var result = new ImpositionResult(
-            labelsAcross,
+            clampedAcross,
             labelsAround,
             labelsPerImpression,
             EstimatingMath.RoundMoney(repeatLength),
-            EstimatingMath.RoundMoney(utilizationPct));
+            EstimatingMath.RoundMoney(utilizationPct),
+            chosen.Orientation,
+            maxAcross,
+            chosen.AcrossIn,
+            chosen.AroundIn);
 
         return new ImpositionCalculation(result, errors, warnings);
     }
 
-    private static int CalculateLabelsAcross(EstimateRequest request)
+    private static Candidate TryOrientation(
+        EstimateRequest request,
+        LabelOrientation orientation,
+        decimal acrossIn,
+        decimal aroundIn)
     {
-        var numerator = request.PressWebWidthIn
-            - (2 * request.PressEdgeMarginIn)
-            + request.GutterAcrossIn;
-        var denominator = request.LabelAcrossIn + request.GutterAcrossIn;
+        var max = 0;
+        if (acrossIn + (2 * request.PressEdgeMarginIn) <= request.PressWebWidthIn)
+        {
+            var numerator = request.PressWebWidthIn
+                - (2 * request.PressEdgeMarginIn)
+                + request.GutterAcrossIn;
+            var denominator = acrossIn + request.GutterAcrossIn;
+            max = (int)Math.Floor(numerator / denominator);
+        }
 
-        return (int)Math.Floor(numerator / denominator);
+        return new Candidate(orientation, acrossIn, aroundIn, Math.Max(0, max));
     }
+
+    private sealed record Candidate(
+        LabelOrientation Orientation,
+        decimal AcrossIn,
+        decimal AroundIn,
+        int MaxLabelsAcross);
 }

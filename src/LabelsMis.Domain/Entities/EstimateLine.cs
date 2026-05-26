@@ -31,6 +31,8 @@ public class EstimateLine : EntityBase
     public decimal RunningWastePct { get; private set; }
     public string? LineNotes { get; private set; }
     public decimal? MarkupPctOverride { get; private set; }
+    public int? MaxLabelsAcrossOverride { get; private set; }
+    public LabelOrientation? LabelOrientationOverride { get; private set; }
 
     public IReadOnlyCollection<EstimateQuantityBreak> QuantityBreaks => _quantityBreaks;
 
@@ -54,6 +56,8 @@ public class EstimateLine : EntityBase
         decimal runningWastePct,
         string? lineNotes,
         decimal? markupPctOverride,
+        int? maxLabelsAcrossOverride,
+        LabelOrientation? labelOrientationOverride,
         Guid createdById,
         DateTime createdAt)
     {
@@ -82,7 +86,9 @@ public class EstimateLine : EntityBase
             SetupWasteImpressions = setupWasteImpressions,
             RunningWastePct = runningWastePct,
             LineNotes = string.IsNullOrWhiteSpace(lineNotes) ? null : lineNotes.Trim(),
-            MarkupPctOverride = markupPctOverride
+            MarkupPctOverride = markupPctOverride,
+            MaxLabelsAcrossOverride = maxLabelsAcrossOverride,
+            LabelOrientationOverride = labelOrientationOverride
         };
         line.SetCreated(id, createdById, createdAt);
         return line;
@@ -106,6 +112,8 @@ public class EstimateLine : EntityBase
         decimal runningWastePct,
         string? lineNotes,
         decimal? markupPctOverride,
+        int? maxLabelsAcrossOverride,
+        LabelOrientation? labelOrientationOverride,
         Guid modifiedById,
         DateTime modifiedAt)
     {
@@ -132,6 +140,8 @@ public class EstimateLine : EntityBase
         RunningWastePct = runningWastePct;
         LineNotes = string.IsNullOrWhiteSpace(lineNotes) ? null : lineNotes.Trim();
         MarkupPctOverride = markupPctOverride;
+        MaxLabelsAcrossOverride = maxLabelsAcrossOverride;
+        LabelOrientationOverride = labelOrientationOverride;
         SetModified(modifiedById, modifiedAt);
     }
 

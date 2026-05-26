@@ -125,7 +125,9 @@ body {
   color: var(--lm-orange);
 }
 
-.app-navbar .nav-link {
+.app-navbar .nav-link,
+.app-navbar .nav-link:visited {
+  color: rgba(255, 255, 255, 0.82);
   font-weight: 500;
   font-size: 0.9rem;
   padding: 0.65rem 0.85rem !important;
@@ -362,4 +364,315 @@ body {
 
 .app-footer .footer-accent {
   color: var(--lm-orange);
+}
+
+/* ==========================================================================
+   Estimate imposition diagram
+   ========================================================================== */
+.imposition-diagram {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.imposition-diagram .imposition-caption {
+  font-size: 0.78rem;
+  color: var(--lm-text-muted);
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.imposition-diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 360px;
+  border: 1px solid var(--lm-gray-200);
+  border-radius: var(--lm-radius);
+  background: var(--lm-white);
+  padding: 0.5rem;
+  box-sizing: border-box;
+}
+
+.imposition-diagram .imposition-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--lm-text-muted);
+}
+
+.imposition-diagram .legend-swatch {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1px solid var(--lm-gray-400);
+  border-radius: 2px;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.imposition-diagram .legend-swatch--stock {
+  background: #e8e0d4;
+}
+
+.imposition-diagram .legend-swatch--press {
+  background: var(--lm-white);
+}
+
+.imposition-diagram .legend-swatch--margin {
+  background: repeating-linear-gradient(
+    -45deg,
+    #fecaca,
+    #fecaca 2px,
+    #fee2e2 2px,
+    #fee2e2 4px
+  );
+}
+
+.imposition-diagram .legend-swatch--label {
+  background: rgba(249, 115, 22, 0.35);
+  border-color: var(--lm-orange);
+}
+
+.imposition-diagram .legend-swatch--waste {
+  background: #fef9c3;
+}
+
+/* ==========================================================================
+   Estimate calculation breakdown
+   ========================================================================== */
+.calc-breakdown-card {
+  background: var(--lm-white);
+  border: 1px solid var(--lm-gray-200);
+  border-radius: var(--lm-radius);
+  padding: 1.25rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.calc-breakdown-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lm-text-muted);
+  margin: 0 0 1rem;
+}
+
+.calc-step-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lm-orange-dark);
+  margin: 0 0 0.6rem;
+}
+
+.calc-imposition {
+  background: var(--lm-gray-100);
+  border: 1px solid var(--lm-gray-200);
+  border-radius: var(--lm-radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.calc-imposition .imposition-diagram {
+  margin-bottom: 0.75rem;
+}
+
+.calc-dl {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  column-gap: 1rem;
+  row-gap: 0.3rem;
+  margin: 0;
+  font-size: 0.825rem;
+}
+
+.calc-dl dt {
+  font-weight: 500;
+  color: var(--lm-text-muted);
+}
+
+.calc-dl dd {
+  margin: 0;
+  color: var(--lm-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.calc-dl-note {
+  color: var(--lm-text-muted);
+  font-size: 0.78rem;
+}
+
+.calc-qty-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.calc-qty-section {
+  border: 1px solid var(--lm-gray-200);
+  border-radius: var(--lm-radius);
+  background: var(--lm-white);
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.calc-qty-section[open] {
+  border-color: var(--lm-orange);
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.12);
+}
+
+.calc-qty-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.7rem 1rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.calc-qty-summary::-webkit-details-marker {
+  display: none;
+}
+
+.calc-qty-summary::marker {
+  display: none;
+}
+
+.calc-qty-summary:hover {
+  background: var(--lm-orange-subtle);
+}
+
+.calc-qty-section[open] .calc-qty-summary {
+  background: var(--lm-orange-subtle);
+  border-bottom: 1px solid var(--lm-gray-200);
+}
+
+.calc-qty-chevron {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-right: 2px solid var(--lm-text-muted);
+  border-bottom: 2px solid var(--lm-text-muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+  margin-left: 0.15rem;
+}
+
+.calc-qty-section[open] .calc-qty-chevron {
+  transform: rotate(45deg);
+  border-color: var(--lm-orange-dark);
+}
+
+.calc-qty-label {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  min-width: 0;
+}
+
+.calc-qty-amount {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--lm-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.calc-qty-unit {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--lm-text-muted);
+  margin-top: 0.15rem;
+}
+
+.calc-qty-stats {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.calc-qty-stat {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  line-height: 1.15;
+}
+
+.calc-qty-stat-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--lm-text-muted);
+}
+
+.calc-qty-stat-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--lm-text);
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.15rem;
+}
+
+.calc-qty-stat--total .calc-qty-stat-value {
+  color: var(--lm-orange-dark);
+  font-size: 1rem;
+}
+
+.calc-qty-stat--warn .calc-qty-stat-value {
+  color: #b45309;
+}
+
+.calc-qty-body {
+  padding: 1rem;
+  background: var(--lm-gray-100);
+}
+
+.calc-qty-body .calc-step + .calc-step {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed var(--lm-gray-200);
+}
+
+.calc-cost-table {
+  font-size: 0.825rem;
+  margin-bottom: 0 !important;
+  background: var(--lm-white);
+}
+
+.calc-cost-table thead th {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--lm-text-muted);
+  background: var(--lm-gray-100);
+  border-bottom: 1px solid var(--lm-gray-200);
+}
+
+.calc-cost-table tfoot td {
+  background: var(--lm-gray-100);
+  border-top: 2px solid var(--lm-gray-200);
+}
+
+@media (max-width: 575.98px) {
+  .calc-qty-summary {
+    flex-wrap: wrap;
+  }
+
+  .calc-qty-stats {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--lm-gray-200);
+  }
 }

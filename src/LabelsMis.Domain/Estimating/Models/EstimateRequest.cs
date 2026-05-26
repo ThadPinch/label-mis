@@ -1,3 +1,5 @@
+using LabelsMis.Domain.Enums;
+
 namespace LabelsMis.Domain.Estimating.Models;
 
 public record EstimateRequest(
@@ -26,4 +28,6 @@ public record EstimateRequest(
     decimal SetupWasteImpressions,
     decimal RunningWastePct,
     decimal CustomerMarkupPct,
-    decimal MinimumMarginPct);
+    decimal MinimumMarginPct,
+    int? MaxLabelsAcrossOverride = null,
+    LabelOrientation? LabelOrientationOverride = null);

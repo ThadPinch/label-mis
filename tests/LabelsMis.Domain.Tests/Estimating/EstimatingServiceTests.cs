@@ -1,3 +1,4 @@
+using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Estimating;
 using LabelsMis.Domain.Estimating.Models;
 
@@ -225,5 +226,104 @@ public class EstimatingServiceTests
     public void Calculate_HistoricalJobs_WithinTwoPercentOfQuotedPrices()
     {
         true.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Calculate_AutoRotation_PicksOrientationWithMoreLabelsAcross()
+    {
+        // 4x3 label on 13" web: as-entered fits 3 across, rotated fits 4 across.
+        var request = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [25000],
+            labelOrientationOverride: null);
+
+        var result = _sut.Calculate(request);
+
+        result.Imposition.Should().NotBeNull();
+        result.Imposition!.Orientation.Should().Be(LabelOrientation.Rotated);
+        result.Imposition.LabelsAcross.Should().Be(4);
+        result.Imposition.MaxLabelsAcross.Should().Be(4);
+        result.Imposition.EffectiveLabelAcrossIn.Should().Be(3.0m);
+        result.Imposition.EffectiveLabelAroundIn.Should().Be(4.0m);
+    }
+
+    [Fact]
+    public void Calculate_OrientationOverride_ForcesAsEnteredEvenWhenRotatedFitsMore()
+    {
+        var request = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [25000],
+            labelOrientationOverride: LabelOrientation.AsEntered);
+
+        var result = _sut.Calculate(request);
+
+        result.Imposition!.Orientation.Should().Be(LabelOrientation.AsEntered);
+        result.Imposition.LabelsAcross.Should().Be(3);
+        result.Imposition.EffectiveLabelAcrossIn.Should().Be(4.0m);
+    }
+
+    [Fact]
+    public void Calculate_MaxLabelsAcrossOverride_ClampsLabelsAcross()
+    {
+        var request = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [25000],
+            maxLabelsAcrossOverride: 1);
+
+        var result = _sut.Calculate(request);
+
+        result.Imposition!.LabelsAcross.Should().Be(1);
+        result.Imposition.MaxLabelsAcross.Should().Be(3);
+    }
+
+    [Fact]
+    public void Calculate_MaxLabelsAcrossOverrideAboveMax_ClampedToMax()
+    {
+        var request = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [25000],
+            maxLabelsAcrossOverride: 99);
+
+        var result = _sut.Calculate(request);
+
+        result.Imposition!.LabelsAcross.Should().Be(result.Imposition.MaxLabelsAcross);
+    }
+
+    [Fact]
+    public void Calculate_TieOnLabelsAcross_PicksShorterRepeatOrientation()
+    {
+        // 2.0 across × 1.5 around on a 4.5" web with 0.25" edge margin and no gutter:
+        //   as-entered: floor((4.5 - 0.5) / 2.0) = 2 across, around = 1.5
+        //   rotated:    floor((4.5 - 0.5) / 1.5) = 2 across, around = 2.0
+        // Tie at 2 across — tie-break picks the orientation with the shorter repeat.
+        var request = new EstimateRequest(
+            LabelAcrossIn: 2.0m,
+            LabelAroundIn: 1.5m,
+            CornerRadiusIn: 0m,
+            GutterAcrossIn: 0m,
+            GutterAroundIn: 0m,
+            BleedIn: 0m,
+            PressId: EstimatingTestData.Indigo6800PressId,
+            PressWebWidthIn: 4.5m,
+            PressEdgeMarginIn: 0.25m,
+            PressSetupMinutes: 20m,
+            PressCostPerHour: 150m,
+            PressSpeedFpm: 100m,
+            PressClickBased: true,
+            InkSet: IndigoInkSet.CMYK,
+            ClickRatePer1000: 35m,
+            WhiteInkUsed: false,
+            WhiteClickRatePer1000: 0m,
+            StockId: EstimatingTestData.BoppStockId,
+            StockWidthIn: 4.5m,
+            StockCostPerMsi: 0.85m,
+            FinishingOperations: [],
+            Quantities: [1000],
+            SetupWasteImpressions: 30m,
+            RunningWastePct: 0.03m,
+            CustomerMarkupPct: 0.45m,
+            MinimumMarginPct: 0.25m);
+
+        var result = _sut.Calculate(request);
+
+        result.Imposition!.LabelsAcross.Should().Be(2);
+        result.Imposition.Orientation.Should().Be(LabelOrientation.AsEntered);
+        result.Imposition.EffectiveLabelAroundIn.Should().Be(1.5m);
     }
 }
