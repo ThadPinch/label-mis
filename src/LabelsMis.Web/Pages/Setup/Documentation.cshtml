@@ -1,0 +1,300 @@
+@page "/setup/documentation"
+@model LabelsMis.Web.Pages.Setup.DocumentationModel
+@{
+    ViewData["Title"] = "Setup & usage guide";
+}
+
+<div class="docs-page">
+    <header class="docs-hero">
+        <p class="docs-hero-eyebrow">Labels MIS</p>
+        <h1 class="docs-hero-title">Setup &amp; usage guide</h1>
+        <p class="docs-hero-lead">
+            Configure master data before estimating and production. Each section covers what to set up,
+            how records are used in the system, and where to manage them in the app.
+        </p>
+    </header>
+
+    <div class="docs-layout">
+        <nav class="docs-sidebar" aria-label="Documentation sections">
+            <div class="docs-sidebar-inner">
+                <p class="docs-nav-heading">Master data</p>
+                <ul class="docs-nav-list">
+                    <li><a class="docs-nav-link" href="#customers">Customers</a></li>
+                    <li><a class="docs-nav-link" href="#suppliers">Suppliers</a></li>
+                    <li><a class="docs-nav-link" href="#stocks">Stocks</a></li>
+                    <li><a class="docs-nav-link" href="#dies">Dies</a></li>
+                    <li><a class="docs-nav-link" href="#inks">Inks</a></li>
+                    <li><a class="docs-nav-link" href="#finishing-operations">Finishing operations</a></li>
+                    <li><a class="docs-nav-link" href="#presses">Presses</a></li>
+                </ul>
+                <p class="docs-nav-heading">Workflows</p>
+                <ul class="docs-nav-list">
+                    <li><a class="docs-nav-link" href="#estimating">Estimating</a></li>
+                </ul>
+            </div>
+        </nav>
+
+        <div class="docs-content">
+            <section class="docs-section" id="master-data-overview">
+                <h2 class="docs-section-title">Master data overview</h2>
+                <p>
+                    Master data records are long-lived reference data. They are soft-deleted (marked inactive)
+                    rather than removed, so historical estimates and jobs keep valid references.
+                </p>
+                <div class="docs-callout docs-callout--tip">
+                    <strong>Recommended order</strong>
+                    <p class="mb-0">
+                        Set up suppliers first, then stocks (which link to suppliers), then customers and dies.
+                        Configure presses, inks, and finishing operations before creating estimates.
+                    </p>
+                </div>
+            </section>
+
+            <section class="docs-section" id="customers">
+                <div class="docs-section-header">
+                    <h2 class="docs-section-title">Customers</h2>
+                    <a class="docs-section-action" asp-page="/Customers/Index">Open customers</a>
+                </div>
+                <p>
+                    Customers are the billing and shipping parties for estimates, sales orders, and invoices.
+                    Each customer can have multiple addresses and contacts.
+                </p>
+
+                <h3 class="docs-subtitle">Setup</h3>
+                <ul class="docs-list">
+                    <li>Create a unique <strong>code</strong> and display <strong>name</strong> for each account.</li>
+                    <li>Set <strong>status</strong> (prospect, active customer, etc.) and payment <strong>terms</strong>.</li>
+                    <li>Enter <strong>default markup %</strong> if this customer uses a standard margin on estimates.</li>
+                    <li>Add at least one <strong>billing</strong> and one <strong>shipping</strong> address when you will ship or invoice.</li>
+                    <li>Assign a <strong>sales rep</strong> and primary <strong>contact</strong> when applicable.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Usage</h3>
+                <ul class="docs-list">
+                    <li>Selected on every <strong>estimate</strong> and carried through to sales orders and jobs.</li>
+                    <li><strong>Tax exempt</strong> flag affects whether tax is calculated on quotes and invoices.</li>
+                    <li><strong>Customer-owned dies</strong> link back to the customer record for tooling traceability.</li>
+                    <li>Deactivate instead of deleting when an account is no longer active — past transactions remain intact.</li>
+                </ul>
+            </section>
+
+            <section class="docs-section" id="suppliers">
+                <div class="docs-section-header">
+                    <h2 class="docs-section-title">Suppliers</h2>
+                    <a class="docs-section-action" asp-page="/Suppliers/Index">Open suppliers</a>
+                </div>
+                <p>
+                    Suppliers are vendors for stock, dies, and other purchased materials. Stock records
+                    require a supplier; dies can reference both a supplier and a customer (for customer-owned tooling).
+                </p>
+
+                <h3 class="docs-subtitle">Setup</h3>
+                <ul class="docs-list">
+                    <li>Assign a short <strong>code</strong> and full <strong>name</strong> (e.g. Avery, RotoMetrics).</li>
+                    <li>Record <strong>terms</strong>, <strong>account number</strong>, and <strong>default lead time</strong> in days.</li>
+                    <li>Add vendor <strong>contacts</strong> for purchasing and reorder follow-up.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Usage</h3>
+                <ul class="docs-list">
+                    <li>Linked from <strong>stock</strong> records for cost and reorder context.</li>
+                    <li>Referenced on <strong>dies</strong> to track who manufactured the tool.</li>
+                    <li>Used on <strong>purchase orders</strong> when ordering material from a vendor.</li>
+                </ul>
+            </section>
+
+            <section class="docs-section" id="stocks">
+                <div class="docs-section-header">
+                    <h2 class="docs-section-title">Stocks</h2>
+                    <a class="docs-section-action" asp-page="/Stocks/Index">Open stocks</a>
+                </div>
+                <p>
+                    Stocks (substrates) describe face material, adhesive, liner, roll width, and cost.
+                    The estimating engine uses stock width and cost per MSI to calculate material usage.
+                </p>
+
+                <h3 class="docs-subtitle">Setup</h3>
+                <ul class="docs-list">
+                    <li>Enter <strong>code</strong> and <strong>description</strong> that match how the shop orders material.</li>
+                    <li>Record <strong>face material</strong>, <strong>adhesive</strong>, and <strong>liner</strong> for spec clarity.</li>
+                    <li>Set <strong>width (in)</strong> to the purchased roll width and <strong>total caliper (mil)</strong> when known.</li>
+                    <li>Link the <strong>supplier</strong>, <strong>supplier part number</strong>, and <strong>cost per MSI</strong>.</li>
+                    <li>Enter <strong>minimum order quantity (LF)</strong> for purchasing guidance.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Usage</h3>
+                <ul class="docs-list">
+                    <li>Selected on estimate lines; drives imposition width and material cost in calculations.</li>
+                    <li>Received on <strong>rolls</strong> via purchase orders for inventory tracking.</li>
+                    <li>MSI (thousand square inches) is the standard North American pricing unit for label stock.</li>
+                </ul>
+            </section>
+
+            <section class="docs-section" id="dies">
+                <div class="docs-section-header">
+                    <h2 class="docs-section-title">Dies</h2>
+                    <a class="docs-section-action" asp-page="/Dies/Index">Open dies</a>
+                </div>
+                <p>
+                    Dies define label shape and layout on the web: dimensions across and around, gutters,
+                    labels per repeat, and die type. They anchor imposition when a die is specified on an estimate.
+                </p>
+
+                <h3 class="docs-subtitle">Setup</h3>
+                <ul class="docs-list">
+                    <li>Enter <strong>label across</strong>, <strong>label around</strong>, and <strong>corner radius</strong> in inches.</li>
+                    <li>Set <strong>labels around</strong>, <strong>gutter</strong> dimensions, and <strong>web width</strong> for the tool layout.</li>
+                    <li>Choose <strong>die type</strong> (flexible, solid, etc.) and optional <strong>shape</strong> description.</li>
+                    <li>Link <strong>customer</strong> when the die is customer-owned; link <strong>supplier</strong> and part number for reorder.</li>
+                    <li>Record <strong>location</strong> in the shop for physical retrieval.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Usage</h3>
+                <ul class="docs-list">
+                    <li>Optional on estimates; when selected, imposition uses die layout instead of manual label counts.</li>
+                    <li>Supports tooling traceability for quality complaints and regulated industries.</li>
+                </ul>
+            </section>
+
+            <section class="docs-section" id="inks">
+                <div class="docs-section-header">
+                    <h2 class="docs-section-title">Inks</h2>
+                    <a class="docs-section-action" asp-page="/Inks/Index">Open inks</a>
+                </div>
+                <p>
+                    Inks represent print stations on digital presses — CMYK, spot colors, white, and varnish.
+                    For click-based presses, each ink carries a click rate used in estimating.
+                </p>
+
+                <h3 class="docs-subtitle">Setup</h3>
+                <ul class="docs-list">
+                    <li>Create a <strong>code</strong> and <strong>description</strong> (e.g. Cyan, White, Pantone 185 C).</li>
+                    <li>Assign the <strong>ink set</strong> (process, spot, varnish, etc.).</li>
+                    <li>For HP Indigo and similar presses, set <strong>click rate per 1,000 impressions</strong>.</li>
+                    <li>Mark <strong>white ink</strong> when the station uses white — it affects coverage and cost assumptions.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Usage</h3>
+                <ul class="docs-list">
+                    <li>Selected per estimate line to count color stations and sum click charges.</li>
+                    <li>Works with <strong>EPM</strong> (Enhanced Productivity Mode) options on supported presses where applicable.</li>
+                </ul>
+            </section>
+
+            <section class="docs-section" id="finishing-operations">
+                <div class="docs-section-header">
+                    <h2 class="docs-section-title">Finishing operations</h2>
+                    <a class="docs-section-action" asp-page="/FinishingOperations/Index">Open finishing operations</a>
+                </div>
+                <p>
+                    Finishing operations are off-press steps such as laminating, slitting, rewinding, or die-cutting
+                    on a separate finisher. Each operation has default setup time, run speed, and hourly cost.
+                </p>
+
+                <h3 class="docs-subtitle">Setup</h3>
+                <ul class="docs-list">
+                    <li>Define a unique <strong>code</strong> and clear <strong>description</strong>.</li>
+                    <li>Choose <strong>operation type</strong> (laminate, slit, rewind, etc.).</li>
+                    <li>Enter <strong>equipment name</strong>, <strong>default setup minutes</strong>, and <strong>default run speed (fpm)</strong>.</li>
+                    <li>Set <strong>cost per hour</strong> for labor and overhead recovery in estimates and jobs.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Usage</h3>
+                <ul class="docs-list">
+                    <li>Attached to estimate lines; setup and run times roll into total production minutes.</li>
+                    <li>Per-line <strong>setup minute overrides</strong> on estimates adjust one-off complexity without changing master data.</li>
+                    <li>Planned minutes on <strong>jobs</strong> use the same defaults unless overridden at estimate time.</li>
+                </ul>
+            </section>
+
+            <section class="docs-section" id="presses">
+                <div class="docs-section-header">
+                    <h2 class="docs-section-title">Presses</h2>
+                    <a class="docs-section-action" asp-page="/Presses/Index">Open presses</a>
+                </div>
+                <p>
+                    Press records define equipment capabilities and costing: web width, repeat range, speed,
+                    setup time, and whether pricing is hourly or click-based.
+                </p>
+
+                <h3 class="docs-subtitle">Setup</h3>
+                <ul class="docs-list">
+                    <li>Enter <strong>name</strong>, <strong>code</strong>, and <strong>press type</strong> (e.g. digital toner).</li>
+                    <li>Set <strong>web width</strong>, <strong>min/max repeat</strong>, and <strong>max colors</strong> for imposition validation.</li>
+                    <li>Record <strong>speed (fpm)</strong> and <strong>setup minutes</strong> for run-time and makeready estimates.</li>
+                    <li>Enter <strong>cost per hour</strong> for time-based presses, or enable <strong>click-based</strong> and configure inks separately.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Usage</h3>
+                <ul class="docs-list">
+                    <li>One press is selected per estimate line; drives impression count, press minutes, and click cost.</li>
+                    <li>Imposition checks label layout against press web width and repeat limits.</li>
+                </ul>
+            </section>
+
+            <section class="docs-section docs-section--workflows" id="estimating">
+                <div class="docs-section-header">
+                    <h2 class="docs-section-title">Estimating</h2>
+                    <a class="docs-section-action" asp-page="/Estimates/Index">Open estimates</a>
+                </div>
+                <p>
+                    Estimates are the central quoting object. Each estimate has a customer, one or more lines
+                    (label specs), quantity breaks, and a calculated cost breakdown before markup and sale price.
+                </p>
+
+                <h3 class="docs-subtitle">Prerequisites</h3>
+                <ul class="docs-list">
+                    <li>At least one <strong>customer</strong>, <strong>stock</strong>, and <strong>press</strong> must exist.</li>
+                    <li>Add <strong>inks</strong> and <strong>finishing operations</strong> before quoting jobs that need them.</li>
+                    <li>Optional: link a <strong>die</strong> for fixed layouts; otherwise set label dimensions and imposition manually.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Creating an estimate</h3>
+                <ol class="docs-list docs-list--ordered">
+                    <li>Go to <strong>Sales → Estimates</strong> and create a new draft.</li>
+                    <li>Select the <strong>customer</strong> and add one or more <strong>lines</strong> with label size, stock, and press.</li>
+                    <li>Enter <strong>quantity breaks</strong> (e.g. 1,000 / 5,000 / 10,000 labels).</li>
+                    <li>Choose <strong>inks</strong>, <strong>finishing operations</strong>, and waste assumptions (setup waste impressions, etc.).</li>
+                    <li>Use <strong>Calculate</strong> to run the engine and review imposition diagram and cost breakdown per quantity.</li>
+                    <li>Apply markup and save; convert to a <strong>product</strong> or <strong>sales order</strong> when the quote is accepted.</li>
+                </ol>
+
+                <div class="docs-callout">
+                    <strong>Imposition</strong>
+                    <p class="mb-0">
+                        The calculator lays out labels across the press web, computes impressions and linear feet,
+                        and rolls up material, press, ink click, and finishing costs. Override fields on a line
+                        (orientation, labels across/around) when you need a manual layout different from the die default.
+                    </p>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            var links = document.querySelectorAll('.docs-nav-link');
+            var sections = [];
+            links.forEach(function (link) {
+                var id = link.getAttribute('href').slice(1);
+                var el = document.getElementById(id);
+                if (el) sections.push({ link: link, el: el });
+            });
+
+            function updateActive() {
+                var scrollY = window.scrollY + 120;
+                var current = sections[0];
+                sections.forEach(function (s) {
+                    if (s.el.offsetTop <= scrollY) current = s;
+                });
+                links.forEach(function (l) { l.classList.remove('is-active'); });
+                if (current) current.link.classList.add('is-active');
+            }
+
+            window.addEventListener('scroll', updateActive, { passive: true });
+            updateActive();
+        })();
+    </script>
+}
