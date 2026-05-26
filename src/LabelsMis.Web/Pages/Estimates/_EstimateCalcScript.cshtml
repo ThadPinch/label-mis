@@ -14,6 +14,9 @@
     let productsCacheKey = null;
     let productsList = [];
     const lineMarkupCache = new Map();
+    const lineResultsCache = new Map();
+    const totalsPanel = document.getElementById('estimate-totals-panel');
+    const breakdownPanel = document.getElementById('estimate-breakdown-panel');
 
     const markupToMargin = (markup) => markup / (1 + markup);
     const marginToMarkup = (margin) => margin / (1 - margin);
@@ -193,16 +196,18 @@
             </div>`;
     };
 
-    const renderCalculationBreakdown = (lineEl, lineResult) => {
-        const container = lineEl.querySelector('.calc-breakdown');
+    const renderCalculationBreakdown = (lineEl, lineResult, targetEl) => {
+        const container = targetEl || lineEl?.querySelector('.calc-breakdown');
         if (!container) return;
 
         const breaks = lineResult.quantityBreaks || [];
         const imposition = lineResult.imposition;
         const markupPct = Number(lineResult.markupPctUsed ?? 0);
         const hasErrors = (lineResult.errors || []).length > 0;
+        const includeTitle = !targetEl;
 
         if (hasErrors || breaks.length === 0 || !imposition) {
+            if (targetEl) return;
             container.classList.add('d-none');
             container.innerHTML = '';
             return;
@@ -318,15 +323,116 @@
                 </details>`;
         }).join('');
 
-        container.classList.remove('d-none');
+        container.classList.remove('d-none', 'estimate-breakdown-panel--empty');
+        const warningsHtml = (lineResult.warnings || []).length
+            ? `<div class="alert alert-warning mb-3">${escapeHtml(lineResult.warnings.join('; '))}</div>`
+            : '';
         container.innerHTML = `
             <div class="calc-breakdown-card">
-                <h3 class="calc-breakdown-title">Calculation breakdown</h3>
+                ${includeTitle ? '<h3 class="calc-breakdown-title">Calculation breakdown</h3>' : ''}
+                ${warningsHtml}
                 ${impositionHtml}
                 <div class="calc-qty-list">
                     ${qtySections}
                 </div>
             </div>`;
+    };
+
+    const updateLineSummary = (lineEl, lineResult) => {
+        const descEl = lineEl.querySelector('.line-desc');
+        const previewEl = lineEl.querySelector('.line-price-preview');
+        const descInput = lineEl.querySelector('[name$=".ProductDescription"]');
+        if (descEl) {
+            descEl.textContent = (descInput?.value || '').trim() || 'Untitled line';
+        }
+        if (!previewEl) return;
+        const breaks = lineResult?.quantityBreaks || [];
+        if (breaks.length === 0) {
+            previewEl.textContent = '—';
+            return;
+        }
+        const top = breaks[breaks.length - 1];
+        previewEl.textContent = fmtMoney(top.totalPrice);
+    };
+
+    const updateEstimateTotals = () => {
+        if (!totalsPanel) return;
+
+        const lineEls = [...linesContainer.querySelectorAll('.estimate-line')];
+        if (lineEls.length === 0) {
+            totalsPanel.innerHTML = '<p class="text-muted small mb-0">Add a line to begin.</p>';
+            return;
+        }
+
+        let grandTotal = 0;
+        let hasAny = false;
+        const rows = lineEls.map((lineEl) => {
+            const idx = Number(lineEl.dataset.lineIndex);
+            const result = lineResultsCache.get(String(idx));
+            const breaks = result?.quantityBreaks || [];
+            const lineNum = idx + 1;
+            if (breaks.length === 0) {
+                return `<tr><td>Line ${lineNum}</td><td class="text-muted">—</td><td class="text-end text-muted">—</td></tr>`;
+            }
+            const top = breaks[breaks.length - 1];
+            grandTotal += Number(top.totalPrice);
+            hasAny = true;
+            return `<tr>
+                <td>Line ${lineNum}</td>
+                <td>${fmtQty(top.quantity)}</td>
+                <td class="text-end">${fmtMoney(top.totalPrice)}</td>
+            </tr>`;
+        }).join('');
+
+        totalsPanel.innerHTML = `
+            <table class="table table-sm align-middle mb-2">
+                <thead>
+                    <tr><th>Line</th><th>Highest qty</th><th class="text-end">Total</th></tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+            <div class="estimate-grand-total">${hasAny ? fmtMoney(grandTotal) : '—'}</div>
+            <p class="estimate-totals-note mb-0">Sum of each line's highest quantity break.</p>`;
+    };
+
+    const refreshBreakdownPanel = () => {
+        if (!breakdownPanel) return;
+
+        const openLine = linesContainer.querySelector('.estimate-line-details[open]')?.closest('.estimate-line');
+        if (!openLine) {
+            breakdownPanel.className = 'estimate-breakdown-panel estimate-breakdown-panel--empty';
+            breakdownPanel.innerHTML = '<p class="text-muted small mb-0">Expand a line to view its calculation breakdown.</p>';
+            return;
+        }
+
+        const result = lineResultsCache.get(String(openLine.dataset.lineIndex));
+        breakdownPanel.className = 'estimate-breakdown-panel';
+
+        if (!result) {
+            breakdownPanel.innerHTML = '<p class="text-muted small mb-0">Calculating…</p>';
+            return;
+        }
+
+        if (result.errors?.length) {
+            breakdownPanel.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(result.errors.join('; '))}</div>`;
+            return;
+        }
+
+        renderCalculationBreakdown(openLine, result, breakdownPanel);
+    };
+
+    const wireLineAccordion = (lineEl) => {
+        const details = lineEl.querySelector('.estimate-line-details');
+        if (!details || details.dataset.accordionWired === 'true') return;
+        details.dataset.accordionWired = 'true';
+        details.addEventListener('toggle', () => {
+            if (details.open) {
+                linesContainer.querySelectorAll('.estimate-line-details[open]').forEach(other => {
+                    if (other !== details) other.open = false;
+                });
+            }
+            refreshBreakdownPanel();
+        });
     };
 
     const getLineMarkup = (lineEl) => {
@@ -371,19 +477,28 @@
     const reindexLines = () => {
         const lines = linesContainer.querySelectorAll('.estimate-line');
         const newCache = new Map();
+        const newResultsCache = new Map();
         lines.forEach((line, idx) => {
             const oldIdx = line.dataset.lineIndex;
             if (lineMarkupCache.has(oldIdx)) {
                 newCache.set(String(idx), lineMarkupCache.get(oldIdx));
             }
+            if (lineResultsCache.has(oldIdx)) {
+                newResultsCache.set(String(idx), lineResultsCache.get(oldIdx));
+            }
             line.dataset.lineIndex = idx;
-            line.querySelector('.card-header strong').textContent = `Line ${idx + 1}`;
+            const title = line.querySelector('.line-title');
+            if (title) title.textContent = `Line ${idx + 1}`;
             line.querySelectorAll('[name^="Input.Lines["]').forEach(el => {
                 el.name = el.name.replace(/Input\.Lines\[\d+\]/, `Input.Lines[${idx}]`);
             });
         });
         lineMarkupCache.clear();
         newCache.forEach((v, k) => lineMarkupCache.set(k, v));
+        lineResultsCache.clear();
+        newResultsCache.forEach((v, k) => lineResultsCache.set(k, v));
+        updateEstimateTotals();
+        refreshBreakdownPanel();
     };
 
     const getProductFilterKey = () => {
@@ -506,6 +621,14 @@
                 });
             });
         }
+        finishing.forEach(op => {
+            if (typeof op.setupMinutesOverride === 'string' && op.setupMinutesOverride.trim() === '') {
+                op.setupMinutesOverride = null;
+            }
+            if (typeof op.runSpeedFpmOverride === 'string' && op.runSpeedFpmOverride.trim() === '') {
+                op.runSpeedFpmOverride = null;
+            }
+        });
         const quantities = [...lineEl.querySelectorAll('.quantity-input')]
             .map(i => parseInt(i.value, 10))
             .filter(q => !Number.isNaN(q) && q > 0);
@@ -521,7 +644,7 @@
             gutterAcrossIn: num('[name$=".GutterAcrossIn"]'),
             gutterAroundIn: num('[name$=".GutterAroundIn"]'),
             bleedIn: num('[name$=".BleedIn"]'),
-            substrateId: val('.substrate-select'),
+            substrateId: val('.substrate-select') || null,
             inkSet: int('[name$=".InkSet"]'),
             whiteInkUsed: whiteInk?.checked === true,
             setupWasteImpressions: num('[name$=".SetupWasteImpressions"]'),
@@ -636,7 +759,12 @@
                 updateMarginDisplay(lineEl, getLineMarkup(lineEl));
             }
         }
-        renderCalculationBreakdown(lineEl, lineResult);
+        lineResultsCache.set(String(lineEl.dataset.lineIndex), lineResult);
+        updateLineSummary(lineEl, lineResult);
+        updateEstimateTotals();
+        if (lineEl.querySelector('.estimate-line-details')?.open) {
+            refreshBreakdownPanel();
+        }
     };
 
     const calculate = async () => {
@@ -661,6 +789,7 @@
                 impositionLayout: lr.impositionLayout
             });
         });
+        refreshBreakdownPanel();
     };
 
     const scheduleCalculate = () => {
@@ -696,10 +825,13 @@
             });
         });
         root.querySelectorAll('.remove-line').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 const lineEl = btn.closest('.estimate-line');
                 if (linesContainer.querySelectorAll('.estimate-line').length <= 1) return;
                 lineMarkupCache.delete(lineEl.dataset.lineIndex);
+                lineResultsCache.delete(String(lineEl.dataset.lineIndex));
                 lineEl.remove();
                 reindexLines();
                 calculate();
@@ -714,18 +846,28 @@
         root.querySelectorAll('.estimate-line').forEach(lineEl => {
             const override = lineEl.querySelector('.markup-override-input')?.value?.trim();
             if (override) updateMarginDisplay(lineEl, parseFloat(override));
+            wireLineAccordion(lineEl);
+            const descInput = lineEl.querySelector('[name$=".ProductDescription"]');
+            descInput?.addEventListener('input', () => {
+                const descEl = lineEl.querySelector('.line-desc');
+                if (descEl) descEl.textContent = descInput.value.trim() || 'Untitled line';
+            });
         });
     };
 
     if (addLineBtn && lineTemplateEl) {
         addLineBtn.addEventListener('click', () => {
             const idx = linesContainer.querySelectorAll('.estimate-line').length;
-            const html = lineTemplateEl.innerHTML.replace(/__INDEX__/g, idx);
+            const html = lineTemplateEl.innerHTML
+                .replace(/__INDEX__/g, String(idx))
+                .replace(/__DISPLAY__/g, String(idx + 1));
             const wrapper = document.createElement('div');
             wrapper.innerHTML = html.trim();
             const newLine = wrapper.firstElementChild;
+            newLine.dataset.lineIndex = String(idx);
             linesContainer.appendChild(newLine);
             wireUp(newLine);
+            wireLineAccordion(newLine);
             populateProductSelects();
             calculate();
         });
@@ -743,6 +885,10 @@
 
     wireUp(root);
     syncProductFilterToEstimateCustomer();
-    loadProducts().then(calculate);
+    loadProducts().then(() => {
+        calculate();
+        updateEstimateTotals();
+        refreshBreakdownPanel();
+    });
 })();
 </script>

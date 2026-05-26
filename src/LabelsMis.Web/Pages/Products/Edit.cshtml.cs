@@ -34,14 +34,26 @@ public class EditModel(ProductService productService, LabelsMisDbContext db) : P
     {
         if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.Estimator)) return Forbid();
         EnsureCustomerSelection();
+        ValidateRequiredSelections();
         if (!ModelState.IsValid)
         {
             Product = await productService.GetAsync(Id, cancellationToken);
             await LoadLookupsAsync(cancellationToken);
             return Page();
         }
-        await productService.UpdateAsync(Id, Input.ToForm(), cancellationToken);
-        return RedirectToPage(new { id = Id });
+
+        try
+        {
+            await productService.UpdateAsync(Id, Input.ToForm(), cancellationToken);
+            return RedirectToPage(new { id = Id });
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            Product = await productService.GetAsync(Id, cancellationToken);
+            await LoadLookupsAsync(cancellationToken);
+            return Page();
+        }
     }
 
     public async Task<IActionResult> OnPostDiscontinueAsync(CancellationToken cancellationToken)
@@ -98,6 +110,24 @@ public class EditModel(ProductService productService, LabelsMisDbContext db) : P
         if (Input.CustomerIds.Count == 0 && Input.PrimaryCustomerId != Guid.Empty)
         {
             Input.CustomerIds.Add(Input.PrimaryCustomerId);
+        }
+    }
+
+    private void ValidateRequiredSelections()
+    {
+        if (Input.PrimaryCustomerId == Guid.Empty)
+        {
+            ModelState.AddModelError(nameof(Input.PrimaryCustomerId), "Select a primary customer.");
+        }
+
+        if (Input.SubstrateId == Guid.Empty)
+        {
+            ModelState.AddModelError(nameof(Input.SubstrateId), "Select a substrate.");
+        }
+
+        if (Input.CustomerIds.Count == 0)
+        {
+            ModelState.AddModelError(nameof(Input.CustomerIds), "Select at least one customer.");
         }
     }
 }

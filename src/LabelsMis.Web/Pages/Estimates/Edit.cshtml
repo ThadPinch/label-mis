@@ -43,6 +43,7 @@ else
 
     @if (Model.IsReadOnly)
     {
+        <div class="estimate-page">
         <div id="estimate-readonly-root">
             <partial name="_EstimateForm" model="Model.Input" />
         </div>
@@ -76,9 +77,11 @@ else
                 </form>
             }
         </div>
+        </div>
     }
     else
     {
+        <div class="estimate-page">
         <form method="post" id="estimate-form">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <partial name="_EstimateForm" for="Input" />
@@ -91,6 +94,7 @@ else
                 <input asp-for="EmailTo" class="form-control d-inline-block w-auto" placeholder="Email address" />
             </div>
         </form>
+        </div>
         <partial name="_EstimateLineTemplate" />
         @if (Model.CanDelete)
         {

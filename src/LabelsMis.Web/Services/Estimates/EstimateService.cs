@@ -189,6 +189,19 @@ public class EstimateService(
         for (var i = 0; i < input.Lines.Count; i++)
         {
             var line = input.Lines[i];
+            if (line.SubstrateId == Guid.Empty)
+            {
+                responses.Add(new EstimateLineCalculationResponse(
+                    i,
+                    [],
+                    null,
+                    null,
+                    [],
+                    ["Select a substrate."],
+                    line.MarkupPctOverride ?? 0m));
+                continue;
+            }
+
             try
             {
                 var request = await calculationMapper.BuildRequestAsync(input.CustomerId, line, cancellationToken);

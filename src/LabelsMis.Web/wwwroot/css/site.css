@@ -441,6 +441,201 @@ body {
 }
 
 /* ==========================================================================
+   Estimate editor workspace
+   ========================================================================== */
+.estimate-page {
+  --estimate-workspace-height: calc(100vh - var(--lm-header-height) - 10rem);
+}
+
+.estimate-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 36%);
+  gap: 1.25rem;
+  align-items: stretch;
+  min-height: var(--estimate-workspace-height);
+}
+
+.estimate-workspace-main,
+.estimate-workspace-panel {
+  min-height: 0;
+  max-height: var(--estimate-workspace-height);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.estimate-workspace-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.estimate-panel-card {
+  background: var(--lm-white);
+  border: 1px solid var(--lm-gray-200);
+  border-radius: var(--lm-radius);
+  padding: 1rem 1.1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.estimate-panel-card--breakdown {
+  flex: 1 1 auto;
+  min-height: 12rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.estimate-panel-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lm-text-muted);
+  margin: 0 0 0.85rem;
+}
+
+.estimate-totals-panel .estimate-grand-total {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--lm-orange-dark);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.estimate-totals-panel .estimate-totals-note {
+  font-size: 0.75rem;
+  color: var(--lm-text-muted);
+  margin-top: 0.35rem;
+}
+
+.estimate-breakdown-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.estimate-breakdown-panel--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 8rem;
+  border: 1px dashed var(--lm-gray-200);
+  border-radius: var(--lm-radius);
+  background: var(--lm-gray-100);
+  padding: 1rem;
+  text-align: center;
+}
+
+.estimate-line.card {
+  overflow: hidden;
+}
+
+.estimate-line-details {
+  margin: 0;
+}
+
+.estimate-line-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+
+.estimate-line-summary::-webkit-details-marker,
+.estimate-line-summary::marker {
+  display: none;
+}
+
+.estimate-line-summary:hover {
+  background: var(--lm-gray-100);
+}
+
+.estimate-line-details[open] > .estimate-line-summary {
+  background: var(--lm-orange-subtle);
+  border-bottom: 1px solid var(--lm-gray-200);
+}
+
+.estimate-line-chevron {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-right: 2px solid var(--lm-text-muted);
+  border-bottom: 2px solid var(--lm-text-muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.estimate-line-details[open] > .estimate-line-summary .estimate-line-chevron {
+  transform: rotate(45deg);
+  border-color: var(--lm-orange-dark);
+}
+
+.estimate-line-summary .line-title {
+  font-weight: 700;
+  color: var(--lm-text);
+  flex-shrink: 0;
+}
+
+.estimate-line-summary .line-desc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--lm-text-muted);
+  font-size: 0.875rem;
+}
+
+.estimate-line-summary .line-price-preview {
+  margin-left: auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--lm-orange-dark);
+  flex-shrink: 0;
+}
+
+.estimate-line-summary .remove-line {
+  flex-shrink: 0;
+}
+
+.estimate-workspace-panel .calc-breakdown-card {
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.estimate-workspace-panel .calc-imposition {
+  padding: 0.85rem;
+}
+
+.estimate-workspace-panel .imposition-diagram {
+  max-width: 100%;
+}
+
+@media (max-width: 991.98px) {
+  .estimate-page {
+    --estimate-workspace-height: none;
+  }
+
+  .estimate-workspace {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .estimate-workspace-main,
+  .estimate-workspace-panel {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .estimate-panel-card--breakdown {
+    min-height: 0;
+  }
+}
+
+/* ==========================================================================
    Estimate calculation breakdown
    ========================================================================== */
 .calc-breakdown-card {

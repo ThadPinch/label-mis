@@ -3,6 +3,11 @@
 @{ ViewData["Title"] = "New product"; ViewData["BackNav"] = new BackNavModel(); }
 <h1 class="h3 mb-3">New product</h1>
 <form method="post">
-    <partial name="_ProductForm" model="Model.Input" />
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+    <partial name="_ProductForm" for="Input" />
     <button type="submit" class="btn btn-primary">Create</button>
 </form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

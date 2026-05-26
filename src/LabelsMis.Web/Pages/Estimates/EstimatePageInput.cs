@@ -32,7 +32,7 @@ public class EstimateLinePageInput
     public decimal BleedIn { get; set; } = 0.0625m;
 
     [Required]
-    public Guid SubstrateId { get; set; }
+    public Guid? SubstrateId { get; set; }
 
     public InkSet InkSet { get; set; } = InkSet.CMYK;
 
@@ -69,7 +69,7 @@ public class EstimateLinePageInput
         GutterAcrossIn,
         GutterAroundIn,
         BleedIn,
-        SubstrateId,
+        SubstrateId ?? Guid.Empty,
         InkSet,
         WhiteInkUsed,
         FinishingOperations,

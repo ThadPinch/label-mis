@@ -4,7 +4,8 @@
 <h1 class="h3 mb-1">@Model.Product?.InternalSku</h1>
 <p class="text-muted">@Model.Product?.Status</p>
 <form method="post">
-    <partial name="_ProductForm" model="Model.Input" />
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+    <partial name="_ProductForm" for="Input" />
     <div class="mt-3 d-flex gap-2">
         @if (Model.CanEdit)
         {
@@ -16,3 +17,7 @@
         }
     </div>
 </form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

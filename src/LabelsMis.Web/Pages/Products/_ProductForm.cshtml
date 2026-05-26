@@ -3,27 +3,48 @@
     <div class="col-md-6">
         <label class="form-label">Customers</label>
         <select asp-for="CustomerIds" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)" multiple size="5"></select>
+        <span asp-validation-for="CustomerIds" class="text-danger"></span>
         <div class="form-text">Hold Ctrl/Cmd to select multiple customers. The product appears in each customer's lists.</div>
     </div>
     <div class="col-md-6">
         <label asp-for="PrimaryCustomerId" class="form-label">Primary customer</label>
-        <select asp-for="PrimaryCustomerId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)"></select>
+        <select asp-for="PrimaryCustomerId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)">
+            <option value="">— Select customer —</option>
+        </select>
+        <span asp-validation-for="PrimaryCustomerId" class="text-danger"></span>
         <div class="form-text">Used for internal SKU prefix (e.g. ACME-0001).</div>
     </div>
     <div class="col-md-4">
         <label asp-for="CustomerSku" class="form-label">Customer SKU</label>
         <input asp-for="CustomerSku" class="form-control" />
+        <span asp-validation-for="CustomerSku" class="text-danger"></span>
     </div>
     <div class="col-md-8">
         <label asp-for="Description" class="form-label">Description</label>
         <input asp-for="Description" class="form-control" />
+        <span asp-validation-for="Description" class="text-danger"></span>
     </div>
-    <div class="col-md-3"><label asp-for="LabelAcrossIn" class="form-label">Across (in)</label><input asp-for="LabelAcrossIn" class="form-control" /></div>
-    <div class="col-md-3"><label asp-for="LabelAroundIn" class="form-label">Around (in)</label><input asp-for="LabelAroundIn" class="form-control" /></div>
-    <div class="col-md-3"><label asp-for="CornerRadiusIn" class="form-label">Corner radius</label><input asp-for="CornerRadiusIn" class="form-control" /></div>
+    <div class="col-md-3">
+        <label asp-for="LabelAcrossIn" class="form-label">Across (in)</label>
+        <input asp-for="LabelAcrossIn" class="form-control" />
+        <span asp-validation-for="LabelAcrossIn" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="LabelAroundIn" class="form-label">Around (in)</label>
+        <input asp-for="LabelAroundIn" class="form-control" />
+        <span asp-validation-for="LabelAroundIn" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="CornerRadiusIn" class="form-label">Corner radius</label>
+        <input asp-for="CornerRadiusIn" class="form-control" />
+        <span asp-validation-for="CornerRadiusIn" class="text-danger"></span>
+    </div>
     <div class="col-md-3">
         <label asp-for="SubstrateId" class="form-label">Substrate</label>
-        <select asp-for="SubstrateId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Substrates"]!)"></select>
+        <select asp-for="SubstrateId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Substrates"]!)">
+            <option value="">— Select substrate —</option>
+        </select>
+        <span asp-validation-for="SubstrateId" class="text-danger"></span>
     </div>
     <div class="col-md-3">
         <label asp-for="InkSet" class="form-label">Ink set</label>

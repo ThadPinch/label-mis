@@ -7,11 +7,15 @@
 }
 <template id="estimate-line-template">
     <div class="card mb-3 estimate-line" data-line-index="@i">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <strong>Line @i</strong>
-            <button type="button" class="btn btn-sm btn-outline-danger remove-line">Remove</button>
-        </div>
-        <div class="card-body">
+        <details class="estimate-line-details">
+            <summary class="estimate-line-summary card-header">
+                <span class="estimate-line-chevron" aria-hidden="true"></span>
+                <span class="line-title">Line __DISPLAY__</span>
+                <span class="line-desc">Untitled line</span>
+                <span class="line-price-preview">—</span>
+                <button type="button" class="btn btn-sm btn-outline-danger remove-line">Remove</button>
+            </summary>
+            <div class="estimate-line-body card-body border-top">
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label">Pull from existing product</label>
@@ -153,8 +157,8 @@
                     <thead><tr><th>Qty</th><th>Unit price</th><th>Total</th><th>Margin %</th></tr></thead>
                     <tbody></tbody>
                 </table>
-                <div class="calc-breakdown mt-3 d-none"></div>
             </div>
-        </div>
+            </div>
+        </details>
     </div>
 </template>

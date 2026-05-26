@@ -11,9 +11,14 @@ namespace LabelsMis.Web.Pages.Estimates;
 public class CalculateModel(EstimateService estimateService) : PageModel
 {
     public async Task<IActionResult> OnPostAsync(
-        [FromBody] EstimatePageInput input,
+        [FromBody] EstimatePageInput? input,
         CancellationToken cancellationToken)
     {
+        if (input is null)
+        {
+            return BadRequest(new { error = "Invalid estimate payload." });
+        }
+
         var result = await estimateService.CalculateAsync(input.ToForm(), cancellationToken);
         return new JsonResult(new
         {

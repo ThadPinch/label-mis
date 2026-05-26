@@ -65,14 +65,24 @@ public class CreateModel(ProductService productService, LabelsMisDbContext db) :
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
         EnsureCustomerSelection();
+        ValidateRequiredSelections();
         if (!ModelState.IsValid)
         {
             await LoadLookupsAsync(cancellationToken);
             return Page();
         }
 
-        var product = await productService.CreateAsync(Input.ToForm(), cancellationToken);
-        return RedirectToPage("Edit", new { id = product.Id });
+        try
+        {
+            var product = await productService.CreateAsync(Input.ToForm(), cancellationToken);
+            return RedirectToPage("Edit", new { id = product.Id });
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            await LoadLookupsAsync(cancellationToken);
+            return Page();
+        }
     }
 
     private async Task LoadLookupsAsync(CancellationToken cancellationToken)
@@ -90,6 +100,24 @@ public class CreateModel(ProductService productService, LabelsMisDbContext db) :
         if (Input.CustomerIds.Count == 0 && Input.PrimaryCustomerId != Guid.Empty)
         {
             Input.CustomerIds.Add(Input.PrimaryCustomerId);
+        }
+    }
+
+    private void ValidateRequiredSelections()
+    {
+        if (Input.PrimaryCustomerId == Guid.Empty)
+        {
+            ModelState.AddModelError(nameof(Input.PrimaryCustomerId), "Select a primary customer.");
+        }
+
+        if (Input.SubstrateId == Guid.Empty)
+        {
+            ModelState.AddModelError(nameof(Input.SubstrateId), "Select a substrate.");
+        }
+
+        if (Input.CustomerIds.Count == 0)
+        {
+            ModelState.AddModelError(nameof(Input.CustomerIds), "Select at least one customer.");
         }
     }
 }

@@ -11,6 +11,8 @@
 {
     <input type="hidden" asp-for="CustomerId" />
 }
+<div class="estimate-workspace">
+    <div class="estimate-workspace-main">
 <div class="row g-3">
     <div class="col-md-6">
         <label asp-for="CustomerId" class="form-label">Customer</label>
@@ -61,14 +63,18 @@
         var line = Model.Lines[i];
         var selectedFinIds = line.FinishingOperations.Select(f => f.OperationId).ToHashSet();
         <div class="card mb-3 estimate-line" data-line-index="@i">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <strong>Line @(i + 1)</strong>
-                @if (!isReadOnly)
-                {
-                    <button type="button" class="btn btn-sm btn-outline-danger remove-line">Remove</button>
-                }
-            </div>
-            <div class="card-body">
+            <details class="estimate-line-details">
+                <summary class="estimate-line-summary card-header">
+                    <span class="estimate-line-chevron" aria-hidden="true"></span>
+                    <span class="line-title">Line @(i + 1)</span>
+                    <span class="line-desc">@(string.IsNullOrWhiteSpace(line.ProductDescription) ? "Untitled line" : line.ProductDescription)</span>
+                    <span class="line-price-preview">—</span>
+                    @if (!isReadOnly)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-line">Remove</button>
+                    }
+                </summary>
+                <div class="estimate-line-body card-body border-top">
                 @if (line.Id.HasValue)
                 {
                     <input type="hidden" name="Input.Lines[@i].Id" value="@line.Id" />
@@ -119,7 +125,7 @@
                             <option value="">Select substrate</option>
                             @foreach (var s in substrates)
                             {
-                                <option value="@s.Value" selected="@(s.Value == line.SubstrateId.ToString())">@s.Text</option>
+                                <option value="@s.Value" selected="@(s.Value == line.SubstrateId?.ToString())">@s.Text</option>
                             }
                         </select>
                     </div>
@@ -243,7 +249,6 @@
                             </thead>
                             <tbody></tbody>
                         </table>
-                        <div class="calc-breakdown mt-3 d-none"></div>
                     </div>
                 }
                 else
@@ -266,10 +271,10 @@
                             </thead>
                             <tbody></tbody>
                         </table>
-                        <div class="calc-breakdown mt-3 d-none"></div>
                     </div>
                 }
-            </div>
+                </div>
+            </details>
         </div>
     }
 </div>
@@ -278,3 +283,19 @@
 {
     <button type="button" id="add-line" class="btn btn-outline-secondary">+ Add line</button>
 }
+    </div>
+    <aside class="estimate-workspace-panel" aria-label="Estimate summary">
+        <div class="estimate-panel-card">
+            <h2 class="estimate-panel-title">Estimate total</h2>
+            <div id="estimate-totals-panel" class="estimate-totals-panel">
+                <p class="text-muted small mb-0">Select a customer to calculate pricing.</p>
+            </div>
+        </div>
+        <div class="estimate-panel-card estimate-panel-card--breakdown">
+            <h2 class="estimate-panel-title">Calculation breakdown</h2>
+            <div id="estimate-breakdown-panel" class="estimate-breakdown-panel estimate-breakdown-panel--empty">
+                <p class="text-muted small mb-0">Expand a line to view its calculation breakdown.</p>
+            </div>
+        </div>
+    </aside>
+</div>
