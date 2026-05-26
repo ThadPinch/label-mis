@@ -1,3 +1,9 @@
+using LabelsMis.Domain.Email;
+using LabelsMis.Domain.Fedex;
+using LabelsMis.Infrastructure.Email;
+using LabelsMis.Infrastructure.Fedex;
+using LabelsMis.Domain.Storage;
+using LabelsMis.Infrastructure.Storage;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -38,6 +44,24 @@ public static class DependencyInjection
             options.LogoutPath = "/Account/Logout";
             options.AccessDeniedPath = "/Account/Login";
         });
+
+        services.AddScoped<IEmailSender, LoggingEmailSender>();
+
+        services.Configure<FedexOptions>(configuration.GetSection(FedexOptions.SectionName));
+        var fedexOptions = configuration.GetSection(FedexOptions.SectionName).Get<FedexOptions>() ?? new FedexOptions();
+        if (fedexOptions.UseSandbox)
+        {
+            services.AddSingleton<IFedexClient, SandboxFedexClient>();
+        }
+        else
+        {
+            throw new InvalidOperationException(
+                "Production FedEx client is not configured. Set Fedex:UseSandbox to true for local development.");
+        }
+
+        services.AddScoped<IFileStorageClient, FileStorageService>();
+        services.AddScoped<LocalFileStorageClient>();
+        services.AddScoped<SpacesFileStorageClient>();
 
         return services;
     }

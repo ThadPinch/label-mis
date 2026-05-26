@@ -5,16 +5,19 @@ Realistic timeline: 8-14 weeks if disciplined about scope.
 
 This document is the build order. Each phase is independently shippable — you can stop at the end of any phase and have something usable, even if incomplete. Do not start phase N+1 until phase N has been used to run a real job.
 
+**Implementation status (May 2026):** Phases 0–8 are implemented in code (master data through invoicing). Phase 9 is operational (training, parallel run, cutover) — see `docs/runbooks/cutover-checklist.md` and `src/LabelsMis.Tools/` for CSV importers. System architecture: `docs/architecture.md`. Entity relationships: `docs/schema-erd.md`.
+
 ---
 
 ## Phase 0 — Project scaffold (week 0, ~2 evenings)
 
 **Goal**: Empty .NET app with database, auth, deployment pipeline, and CI working before any business logic exists.
 
-- `.NET 10` solution, three projects:
+- `.NET 10` solution, four projects:
   - `LabelsMis.Domain` — entities, value objects, business rules (no EF dependency)
-  - `LabelsMis.Infrastructure` — EF DbContext, migrations, external service clients (FedEx, QuickBooks)
-  - `LabelsMis.Web` — Razor Pages or Blazor Server, controllers, views
+  - `LabelsMis.Infrastructure` — EF DbContext, migrations, external service clients (FedEx, email)
+  - `LabelsMis.Web` — Razor Pages UI, application services, PDF generation, background workers
+  - `LabelsMis.Tools` — CLI CSV importers for cutover (references Infrastructure only)
 - Postgres database, EF Core code-first migrations
 - ASP.NET Identity for auth, seeded admin user
 - `.github/workflows/ci.yml` — build + test + EF migrations check on every PR
@@ -108,7 +111,7 @@ Deliverables:
 
 ## Phase 4 — Products and orders (weeks 7-8)
 
-**Goal**: Won estimates become products (reusable specs). Customer purchase orders become jobs.
+**Goal**: Won estimates become products (reusable specs). Customer POs become sales orders ready for production scheduling (jobs are created in Phase 5).
 
 ### Products
 - `Product` (id, customer_id, customer_sku, internal_sku, description, source_estimate_id, label_across_in, label_around_in, substrate_id, ink_set, finishing_ops, die_id, roll_spec_id, artwork_file_path, status [active/discontinued], created_at)
@@ -132,7 +135,7 @@ Deliverables:
 ### Schema
 - `Job` (id, job_number [year-sequence like 2026-00472], sales_order_line_id, product_id, quantity_ordered, quantity_planned [with overrun %], status [planned/prepress/scheduled/on_press/finishing/qc/packed/shipped/closed], scheduled_for_date, due_date, priority, notes, created_at)
 - `JobOperation` (job_id, sequence, operation_type [press/finishing/inspection/pack/ship], equipment_id, planned_start_at, planned_minutes, actual_start_at, actual_end_at, status, operator_id, good_count, waste_count, downtime_minutes)
-- `JobMaterialUsage` (job_id, roll_id, quantity_used_lf, used_at, used_by)
+- `JobMaterialUsage` (job_id, stock_id, roll_id [nullable], quantity_used_lf, used_at, used_by) — roll linkage added in Phase 6
 - `JobTimeEntry` (job_operation_id, user_id, clocked_in_at, clocked_out_at) — for accurate labor cost
 
 ### UI
@@ -194,7 +197,7 @@ Deliverables:
 **Goal**: Generate invoices on ship, export to QuickBooks.
 
 ### Schema
-- `Invoice` (id, invoice_number, customer_id, sales_order_id, invoice_date, due_date, status [draft/sent/paid/void], subtotal, tax, total, balance_due, qb_export_at)
+- `Invoice` (id, invoice_number, customer_id, sales_order_id, shipment_id, invoice_date, due_date, status [draft/sent/partially_paid/paid/void], subtotal, tax, shipping, total, balance_due, qb_export_at)
 - `InvoiceLine` (invoice_id, sales_order_line_id, description, quantity, unit_price, line_total)
 - `Payment` (invoice_id, payment_date, amount, method, reference) — manual entry only in v1
 
@@ -202,7 +205,7 @@ Deliverables:
 - Generate invoice from shipment (one-click, pre-filled)
 - Invoice PDF (QuestPDF)
 - AR aging report (current / 30 / 60 / 90+)
-- QuickBooks Online export — IIF, CSV, or QBO API (pick based on what the shop's bookkeeper actually uses)
+- QuickBooks Online export — **CSV import format** in Tier 1 (`/invoices/export`); direct QBO API deferred to Tier 3
 
 **Done when**: invoices generate on ship, bookkeeper imports to QB without manual rekeying.
 
@@ -212,10 +215,10 @@ Deliverables:
 
 **Goal**: Replace whatever the shop is using today.
 
-- Bulk import of existing customers / products / open orders from current system or spreadsheets
+- Bulk import via `LabelsMis.Tools` CLI: customers, stocks, products, opening AR balances (see `docs/runbooks/cutover-checklist.md`)
 - User training (6 people, 30 min each role-specific)
 - Run new system parallel to old for 2 weeks
-- Cutover
+- Cutover — disaster recovery: `docs/runbooks/disaster-recovery.md`
 
 ---
 
@@ -232,7 +235,7 @@ Roles seeded in phase 0, used from phase 1 onward:
 - **Accounting** — invoices, payments, QB export, view everything
 
 ### Audit trail
-Every business entity table has: `CreatedAt`, `CreatedById`, `ModifiedAt`, `ModifiedById`. Add an `AuditLog` table for sensitive operations (price changes, void invoices, manual roll adjustments).
+Every business entity table has: `CreatedAt`, `CreatedById`, `ModifiedAt`, `ModifiedById` (via `EntityBase`). A dedicated `AuditLog` table for sensitive operations (price changes, void invoices, manual roll adjustments) is **deferred to Tier 2** — void reasons and payment records capture the essentials for now.
 
 ### Soft delete
 `Customer`, `Product`, `Stock`, `Die`, `Supplier` — soft delete (set `is_active=false`), never hard delete. Transactional records (estimates, orders, invoices) are immutable once non-draft.
@@ -275,36 +278,58 @@ labels-mis/
 ├── AGENTS.md
 ├── README.md
 ├── docker-compose.yml
-├── .agent/
-│   └── tasks/
-│       ├── 001-scaffold.md
-│       ├── 002-estimating-engine.md
-│       └── ...
+├── global.json
+├── Directory.Packages.props
+├── .agent/tasks/                 ← work orders (001–010)
 ├── docs/
-│   ├── domain-reference.md       (the Cerm/LabelTraxx/Radius synthesis)
-│   ├── tier1-buildout.md         (this file)
-│   ├── estimating-engine.md      (the spec for the engine)
-│   └── schema-erd.md
+│   ├── architecture.md           ← stack diagram, layer rules
+│   ├── domain-reference.md       ← industry terminology
+│   ├── estimating-engine.md      ← calculation engine spec
+│   ├── schema-erd.md             ← entity relationship diagram
+│   ├── tier1-buildout.md         ← this file
+│   └── runbooks/
+│       ├── cutover-checklist.md
+│       └── disaster-recovery.md
 ├── src/
 │   ├── LabelsMis.Domain/
+│   │   ├── Common/               ← EntityBase, TenantConstants
 │   │   ├── Entities/
-│   │   ├── ValueObjects/
-│   │   ├── Estimating/           ← engine lives here
-│   │   └── Common/
+│   │   ├── Enums/
+│   │   ├── Estimating/           ← pure calculation engine
+│   │   ├── Fedex/                ← IFedexClient interface
+│   │   ├── Email/                ← IEmailSender interface
+│   │   ├── Jobs/                 ← JobCostCalculator
+│   │   └── Inventory/            ← roll split / reconciliation rules
 │   ├── LabelsMis.Infrastructure/
-│   │   ├── Persistence/
+│   │   ├── Persistence/          ← DbContext, configurations, seeders
 │   │   ├── Migrations/
-│   │   ├── Fedex/
-│   │   └── QuickBooks/
-│   └── LabelsMis.Web/
-│       ├── Pages/ or Controllers+Views/
-│       ├── wwwroot/
-│       └── Program.cs
+│   │   ├── Fedex/                ← SandboxFedexClient (+ prod client Tier 2)
+│   │   ├── Email/                ← LoggingEmailSender
+│   │   └── Identity/
+│   ├── LabelsMis.Web/
+│   │   ├── Pages/                ← Razor Pages by area (see below)
+│   │   ├── Services/             ← application orchestration
+│   │   ├── Pdf/                  ← QuestPDF templates (estimate, job ticket, invoice)
+│   │   ├── Background/           ← ShipmentTrackingPoller
+│   │   ├── Authorization/
+│   │   └── wwwroot/
+│   └── LabelsMis.Tools/
+│       └── Importers/            ← CSV cutover importers
 ├── tests/
 │   ├── LabelsMis.Domain.Tests/
-│   │   └── Estimating/           ← engine tests
+│   ├── LabelsMis.Infrastructure.Tests/
 │   └── LabelsMis.Web.Tests/
-└── .github/
-    └── workflows/
-        └── ci.yml
+└── .github/workflows/ci.yml
 ```
+
+### Razor Pages areas (implemented)
+
+| Area | Routes |
+|------|--------|
+| Master data | `/customers`, `/suppliers`, `/stocks`, `/dies`, `/inks`, `/finishing-operations`, `/presses` |
+| Estimating | `/estimates`, `/estimates/new`, `/estimates/{id}/edit` |
+| Products & orders | `/products`, `/sales-orders` |
+| Production | `/jobs`, `/jobs/{id}`, `/jobs/{id}/ticket`, `/operator/job/{jobNumber}` |
+| Inventory | `/purchase-orders`, `/rolls` |
+| Shipping | `/shipments` |
+| Invoicing | `/invoices`, `/reports/ar-aging` |

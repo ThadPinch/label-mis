@@ -1,0 +1,36 @@
+@page "/rolls"
+@model LabelsMis.Web.Pages.Rolls.IndexModel
+@{ ViewData["Title"] = "Rolls"; }
+
+<h1 class="h3 mb-3">Roll inventory</h1>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-3"><input asp-for="Search" class="form-control" placeholder="Barcode or lot" autofocus /></div>
+    <div class="col-md-2">
+        <select asp-for="StockId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["StockOptions"]!)"><option value="">All stocks</option></select>
+    </div>
+    <div class="col-md-2">
+        <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.RollStatus>()"><option value="">All statuses</option></select>
+    </div>
+    <div class="col-md-2"><input asp-for="Location" class="form-control" placeholder="Location" /></div>
+    <div class="col-md-2"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
+</form>
+
+<table class="table table-striped">
+    <thead><tr><th>Barcode</th><th>Stock</th><th>Lot</th><th>Width</th><th>Remaining LF</th><th>Location</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var item in Model.Result.Items)
+    {
+        <tr>
+            <td>@item.RollBarcode</td><td>@item.StockDescription</td><td>@item.SupplierLotNumber</td>
+            <td>@item.WidthIn.ToString("N2")"</td><td>@item.RemainingLengthLf.ToString("N2")</td>
+            <td>@(item.Location ?? "—")</td><td>@item.Status</td>
+            <td class="text-end"><a asp-page="Detail" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a></td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@await Html.PartialAsync("Shared/_Pager", new PagerModel(
+    Model.Result.Page,
+    Model.Result.TotalPages,
+    Model.Result.TotalCount))

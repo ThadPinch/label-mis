@@ -1,0 +1,33 @@
+@page "/reports/ar-aging"
+@model LabelsMis.Web.Pages.Reports.ArAgingModel
+@{ ViewData["Title"] = "AR aging"; }
+
+<div class="d-flex justify-content-between mb-3">
+    <h1 class="h3 mb-0">AR aging</h1>
+    <a asp-page-handler="Export" class="btn btn-outline-secondary">Export CSV</a>
+</div>
+
+<p class="text-muted">Aging calculated from invoice date as of @(Model.Report?.AsOfDate.ToString("yyyy-MM-dd") ?? "—").</p>
+
+@if (Model.Report is not null)
+{
+    <p><strong>Total exposure: @Model.Report.TotalExposure.ToString("C2")</strong></p>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Customer</th><th>Current</th><th>1–30</th><th>31–60</th><th>61–90</th><th>90+</th><th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var row in Model.Report.Rows)
+        {
+            <tr>
+                <td>@row.CustomerName</td>
+                <td>@row.Current.ToString("C2")</td><td>@row.Days1To30.ToString("C2")</td>
+                <td>@row.Days31To60.ToString("C2")</td><td>@row.Days61To90.ToString("C2")</td>
+                <td>@row.Over90.ToString("C2")</td><td>@row.Total.ToString("C2")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

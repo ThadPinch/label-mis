@@ -1,0 +1,186 @@
+using LabelsMis.Domain.Common;
+using LabelsMis.Domain.Enums;
+
+namespace LabelsMis.Domain.Entities;
+
+public class Estimate : EntityBase
+{
+    private readonly List<EstimateLine> _lines = [];
+    private readonly List<EstimateRevision> _revisions = [];
+
+    private Estimate()
+    {
+    }
+
+    public string EstimateNumber { get; private set; } = string.Empty;
+    public int RevisionNumber { get; private set; } = 1;
+    public Guid CustomerId { get; private set; }
+    public Customer Customer { get; private set; } = null!;
+    public Guid? SalesRepId { get; private set; }
+    public EstimateStatus Status { get; private set; }
+    public string? Notes { get; private set; }
+    public DateOnly? ValidUntilDate { get; private set; }
+    public DateTime? WonAt { get; private set; }
+    public DateTime? LostAt { get; private set; }
+    public string? LostReason { get; private set; }
+    public string? PdfFilePath { get; private set; }
+
+    public IReadOnlyCollection<EstimateLine> Lines => _lines;
+    public IReadOnlyCollection<EstimateRevision> Revisions => _revisions;
+
+    public static Estimate CreateDraft(
+        Guid id,
+        string estimateNumber,
+        Guid customerId,
+        Guid? salesRepId,
+        string? notes,
+        DateOnly? validUntilDate,
+        Guid createdById,
+        DateTime createdAt)
+    {
+        var estimate = new Estimate
+        {
+            EstimateNumber = estimateNumber,
+            CustomerId = customerId,
+            SalesRepId = salesRepId,
+            Status = EstimateStatus.Draft,
+            Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+            ValidUntilDate = validUntilDate
+        };
+        estimate.SetCreated(id, createdById, createdAt);
+        return estimate;
+    }
+
+    public void UpdateDraft(
+        Guid? salesRepId,
+        string? notes,
+        DateOnly? validUntilDate,
+        Guid modifiedById,
+        DateTime modifiedAt)
+    {
+        EnsureDraft();
+
+        SalesRepId = salesRepId;
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        ValidUntilDate = validUntilDate;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    public void ReplaceLines(IEnumerable<EstimateLine> lines)
+    {
+        EnsureDraft();
+        _lines.Clear();
+        _lines.AddRange(lines);
+    }
+
+    public void AddLine(EstimateLine line) => _lines.Add(line);
+
+    public void MarkSent(string? pdfFilePath, Guid modifiedById, DateTime modifiedAt)
+    {
+        EnsureDraft();
+        if (_lines.Count == 0)
+        {
+            throw new InvalidOperationException("Estimate must have at least one line before it can be sent.");
+        }
+        Status = EstimateStatus.Sent;
+        PdfFilePath = pdfFilePath;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    public void MarkWon(Guid modifiedById, DateTime modifiedAt)
+    {
+        if (Status is not (EstimateStatus.Sent or EstimateStatus.Draft))
+        {
+            throw new InvalidOperationException("Only draft or sent estimates can be marked won.");
+        }
+        if (_lines.Count == 0)
+        {
+            throw new InvalidOperationException("Estimate must have at least one line before it can be marked won.");
+        }
+
+        Status = EstimateStatus.Won;
+        WonAt = modifiedAt;
+        LostAt = null;
+        LostReason = null;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    public void MarkLost(string? reason, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (Status is EstimateStatus.Won)
+        {
+            throw new InvalidOperationException("Won estimates cannot be marked lost.");
+        }
+
+        Status = EstimateStatus.Lost;
+        LostAt = modifiedAt;
+        LostReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    public void MarkExpired(Guid modifiedById, DateTime modifiedAt)
+    {
+        if (Status is EstimateStatus.Won or EstimateStatus.Lost)
+        {
+            throw new InvalidOperationException("Closed estimates cannot be marked expired.");
+        }
+
+        Status = EstimateStatus.Expired;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    public EstimateRevision CreateRevisionSnapshot(
+        Guid revisionId,
+        string snapshotJson,
+        Guid createdById,
+        DateTime createdAt)
+    {
+        if (Status is EstimateStatus.Draft)
+        {
+            throw new InvalidOperationException("Draft estimates do not require a revision.");
+        }
+
+        var revision = EstimateRevision.Create(revisionId, Id, RevisionNumber, snapshotJson, createdById, createdAt);
+        RevisionNumber++;
+        Status = EstimateStatus.Draft;
+        PdfFilePath = null;
+        WonAt = null;
+        LostAt = null;
+        LostReason = null;
+        SetModified(createdById, createdAt);
+        return revision;
+    }
+
+    public EstimateRevision BeginRevision(Guid revisionId, string snapshotJson, Guid createdById, DateTime createdAt)
+    {
+        var revision = CreateRevisionSnapshot(revisionId, snapshotJson, createdById, createdAt);
+        _revisions.Add(revision);
+        return revision;
+    }
+
+    public void EnsureCanTransitionToDraft()
+    {
+        if (Status is EstimateStatus.Won)
+        {
+            throw new InvalidOperationException("Won estimates cannot return to draft without creating a revision.");
+        }
+    }
+
+    public void EnsureCanDelete()
+    {
+        if (Status is not EstimateStatus.Draft)
+        {
+            throw new InvalidOperationException("Only draft estimates can be deleted.");
+        }
+    }
+
+    public void AddRevision(EstimateRevision revision) => _revisions.Add(revision);
+
+    private void EnsureDraft()
+    {
+        if (Status is not EstimateStatus.Draft)
+        {
+            throw new InvalidOperationException("Only draft estimates can be edited.");
+        }
+    }
+}

@@ -1,0 +1,44 @@
+@page "/shipments/new"
+@model LabelsMis.Web.Pages.Shipments.CreateModel
+@{ ViewData["Title"] = "New shipment"; ViewData["BackNav"] = new BackNavModel("Back", "/SalesOrders/Edit") { RouteValues = new Dictionary<string, object?> { ["id"] = Model.SalesOrderId } }; }
+
+<h1 class="h3 mb-3">Ship order @Model.Order?.OrderNumber</h1>
+<form method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <label class="form-label">Ship date</label>
+            <input asp-for="ShipDate" class="form-control" type="date" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Service</label>
+            <select asp-for="ServiceLevel" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.FedexServiceLevel>()"></select>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Ship to</label>
+            <select asp-for="ShipToAddressId" class="form-select" asp-items="Model.ShipToOptions"></select>
+        </div>
+    </div>
+
+    <h2 class="h6">Lines</h2>
+    @for (var i = 0; i < Model.Lines.Count; i++)
+    {
+        var line = Model.Order!.Lines.ElementAt(i);
+        <input type="hidden" asp-for="Lines[i].SalesOrderLineId" />
+        <div class="row g-2 mb-2 align-items-center">
+            <div class="col-md-6">@line.Product.Description (ordered @line.Quantity.ToString("N0"))</div>
+            <div class="col-md-3"><input asp-for="Lines[i].QuantityShipped" class="form-control" /></div>
+        </div>
+    }
+
+    <h2 class="h6 mt-3">Package 1</h2>
+    <div class="row g-2 mb-3">
+        <div class="col-md-2"><input asp-for="Package.WeightLb" class="form-control" placeholder="Weight lb" /></div>
+        <div class="col-md-2"><input asp-for="Package.LengthIn" class="form-control" placeholder="L in" /></div>
+        <div class="col-md-2"><input asp-for="Package.WidthIn" class="form-control" placeholder="W in" /></div>
+        <div class="col-md-2"><input asp-for="Package.HeightIn" class="form-control" placeholder="H in" /></div>
+        <div class="col-md-2"><input asp-for="Package.DeclaredValue" class="form-control" placeholder="Value" /></div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Create shipment</button>
+</form>

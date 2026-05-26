@@ -1,0 +1,53 @@
+@page "/shipments/{id:guid}"
+@model LabelsMis.Web.Pages.Shipments.DetailModel
+@{ ViewData["Title"] = Model.Detail?.Shipment.ShipmentNumber ?? "Shipment"; 
+    ViewData["BackNav"] = new BackNavModel();
+}
+
+@if (Model.Detail is null) { <p>Not found.</p>; return; }
+
+<div class="d-flex justify-content-between mb-3">
+    <div>
+        <h1 class="h3 mb-1">@Model.Detail.Shipment.ShipmentNumber</h1>
+        <p class="text-muted mb-0">@Model.Detail.CustomerName — @Model.Detail.Shipment.Status</p>
+        @if (!string.IsNullOrWhiteSpace(Model.Detail.LatestTrackingStatus))
+        {
+            <p class="text-muted">Latest: @Model.Detail.LatestTrackingStatus</p>
+        }
+    </div>
+    @if (Model.CanInvoice)
+    {
+        <form method="post" asp-page-handler="GenerateInvoice">
+            <button type="submit" class="btn btn-primary">Generate invoice</button>
+        </form>
+    }
+</div>
+
+<h2 class="h6">Ship to</h2>
+<p>@Model.Detail.Shipment.ShipToAddress.Street1<br />
+@Model.Detail.Shipment.ShipToAddress.City, @Model.Detail.Shipment.ShipToAddress.State @Model.Detail.Shipment.ShipToAddress.Zip</p>
+
+<h2 class="h6">Lines</h2>
+<table class="table table-sm table-striped mb-3">
+    <thead><tr><th>Product</th><th>Qty shipped</th></tr></thead>
+    <tbody>
+    @foreach (var line in Model.Detail.Shipment.Lines)
+    {
+        <tr><td>@line.SalesOrderLine.Product.Description</td><td>@line.QuantityShipped.ToString("N0")</td></tr>
+    }
+    </tbody>
+</table>
+
+<h2 class="h6">Packages</h2>
+<table class="table table-sm table-striped">
+    <thead><tr><th>#</th><th>Weight</th><th>Tracking</th><th>Cost</th></tr></thead>
+    <tbody>
+    @foreach (var pkg in Model.Detail.Shipment.Packages.OrderBy(p => p.PackageNumber))
+    {
+        <tr>
+            <td>@pkg.PackageNumber</td><td>@pkg.WeightLb.ToString("N1") lb</td>
+            <td>@(pkg.TrackingNumber ?? "—")</td><td>@pkg.ShippingCost.ToString("C2")</td>
+        </tr>
+    }
+    </tbody>
+</table>

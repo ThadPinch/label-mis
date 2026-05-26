@@ -1,0 +1,152 @@
+@page "/jobs/{id:guid}"
+@model LabelsMis.Web.Pages.Jobs.DetailModel
+@using LabelsMis.Domain.Enums
+@{ ViewData["Title"] = Model.Detail?.Job.JobNumber ?? "Job"; ViewData["BackNav"] = new BackNavModel(); }
+
+@if (Model.Detail is null)
+{
+    <p>Job not found.</p>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+            <h1 class="h3 mb-1">@Model.Detail.Job.JobNumber</h1>
+            <p class="text-muted mb-0">@Model.Detail.CustomerName — @Model.Detail.ProductDescription</p>
+            <p class="text-muted mb-0">Status: <strong>@Model.Detail.Job.Status</strong></p>
+        </div>
+        <div>
+            <a asp-page="Ticket" asp-route-id="@Model.Detail.Job.Id" class="btn btn-outline-secondary">Print ticket</a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger">@Model.ErrorMessage</div>
+    }
+
+    @if (Model.CanChangeStatus)
+    {
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2 class="h6">Job status</h2>
+                <form method="post" asp-page-handler="SetStatus" class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <select asp-for="StatusInput" class="form-select" asp-items="Html.GetEnumSelectList<JobStatus>()"></select>
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" class="btn btn-outline-primary">Update status</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
+
+    @if (Model.CanOperate)
+    {
+        <partial name="_JobOperatorPanel" model="Model" />
+    }
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h6">Quantities</h2>
+                    <p class="mb-0">Ordered: @Model.Detail.Job.QuantityOrdered.ToString("N0")</p>
+                    <p class="mb-0">Planned: @Model.Detail.Job.QuantityPlanned.ToString("N0")</p>
+                    <p class="mb-0">Good: @Model.Detail.Job.TotalGoodCount.ToString("N0")</p>
+                    <p class="mb-0">Waste: @Model.Detail.Job.TotalWasteCount.ToString("N0")</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            @if (Model.CanEdit)
+            {
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h2 class="h6">Schedule</h2>
+                        <form method="post" asp-page-handler="Schedule">
+                            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                            <div class="mb-2">
+                                <label asp-for="ScheduleInput.ScheduledForDate" class="form-label">Date</label>
+                                <input asp-for="ScheduleInput.ScheduledForDate" class="form-control" type="date" />
+                            </div>
+                            <div class="mb-2">
+                                <label asp-for="ScheduleInput.PressId" class="form-label">Press</label>
+                                <select asp-for="ScheduleInput.PressId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["PressOptions"]!)">
+                                    <option value="">Unassigned</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Save schedule</button>
+                        </form>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2 class="h6">Artwork</h2>
+            @if (!string.IsNullOrWhiteSpace(Model.Detail.ArtworkFilePath))
+            {
+                <p class="mb-2">
+                    Current file:
+                    <a asp-page="/Artwork/Download" asp-route-productId="@Model.Detail.Job.ProductId" target="_blank">Download artwork</a>
+                </p>
+            }
+            else
+            {
+                <p class="text-muted mb-2">No artwork on file for this product.</p>
+            }
+            <form method="post" asp-page-handler="UploadArtwork" enctype="multipart/form-data" class="row g-2 align-items-end">
+                <div class="col-md-6">
+                    <input asp-for="ArtworkFile" type="file" class="form-control" accept=".pdf,.ai,.eps,.png,.jpg,.jpeg,.tif,.tiff" />
+                </div>
+                <div class="col-md-auto">
+                    <button type="submit" class="btn btn-outline-primary">Upload artwork</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <h2 class="h5">Operations</h2>
+    <table class="table table-sm table-striped mb-4">
+        <thead>
+            <tr>
+                <th>#</th><th>Step</th><th>Equipment</th><th>Status</th><th>Planned min</th><th>Good</th><th>Waste</th><th>Downtime</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var op in Model.Detail.Operations)
+        {
+            <tr>
+                <td>@op.Operation.Sequence</td>
+                <td>@op.TypeLabel</td>
+                <td>@(op.EquipmentName ?? "—")</td>
+                <td>@op.Operation.Status</td>
+                <td>@op.Operation.PlannedMinutes.ToString("N0")</td>
+                <td>@op.Operation.GoodCount.ToString("N0")</td>
+                <td>@op.Operation.WasteCount.ToString("N0")</td>
+                <td>@op.Operation.DowntimeMinutes.ToString("N0")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    <h2 class="h5">Material usage</h2>
+    <table class="table table-sm table-striped">
+        <thead><tr><th>Stock</th><th>Qty (LF)</th><th>Used at</th><th>Notes</th></tr></thead>
+        <tbody>
+        @foreach (var usage in Model.Detail.Job.MaterialUsages.OrderByDescending(m => m.UsedAt))
+        {
+            <tr>
+                <td>@usage.Stock.Description</td>
+                <td>@usage.QuantityUsedLf.ToString("N2")</td>
+                <td>@usage.UsedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                <td>@(usage.Notes ?? "—")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

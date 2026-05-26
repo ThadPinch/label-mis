@@ -1,0 +1,46 @@
+@model LabelsMis.Web.Pages.Users.UserPageInput
+<div class="row g-3">
+    <div class="col-md-6">
+        <label asp-for="Email" class="form-label">Email</label>
+        <input asp-for="Email" class="form-control" type="email" readonly="@(Model.IsEdit)" />
+    </div>
+    @if (!Model.IsEdit)
+    {
+        <div class="col-md-6">
+            <label asp-for="Password" class="form-label">Temporary password</label>
+            <input asp-for="Password" class="form-control" type="password" autocomplete="new-password" />
+        </div>
+    }
+    else
+    {
+        <div class="col-md-6">
+            <label asp-for="NewPassword" class="form-label">Reset password</label>
+            <input asp-for="NewPassword" class="form-control" type="password" autocomplete="new-password" placeholder="Leave blank to keep current password" />
+        </div>
+    }
+    <div class="col-12">
+        <label class="form-label">Roles</label>
+        <div class="d-flex flex-wrap gap-3">
+            @for (var i = 0; i < Model.AvailableRoles.Count; i++)
+            {
+                var role = Model.AvailableRoles[i];
+                var isChecked = Model.SelectedRoles.Contains(role);
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" name="Input.SelectedRoles" value="@role" id="role_@role" checked="@isChecked" />
+                    <label class="form-check-label" for="role_@role">@role</label>
+                </div>
+            }
+        </div>
+    </div>
+    <div class="col-md-4 form-check">
+        <input asp-for="MustChangePassword" class="form-check-input" />
+        <label asp-for="MustChangePassword" class="form-check-label">Require password change on next login</label>
+    </div>
+    @if (Model.IsEdit)
+    {
+        <div class="col-md-4 form-check">
+            <input asp-for="IsLockedOut" class="form-check-input" />
+            <label asp-for="IsLockedOut" class="form-check-label">Account locked</label>
+        </div>
+    }
+</div>

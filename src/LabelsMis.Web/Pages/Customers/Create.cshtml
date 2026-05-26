@@ -1,0 +1,19 @@
+@page "/customers/create"
+@model LabelsMis.Web.Pages.Customers.CreateModel
+@{
+    ViewData["Title"] = "New customer";
+
+    ViewData["BackNav"] = new BackNavModel();
+}
+
+<h1 class="h3 mb-3">New customer</h1>
+<form method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <partial name="_CustomerForm" for="Input" />
+    <button type="submit" class="btn btn-primary">Create</button>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/customer-form.js" asp-append-version="true"></script>
+}

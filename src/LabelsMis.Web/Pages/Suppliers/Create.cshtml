@@ -1,0 +1,18 @@
+@page "/suppliers/create"
+@model LabelsMis.Web.Pages.Suppliers.CreateModel
+@{
+    ViewData["Title"] = "New supplier";
+
+    ViewData["BackNav"] = new BackNavModel();
+}
+
+<h1 class="h3 mb-3">New supplier</h1>
+<form method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <partial name="_SupplierForm" model="Model.Input" />
+    <button type="submit" class="btn btn-primary">Create</button>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

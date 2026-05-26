@@ -1,0 +1,49 @@
+@page "/purchase-orders/{id:guid}/edit"
+@model LabelsMis.Web.Pages.PurchaseOrders.EditModel
+@{ ViewData["Title"] = Model.Po?.PoNumber ?? "Purchase order"; ViewData["BackNav"] = new BackNavModel(); }
+
+<h1 class="h3 mb-1">@Model.Po?.PoNumber</h1>
+<p class="text-muted">@Model.Po?.Status — @Model.Po?.Supplier.Name</p>
+
+@if (Model.CanEdit)
+{
+    <form method="post" asp-page-handler="Save">
+        <div class="mb-3">
+            <label class="form-label">Expected</label>
+            <input asp-for="Input.ExpectedAt" class="form-control" type="date" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Notes</label>
+            <textarea asp-for="Input.Notes" class="form-control" rows="2"></textarea>
+        </div>
+        @for (var i = 0; i < Model.Input.Lines.Count; i++)
+        {
+            <input type="hidden" asp-for="Input.Lines[i].Id" />
+            <div class="row g-2 mb-2">
+                <div class="col-md-5"><select asp-for="Input.Lines[i].StockId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Stocks"]!)"></select></div>
+                <div class="col-md-3"><input asp-for="Input.Lines[i].QuantityLf" class="form-control" /></div>
+                <div class="col-md-3"><input asp-for="Input.Lines[i].UnitCost" class="form-control" /></div>
+            </div>
+        }
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+    <form method="post" asp-page-handler="Send" class="d-inline ms-2">
+        <button type="submit" class="btn btn-success">Send PO</button>
+    </form>
+}
+else
+{
+    <table class="table table-sm">
+        <thead><tr><th>Line</th><th>Stock</th><th>Qty LF</th><th>Received</th><th>Total</th></tr></thead>
+        <tbody>
+        @foreach (var line in Model.Po!.Lines.OrderBy(l => l.LineNumber))
+        {
+            <tr>
+                <td>@line.LineNumber</td><td>@line.Stock.Description</td>
+                <td>@line.QuantityLf.ToString("N2")</td><td>@line.QuantityReceivedLf.ToString("N2")</td>
+                <td>@line.LineTotal.ToString("C2")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

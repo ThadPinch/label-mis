@@ -1,0 +1,79 @@
+@page "/invoices/{id:guid}"
+@model LabelsMis.Web.Pages.Invoices.DetailModel
+@{ ViewData["Title"] = Model.Detail?.Invoice.InvoiceNumber ?? "Invoice"; 
+    ViewData["BackNav"] = new BackNavModel();
+}
+
+@if (Model.Detail is null) { <p>Not found.</p>; return; }
+
+<h1 class="h3 mb-1">@Model.Detail.Invoice.InvoiceNumber</h1>
+<p class="text-muted">@Model.Detail.CustomerName — @Model.Detail.Invoice.Status</p>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <dl class="row">
+            <dt class="col-sm-4">Invoice date</dt><dd class="col-sm-8">@Model.Detail.Invoice.InvoiceDate.ToString("yyyy-MM-dd")</dd>
+            <dt class="col-sm-4">Due date</dt><dd class="col-sm-8">@Model.Detail.Invoice.DueDate.ToString("yyyy-MM-dd")</dd>
+            <dt class="col-sm-4">Subtotal</dt><dd class="col-sm-8">@Model.Detail.Invoice.Subtotal.ToString("C2")</dd>
+            <dt class="col-sm-4">Tax</dt><dd class="col-sm-8">@Model.Detail.Invoice.TaxAmount.ToString("C2")</dd>
+            <dt class="col-sm-4">Shipping</dt><dd class="col-sm-8">@Model.Detail.Invoice.ShippingAmount.ToString("C2")</dd>
+            <dt class="col-sm-4">Total</dt><dd class="col-sm-8"><strong>@Model.Detail.Invoice.Total.ToString("C2")</strong></dd>
+            <dt class="col-sm-4">Balance due</dt><dd class="col-sm-8"><strong>@Model.Detail.Invoice.BalanceDue.ToString("C2")</strong></dd>
+        </dl>
+    </div>
+</div>
+
+<table class="table table-sm table-striped mb-4">
+    <thead><tr><th>Line</th><th>Description</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead>
+    <tbody>
+    @foreach (var line in Model.Detail.Invoice.Lines.OrderBy(l => l.LineNumber))
+    {
+        <tr>
+            <td>@line.LineNumber</td><td>@line.Description</td>
+            <td>@line.Quantity.ToString("N0")</td><td>@line.UnitPrice.ToString("C4")</td><td>@line.LineTotal.ToString("C2")</td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h2 class="h6">Payments</h2>
+<table class="table table-sm table-striped mb-4">
+    <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Amount</th></tr></thead>
+    <tbody>
+    @foreach (var payment in Model.Detail.Payments.OrderByDescending(p => p.PaymentDate))
+    {
+        <tr>
+            <td>@payment.PaymentDate.ToString("yyyy-MM-dd")</td><td>@payment.Method</td>
+            <td>@(payment.Reference ?? "—")</td><td>@payment.Amount.ToString("C2")</td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@if (Model.CanEdit && Model.Detail.Invoice.BalanceDue > 0 && Model.Detail.Invoice.Status != LabelsMis.Domain.Enums.InvoiceStatus.Void)
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2 class="h6">Record payment</h2>
+            <form method="post" asp-page-handler="RecordPayment">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <div class="row g-2">
+                    <div class="col-md-2"><input asp-for="Payment.PaymentDate" class="form-control" type="date" /></div>
+                    <div class="col-md-2"><input asp-for="Payment.Amount" class="form-control" placeholder="Amount" /></div>
+                    <div class="col-md-2"><select asp-for="Payment.Method" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.PaymentMethod>()"></select></div>
+                    <div class="col-md-3"><input asp-for="Payment.Reference" class="form-control" placeholder="Reference" /></div>
+                    <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Record</button></div>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@if (User.IsInRole("Admin") && Model.Detail.Invoice.Status != LabelsMis.Domain.Enums.InvoiceStatus.Void && Model.Detail.Invoice.Status != LabelsMis.Domain.Enums.InvoiceStatus.Paid)
+{
+    <form method="post" asp-page-handler="Void" class="mb-3">
+        <input asp-for="VoidReason" class="form-control mb-2" placeholder="Void reason" required />
+        <button type="submit" class="btn btn-outline-danger">Void invoice</button>
+    </form>
+}
+

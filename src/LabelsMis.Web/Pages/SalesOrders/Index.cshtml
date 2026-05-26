@@ -1,0 +1,21 @@
+@page "/sales-orders"
+@model LabelsMis.Web.Pages.SalesOrders.IndexModel
+@{ ViewData["Title"] = "Sales orders"; }
+<div class="d-flex justify-content-between mb-3">
+    <h1 class="h3 mb-0">Sales orders</h1>
+    @if (Model.CanEdit) { <a class="btn btn-primary" asp-page="Create">New order</a> }
+</div>
+<table class="table table-striped">
+    <thead><tr><th>Order #</th><th>Customer</th><th>PO #</th><th>Ship date</th><th>Status</th><th>Total</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var item in Model.Result.Items)
+    {
+        <tr>
+            <td>@item.OrderNumber</td><td>@item.CustomerName</td><td>@(item.CustomerPoNumber ?? "—")</td>
+            <td>@(item.RequestedShipDate?.ToString("yyyy-MM-dd") ?? "—")</td><td>@item.Status</td>
+            <td>@item.OrderTotal.ToString("C2")</td>
+            <td class="text-end"><a asp-page="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a></td>
+        </tr>
+    }
+    </tbody>
+</table>

@@ -1,0 +1,50 @@
+@page "/purchase-orders"
+@model LabelsMis.Web.Pages.PurchaseOrders.IndexModel
+@{ ViewData["Title"] = "Purchase orders"; }
+
+<div class="d-flex justify-content-between mb-3">
+    <h1 class="h3 mb-0">Purchase orders</h1>
+    @if (Model.CanEdit) { <a class="btn btn-primary" asp-page="Create">New PO</a> }
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-3"><input asp-for="Search" class="form-control" placeholder="Search PO or supplier" /></div>
+    <div class="col-md-2">
+        <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.PurchaseOrderStatus>()">
+            <option value="">All statuses</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select asp-for="SupplierId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["SupplierOptions"]!)">
+            <option value="">All suppliers</option>
+        </select>
+    </div>
+    <div class="col-md-2"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
+</form>
+
+<table class="table table-striped">
+    <thead><tr><th>PO #</th><th>Supplier</th><th>Status</th><th>Ordered</th><th>Expected</th><th>Total</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var item in Model.Result.Items)
+    {
+        <tr>
+            <td>@item.PoNumber</td><td>@item.SupplierName</td><td>@item.Status</td>
+            <td>@item.OrderedAt.ToString("yyyy-MM-dd")</td>
+            <td>@(item.ExpectedAt?.ToString("yyyy-MM-dd") ?? "—")</td>
+            <td>@item.OrderTotal.ToString("C2")</td>
+            <td class="text-end">
+                <a asp-page="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a>
+                @if (item.Status is LabelsMis.Domain.Enums.PurchaseOrderStatus.Sent or LabelsMis.Domain.Enums.PurchaseOrderStatus.PartiallyReceived)
+                {
+                    <a asp-page="Receive" asp-route-id="@item.Id" class="btn btn-sm btn-outline-success">Receive</a>
+                }
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@await Html.PartialAsync("Shared/_Pager", new PagerModel(
+    Model.Result.Page,
+    Model.Result.TotalPages,
+    Model.Result.TotalCount))

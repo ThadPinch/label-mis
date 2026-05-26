@@ -1,0 +1,63 @@
+@model LabelsMis.Web.Pages.Suppliers.SupplierFormInput
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <label asp-for="Name" class="form-label"></label>
+        <input asp-for="Name" class="form-control" />
+        <span asp-validation-for="Name" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="Code" class="form-label"></label>
+        <input asp-for="Code" class="form-control" />
+        <span asp-validation-for="Code" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="Terms" class="form-label"></label>
+        <input asp-for="Terms" class="form-control" />
+    </div>
+    <div class="col-md-4">
+        <label asp-for="DefaultLeadTimeDays" class="form-label"></label>
+        <input asp-for="DefaultLeadTimeDays" class="form-control" />
+        <span asp-validation-for="DefaultLeadTimeDays" class="text-danger"></span>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="AccountNumber" class="form-label"></label>
+        <input asp-for="AccountNumber" class="form-control" />
+    </div>
+</div>
+
+<h2 class="h5 mt-4">Contacts</h2>
+@for (var i = 0; i < Model.Contacts.Count; i++)
+{
+    <div class="border rounded p-3 mb-3">
+        <input type="hidden" asp-for="Contacts[i].Id" />
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label asp-for="Contacts[i].FirstName" class="form-label"></label>
+                <input asp-for="Contacts[i].FirstName" class="form-control" />
+                <span asp-validation-for="Contacts[i].FirstName" class="text-danger"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Contacts[i].LastName" class="form-label"></label>
+                <input asp-for="Contacts[i].LastName" class="form-control" />
+                <span asp-validation-for="Contacts[i].LastName" class="text-danger"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Contacts[i].Email" class="form-label"></label>
+                <input asp-for="Contacts[i].Email" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Contacts[i].Phone" class="form-label"></label>
+                <input asp-for="Contacts[i].Phone" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="Contacts[i].Role" class="form-label"></label>
+                <input asp-for="Contacts[i].Role" class="form-control" />
+            </div>
+            <div class="col-md-3 form-check align-self-end">
+                <input asp-for="Contacts[i].IsPrimary" class="form-check-input" />
+                <label asp-for="Contacts[i].IsPrimary" class="form-check-label"></label>
+            </div>
+        </div>
+    </div>
+}

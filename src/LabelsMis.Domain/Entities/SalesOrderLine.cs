@@ -1,0 +1,83 @@
+using LabelsMis.Domain.Common;
+
+namespace LabelsMis.Domain.Entities;
+
+public class SalesOrderLine : EntityBase
+{
+    private SalesOrderLine()
+    {
+    }
+
+    public Guid SalesOrderId { get; private set; }
+    public SalesOrder SalesOrder { get; private set; } = null!;
+    public int LineNumber { get; private set; }
+    public Guid ProductId { get; private set; }
+    public Product Product { get; private set; } = null!;
+    public Guid? SourceEstimateLineId { get; private set; }
+    public EstimateLine? SourceEstimateLine { get; private set; }
+    public int Quantity { get; private set; }
+    public decimal UnitPrice { get; private set; }
+    public decimal LineTotal { get; private set; }
+    public string? LineNotes { get; private set; }
+
+    public static SalesOrderLine Create(
+        Guid id,
+        Guid salesOrderId,
+        int lineNumber,
+        Guid productId,
+        Guid? sourceEstimateLineId,
+        int quantity,
+        decimal unitPrice,
+        string? lineNotes,
+        Guid createdById,
+        DateTime createdAt)
+    {
+        if (lineNumber <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(lineNumber), "Line number must be greater than zero.");
+        }
+
+        if (quantity <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(quantity), "Quantity must be greater than zero.");
+        }
+
+        if (unitPrice < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(unitPrice), "Unit price cannot be negative.");
+        }
+
+        var line = new SalesOrderLine
+        {
+            SalesOrderId = salesOrderId,
+            LineNumber = lineNumber,
+            ProductId = productId,
+            SourceEstimateLineId = sourceEstimateLineId,
+            Quantity = quantity,
+            UnitPrice = unitPrice,
+            LineTotal = unitPrice * quantity,
+            LineNotes = string.IsNullOrWhiteSpace(lineNotes) ? null : lineNotes.Trim()
+        };
+        line.SetCreated(id, createdById, createdAt);
+        return line;
+    }
+
+    public void Update(int quantity, decimal unitPrice, string? lineNotes, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (quantity <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(quantity), "Quantity must be greater than zero.");
+        }
+
+        if (unitPrice < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(unitPrice), "Unit price cannot be negative.");
+        }
+
+        Quantity = quantity;
+        UnitPrice = unitPrice;
+        LineTotal = unitPrice * quantity;
+        LineNotes = string.IsNullOrWhiteSpace(lineNotes) ? null : lineNotes.Trim();
+        SetModified(modifiedById, modifiedAt);
+    }
+}

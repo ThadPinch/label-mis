@@ -1,0 +1,53 @@
+@page "/invoices"
+@model LabelsMis.Web.Pages.Invoices.IndexModel
+@{ ViewData["Title"] = "Invoices"; }
+
+<div class="d-flex justify-content-between mb-3">
+    <h1 class="h3 mb-0">Invoices</h1>
+    @if (Model.CanEdit)
+    {
+        <a asp-page="Export" class="btn btn-outline-secondary">Export to QuickBooks</a>
+        <a asp-page="/Reports/ArAging" class="btn btn-outline-primary">AR aging</a>
+    }
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-2"><input asp-for="Search" class="form-control" placeholder="Search" /></div>
+    <div class="col-md-2">
+        <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.InvoiceStatus>()"><option value="">All statuses</option></select>
+    </div>
+    <div class="col-md-2">
+        <select asp-for="CustomerId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["CustomerOptions"]!)"><option value="">All customers</option></select>
+    </div>
+    <div class="col-md-2">
+        <select asp-for="AgingBucket" class="form-select">
+            <option value="">All aging</option>
+            <option value="current">Current</option>
+            <option value="1-30">1–30 days</option>
+            <option value="31-60">31–60 days</option>
+            <option value="61-90">61–90 days</option>
+            <option value="90+">90+ days</option>
+        </select>
+    </div>
+    <div class="col-md-1"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
+</form>
+
+<table class="table table-striped">
+    <thead><tr><th>Invoice #</th><th>Customer</th><th>Date</th><th>Due</th><th>Status</th><th>Total</th><th>Balance</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var item in Model.Result.Items)
+    {
+        <tr>
+            <td>@item.InvoiceNumber</td><td>@item.CustomerName</td>
+            <td>@item.InvoiceDate.ToString("yyyy-MM-dd")</td><td>@item.DueDate.ToString("yyyy-MM-dd")</td>
+            <td>@item.Status</td><td>@item.Total.ToString("C2")</td><td>@item.BalanceDue.ToString("C2")</td>
+            <td class="text-end"><a asp-page="Detail" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a></td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@await Html.PartialAsync("Shared/_Pager", new PagerModel(
+    Model.Result.Page,
+    Model.Result.TotalPages,
+    Model.Result.TotalCount))

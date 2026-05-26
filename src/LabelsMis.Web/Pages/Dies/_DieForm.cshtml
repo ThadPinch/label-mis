@@ -1,0 +1,69 @@
+@model LabelsMis.Web.Pages.Dies.DieFormInput
+@using LabelsMis.Domain.Enums
+
+<div class="row g-3">
+    <div class="col-md-8">
+        <label asp-for="Description" class="form-label"></label>
+        <input asp-for="Description" class="form-control" />
+        <span asp-validation-for="Description" class="text-danger"></span>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="DieType" class="form-label"></label>
+        <select asp-for="DieType" asp-items="Html.GetEnumSelectList<DieType>()" class="form-select"></select>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="CustomerId" class="form-label"></label>
+        <select asp-for="CustomerId" asp-items="@(ViewData["CustomerOptions"] as IEnumerable<SelectListItem>)" class="form-select">
+            <option value="">(None)</option>
+        </select>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="SupplierId" class="form-label"></label>
+        <select asp-for="SupplierId" asp-items="@(ViewData["SupplierOptions"] as IEnumerable<SelectListItem>)" class="form-select">
+            <option value="">(None)</option>
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="Shape" class="form-label"></label>
+        <input asp-for="Shape" class="form-control" />
+    </div>
+    <div class="col-md-4">
+        <label asp-for="SupplierPartNumber" class="form-label"></label>
+        <input asp-for="SupplierPartNumber" class="form-control" />
+    </div>
+    <div class="col-md-4">
+        <label asp-for="Location" class="form-label"></label>
+        <input asp-for="Location" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label asp-for="LabelAcrossIn" class="form-label"></label>
+        <input asp-for="LabelAcrossIn" class="form-control" />
+        <span asp-validation-for="LabelAcrossIn" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="LabelAroundIn" class="form-label"></label>
+        <input asp-for="LabelAroundIn" class="form-control" />
+        <span asp-validation-for="LabelAroundIn" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="CornerRadiusIn" class="form-label"></label>
+        <input asp-for="CornerRadiusIn" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label asp-for="LabelsAround" class="form-label"></label>
+        <input asp-for="LabelsAround" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label asp-for="GutterAcrossIn" class="form-label"></label>
+        <input asp-for="GutterAcrossIn" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label asp-for="GutterAroundIn" class="form-label"></label>
+        <input asp-for="GutterAroundIn" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label asp-for="WebWidthIn" class="form-label"></label>
+        <input asp-for="WebWidthIn" class="form-control" />
+        <span asp-validation-for="WebWidthIn" class="text-danger"></span>
+    </div>
+</div>

@@ -1,0 +1,63 @@
+@page "/finishing-operations"
+@model LabelsMis.Web.Pages.FinishingOperations.IndexModel
+@{
+    ViewData["Title"] = "Finishing operations";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Finishing operations</h1>
+    @if (Model.CanEdit)
+    {
+        <a class="btn btn-primary" asp-page="Create">New operation</a>
+    }
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-4">
+        <input asp-for="Search" class="form-control" placeholder="Search code or description" />
+    </div>
+    <div class="col-md-2 form-check align-self-center">
+        <input asp-for="IncludeInactive" class="form-check-input" />
+        <label asp-for="IncludeInactive" class="form-check-label">Show inactive</label>
+    </div>
+    <div class="col-md-3">
+        <button type="submit" class="btn btn-outline-secondary">Search</button>
+    </div>
+</form>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Code</th>
+            <th>Description</th>
+            <th>Type</th>
+            <th>Active</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var item in Model.Result.Items)
+    {
+        <tr>
+            <td>@item.Code</td>
+            <td>@item.Description</td>
+            <td>@item.OperationType</td>
+            <td>@(item.IsActive ? "Yes" : "No")</td>
+            <td class="text-end text-nowrap">
+                <a asp-page="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">@(Model.CanEdit ? "Edit" : "View")</a>
+                @if (Model.CanEdit)
+                {
+                    <a asp-page="Create" asp-route-duplicateFrom="@item.Id" class="btn btn-sm btn-outline-secondary">Duplicate</a>
+                }
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@await Html.PartialAsync("Shared/_Pager", new PagerModel(
+    Model.Result.Page,
+    Model.Result.TotalPages,
+    Model.Result.TotalCount,
+    Model.Search,
+    IncludeInactive: Model.IncludeInactive))

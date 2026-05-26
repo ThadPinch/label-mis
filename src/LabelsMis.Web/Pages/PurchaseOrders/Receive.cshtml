@@ -1,0 +1,26 @@
+@page "/purchase-orders/{id:guid}/receive"
+@model LabelsMis.Web.Pages.PurchaseOrders.ReceiveModel
+@{ ViewData["Title"] = "Receive PO"; ViewData["BackNav"] = new BackNavModel("Back", "./Edit") { RouteValues = new Dictionary<string, object?> { ["id"] = Model.Id } }; }
+
+<h1 class="h3 mb-3">Receive @Model.Po?.PoNumber</h1>
+<form method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    @for (var i = 0; i < Model.Lines.Count; i++)
+    {
+        var line = Model.Po!.Lines.ElementAt(i);
+        <div class="card mb-3">
+            <div class="card-body">
+                <h2 class="h6">Line @line.LineNumber — @line.Stock.Description</h2>
+                <p class="text-muted mb-2">Open: @((line.QuantityLf - line.QuantityReceivedLf).ToString("N2")) LF</p>
+                <input type="hidden" asp-for="Lines[i].PoLineId" />
+                <div class="row g-2">
+                    <div class="col-md-3"><label class="form-label">Qty received (LF)</label><input asp-for="Lines[i].QuantityLf" class="form-control" /></div>
+                    <div class="col-md-3"><label class="form-label">Supplier lot #</label><input asp-for="Lines[i].SupplierLotNumber" class="form-control" /></div>
+                    <div class="col-md-2"><label class="form-label"># rolls</label><input asp-for="Lines[i].RollCount" class="form-control" /></div>
+                    <div class="col-md-3"><label class="form-label">Location</label><input asp-for="Lines[i].Location" class="form-control" /></div>
+                </div>
+            </div>
+        </div>
+    }
+    <button type="submit" class="btn btn-primary">Receive</button>
+</form>

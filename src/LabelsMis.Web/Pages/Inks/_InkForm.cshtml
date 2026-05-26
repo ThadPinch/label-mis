@@ -1,0 +1,28 @@
+@model LabelsMis.Web.Pages.Inks.InkFormInput
+@using LabelsMis.Domain.Enums
+
+<div class="row g-3">
+    <div class="col-md-3">
+        <label asp-for="Code" class="form-label"></label>
+        <input asp-for="Code" class="form-control" />
+        <span asp-validation-for="Code" class="text-danger"></span>
+    </div>
+    <div class="col-md-5">
+        <label asp-for="Description" class="form-label"></label>
+        <input asp-for="Description" class="form-control" />
+        <span asp-validation-for="Description" class="text-danger"></span>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="InkSet" class="form-label"></label>
+        <select asp-for="InkSet" asp-items="Html.GetEnumSelectList<InkSet>()" class="form-select"></select>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="ClickRatePer1000" class="form-label"></label>
+        <input asp-for="ClickRatePer1000" class="form-control" />
+        <span asp-validation-for="ClickRatePer1000" class="text-danger"></span>
+    </div>
+    <div class="col-md-4 form-check align-self-end">
+        <input asp-for="IsWhite" class="form-check-input" />
+        <label asp-for="IsWhite" class="form-check-label"></label>
+    </div>
+</div>

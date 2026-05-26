@@ -1,0 +1,20 @@
+@model LabelsMis.Web.Pages.Shared.PagerModel
+<nav aria-label="Pagination" class="mt-3">
+    <ul class="pagination">
+        @if (Model.Page > 1)
+        {
+            <li class="page-item">
+                <a class="page-link" asp-route-page="@(Model.Page - 1)" asp-route-search="@Model.Search" asp-route-sort="@Model.Sort" asp-route-includeInactive="@Model.IncludeInactive">Previous</a>
+            </li>
+        }
+        <li class="page-item disabled">
+            <span class="page-link">Page @Model.Page of @Math.Max(Model.TotalPages, 1) (@Model.TotalCount total)</span>
+        </li>
+        @if (Model.Page < Model.TotalPages)
+        {
+            <li class="page-item">
+                <a class="page-link" asp-route-page="@(Model.Page + 1)" asp-route-search="@Model.Search" asp-route-sort="@Model.Sort" asp-route-includeInactive="@Model.IncludeInactive">Next</a>
+            </li>
+        }
+    </ul>
+</nav>
