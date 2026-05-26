@@ -22,3 +22,9 @@ services:
       - key: ConnectionStrings__Default
         scope: RUN_TIME
         type: SECRET
+databases:
+  - name: labelsmis-db
+    engine: PG
+    version: "16"
+    production: false
+    cluster_name: labelsmis-dev-db
