@@ -64,6 +64,54 @@
         </tr>`;
     }).join('');
 
+    const renderCostLineCards = (items) => (items || []).map(item => {
+        const qty = fmtQty(item.quantity, item.unit === 'MSI' || item.unit === 'minutes' ? 1 : 0);
+        const unitCost = fmtMoney(item.unitCost, item.unitCost < 1 ? 4 : 2);
+        return `<div class="calc-cost-line">
+            <div class="calc-cost-line-top">
+                <span class="calc-cost-line-category">${escapeHtml(item.category)}</span>
+                <span class="calc-cost-line-total">${fmtMoney(item.lineCost)}</span>
+            </div>
+            <div class="calc-cost-line-desc">${escapeHtml(item.description)}</div>
+            <div class="calc-cost-line-meta">${qty} ${escapeHtml(item.unit)} × ${unitCost}</div>
+        </div>`;
+    }).join('');
+
+    const renderCostBreakdown = (items, totalCost, compact) => {
+        if (!items?.length) {
+            return '<p class="text-muted small mb-0">No cost lines calculated.</p>';
+        }
+        if (compact) {
+            return `<div class="calc-cost-lines">${renderCostLineCards(items)}</div>
+                <div class="calc-cost-lines-total">
+                    <span>Total cost</span>
+                    <span>${fmtMoney(totalCost)}</span>
+                </div>`;
+        }
+        const costRows = renderCostLineRows(items);
+        return `<div class="calc-cost-table-wrap table-responsive">
+            <table class="table table-sm table-bordered calc-cost-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Description</th>
+                        <th class="text-end">Qty</th>
+                        <th>Unit</th>
+                        <th class="text-end">Unit cost</th>
+                        <th class="text-end">Line cost</th>
+                    </tr>
+                </thead>
+                <tbody>${costRows}</tbody>
+                <tfoot>
+                    <tr class="fw-semibold">
+                        <td colspan="5">Total cost</td>
+                        <td class="text-end">${fmtMoney(totalCost)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>`;
+    };
+
     const renderImpositionDiagram = (layout, imposition, idSuffix = '0') => {
         if (!layout || !imposition) return '';
 
@@ -231,30 +279,11 @@
                 </dl>
             </section>`;
 
+        const compactCost = !!targetEl;
+
         const qtySections = breaks.map(row => {
             const markupAmount = Number(row.totalPrice) - Number(row.totalCost);
-            const costRows = renderCostLineRows(row.costBreakdown);
-            const costTable = costRows
-                ? `<table class="table table-sm table-bordered calc-cost-table mb-0">
-                        <thead>
-                            <tr>
-                                <th>Category</th>
-                                <th>Description</th>
-                                <th class="text-end">Qty</th>
-                                <th>Unit</th>
-                                <th class="text-end">Unit cost</th>
-                                <th class="text-end">Line cost</th>
-                            </tr>
-                        </thead>
-                        <tbody>${costRows}</tbody>
-                        <tfoot>
-                            <tr class="fw-semibold">
-                                <td colspan="5">Total cost</td>
-                                <td class="text-end">${fmtMoney(row.totalCost)}</td>
-                            </tr>
-                        </tfoot>
-                    </table>`
-                : '<p class="text-muted small mb-0">No cost lines calculated.</p>';
+            const costTable = renderCostBreakdown(row.costBreakdown, row.totalCost, compactCost);
 
             const marginClass = row.belowMinimumMargin ? ' calc-qty-stat--warn' : '';
             const marginSuffix = row.belowMinimumMargin ? ' ⚠' : '';

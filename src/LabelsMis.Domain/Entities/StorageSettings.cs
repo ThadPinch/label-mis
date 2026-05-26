@@ -40,8 +40,8 @@ public class StorageSettings : EntityBase
         Guid modifiedById,
         DateTime modifiedAt)
     {
-        ServiceUrl = serviceUrl.Trim();
         BucketName = bucketName.Trim();
+        ServiceUrl = NormalizeServiceUrl(serviceUrl, BucketName);
         AccessKey = accessKey.Trim();
         if (!string.IsNullOrWhiteSpace(secretKey))
         {
@@ -65,4 +65,33 @@ public class StorageSettings : EntityBase
         && !string.IsNullOrWhiteSpace(BucketName)
         && !string.IsNullOrWhiteSpace(AccessKey)
         && !string.IsNullOrWhiteSpace(SecretKey);
+
+    private static string NormalizeServiceUrl(string serviceUrl, string bucketName)
+    {
+        var url = serviceUrl.Trim().TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return string.Empty;
+        }
+
+        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            && !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            url = "https://" + url;
+        }
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return url;
+        }
+
+        var host = uri.Host;
+        if (!string.IsNullOrWhiteSpace(bucketName)
+            && host.StartsWith($"{bucketName}.", StringComparison.OrdinalIgnoreCase))
+        {
+            host = host[(bucketName.Length + 1)..];
+        }
+
+        return $"{uri.Scheme}://{host}";
+    }
 }

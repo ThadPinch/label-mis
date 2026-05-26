@@ -13,6 +13,7 @@
         <div class="col-md-6">
             <label asp-for="Input.ServiceUrl" class="form-label">Spaces endpoint URL</label>
             <input asp-for="Input.ServiceUrl" class="form-control" placeholder="https://nyc3.digitaloceanspaces.com" />
+            <div class="form-text">Regional endpoint only — do not include the bucket name.</div>
         </div>
         <div class="col-md-6">
             <label asp-for="Input.BucketName" class="form-label">Bucket name</label>

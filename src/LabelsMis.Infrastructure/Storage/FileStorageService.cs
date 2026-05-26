@@ -1,3 +1,6 @@
+using System.Net;
+using Amazon.S3;
+using Amazon.S3.Model;
 using LabelsMis.Domain.Storage;
 using LabelsMis.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -102,16 +105,24 @@ public class SpacesFileStorageClient(LabelsMisDbContext db) : IFileStorageClient
         CancellationToken cancellationToken = default)
     {
         var (client, bucket) = await CreateClientAsync(cancellationToken);
-        var request = new Amazon.S3.Model.PutObjectRequest
+        var request = new PutObjectRequest
         {
             BucketName = bucket,
             Key = key,
             InputStream = content,
             ContentType = contentType,
-            CannedACL = Amazon.S3.S3CannedACL.Private
+            CannedACL = S3CannedACL.Private
         };
-        var response = await client.PutObjectAsync(request, cancellationToken);
-        return new StoredFile(key, contentType, response.ContentLength);
+
+        try
+        {
+            var response = await client.PutObjectAsync(request, cancellationToken);
+            return new StoredFile(key, contentType, response.ContentLength);
+        }
+        catch (Exception ex)
+        {
+            throw WrapSpacesException(ex, "upload artwork to");
+        }
     }
 
     public async Task<Stream> OpenReadAsync(string key, CancellationToken cancellationToken = default)
@@ -138,13 +149,13 @@ public class SpacesFileStorageClient(LabelsMisDbContext db) : IFileStorageClient
             await client.GetObjectMetadataAsync(bucket, key, cancellationToken);
             return true;
         }
-        catch (Amazon.S3.AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
             return false;
         }
     }
 
-    private async Task<(Amazon.S3.AmazonS3Client Client, string Bucket)> CreateClientAsync(CancellationToken cancellationToken)
+    private async Task<(AmazonS3Client Client, string Bucket)> CreateClientAsync(CancellationToken cancellationToken)
     {
         var settings = await db.StorageSettings.AsNoTracking().SingleAsync(cancellationToken);
         if (!settings.IsSpacesConfigured)
@@ -152,17 +163,32 @@ public class SpacesFileStorageClient(LabelsMisDbContext db) : IFileStorageClient
             throw new InvalidOperationException("DigitalOcean Spaces is not configured.");
         }
 
-        var config = new Amazon.S3.AmazonS3Config
+        var serviceUrl = SpacesEndpointNormalizer.NormalizeServiceUrl(settings.ServiceUrl, settings.BucketName);
+        var config = new AmazonS3Config
         {
-            ServiceURL = settings.ServiceUrl,
-            ForcePathStyle = false
+            ServiceURL = serviceUrl,
+            ForcePathStyle = false,
+            AuthenticationRegion = SpacesEndpointNormalizer.SigningRegion
         };
-        if (!string.IsNullOrWhiteSpace(settings.Region))
+
+        var client = new AmazonS3Client(settings.AccessKey, settings.SecretKey, config);
+        return (client, settings.BucketName);
+    }
+
+    private static InvalidOperationException WrapSpacesException(Exception ex, string action)
+    {
+        var detail = ex.InnerException?.Message ?? ex.Message;
+        if (ex.Message.Contains("SSL connection could not be established", StringComparison.OrdinalIgnoreCase)
+            || detail.Contains("SSL connection could not be established", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("The remote certificate is invalid", StringComparison.OrdinalIgnoreCase))
         {
-            config.AuthenticationRegion = settings.Region;
+            return new InvalidOperationException(
+                $"Could not connect to DigitalOcean Spaces to {action}. "
+                + "Use the regional endpoint only, e.g. https://nyc3.digitaloceanspaces.com (without the bucket name). "
+                + $"Details: {detail}",
+                ex);
         }
 
-        var client = new Amazon.S3.AmazonS3Client(settings.AccessKey, settings.SecretKey, config);
-        return (client, settings.BucketName);
+        return new InvalidOperationException($"DigitalOcean Spaces failed to {action}: {ex.Message}", ex);
     }
 }

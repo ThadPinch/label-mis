@@ -45,14 +45,20 @@
         </div>
         <div class="col-md-2"><input name="Input.Lines[@i].Quantity" value="@line.Quantity" class="form-control line-qty" readonly="@isLocked" /></div>
         <div class="col-md-2"><input name="Input.Lines[@i].UnitPrice" value="@line.UnitPrice" class="form-control line-price" readonly="@isLocked" /></div>
-        <div class="col-md-2">
+        <div class="col-md-2 artwork-upload-cell">
             @if (line.HasArtwork && line.ProductId != Guid.Empty)
             {
-                <a asp-page="/Artwork/Download" asp-route-productId="@line.ProductId" target="_blank" class="small d-block mb-1">Download</a>
+                <a asp-page="/Artwork/Download" asp-route-productId="@line.ProductId" target="_blank" class="small d-block mb-1 artwork-download-link">Download</a>
             }
             @if (!isLocked)
             {
-                <input type="file" name="Input.Lines[@i].ArtworkFile" class="form-control form-control-sm" accept=".pdf,.ai,.eps,.png,.jpg,.jpeg,.tif,.tiff" />
+                <input type="file" name="Input.Lines[@i].ArtworkFile" class="form-control form-control-sm artwork-file-input" accept=".pdf,.ai,.eps,.png,.jpg,.jpeg,.tif,.tiff" />
+                <div class="artwork-upload-status d-none">
+                    <div class="progress mt-1" style="height: 6px;">
+                        <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <div class="small artwork-upload-message mt-1 text-muted"></div>
+                </div>
             }
         </div>
         <div class="col-md-2"><input name="Input.Lines[@i].LineNotes" value="@line.LineNotes" class="form-control" placeholder="Notes" readonly="@isLocked" /></div>
