@@ -23,7 +23,7 @@ if (!IsEfDesignTime())
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<LabelsMisDbContext>();
-    // await db.Database.MigrateAsync();
+    await db.Database.MigrateAsync();
     await IdentitySeeder.SeedAsync(app.Services);
     await MasterDataSeeder.SeedAsync(app.Services);
 }
@@ -56,5 +56,28 @@ app.Run();
 static bool IsEfDesignTime() =>
     Environment.GetCommandLineArgs().Any(arg =>
         arg.Contains("ef", StringComparison.OrdinalIgnoreCase));
+
+app.MapGet("/_diag/db", async (LabelsMisDbContext db) =>
+{
+    var canConnect = await db.Database.CanConnectAsync();
+    var conn = db.Database.GetDbConnection();
+    await conn.OpenAsync();
+    using var cmd = conn.CreateCommand();
+    cmd.CommandText = """
+        SELECT current_user AS usr,
+               current_database() AS db,
+               has_schema_privilege(current_user, 'public', 'CREATE') AS can_create,
+               has_schema_privilege(current_user, 'public', 'USAGE') AS can_use
+    """;
+    using var reader = await cmd.ExecuteReaderAsync();
+    await reader.ReadAsync();
+    return Results.Ok(new {
+        canConnect,
+        user = reader["usr"]?.ToString(),
+        db = reader["db"]?.ToString(),
+        canCreate = reader["can_create"],
+        canUse = reader["can_use"]
+    });
+});
 
 public partial class Program;
