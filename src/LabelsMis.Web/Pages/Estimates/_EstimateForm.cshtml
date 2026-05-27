@@ -212,8 +212,9 @@
                     </div>
                     <div class="col-12">
                         <label class="form-label">Quantity breaks</label>
+                        <div class="form-text mb-1">Up to two quantities. Values move to the first slots automatically.</div>
                         <div class="row g-2 quantity-inputs">
-                            @for (var q = 0; q < Math.Max(3, line.Quantities.Count); q++)
+                            @for (var q = 0; q < 2; q++)
                             {
                                 var qty = q < line.Quantities.Count ? line.Quantities[q] : 0;
                                 <div class="col-md-2">
@@ -235,11 +236,11 @@
                             <label class="form-label mb-0 me-1">Margin</label>
                             <div class="input-group input-group-sm margin-control" style="width: auto;">
                                 <button type="button" class="btn btn-outline-secondary margin-decrease" aria-label="Decrease margin">−</button>
-                                <span class="input-group-text margin-display" style="min-width: 4.5rem; justify-content: center;">—</span>
+                                <input type="text" class="form-control margin-input text-center" style="min-width: 4.5rem; max-width: 5rem;" inputmode="decimal" aria-label="Margin percent" placeholder="—" />
                                 <button type="button" class="btn btn-outline-secondary margin-increase" aria-label="Increase margin">+</button>
                             </div>
                             <input type="hidden" name="Input.Lines[@i].MarkupPctOverride" value="@(line.MarkupPctOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")" class="markup-override-input" />
-                            <span class="form-text mb-0">Adjust markup for this line (±1% margin per click)</span>
+                            <span class="form-text mb-0">Type a margin (e.g. 25 or 25%) or use ± for 1% steps</span>
                         </div>
                         <div class="calc-warnings alert alert-warning d-none"></div>
                         <div class="calc-errors alert alert-danger d-none"></div>
@@ -263,6 +264,15 @@
                             <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].SetupMinutesOverride" value="@(sel.SetupMinutesOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")" />
                             <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].RunSpeedFpmOverride" value="@(sel.RunSpeedFpmOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")" />
                         }
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <label class="form-label mb-0 me-1">Margin</label>
+                            <div class="input-group input-group-sm margin-control" style="width: auto;">
+                                <button type="button" class="btn btn-outline-secondary margin-decrease" aria-label="Decrease margin">−</button>
+                                <input type="text" class="form-control margin-input text-center" style="min-width: 4.5rem; max-width: 5rem;" inputmode="decimal" aria-label="Margin percent" placeholder="—" />
+                                <button type="button" class="btn btn-outline-secondary margin-increase" aria-label="Increase margin">+</button>
+                            </div>
+                            <span class="form-text mb-0">Adjust margin to recalculate pricing for this line</span>
+                        </div>
                         <div class="calc-warnings alert alert-warning d-none"></div>
                         <div class="calc-errors alert alert-danger d-none"></div>
                         <table class="table table-sm calc-results">

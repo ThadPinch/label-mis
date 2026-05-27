@@ -443,24 +443,11 @@ body {
 /* ==========================================================================
    Estimate editor workspace
    ========================================================================== */
-.estimate-page {
-  --estimate-workspace-height: calc(100vh - var(--lm-header-height) - 10rem);
-}
-
 .estimate-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 36%);
   gap: 1.25rem;
-  align-items: stretch;
-  min-height: var(--estimate-workspace-height);
-}
-
-.estimate-workspace-main,
-.estimate-workspace-panel {
-  min-height: 0;
-  max-height: var(--estimate-workspace-height);
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  align-items: start;
 }
 
 .estimate-workspace-panel {
@@ -478,8 +465,6 @@ body {
 }
 
 .estimate-panel-card--breakdown {
-  flex: 1 1 auto;
-  min-height: 12rem;
   display: flex;
   flex-direction: column;
 }
@@ -505,11 +490,6 @@ body {
   font-size: 0.75rem;
   color: var(--lm-text-muted);
   margin-top: 0.35rem;
-}
-
-.estimate-breakdown-panel {
-  flex: 1 1 auto;
-  min-height: 0;
 }
 
 .estimate-breakdown-panel--empty {
@@ -712,23 +692,8 @@ body {
 }
 
 @media (max-width: 991.98px) {
-  .estimate-page {
-    --estimate-workspace-height: none;
-  }
-
   .estimate-workspace {
     grid-template-columns: 1fr;
-    min-height: 0;
-  }
-
-  .estimate-workspace-main,
-  .estimate-workspace-panel {
-    max-height: none;
-    overflow: visible;
-  }
-
-  .estimate-panel-card--breakdown {
-    min-height: 0;
   }
 }
 
