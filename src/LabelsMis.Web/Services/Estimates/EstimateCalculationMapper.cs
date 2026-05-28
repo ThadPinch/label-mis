@@ -140,7 +140,7 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             stock.WidthIn,
             stock.CostPerMsi,
             finishingRequests,
-            line.Quantities.Where(q => q > 0).Distinct().OrderBy(q => q).Take(2).ToList(),
+            line.Quantities.Where(q => q > 0).Distinct().OrderBy(q => q).ToList(),
             line.SetupWasteImpressions,
             line.RunningWastePct,
             line.MarkupPctOverride ?? customer.DefaultMarkupPct,

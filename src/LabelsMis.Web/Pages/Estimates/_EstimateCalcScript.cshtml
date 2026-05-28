@@ -650,7 +650,7 @@
             .map(i => parseInt(i.value, 10))
             .filter(q => !Number.isNaN(q) && q > 0)
             .sort((a, b) => a - b)
-            .slice(0, 2);
+            .slice(0, 3);
         inputs.forEach((input, idx) => {
             input.value = values[idx] !== undefined ? String(values[idx]) : '';
         });

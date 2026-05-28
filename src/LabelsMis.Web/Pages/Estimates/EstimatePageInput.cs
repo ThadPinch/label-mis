@@ -76,7 +76,7 @@ public class EstimateLinePageInput
         SetupWasteImpressions,
         RunningWastePct,
         LineNotes,
-        Quantities.Where(q => q > 0).Distinct().OrderBy(q => q).Take(2).ToList(),
+        Quantities.Where(q => q > 0).Distinct().OrderBy(q => q).ToList(),
         MarkupPctOverride,
         MaxLabelsAcrossOverride,
         LabelOrientationOverride);
@@ -105,7 +105,7 @@ public class EstimateLinePageInput
             LabelOrientationOverride = line.LabelOrientationOverride,
             FinishingOperations = EstimateCalculationMapper
                 .DeserializeFinishingOperations(line.FinishingOperationsJson).ToList(),
-            Quantities = line.QuantityBreaks.OrderBy(q => q.Quantity).Select(q => q.Quantity).Take(2).ToList()
+            Quantities = line.QuantityBreaks.OrderBy(q => q.Quantity).Select(q => q.Quantity).ToList()
         };
     }
 }

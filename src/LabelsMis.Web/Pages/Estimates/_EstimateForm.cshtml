@@ -212,9 +212,9 @@
                     </div>
                     <div class="col-12">
                         <label class="form-label">Quantity breaks</label>
-                        <div class="form-text mb-1">Up to two quantities. Values move to the first slots automatically.</div>
+                        <div class="form-text mb-1">Enter one to three quantity breaks. Values shift to the first slots automatically.</div>
                         <div class="row g-2 quantity-inputs">
-                            @for (var q = 0; q < 2; q++)
+                            @for (var q = 0; q < 3; q++)
                             {
                                 var qty = q < line.Quantities.Count ? line.Quantities[q] : 0;
                                 <div class="col-md-2">
