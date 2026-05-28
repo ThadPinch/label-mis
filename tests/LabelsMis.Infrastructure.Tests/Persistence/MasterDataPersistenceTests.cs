@@ -150,8 +150,26 @@ public class MasterDataPersistenceTests : IAsyncLifetime
     public async Task Press_PersistsAndReadsBack()
     {
         var id = Guid.NewGuid();
-        var press = Press.Create(id, "Test Press", "TEST1", PressType.DigitalInkjet,
-            13m, 29m, 3m, 7, 100m, 20m, 150m, true, TestUserId, DateTime.UtcNow);
+        var press = Press.Create(
+            id,
+            "Test Press",
+            "TEST1",
+            PressType.DigitalInkjet,
+            webWidthIn: 13.39m,
+            minWebWidthIn: 7.87m,
+            maxWebWidthIn: 13.39m,
+            maxImageWidthIn: 12.59m,
+            frameRepeatIn: 18.9m,
+            maxImageLengthIn: 38.58m,
+            maxRepeatIn: 38.58m,
+            minRepeatIn: 18.9m,
+            maxColors: 7,
+            speedFpm: 100m,
+            setupMinutes: 20m,
+            costPerHour: 150m,
+            isClickBased: true,
+            TestUserId,
+            DateTime.UtcNow);
         _db.Presses.Add(press);
         await _db.SaveChangesAsync();
 

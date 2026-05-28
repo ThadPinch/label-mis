@@ -8,7 +8,7 @@ namespace LabelsMis.Infrastructure.Persistence;
 public static class IdentitySeeder
 {
     public const string DefaultAdminEmail = "admin@labels-mis.local";
-    public const string DefaultAdminPassword = "ChangeMe!2026";
+    public const string DefaultAdminPassword = "pa55w0rd";
 
     public static async Task SeedAsync(IServiceProvider services, CancellationToken cancellationToken = default)
     {

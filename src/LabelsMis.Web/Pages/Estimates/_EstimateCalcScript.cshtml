@@ -119,6 +119,8 @@
         const trimPatternId = `impositionTrimHatch-${idSuffix}`;
 
         const pressWeb = Number(layout.pressWebWidthIn);
+        const imageWidth = Number(layout.pressMaxImageWidthIn) || pressWeb;
+        const frameRepeat = Number(layout.pressFrameRepeatIn) || Number(imposition.frameRepeatIn);
         const edgeMargin = Number(layout.pressEdgeMarginIn);
         const stockWidth = Number(layout.stockWidthIn);
         const labelAcross = Number(layout.labelAcrossIn);
@@ -127,23 +129,30 @@
         const gutterAround = Number(layout.gutterAroundIn);
         const labelsAcross = Number(imposition.labelsAcross);
         const labelsAround = Number(imposition.labelsAround);
+        const framesPerImpression = Number(imposition.framesPerImpression) || 1;
         const repeatLength = Number(imposition.repeatLengthIn);
+        const layoutRepeat = Number(imposition.layoutRepeatIn) || repeatLength;
 
         if ([pressWeb, stockWidth, labelAcross, labelAround, repeatLength].some(v => !v || Number.isNaN(v))) {
             return '';
         }
 
         const canvasWidth = Math.max(stockWidth, pressWeb);
-        const canvasHeight = Math.max(repeatLength, 0.5);
+        const canvasHeight = Math.max(repeatLength, frameRepeat || 0.5, 0.5);
         const pressOffsetX = Math.max(0, (stockWidth - pressWeb) / 2);
-        const printableLeft = pressOffsetX + edgeMargin;
-        const printableRight = pressOffsetX + pressWeb - edgeMargin;
-        const printableWidth = printableRight - printableLeft;
+        const printableLeft = pressOffsetX + Math.max(0, (pressWeb - imageWidth) / 2);
+        const printableRight = printableLeft + imageWidth;
+        const printableWidth = imageWidth;
         const usedWidth = labelsAcross > 0
             ? (labelsAcross * labelAcross) + (Math.max(labelsAcross - 1, 0) * gutterAcross)
             : 0;
         const wasteSide = Math.max(0, (printableWidth - usedWidth) / 2);
         const labelsStartX = printableLeft + wasteSide;
+
+        const frameAreaHeight = framesPerImpression === 1 && frameRepeat > 0
+            ? frameRepeat
+            : repeatLength;
+        const labelsStartY = Math.max(0, (frameAreaHeight - layoutRepeat) / 2);
 
         // ViewBox padding (in inches) — leaves room for the bottom stock label,
         // the web-direction arrow on the right, and a touch of breathing room.
@@ -169,21 +178,40 @@
             }
         }
 
-        // Unused web — split into two strips on either side of the centered labels.
+        // Unused web — beside and above/below the centered label block.
         let webWaste = '';
         if (wasteSide > 0.05) {
-            webWaste = `<rect x="${printableLeft}" y="0" width="${wasteSide}" height="${canvasHeight}" fill="#fef9c3" stroke="none"/>
-                        <rect x="${labelsStartX + usedWidth}" y="0" width="${wasteSide}" height="${canvasHeight}" fill="#fef9c3" stroke="none"/>`;
+            webWaste += `<rect x="${printableLeft}" y="0" width="${wasteSide}" height="${canvasHeight}" fill="#fef9c3" stroke="none"/>
+                         <rect x="${labelsStartX + usedWidth}" y="0" width="${wasteSide}" height="${canvasHeight}" fill="#fef9c3" stroke="none"/>`;
+        }
+        const wasteTop = labelsStartY;
+        const wasteBottom = Math.max(0, frameAreaHeight - labelsStartY - layoutRepeat);
+        if (wasteTop > 0.05) {
+            webWaste += `<rect x="${printableLeft}" y="0" width="${printableWidth}" height="${wasteTop}" fill="#fef9c3" stroke="none"/>`;
+        }
+        if (wasteBottom > 0.05) {
+            webWaste += `<rect x="${printableLeft}" y="${labelsStartY + layoutRepeat}" width="${printableWidth}" height="${wasteBottom}" fill="#fef9c3" stroke="none"/>`;
         }
 
         const labelCornerRadius = Math.min(0.08, Math.min(labelAcross, labelAround) * 0.05);
+        let frameGuides = '';
+        if (frameRepeat > 0) {
+            for (let f = 0; f < framesPerImpression; f++) {
+                const y = f * frameRepeat;
+                frameGuides += `<rect x="${printableLeft}" y="${y}" width="${printableWidth}" height="${frameRepeat}" fill="none" stroke="#2563eb" stroke-width="0.05" stroke-dasharray="0.12 0.08"/>`;
+                if (framesPerImpression > 1) {
+                    frameGuides += `<text x="${printableLeft + 0.08}" y="${y + 0.22}" font-size="0.22" fill="#1d4ed8" font-weight="600">Frame ${f + 1}</text>`;
+                }
+            }
+        }
+
         let labels = '';
         for (let row = 0; row < labelsAround; row++) {
             for (let col = 0; col < labelsAcross; col++) {
                 const x = labelsStartX + col * (labelAcross + gutterAcross);
-                const y = row * (labelAround + gutterAround);
+                const y = labelsStartY + row * (labelAround + gutterAround);
                 labels += `<rect x="${x}" y="${y}" width="${labelAcross}" height="${labelAround}" rx="${labelCornerRadius}" ry="${labelCornerRadius}" fill="rgba(249,115,22,0.35)" stroke="#ea580c" stroke-width="0.04"/>`;
-                if (labelsAcross * labelsAround <= 12) {
+                if (labelsAcross * labelsAround <= 24) {
                     labels += `<text x="${x + labelAcross / 2}" y="${y + labelAround / 2}" text-anchor="middle" dominant-baseline="central" font-size="${Math.min(labelAcross, labelAround) * 0.24}" fill="#7c2d12" font-weight="700">${row * labelsAcross + col + 1}</text>`;
                 }
             }
@@ -212,7 +240,7 @@
 
         return `
             <div class="imposition-diagram">
-                <div class="imposition-caption">One impression — labels on stock (top view, arrow shows web direction)</div>
+                <div class="imposition-caption">One impression (${framesPerImpression} frame${framesPerImpression === 1 ? '' : 's'} × ${frameRepeat ? frameRepeat.toFixed(2) + '"' : 'repeat'}) — top view, arrow is web direction</div>
                 <svg viewBox="${-padL} ${-padT} ${canvasWidth + padL + padR} ${canvasHeight + padT + padB}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Imposition diagram showing ${labelsAcross} labels across on ${stockWidth} inch stock">
                     <defs>
                         <pattern id="${marginPatternId}" width="0.15" height="0.15" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -230,6 +258,7 @@
                     ${leftMargin}
                     ${rightMargin}
                     ${webWaste}
+                    ${frameGuides}
                     ${labels}
                     ${flowArrow}
                     ${dimText}
@@ -272,7 +301,11 @@
                     <dd>${imposition.labelsAround}</dd>
                     <dt>Labels per impression</dt>
                     <dd>${imposition.labelsPerImpression}</dd>
-                    <dt>Repeat length</dt>
+                    <dt>Frames per impression</dt>
+                    <dd>${imposition.framesPerImpression ?? 1} × ${fmtQty(imposition.frameRepeatIn ?? 0, 2)}" frame</dd>
+                    <dt>Layout repeat</dt>
+                    <dd>${fmtQty(imposition.layoutRepeatIn ?? imposition.repeatLengthIn, 4)}"</dd>
+                    <dt>Billable repeat</dt>
                     <dd>${fmtQty(imposition.repeatLengthIn, 4)}"</dd>
                     <dt>Web utilization</dt>
                     <dd>${fmtPct(imposition.utilizationPct)}</dd>
@@ -318,7 +351,9 @@
                                 <dt>Order quantity</dt>
                                 <dd>${fmtQty(row.quantity)} labels</dd>
                                 <dt>Impressions</dt>
-                                <dd>${fmtQty(row.impressions)} <span class="calc-dl-note">(includes setup + running waste)</span></dd>
+                                <dd>${fmtQty(row.impressions)} <span class="calc-dl-note">(drum revolutions; includes waste)</span></dd>
+                                <dt>Frame slots</dt>
+                                <dd>${fmtQty(row.impressions * (imposition.framesPerImpression ?? 1))} <span class="calc-dl-note">(impressions × frames per impression)</span></dd>
                                 <dt>Web length</dt>
                                 <dd>${fmtQty(row.webLengthFt, 1)} ft</dd>
                                 <dt>Press run time</dt>

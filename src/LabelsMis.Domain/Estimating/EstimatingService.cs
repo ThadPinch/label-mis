@@ -50,7 +50,10 @@ public class EstimatingService
             imposition.LabelsPerImpression,
             request.SetupWasteImpressions);
 
-        var clickResult = IndigoClickCalculator.Calculate(request, impressions);
+        var clickResult = IndigoClickCalculator.Calculate(
+            request,
+            impressions,
+            imposition.FramesPerImpression);
         var substrateResult = SubstrateCalculator.Calculate(
             request,
             impressions,

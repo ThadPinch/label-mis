@@ -208,6 +208,9 @@ public class EstimateService(
                 var result = estimatingService.Calculate(request);
                 var layout = new ImpositionLayoutView(
                     request.PressWebWidthIn,
+                    request.PressMaxImageWidthIn,
+                    request.PressFrameRepeatIn,
+                    request.PressMaxImageLengthIn,
                     request.PressEdgeMarginIn,
                     request.StockWidthIn,
                     result.Imposition?.EffectiveLabelAcrossIn ?? request.LabelAcrossIn,

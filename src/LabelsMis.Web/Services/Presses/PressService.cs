@@ -13,6 +13,11 @@ public record PressForm(
     string Code,
     PressType PressType,
     decimal WebWidthIn,
+    decimal MinWebWidthIn,
+    decimal MaxWebWidthIn,
+    decimal MaxImageWidthIn,
+    decimal FrameRepeatIn,
+    decimal MaxImageLengthIn,
     decimal MaxRepeatIn,
     decimal MinRepeatIn,
     int MaxColors,
@@ -48,9 +53,26 @@ public class PressService(LabelsMisDbContext db, ICurrentUserService currentUser
     public async Task<Press> CreateAsync(PressForm form, CancellationToken ct = default)
     {
         var userId = RequireUserId();
-        var press = Press.Create(Guid.NewGuid(), form.Name, form.Code, form.PressType, form.WebWidthIn,
-            form.MaxRepeatIn, form.MinRepeatIn, form.MaxColors, form.SpeedFpm, form.SetupMinutes,
-            form.CostPerHour, form.IsClickBased, userId, DateTime.UtcNow);
+        var press = Press.Create(
+            Guid.NewGuid(),
+            form.Name,
+            form.Code,
+            form.PressType,
+            form.WebWidthIn,
+            form.MinWebWidthIn,
+            form.MaxWebWidthIn,
+            form.MaxImageWidthIn,
+            form.FrameRepeatIn,
+            form.MaxImageLengthIn,
+            form.MaxRepeatIn,
+            form.MinRepeatIn,
+            form.MaxColors,
+            form.SpeedFpm,
+            form.SetupMinutes,
+            form.CostPerHour,
+            form.IsClickBased,
+            userId,
+            DateTime.UtcNow);
         db.Presses.Add(press);
         await db.SaveChangesAsync(ct);
         return press;
@@ -60,9 +82,25 @@ public class PressService(LabelsMisDbContext db, ICurrentUserService currentUser
     {
         var press = await db.Presses.FirstOrDefaultAsync(p => p.Id == id, ct)
             ?? throw new InvalidOperationException("Press not found.");
-        press.Update(form.Name, form.Code, form.PressType, form.WebWidthIn, form.MaxRepeatIn, form.MinRepeatIn,
-            form.MaxColors, form.SpeedFpm, form.SetupMinutes, form.CostPerHour, form.IsClickBased,
-            RequireUserId(), DateTime.UtcNow);
+        press.Update(
+            form.Name,
+            form.Code,
+            form.PressType,
+            form.WebWidthIn,
+            form.MinWebWidthIn,
+            form.MaxWebWidthIn,
+            form.MaxImageWidthIn,
+            form.FrameRepeatIn,
+            form.MaxImageLengthIn,
+            form.MaxRepeatIn,
+            form.MinRepeatIn,
+            form.MaxColors,
+            form.SpeedFpm,
+            form.SetupMinutes,
+            form.CostPerHour,
+            form.IsClickBased,
+            RequireUserId(),
+            DateTime.UtcNow);
         await db.SaveChangesAsync(ct);
     }
 

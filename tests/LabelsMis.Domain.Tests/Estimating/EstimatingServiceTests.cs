@@ -17,43 +17,46 @@ public class EstimatingServiceTests
         result.Errors.Should().BeEmpty();
         result.Imposition.Should().NotBeNull();
         result.Imposition!.LabelsAcross.Should().Be(3);
-        result.Imposition.LabelsAround.Should().Be(1);
-        result.Imposition.LabelsPerImpression.Should().Be(3);
-        result.Imposition.RepeatLengthIn.Should().Be(3.0625m);
-        result.Imposition.UtilizationPct.Should().BeApproximately(0.9231m, 0.0001m);
+        result.Imposition.LabelsAround.Should().Be(6);
+        result.Imposition.LabelsPerImpression.Should().Be(18);
+        result.Imposition.FramesPerImpression.Should().Be(1);
+        result.Imposition.FrameRepeatIn.Should().Be(18.9m);
+        result.Imposition.LayoutRepeatIn.Should().Be(18.375m);
+        result.Imposition.RepeatLengthIn.Should().Be(18.9m);
+        result.Imposition.UtilizationPct.Should().BeApproximately(0.8962m, 0.0001m);
 
         result.QuantityBreaks.Should().HaveCount(3);
 
         var break25k = result.QuantityBreaks.Single(q => q.Quantity == 25000);
-        break25k.Impressions.Should().Be(8614);
-        break25k.TotalCost.Should().Be(819.32m);
-        break25k.TotalPrice.Should().Be(1188.01m);
-        break25k.UnitPrice.Should().Be(0.0475m);
-        break25k.PricePerThousand.Should().Be(47.52m);
-        break25k.MarginPct.Should().BeApproximately(0.31m, 0.001m);
+        break25k.Impressions.Should().Be(1461);
+        break25k.TotalCost.Should().Be(740.59m);
+        break25k.TotalPrice.Should().Be(1073.86m);
+        break25k.UnitPrice.Should().Be(0.0430m);
+        break25k.PricePerThousand.Should().Be(42.95m);
+        break25k.MarginPct.Should().BeApproximately(0.3103m, 0.0001m);
         break25k.BelowMinimumMargin.Should().BeFalse();
         break25k.CostBreakdown.Should().Contain(item =>
-            item.Category == "Press click" && item.LineCost == 301.49m);
+            item.Category == "Press click" && item.LineCost == 204.54m);
         break25k.CostBreakdown.Should().Contain(item =>
-            item.Category == "Substrate" && item.LineCost == 302.77m);
+            item.Category == "Substrate" && item.LineCost == 316.88m);
         break25k.CostBreakdown.Should().Contain(item =>
             item.Category == "Press setup" && item.LineCost == 50.00m);
         break25k.CostBreakdown.Should().Contain(item =>
-            item.Category == "Press run" && item.LineCost == 54.95m);
+            item.Category == "Press run" && item.LineCost == 57.53m);
         break25k.CostBreakdown.Should().Contain(item =>
-            item.Description == "Gloss laminate" && item.LineCost == 38.99m);
+            item.Description == "Gloss laminate" && item.LineCost == 39.76m);
         break25k.CostBreakdown.Should().Contain(item =>
-            item.Description == "Rotary die-cut / matrix strip" && item.LineCost == 71.12m);
+            item.Description == "Rotary die-cut / matrix strip" && item.LineCost == 71.87m);
 
         var break5k = result.QuantityBreaks.Single(q => q.Quantity == 5000);
-        break5k.Impressions.Should().Be(1747);
-        break5k.TotalCost.Should().Be(267.87m);
-        break5k.TotalPrice.Should().Be(388.41m);
+        break5k.Impressions.Should().Be(317);
+        break5k.TotalCost.Should().Be(260.55m);
+        break5k.TotalPrice.Should().Be(377.80m);
 
         var break10k = result.QuantityBreaks.Single(q => q.Quantity == 10000);
-        break10k.Impressions.Should().Be(3464);
-        break10k.TotalCost.Should().Be(405.77m);
-        break10k.TotalPrice.Should().Be(588.37m);
+        break10k.Impressions.Should().Be(603);
+        break10k.TotalCost.Should().Be(380.59m);
+        break10k.TotalPrice.Should().Be(551.86m);
     }
 
     [Fact]
@@ -73,9 +76,9 @@ public class EstimatingServiceTests
         var epmResult = _sut.Calculate(epmRequest);
 
         var cmykClick = cmykResult.QuantityBreaks[0].CostBreakdown
-            .Single(item => item.Description.Contains("click charge", StringComparison.Ordinal));
+            .Single(item => item.Description.Contains("CMYK", StringComparison.Ordinal));
         var epmClick = epmResult.QuantityBreaks[0].CostBreakdown
-            .Single(item => item.Description.Contains("click charge", StringComparison.Ordinal));
+            .Single(item => item.Description.Contains("EPM", StringComparison.Ordinal));
 
         epmClick.LineCost.Should().BeLessThan(cmykClick.LineCost);
         epmResult.QuantityBreaks[0].TotalCost.Should().BeLessThan(cmykResult.QuantityBreaks[0].TotalCost);
@@ -94,7 +97,7 @@ public class EstimatingServiceTests
 
         result.Errors.Should().BeEmpty();
         result.QuantityBreaks[0].CostBreakdown.Should().Contain(item =>
-            item.Description == "White ink click charge" && item.LineCost == 103.37m);
+            item.Description.Contains("White ink", StringComparison.Ordinal) && item.LineCost == 17.53m);
     }
 
     [Fact]
@@ -103,8 +106,7 @@ public class EstimatingServiceTests
         var request = EstimatingTestData.CreateWorkedExampleRequest(
             quantities: [25000],
             labelAcrossIn: 13.0m,
-            pressWebWidthIn: 13.0m,
-            pressEdgeMarginIn: 0.25m);
+            pressMaxImageWidthIn: 12.0m);
 
         var result = _sut.Calculate(request);
 
@@ -139,7 +141,7 @@ public class EstimatingServiceTests
 
         result.Errors.Should().BeEmpty();
         result.QuantityBreaks[0].CostBreakdown.Should().NotContain(item => item.Category == "Finishing");
-        result.QuantityBreaks[0].TotalCost.Should().Be(709.21m);
+        result.QuantityBreaks[0].TotalCost.Should().Be(628.95m);
     }
 
     [Fact]
@@ -155,7 +157,7 @@ public class EstimatingServiceTests
         breakdown.Should().Contain(item => item.Description == "Gloss laminate");
         breakdown.Should().Contain(item => item.Description == "Rotary die-cut / matrix strip");
         breakdown.Should().Contain(item => item.Description == "Slit to width");
-        result.QuantityBreaks[0].TotalCost.Should().Be(843.87m);
+        result.QuantityBreaks[0].TotalCost.Should().Be(765.61m);
     }
 
     [Fact]
@@ -201,8 +203,12 @@ public class EstimatingServiceTests
         var smallResult = _sut.Calculate(smallRequest).QuantityBreaks[0];
         var largeResult = _sut.Calculate(largeRequest).QuantityBreaks[0];
 
-        var smallSetupShare = smallResult.Impressions - (int)Math.Ceiling(100 * 1.03m / 3);
-        var largeSetupShare = largeResult.Impressions - (int)Math.Ceiling(100000 * 1.03m / 3);
+        var labelsPerImpression = _sut.Calculate(EstimatingTestData.CreateWorkedExampleRequest(quantities: [100]))
+            .Imposition!.LabelsPerImpression;
+        var smallProduction = (int)Math.Ceiling(100 * 1.03m / labelsPerImpression);
+        var largeProduction = (int)Math.Ceiling(100000 * 1.03m / labelsPerImpression);
+        var smallSetupShare = smallResult.Impressions - smallProduction;
+        var largeSetupShare = largeResult.Impressions - largeProduction;
 
         smallSetupShare.Should().BeGreaterThan(0);
         largeSetupShare.Should().Be(100);
@@ -229,9 +235,9 @@ public class EstimatingServiceTests
     }
 
     [Fact]
-    public void Calculate_AutoRotation_PicksOrientationWithMoreLabelsAcross()
+    public void Calculate_AutoRotation_PicksOrientationWithMostLabelsPerImpression()
     {
-        // 4x3 label on 13" web: as-entered fits 3 across, rotated fits 4 across.
+        // 4×3" on WS6800: rotated fits more across, but as-entered gangs 6 around in one frame (18 labels/impression).
         var request = EstimatingTestData.CreateWorkedExampleRequest(
             quantities: [25000],
             labelOrientationOverride: null);
@@ -239,11 +245,44 @@ public class EstimatingServiceTests
         var result = _sut.Calculate(request);
 
         result.Imposition.Should().NotBeNull();
-        result.Imposition!.Orientation.Should().Be(LabelOrientation.Rotated);
-        result.Imposition.LabelsAcross.Should().Be(4);
-        result.Imposition.MaxLabelsAcross.Should().Be(4);
-        result.Imposition.EffectiveLabelAcrossIn.Should().Be(3.0m);
-        result.Imposition.EffectiveLabelAroundIn.Should().Be(4.0m);
+        result.Imposition!.Orientation.Should().Be(LabelOrientation.AsEntered);
+        result.Imposition.LabelsAcross.Should().Be(3);
+        result.Imposition.LabelsAround.Should().Be(6);
+        result.Imposition.LabelsPerImpression.Should().Be(18);
+        result.Imposition.MaxLabelsAcross.Should().Be(3);
+        result.Imposition.EffectiveLabelAcrossIn.Should().Be(4.0m);
+        result.Imposition.EffectiveLabelAroundIn.Should().Be(3.0m);
+    }
+
+    [Fact]
+    public void Calculate_LabelLongerThanHalfFrame_LimitsToOneAroundPerFrame()
+    {
+        var request = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [1000],
+            labelAcrossIn: 4.0m,
+            labelAroundIn: 10.0m);
+
+        var result = _sut.Calculate(request);
+
+        result.Errors.Should().BeEmpty();
+        result.Imposition!.LabelsAround.Should().Be(1);
+        result.Warnings.Should().Contain("Label length exceeds half a frame repeat — limited to one around per frame");
+    }
+
+    [Fact]
+    public void Calculate_LayoutExceedingOneFrame_UsesMultipleFrameSlots()
+    {
+        var request = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [1000],
+            labelAcrossIn: 4.0m,
+            labelAroundIn: 20.0m);
+
+        var result = _sut.Calculate(request);
+
+        result.Errors.Should().BeEmpty();
+        result.Imposition!.LabelsAround.Should().Be(1);
+        result.Imposition.FramesPerImpression.Should().Be(2);
+        result.Imposition.RepeatLengthIn.Should().Be(37.8m);
     }
 
     [Fact]
@@ -301,6 +340,9 @@ public class EstimatingServiceTests
             BleedIn: 0m,
             PressId: EstimatingTestData.Indigo6800PressId,
             PressWebWidthIn: 4.5m,
+            PressMaxImageWidthIn: 4.0m,
+            PressFrameRepeatIn: EstimatingTestData.IndigoFrameRepeatIn,
+            PressMaxImageLengthIn: EstimatingTestData.IndigoMaxImageLengthIn,
             PressEdgeMarginIn: 0.25m,
             PressSetupMinutes: 20m,
             PressCostPerHour: 150m,

@@ -11,6 +11,10 @@ internal static class EstimatingTestData
     internal static readonly Guid DieCutOpId = Guid.Parse("44444444-4444-4444-4444-444444444444");
     internal static readonly Guid SlitOpId = Guid.Parse("55555555-5555-5555-5555-555555555555");
 
+    internal const decimal IndigoMaxImageWidthIn = 12.59m;
+    internal const decimal IndigoFrameRepeatIn = 18.9m;
+    internal const decimal IndigoMaxImageLengthIn = 38.58m;
+
     internal static EstimateRequest CreateWorkedExampleRequest(
         IReadOnlyList<int>? quantities = null,
         decimal? customerMarkupPct = null,
@@ -21,7 +25,11 @@ internal static class EstimatingTestData
         decimal? whiteClickRatePer1000 = null,
         IReadOnlyList<FinishingOperationRequest>? finishingOperations = null,
         decimal? labelAcrossIn = null,
+        decimal? labelAroundIn = null,
         decimal? pressWebWidthIn = null,
+        decimal? pressMaxImageWidthIn = null,
+        decimal? pressFrameRepeatIn = null,
+        decimal? pressMaxImageLengthIn = null,
         decimal? pressEdgeMarginIn = null,
         decimal? setupWasteImpressions = null,
         decimal? runningWastePct = null,
@@ -30,13 +38,16 @@ internal static class EstimatingTestData
     {
         return new EstimateRequest(
             LabelAcrossIn: labelAcrossIn ?? 4.0m,
-            LabelAroundIn: 3.0m,
+            LabelAroundIn: labelAroundIn ?? 3.0m,
             CornerRadiusIn: 0.125m,
             GutterAcrossIn: 0.0625m,
             GutterAroundIn: 0.0625m,
             BleedIn: 0.0625m,
             PressId: Indigo6800PressId,
-            PressWebWidthIn: pressWebWidthIn ?? 13.0m,
+            PressWebWidthIn: pressWebWidthIn ?? 13.39m,
+            PressMaxImageWidthIn: pressMaxImageWidthIn ?? IndigoMaxImageWidthIn,
+            PressFrameRepeatIn: pressFrameRepeatIn ?? IndigoFrameRepeatIn,
+            PressMaxImageLengthIn: pressMaxImageLengthIn ?? IndigoMaxImageLengthIn,
             PressEdgeMarginIn: pressEdgeMarginIn ?? 0.25m,
             PressSetupMinutes: 20m,
             PressCostPerHour: 150m,

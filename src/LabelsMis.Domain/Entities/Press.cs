@@ -15,6 +15,11 @@ public class Press : MasterDataEntity
     public string Code { get; private set; } = string.Empty;
     public PressType PressType { get; private set; }
     public decimal WebWidthIn { get; private set; }
+    public decimal MinWebWidthIn { get; private set; }
+    public decimal MaxWebWidthIn { get; private set; }
+    public decimal MaxImageWidthIn { get; private set; }
+    public decimal FrameRepeatIn { get; private set; }
+    public decimal MaxImageLengthIn { get; private set; }
     public decimal MaxRepeatIn { get; private set; }
     public decimal MinRepeatIn { get; private set; }
     public int MaxColors { get; private set; }
@@ -29,6 +34,11 @@ public class Press : MasterDataEntity
         string code,
         PressType pressType,
         decimal webWidthIn,
+        decimal minWebWidthIn,
+        decimal maxWebWidthIn,
+        decimal maxImageWidthIn,
+        decimal frameRepeatIn,
+        decimal maxImageLengthIn,
         decimal maxRepeatIn,
         decimal minRepeatIn,
         int maxColors,
@@ -39,7 +49,21 @@ public class Press : MasterDataEntity
         Guid createdById,
         DateTime createdAt)
     {
-        Validate(name, code, webWidthIn, maxRepeatIn, minRepeatIn, maxColors, speedFpm, setupMinutes, costPerHour);
+        Validate(
+            name,
+            code,
+            webWidthIn,
+            minWebWidthIn,
+            maxWebWidthIn,
+            maxImageWidthIn,
+            frameRepeatIn,
+            maxImageLengthIn,
+            maxRepeatIn,
+            minRepeatIn,
+            maxColors,
+            speedFpm,
+            setupMinutes,
+            costPerHour);
 
         var press = new Press
         {
@@ -47,6 +71,11 @@ public class Press : MasterDataEntity
             Code = code.Trim().ToUpperInvariant(),
             PressType = pressType,
             WebWidthIn = webWidthIn,
+            MinWebWidthIn = minWebWidthIn,
+            MaxWebWidthIn = maxWebWidthIn,
+            MaxImageWidthIn = maxImageWidthIn,
+            FrameRepeatIn = frameRepeatIn,
+            MaxImageLengthIn = maxImageLengthIn,
             MaxRepeatIn = maxRepeatIn,
             MinRepeatIn = minRepeatIn,
             MaxColors = maxColors,
@@ -62,12 +91,17 @@ public class Press : MasterDataEntity
     public static Press CreateIndigo6800(Guid createdById, DateTime createdAt) =>
         Create(
             Indigo6800Id,
-            "HP Indigo 6800",
+            "HP Indigo WS6800",
             "INDIGO6800",
             PressType.DigitalInkjet,
-            webWidthIn: 13.0m,
-            maxRepeatIn: 29.0m,
-            minRepeatIn: 3.0m,
+            webWidthIn: 13.39m,
+            minWebWidthIn: 7.87m,
+            maxWebWidthIn: 13.39m,
+            maxImageWidthIn: 12.59m,
+            frameRepeatIn: 18.9m,
+            maxImageLengthIn: 38.58m,
+            maxRepeatIn: 38.58m,
+            minRepeatIn: 18.9m,
             maxColors: 7,
             speedFpm: 100m,
             setupMinutes: 20m,
@@ -81,6 +115,11 @@ public class Press : MasterDataEntity
         string code,
         PressType pressType,
         decimal webWidthIn,
+        decimal minWebWidthIn,
+        decimal maxWebWidthIn,
+        decimal maxImageWidthIn,
+        decimal frameRepeatIn,
+        decimal maxImageLengthIn,
         decimal maxRepeatIn,
         decimal minRepeatIn,
         int maxColors,
@@ -91,12 +130,31 @@ public class Press : MasterDataEntity
         Guid modifiedById,
         DateTime modifiedAt)
     {
-        Validate(name, code, webWidthIn, maxRepeatIn, minRepeatIn, maxColors, speedFpm, setupMinutes, costPerHour);
+        Validate(
+            name,
+            code,
+            webWidthIn,
+            minWebWidthIn,
+            maxWebWidthIn,
+            maxImageWidthIn,
+            frameRepeatIn,
+            maxImageLengthIn,
+            maxRepeatIn,
+            minRepeatIn,
+            maxColors,
+            speedFpm,
+            setupMinutes,
+            costPerHour);
 
         Name = name.Trim();
         Code = code.Trim().ToUpperInvariant();
         PressType = pressType;
         WebWidthIn = webWidthIn;
+        MinWebWidthIn = minWebWidthIn;
+        MaxWebWidthIn = maxWebWidthIn;
+        MaxImageWidthIn = maxImageWidthIn;
+        FrameRepeatIn = frameRepeatIn;
+        MaxImageLengthIn = maxImageLengthIn;
         MaxRepeatIn = maxRepeatIn;
         MinRepeatIn = minRepeatIn;
         MaxColors = maxColors;
@@ -111,6 +169,11 @@ public class Press : MasterDataEntity
         string name,
         string code,
         decimal webWidthIn,
+        decimal minWebWidthIn,
+        decimal maxWebWidthIn,
+        decimal maxImageWidthIn,
+        decimal frameRepeatIn,
+        decimal maxImageLengthIn,
         decimal maxRepeatIn,
         decimal minRepeatIn,
         int maxColors,
@@ -131,6 +194,26 @@ public class Press : MasterDataEntity
         if (webWidthIn <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(webWidthIn), "Web width must be greater than zero.");
+        }
+
+        if (minWebWidthIn <= 0 || maxWebWidthIn <= 0 || minWebWidthIn > maxWebWidthIn)
+        {
+            throw new ArgumentOutOfRangeException(nameof(minWebWidthIn), "Web width range is invalid.");
+        }
+
+        if (maxImageWidthIn <= 0 || maxImageWidthIn > maxWebWidthIn)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxImageWidthIn), "Max image width is invalid.");
+        }
+
+        if (frameRepeatIn <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(frameRepeatIn), "Frame repeat must be greater than zero.");
+        }
+
+        if (maxImageLengthIn < frameRepeatIn)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxImageLengthIn), "Max image length must be at least one frame repeat.");
         }
 
         if (minRepeatIn <= 0 || maxRepeatIn <= 0 || minRepeatIn > maxRepeatIn)

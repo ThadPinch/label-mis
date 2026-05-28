@@ -35,7 +35,7 @@ dotnet ef database update --project src/LabelsMis.Infrastructure --startup-proje
 dotnet run --project src/LabelsMis.Web --urls "https://localhost:5001;http://localhost:5010"
 ```
 
-App runs at the URL shown in the console. Default seeded admin: `admin@labels-mis.local` / `ChangeMe!2026` — you will be prompted to change the password on first login.
+App runs at the URL shown in the console. Default seeded admin: `admin@labels-mis.local` / `pa55w0rd` — you will be prompted to change the password on first login.
 
 On startup the app applies pending migrations and seeds roles, the admin user, and the Indigo 6800 press when the database is empty.
 

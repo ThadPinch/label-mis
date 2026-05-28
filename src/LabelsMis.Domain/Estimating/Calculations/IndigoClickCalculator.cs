@@ -11,7 +11,8 @@ internal static class IndigoClickCalculator
 {
     public static ClickCostResult Calculate(
         EstimateRequest request,
-        int impressions)
+        int impressions,
+        int framesPerImpression)
     {
         var warnings = new List<string>();
         var lineItems = new List<EstimateLineItem>();
@@ -21,14 +22,18 @@ internal static class IndigoClickCalculator
             return new ClickCostResult(0m, lineItems, warnings);
         }
 
+        var frameSlots = impressions * Math.Max(1, framesPerImpression);
+        var colorSeparations = IndigoInkSeparations.ColorSeparationsPerFrame(request.InkSet);
+        var colorClicks = frameSlots * colorSeparations;
+
         var clickCost = EstimatingMath.RoundCurrency(
-            (impressions / 1000m) * request.ClickRatePer1000);
+            (colorClicks / 1000m) * request.ClickRatePer1000);
 
         lineItems.Add(new EstimateLineItem(
             "Press click",
-            $"Indigo {request.InkSet} click charge",
-            impressions,
-            "impressions",
+            $"Indigo {request.InkSet} ({colorSeparations} colors × {frameSlots} frame slots)",
+            colorClicks,
+            "clicks",
             EstimatingMath.RoundMoney(request.ClickRatePer1000 / 1000m),
             clickCost));
 
@@ -36,14 +41,15 @@ internal static class IndigoClickCalculator
 
         if (request.WhiteInkUsed)
         {
+            var whiteClicks = frameSlots;
             var whiteClickCost = EstimatingMath.RoundCurrency(
-                (impressions / 1000m) * request.WhiteClickRatePer1000);
+                (whiteClicks / 1000m) * request.WhiteClickRatePer1000);
 
             lineItems.Add(new EstimateLineItem(
                 "Press click",
-                "White ink click charge",
-                impressions,
-                "impressions",
+                "White ink (1 separation × frame slots)",
+                whiteClicks,
+                "clicks",
                 EstimatingMath.RoundMoney(request.WhiteClickRatePer1000 / 1000m),
                 whiteClickCost));
 

@@ -50,6 +50,9 @@ public record EstimateFormInput(
 
 public record ImpositionLayoutView(
     decimal PressWebWidthIn,
+    decimal PressMaxImageWidthIn,
+    decimal PressFrameRepeatIn,
+    decimal PressMaxImageLengthIn,
     decimal PressEdgeMarginIn,
     decimal StockWidthIn,
     decimal LabelAcrossIn,
@@ -127,6 +130,9 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             line.BleedIn,
             press.Id,
             press.WebWidthIn,
+            press.MaxImageWidthIn,
+            press.FrameRepeatIn,
+            press.MaxImageLengthIn,
             PressEdgeMarginIn,
             press.SetupMinutes,
             press.CostPerHour,

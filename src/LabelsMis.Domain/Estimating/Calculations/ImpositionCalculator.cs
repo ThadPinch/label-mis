@@ -17,8 +17,24 @@ internal static class ImpositionCalculator
         var errors = new List<string>();
         var warnings = new List<string>();
 
-        var asEntered = TryOrientation(request, LabelOrientation.AsEntered, request.LabelAcrossIn, request.LabelAroundIn);
-        var rotated = TryOrientation(request, LabelOrientation.Rotated, request.LabelAroundIn, request.LabelAcrossIn);
+        var imageableWidth = GetImageableWidthIn(request);
+        var frameRepeat = request.PressFrameRepeatIn;
+        var maxImageLength = request.PressMaxImageLengthIn;
+
+        var asEntered = TryOrientation(
+            request,
+            LabelOrientation.AsEntered,
+            request.LabelAcrossIn,
+            request.LabelAroundIn,
+            imageableWidth,
+            frameRepeat);
+        var rotated = TryOrientation(
+            request,
+            LabelOrientation.Rotated,
+            request.LabelAroundIn,
+            request.LabelAcrossIn,
+            imageableWidth,
+            frameRepeat);
 
         Candidate? chosen;
         if (request.LabelOrientationOverride is LabelOrientation forced)
@@ -43,8 +59,9 @@ internal static class ImpositionCalculator
             }
 
             chosen = valid
-                .OrderByDescending(c => c.MaxLabelsAcross)
-                .ThenBy(c => c.AroundIn)
+                .OrderByDescending(c => c.LabelsPerImpression)
+                .ThenByDescending(c => c.MaxLabelsAcross)
+                .ThenBy(c => c.LayoutRepeatIn)
                 .ThenBy(c => c.Orientation)
                 .First();
         }
@@ -54,9 +71,28 @@ internal static class ImpositionCalculator
             ? Math.Clamp(requested, 1, maxAcross)
             : maxAcross;
 
-        const int labelsAround = 1;
+        var labelsAround = chosen.MaxLabelsAround;
         var labelsPerImpression = clampedAcross * labelsAround;
-        var repeatLength = labelsAround * (chosen.AroundIn + request.GutterAroundIn);
+        var layoutRepeat = labelsAround * (chosen.AroundIn + request.GutterAroundIn);
+
+        var framesPerImpression = 1;
+        decimal repeatLengthIn;
+        if (frameRepeat > 0)
+        {
+            framesPerImpression = Math.Max(1, EstimatingMath.CeilingDivision(layoutRepeat, frameRepeat));
+            repeatLengthIn = framesPerImpression * frameRepeat;
+
+            if (maxImageLength > 0 && repeatLengthIn > maxImageLength + 0.0001m)
+            {
+                errors.Add("Label repeat exceeds maximum press image length");
+                return new ImpositionCalculation(null!, errors, warnings);
+            }
+        }
+        else
+        {
+            repeatLengthIn = layoutRepeat;
+        }
+
         var utilizationPct = (clampedAcross * chosen.AcrossIn) / request.PressWebWidthIn;
 
         if (utilizationPct < LowUtilizationThreshold)
@@ -64,11 +100,19 @@ internal static class ImpositionCalculator
             warnings.Add("Low web utilization, consider gang or different press");
         }
 
+        if (frameRepeat > 0 && chosen.AroundIn > frameRepeat / 2m)
+        {
+            warnings.Add("Label length exceeds half a frame repeat — limited to one around per frame");
+        }
+
         var result = new ImpositionResult(
             clampedAcross,
             labelsAround,
             labelsPerImpression,
-            EstimatingMath.RoundMoney(repeatLength),
+            framesPerImpression,
+            frameRepeat > 0 ? frameRepeat : repeatLengthIn,
+            EstimatingMath.RoundMoney(layoutRepeat),
+            EstimatingMath.RoundMoney(repeatLengthIn),
             EstimatingMath.RoundMoney(utilizationPct),
             chosen.Orientation,
             maxAcross,
@@ -78,28 +122,74 @@ internal static class ImpositionCalculator
         return new ImpositionCalculation(result, errors, warnings);
     }
 
+    private static decimal GetImageableWidthIn(EstimateRequest request) =>
+        request.PressMaxImageWidthIn > 0
+            ? request.PressMaxImageWidthIn
+            : request.PressWebWidthIn - (2 * request.PressEdgeMarginIn);
+
     private static Candidate TryOrientation(
         EstimateRequest request,
         LabelOrientation orientation,
         decimal acrossIn,
-        decimal aroundIn)
+        decimal aroundIn,
+        decimal imageableWidth,
+        decimal frameRepeat)
     {
-        var max = 0;
-        if (acrossIn + (2 * request.PressEdgeMarginIn) <= request.PressWebWidthIn)
+        var maxAcross = CalculateMaxLabelsAcross(imageableWidth, acrossIn, request.GutterAcrossIn);
+        var maxAround = CalculateMaxLabelsAround(frameRepeat, aroundIn, request.GutterAroundIn);
+        var layoutRepeat = maxAround * (aroundIn + request.GutterAroundIn);
+        var labelsPerImpression = Math.Max(0, maxAcross) * maxAround;
+
+        return new Candidate(
+            orientation,
+            acrossIn,
+            aroundIn,
+            maxAcross,
+            maxAround,
+            layoutRepeat,
+            labelsPerImpression);
+    }
+
+    private static int CalculateMaxLabelsAcross(
+        decimal imageableWidth,
+        decimal acrossIn,
+        decimal gutterAcross)
+    {
+        if (acrossIn <= 0 || imageableWidth <= 0)
         {
-            var numerator = request.PressWebWidthIn
-                - (2 * request.PressEdgeMarginIn)
-                + request.GutterAcrossIn;
-            var denominator = acrossIn + request.GutterAcrossIn;
-            max = (int)Math.Floor(numerator / denominator);
+            return 0;
         }
 
-        return new Candidate(orientation, acrossIn, aroundIn, Math.Max(0, max));
+        var numerator = imageableWidth + gutterAcross;
+        var denominator = acrossIn + gutterAcross;
+        return (int)Math.Floor(numerator / denominator);
+    }
+
+    private static int CalculateMaxLabelsAround(
+        decimal frameRepeat,
+        decimal aroundIn,
+        decimal gutterAround)
+    {
+        if (frameRepeat <= 0)
+        {
+            return 1;
+        }
+
+        if (aroundIn > frameRepeat / 2m)
+        {
+            return 1;
+        }
+
+        var pitch = aroundIn + gutterAround;
+        return Math.Max(1, (int)Math.Floor((frameRepeat + gutterAround) / pitch));
     }
 
     private sealed record Candidate(
         LabelOrientation Orientation,
         decimal AcrossIn,
         decimal AroundIn,
-        int MaxLabelsAcross);
+        int MaxLabelsAcross,
+        int MaxLabelsAround,
+        decimal LayoutRepeatIn,
+        int LabelsPerImpression);
 }

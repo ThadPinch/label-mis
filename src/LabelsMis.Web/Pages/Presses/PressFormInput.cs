@@ -16,8 +16,28 @@ public class PressFormInput
     public PressType PressType { get; set; } = PressType.DigitalToner;
 
     [Range(0.0001, 100)]
-    [Display(Name = "Web width (in)")]
+    [Display(Name = "Nominal web width (in)")]
     public decimal WebWidthIn { get; set; }
+
+    [Range(0.0001, 100)]
+    [Display(Name = "Min web width (in)")]
+    public decimal MinWebWidthIn { get; set; }
+
+    [Range(0.0001, 100)]
+    [Display(Name = "Max web width (in)")]
+    public decimal MaxWebWidthIn { get; set; }
+
+    [Range(0.0001, 100)]
+    [Display(Name = "Max image width (in)")]
+    public decimal MaxImageWidthIn { get; set; }
+
+    [Range(0.0001, 100)]
+    [Display(Name = "Frame repeat (in)")]
+    public decimal FrameRepeatIn { get; set; } = 18.9m;
+
+    [Range(0.0001, 200)]
+    [Display(Name = "Max image length (in)")]
+    public decimal MaxImageLengthIn { get; set; }
 
     [Range(0.0001, 100)]
     [Display(Name = "Max repeat (in)")]
@@ -51,6 +71,11 @@ public class PressFormInput
         Code,
         PressType,
         WebWidthIn,
+        MinWebWidthIn,
+        MaxWebWidthIn,
+        MaxImageWidthIn,
+        FrameRepeatIn,
+        MaxImageLengthIn,
         MaxRepeatIn,
         MinRepeatIn,
         MaxColors,
@@ -65,6 +90,11 @@ public class PressFormInput
         Code = press.Code,
         PressType = press.PressType,
         WebWidthIn = press.WebWidthIn,
+        MinWebWidthIn = press.MinWebWidthIn,
+        MaxWebWidthIn = press.MaxWebWidthIn,
+        MaxImageWidthIn = press.MaxImageWidthIn,
+        FrameRepeatIn = press.FrameRepeatIn,
+        MaxImageLengthIn = press.MaxImageLengthIn,
         MaxRepeatIn = press.MaxRepeatIn,
         MinRepeatIn = press.MinRepeatIn,
         MaxColors = press.MaxColors,

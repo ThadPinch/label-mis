@@ -16,9 +16,34 @@
         <label asp-for="PressType" class="form-label"></label>
         <select asp-for="PressType" asp-items="Html.GetEnumSelectList<PressType>()" class="form-select"></select>
     </div>
+    <div class="col-12">
+        <p class="text-muted small mb-0">Web and frame dimensions drive estimate imposition and Indigo click slots (~one frame repeat per drum revolution).</p>
+    </div>
     <div class="col-md-3">
         <label asp-for="WebWidthIn" class="form-label"></label>
         <input asp-for="WebWidthIn" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label asp-for="MinWebWidthIn" class="form-label"></label>
+        <input asp-for="MinWebWidthIn" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label asp-for="MaxWebWidthIn" class="form-label"></label>
+        <input asp-for="MaxWebWidthIn" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label asp-for="MaxImageWidthIn" class="form-label"></label>
+        <input asp-for="MaxImageWidthIn" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label asp-for="FrameRepeatIn" class="form-label"></label>
+        <input asp-for="FrameRepeatIn" class="form-control" />
+        <span class="form-text">Standard ~480 mm (~18.9") frame per revolution.</span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="MaxImageLengthIn" class="form-label"></label>
+        <input asp-for="MaxImageLengthIn" class="form-control" />
+        <span class="form-text">Max imageable length along web (e.g. two stacked frames).</span>
     </div>
     <div class="col-md-3">
         <label asp-for="MaxRepeatIn" class="form-label"></label>
