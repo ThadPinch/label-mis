@@ -16,6 +16,7 @@ using LabelsMis.Web.Services.PurchaseOrders;
 using LabelsMis.Web.Services.Rolls;
 using LabelsMis.Web.Services.SalesOrders;
 using LabelsMis.Web.Services.Shipments;
+using LabelsMis.Web.Services.Shipping;
 using LabelsMis.Web.Services.Stocks;
 using LabelsMis.Web.Services.Suppliers;
 using LabelsMis.Web.Services.Artwork;
@@ -36,6 +37,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DieService>();
         services.AddScoped<InkService>();
         services.AddScoped<FinishingOperationService>();
+        services.AddScoped<ShippingMethodService>();
         services.AddScoped<PressService>();
         services.AddScoped<DocumentNumberService>();
         services.AddScoped<EstimateCalculationMapper>();

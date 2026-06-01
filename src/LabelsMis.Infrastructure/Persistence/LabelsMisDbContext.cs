@@ -24,6 +24,7 @@ public class LabelsMisDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<DieUsage> DieUsage => Set<DieUsage>();
     public DbSet<Ink> Inks => Set<Ink>();
     public DbSet<FinishingOperation> FinishingOperations => Set<FinishingOperation>();
+    public DbSet<ShippingMethod> ShippingMethods => Set<ShippingMethod>();
     public DbSet<Press> Presses => Set<Press>();
     public DbSet<Estimate> Estimates => Set<Estimate>();
     public DbSet<EstimateLine> EstimateLines => Set<EstimateLine>();

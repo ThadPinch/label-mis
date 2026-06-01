@@ -59,7 +59,7 @@ public class Job : EntityBase
             ProductId = productId,
             QuantityOrdered = quantityOrdered,
             QuantityPlanned = quantityPlanned,
-            Status = JobStatus.Planned,
+            Status = JobStatus.PrePress,
             DueDate = dueDate,
             Priority = priority,
             Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim()
@@ -68,15 +68,11 @@ public class Job : EntityBase
         return job;
     }
 
+    /// <summary>Assigns a production date/press. Status moves through the stages explicitly, not here.</summary>
     public void Schedule(DateOnly scheduledForDate, Guid? pressId, Guid modifiedById, DateTime modifiedAt)
     {
         ScheduledForDate = scheduledForDate;
         ScheduledPressId = pressId;
-        if (Status is JobStatus.Planned or JobStatus.Prepress)
-        {
-            Status = JobStatus.Scheduled;
-        }
-
         SetModified(modifiedById, modifiedAt);
     }
 

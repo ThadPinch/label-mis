@@ -3,6 +3,7 @@ using CsvHelper;
 using CsvHelper.Configuration;
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -306,7 +307,7 @@ public sealed class OpeningBalanceImporter : CsvImporterBase
 
                 var order = SalesOrder.CreateOpen(
                     Guid.NewGuid(), $"OB-{row.InvoiceNumber}", customer.Id, null, "OPENING-BALANCE",
-                    now, null, "Opening balance import", actorId, now);
+                    now, null, "Opening balance import", null, 0m, ShippingAddress.Empty, actorId, now);
                 db.SalesOrders.Add(order);
 
                 var invoice = Invoice.CreateDraft(

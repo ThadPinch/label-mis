@@ -9,7 +9,7 @@ namespace LabelsMis.Web.Pages.Artwork;
 [Authorize(Policy = TransactionPolicies.ProductsRead)]
 public class DownloadModel(ArtworkService artworkService) : PageModel
 {
-    public async Task<IActionResult> OnGetAsync(Guid productId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(Guid productId, bool inline, CancellationToken cancellationToken)
     {
         var file = await artworkService.OpenForProductAsync(productId, cancellationToken);
         if (file is null)
@@ -17,6 +17,9 @@ public class DownloadModel(ArtworkService artworkService) : PageModel
             return NotFound();
         }
 
-        return File(file.Value.Stream, file.Value.ContentType, file.Value.FileName);
+        // inline = render in the browser (preview); otherwise download with the original file name.
+        return inline
+            ? File(file.Value.Stream, file.Value.ContentType)
+            : File(file.Value.Stream, file.Value.ContentType, file.Value.FileName);
     }
 }

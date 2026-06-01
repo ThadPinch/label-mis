@@ -7,6 +7,9 @@
     const linesContainer = document.getElementById('estimate-lines');
     const addLineBtn = document.getElementById('add-line');
     const lineTemplateEl = document.getElementById('estimate-line-template');
+    const shippingMethodSelect = document.getElementById('shipping-method-select');
+    const shippingCostInput = document.getElementById('shipping-cost-input');
+    const shipToSource = document.getElementById('shipto-source');
 
     if (!root || !linesContainer) return;
 
@@ -428,35 +431,65 @@
             return;
         }
 
-        let grandTotal = 0;
-        let hasAny = false;
-        const rows = lineEls.map((lineEl) => {
+        const blocks = lineEls.map((lineEl) => {
             const idx = Number(lineEl.dataset.lineIndex);
             const result = lineResultsCache.get(String(idx));
             const breaks = result?.quantityBreaks || [];
             const lineNum = idx + 1;
+            const desc = lineEl.querySelector('input[name$=".ProductDescription"]')?.value?.trim();
+            const title = desc ? `Line ${lineNum}: ${escapeHtml(desc)}` : `Line ${lineNum}`;
+
             if (breaks.length === 0) {
-                return `<tr><td>Line ${lineNum}</td><td class="text-muted">—</td><td class="text-end text-muted">—</td></tr>`;
+                return `<div class="estimate-total-line mb-3">
+                    <div class="estimate-total-line-title fw-semibold">${title}</div>
+                    <p class="text-muted small mb-0">No pricing yet.</p>
+                </div>`;
             }
-            const top = breaks[breaks.length - 1];
-            grandTotal += Number(top.totalPrice);
-            hasAny = true;
-            return `<tr>
-                <td>Line ${lineNum}</td>
-                <td>${fmtQty(top.quantity)}</td>
-                <td class="text-end">${fmtMoney(top.totalPrice)}</td>
-            </tr>`;
+
+            const rows = breaks.map(b => `<tr>
+                <td>${fmtQty(b.quantity)}</td>
+                <td class="text-end">${fmtMoney(b.unitPrice, 4)}</td>
+                <td class="text-end">${fmtMoney(b.totalPrice)}</td>
+            </tr>`).join('');
+
+            return `<div class="estimate-total-line mb-3">
+                <div class="estimate-total-line-title fw-semibold">${title}</div>
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Qty</th><th class="text-end">Unit</th><th class="text-end">Total</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
         }).join('');
 
-        totalsPanel.innerHTML = `
-            <table class="table table-sm align-middle mb-2">
-                <thead>
-                    <tr><th>Line</th><th>Highest qty</th><th class="text-end">Total</th></tr>
-                </thead>
-                <tbody>${rows}</tbody>
-            </table>
-            <div class="estimate-grand-total">${hasAny ? fmtMoney(grandTotal) : '—'}</div>
-            <p class="estimate-totals-note mb-0">Sum of each line's highest quantity break.</p>`;
+        const shipping = getShippingCost();
+        let shippingBlock = '';
+        if (shipping > 0) {
+            const label = getShippingLabel();
+            shippingBlock = `<div class="estimate-total-line d-flex justify-content-between">
+                <span class="fw-semibold">Shipping${label ? ` (${escapeHtml(label)})` : ''}</span>
+                <span>${fmtMoney(shipping)}</span>
+            </div>`;
+        }
+
+        totalsPanel.innerHTML = blocks + shippingBlock;
+    };
+
+    const getShippingCost = () => {
+        const value = Number(shippingCostInput?.value);
+        return Number.isFinite(value) && value > 0 ? value : 0;
+    };
+
+    const getShippingLabel = () => {
+        const opt = shippingMethodSelect?.selectedOptions?.[0];
+        if (!opt || !shippingMethodSelect.value) return '';
+        return (opt.textContent || '').split('—')[0].trim();
+    };
+
+    const updateShippingAddressVisibility = () => {
+        if (!shippingMethodSelect) return;
+        const opt = shippingMethodSelect.selectedOptions?.[0];
+        const requires = opt ? opt.dataset.requiresAddress !== 'false' : true;
+        root.querySelectorAll('.shipto-group').forEach(el => el.classList.toggle('d-none', !requires));
     };
 
     const refreshBreakdownPanel = () => {
@@ -993,8 +1026,73 @@
         });
     }
 
+    const shipToFields = () => ({
+        name: root.querySelector('[name="Input.ShipToName"]'),
+        street1: root.querySelector('[name="Input.ShipToStreet1"]'),
+        street2: root.querySelector('[name="Input.ShipToStreet2"]'),
+        city: root.querySelector('[name="Input.ShipToCity"]'),
+        state: root.querySelector('[name="Input.ShipToState"]'),
+        zip: root.querySelector('[name="Input.ShipToZip"]'),
+        country: root.querySelector('[name="Input.ShipToCountry"]'),
+    });
+
+    let shipToOptions = [];
+
+    const loadShipToAddresses = async () => {
+        if (!shipToSource) return;
+        const customerId = customerSelect?.value;
+        const previous = shipToSource.value;
+        shipToSource.innerHTML = '<option value="custom">Enter manually</option>';
+        shipToOptions = [];
+        if (!customerId) return;
+
+        try {
+            const response = await fetch(`/estimates/addresses?customerId=${encodeURIComponent(customerId)}`);
+            if (!response.ok) return;
+            shipToOptions = await response.json();
+        } catch { return; }
+
+        shipToOptions.forEach((a, i) => {
+            const opt = document.createElement('option');
+            opt.value = String(i);
+            opt.textContent = a.label;
+            shipToSource.appendChild(opt);
+        });
+        if ([...shipToSource.options].some(o => o.value === previous)) {
+            shipToSource.value = previous;
+        }
+    };
+
+    shipToSource?.addEventListener('change', () => {
+        if (shipToSource.value === 'custom') return;
+        const a = shipToOptions[Number(shipToSource.value)];
+        if (!a) return;
+        const f = shipToFields();
+        if (f.name) f.name.value = a.recipientName ?? '';
+        if (f.street1) f.street1.value = a.street1 ?? '';
+        if (f.street2) f.street2.value = a.street2 ?? '';
+        if (f.city) f.city.value = a.city ?? '';
+        if (f.state) f.state.value = a.state ?? '';
+        if (f.zip) f.zip.value = a.zip ?? '';
+        if (f.country) f.country.value = a.country ?? '';
+    });
+
+    shippingMethodSelect?.addEventListener('change', () => {
+        if (shippingCostInput && !shippingMethodSelect.disabled) {
+            const opt = shippingMethodSelect.selectedOptions?.[0];
+            const price = Number(opt?.dataset.price);
+            shippingCostInput.value = Number.isFinite(price) ? price : 0;
+        }
+        updateShippingAddressVisibility();
+        updateEstimateTotals();
+    });
+
+    shippingCostInput?.addEventListener('input', updateEstimateTotals);
+    updateShippingAddressVisibility();
+
     customerSelect?.addEventListener('change', () => {
         syncProductFilterToEstimateCustomer();
+        loadShipToAddresses();
         loadProducts().then(calculate);
     });
 
@@ -1005,6 +1103,7 @@
 
     wireUp(root);
     syncProductFilterToEstimateCustomer();
+    loadShipToAddresses();
     loadProducts().then(() => {
         calculate();
         updateEstimateTotals();

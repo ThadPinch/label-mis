@@ -1,0 +1,91 @@
+@page "/production/finishing"
+@model LabelsMis.Web.Pages.Production.FinishingModel
+@{ ViewData["Title"] = Model.StageTitle; }
+
+<partial name="_ProductionStageNav" model="Model" />
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">@Model.StageTitle</h1>
+    <span class="text-muted">@Model.FinishingJobs.Count job(s)</span>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-4">
+        <input asp-for="Search" class="form-control" placeholder="Search job, product, or customer" />
+    </div>
+    <div class="col-md-2">
+        <button type="submit" class="btn btn-outline-secondary">Search</button>
+    </div>
+</form>
+
+@if (Model.FinishingJobs.Count == 0)
+{
+    <p class="text-muted">No jobs in this stage.</p>
+}
+else
+{
+    @foreach (var job in Model.FinishingJobs)
+    {
+        var remaining = job.Tasks.Count(t => !t.IsDone);
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <a asp-page="/Jobs/Detail" asp-route-id="@job.JobId" class="fw-semibold">@job.JobNumber</a>
+                    <span class="text-muted ms-2">@job.CustomerName — @job.ProductDescription</span>
+                </div>
+                <div class="text-muted small">
+                    Qty @job.QuantityOrdered.ToString("N0")
+                    @if (job.DueDate is not null)
+                    {
+                        <span class="ms-2">Due @job.DueDate.Value.ToString("yyyy-MM-dd")</span>
+                    }
+                </div>
+            </div>
+            <div class="card-body">
+                @if (job.Tasks.Count == 0)
+                {
+                    <p class="text-muted mb-2">No finishing tasks on this job.</p>
+                    @if (Model.CanAdvance)
+                    {
+                        <form method="post" asp-page-handler="Advance" class="d-inline">
+                            <input type="hidden" name="jobId" value="@job.JobId" />
+                            <input type="hidden" name="Search" value="@Model.Search" />
+                            <button type="submit" class="btn btn-sm btn-primary">Mark finished</button>
+                        </form>
+                    }
+                }
+                else
+                {
+                    <p class="form-text mb-2">
+                        Complete each finishing task. The job moves to Rewinding once all
+                        @job.Tasks.Count task(s) are done (@remaining remaining).
+                    </p>
+                    <ul class="list-group list-group-flush">
+                        @foreach (var task in job.Tasks)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                <span>@task.Label</span>
+                                @if (task.IsDone)
+                                {
+                                    <span class="badge text-bg-success">Done</span>
+                                }
+                                else if (Model.CanAdvance)
+                                {
+                                    <form method="post" asp-page-handler="CompleteTask" class="d-inline">
+                                        <input type="hidden" name="operationId" value="@task.OperationId" />
+                                        <input type="hidden" name="Search" value="@Model.Search" />
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">Complete</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span class="badge text-bg-secondary">@task.Status</span>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    }
+}

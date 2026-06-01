@@ -1,6 +1,7 @@
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
+using LabelsMis.Web.Services.Artwork;
 using LabelsMis.Web.Services.Products;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,10 +12,11 @@ using Microsoft.EntityFrameworkCore;
 namespace LabelsMis.Web.Pages.Products;
 
 [Authorize(Policy = TransactionPolicies.ProductsRead)]
-public class EditModel(ProductService productService, LabelsMisDbContext db) : PageModel
+public class EditModel(ProductService productService, ArtworkService artworkService, LabelsMisDbContext db) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
     [BindProperty] public ProductPageInput Input { get; set; } = new();
+    [BindProperty] public IFormFile? ArtworkFile { get; set; }
     public Domain.Entities.Product? Product { get; private set; }
     public bool CanEdit { get; private set; }
     public bool CanAdmin { get; private set; }
@@ -54,6 +56,39 @@ public class EditModel(ProductService productService, LabelsMisDbContext db) : P
             await LoadLookupsAsync(cancellationToken);
             return Page();
         }
+    }
+
+    public async Task<IActionResult> OnPostUploadArtworkAsync(CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.Estimator)) return Forbid();
+
+        if (ArtworkFile is null || ArtworkFile.Length == 0)
+        {
+            ModelState.AddModelError(string.Empty, "Select an artwork file to upload.");
+            return await ReloadPageAsync(cancellationToken);
+        }
+
+        try
+        {
+            await artworkService.UploadForProductAsync(Id, ArtworkFile, cancellationToken);
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return await ReloadPageAsync(cancellationToken);
+        }
+    }
+
+    private async Task<IActionResult> ReloadPageAsync(CancellationToken cancellationToken)
+    {
+        CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Estimator);
+        CanAdmin = User.IsInRole(AppRoles.Admin);
+        Product = await productService.GetAsync(Id, cancellationToken);
+        if (Product is null) return NotFound();
+        Input = Map(Product);
+        await LoadLookupsAsync(cancellationToken);
+        return Page();
     }
 
     public async Task<IActionResult> OnPostDiscontinueAsync(CancellationToken cancellationToken)

@@ -18,6 +18,21 @@ public class EstimateConfiguration : IEntityTypeConfiguration<Estimate>
         builder.Property(e => e.LostReason).HasMaxLength(500);
         builder.Property(e => e.PdfFilePath).HasMaxLength(500);
 
+        builder.Property(e => e.ShippingCost).HasMoneyPrecision();
+        builder.Property(e => e.ShipToName).HasMaxLength(200);
+        builder.Property(e => e.ShipToStreet1).HasMaxLength(200);
+        builder.Property(e => e.ShipToStreet2).HasMaxLength(200);
+        builder.Property(e => e.ShipToCity).HasMaxLength(100);
+        builder.Property(e => e.ShipToState).HasMaxLength(100);
+        builder.Property(e => e.ShipToZip).HasMaxLength(20);
+        builder.Property(e => e.ShipToCountry).HasMaxLength(2);
+        builder.Ignore(e => e.ShippingAddress);
+
+        builder.HasOne(e => e.ShippingMethod)
+            .WithMany()
+            .HasForeignKey(e => e.ShippingMethodId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(e => e.EstimateNumber);
         builder.HasIndex(e => e.Status);
         builder.HasIndex(e => e.CustomerId);

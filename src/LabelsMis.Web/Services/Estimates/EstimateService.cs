@@ -159,6 +159,8 @@ public class EstimateService(
     {
         var estimate = await db.Estimates
             .Include(e => e.Customer).ThenInclude(c => c.Addresses)
+            .Include(e => e.Customer).ThenInclude(c => c.Contacts)
+            .Include(e => e.ShippingMethod)
             .Include(e => e.Lines).ThenInclude(l => l.Substrate)
             .Include(e => e.Lines).ThenInclude(l => l.QuantityBreaks)
             .Include(e => e.Revisions)
@@ -251,6 +253,7 @@ public class EstimateService(
         var calc = await CalculateAsync(input, cancellationToken);
         EnsureNoCalculationErrors(calc);
 
+        await ValidateShippingMethodAsync(input.ShippingMethodId, cancellationToken);
         var estimateNumber = await documentNumbers.NextEstimateNumberAsync(cancellationToken);
         var estimate = Estimate.CreateDraft(
             Guid.NewGuid(),
@@ -259,6 +262,9 @@ public class EstimateService(
             input.SalesRepId,
             input.Notes,
             input.ValidUntilDate,
+            input.ShippingMethodId,
+            input.ShippingCost,
+            input.ShippingAddress,
             userId,
             now);
 
@@ -282,7 +288,16 @@ public class EstimateService(
         var calc = await CalculateAsync(input, cancellationToken);
         EnsureNoCalculationErrors(calc);
 
-        estimate.UpdateDraft(input.SalesRepId, input.Notes, input.ValidUntilDate, userId, now);
+        await ValidateShippingMethodAsync(input.ShippingMethodId, cancellationToken);
+        estimate.UpdateDraft(
+            input.SalesRepId,
+            input.Notes,
+            input.ValidUntilDate,
+            input.ShippingMethodId,
+            input.ShippingCost,
+            input.ShippingAddress,
+            userId,
+            now);
 
         // Replace all lines + breaks (simplest path; preserves estimate identity but rewrites lines)
         foreach (var line in estimate.Lines.ToList())
@@ -494,6 +509,20 @@ public class EstimateService(
         if (errors.Count > 0)
         {
             throw new InvalidOperationException(string.Join("; ", errors));
+        }
+    }
+
+    private async Task ValidateShippingMethodAsync(Guid? shippingMethodId, CancellationToken cancellationToken)
+    {
+        if (shippingMethodId is not { } id || id == Guid.Empty)
+        {
+            return;
+        }
+
+        var exists = await db.ShippingMethods.AnyAsync(m => m.Id == id, cancellationToken);
+        if (!exists)
+        {
+            throw new InvalidOperationException("Selected shipping method was not found.");
         }
     }
 

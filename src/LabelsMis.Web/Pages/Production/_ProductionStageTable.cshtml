@@ -1,0 +1,64 @@
+@using LabelsMis.Web.Pages.Shared
+@model LabelsMis.Web.Pages.Production.ProductionStageModel
+
+<partial name="_ProductionStageNav" model="Model" />
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">@Model.StageTitle</h1>
+    <span class="text-muted">@Model.Result.TotalCount job(s)</span>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-4">
+        <input asp-for="Search" class="form-control" placeholder="Search job, product, or customer" />
+    </div>
+    <div class="col-md-2">
+        <button type="submit" class="btn btn-outline-secondary">Search</button>
+    </div>
+</form>
+
+@if (Model.Result.Items.Count == 0)
+{
+    <p class="text-muted">No jobs in this stage.</p>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Job</th>
+                <th>Customer</th>
+                <th>Product</th>
+                <th class="text-end">Qty</th>
+                <th>Due</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in Model.Result.Items)
+        {
+            <tr>
+                <td><a asp-page="/Jobs/Detail" asp-route-id="@item.Id">@item.JobNumber</a></td>
+                <td>@item.CustomerName</td>
+                <td>@item.ProductDescription</td>
+                <td class="text-end">@item.QuantityOrdered.ToString("N0")</td>
+                <td>@(item.DueDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                <td class="text-end">
+                    @if (Model.CanAdvance && Model.NextStatus is not null)
+                    {
+                        <form method="post" asp-page-handler="Advance" class="d-inline">
+                            <input type="hidden" name="jobId" value="@item.Id" />
+                            <input type="hidden" name="Search" value="@Model.Search" />
+                            <input type="hidden" name="page" value="@Model.Result.Page" />
+                            <button type="submit" class="btn btn-sm btn-primary">@Model.AdvanceLabel</button>
+                        </form>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    @await Html.PartialAsync("Shared/_Pager", new PagerModel(
+        Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, Model.Search))
+}

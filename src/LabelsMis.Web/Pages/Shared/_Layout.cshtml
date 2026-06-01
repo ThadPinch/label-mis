@@ -51,6 +51,9 @@
                                 <ul class="dropdown-menu app-dropdown-menu">
                                     <li><h6 class="dropdown-header">Shop floor</h6></li>
                                     <li><a class="dropdown-item" asp-page="/Jobs/Index">Jobs</a></li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li><h6 class="dropdown-header">Stages</h6></li>
+                                    @await Component.InvokeAsync("ProductionNav")
                                 </ul>
                             </li>
 
@@ -100,6 +103,9 @@
                                     <li><a class="dropdown-item" asp-page="/Inks/Index">Inks</a></li>
                                     <li><a class="dropdown-item" asp-page="/FinishingOperations/Index">Finishing operations</a></li>
                                     <li><a class="dropdown-item" asp-page="/Presses/Index">Presses</a></li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li><h6 class="dropdown-header">Fulfillment</h6></li>
+                                    <li><a class="dropdown-item" asp-page="/ShippingMethods/Index">Shipping methods</a></li>
                                     @if (User.IsInRole(AppRoles.Admin))
                                     {
                                         <li><hr class="dropdown-divider" /></li>

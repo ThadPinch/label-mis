@@ -2,6 +2,7 @@ using System.Text.Json;
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Estimating.Models;
+using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -46,7 +47,10 @@ public record EstimateFormInput(
     Guid? SalesRepId,
     string? Notes,
     DateOnly? ValidUntilDate,
-    IReadOnlyList<EstimateLineFormInput> Lines);
+    IReadOnlyList<EstimateLineFormInput> Lines,
+    Guid? ShippingMethodId,
+    decimal ShippingCost,
+    ShippingAddress ShippingAddress);
 
 public record ImpositionLayoutView(
     decimal PressWebWidthIn,

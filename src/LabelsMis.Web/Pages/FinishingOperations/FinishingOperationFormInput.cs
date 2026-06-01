@@ -16,6 +16,9 @@ public class FinishingOperationFormInput
     [Display(Name = "Operation type")]
     public FinishingOperationType OperationType { get; set; } = FinishingOperationType.Laminate;
 
+    [Display(Name = "Die")]
+    public Guid? DieId { get; set; }
+
     [Range(0, 999999)]
     [Display(Name = "Default setup (minutes)")]
     public decimal DefaultSetupMinutes { get; set; }
@@ -36,6 +39,7 @@ public class FinishingOperationFormInput
         Code,
         Description,
         OperationType,
+        DieId,
         DefaultSetupMinutes,
         DefaultRunSpeedFpm,
         EquipmentName,
@@ -46,6 +50,7 @@ public class FinishingOperationFormInput
         Code = operation.Code,
         Description = operation.Description,
         OperationType = operation.OperationType,
+        DieId = operation.DieId,
         DefaultSetupMinutes = operation.DefaultSetupMinutes,
         DefaultRunSpeedFpm = operation.DefaultRunSpeedFpm,
         EquipmentName = operation.EquipmentName,

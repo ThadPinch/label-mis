@@ -11,8 +11,13 @@
         <input asp-for="Search" class="form-control" placeholder="Search job, customer, product" />
     </div>
     <div class="col-md-2">
-        <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.JobStatus>()">
-            <option value="">All statuses</option>
+        <select asp-for="StatusFilter" class="form-select">
+            <option value="live">Live statuses</option>
+            <option value="all">All statuses</option>
+            @foreach (var s in Enum.GetValues<LabelsMis.Domain.Enums.JobStatus>())
+            {
+                <option value="@s">@s</option>
+            }
         </select>
     </div>
     <div class="col-md-2">

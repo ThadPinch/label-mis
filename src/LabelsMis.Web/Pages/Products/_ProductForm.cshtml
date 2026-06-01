@@ -54,10 +54,7 @@
         <label asp-for="DieId" class="form-label">Die</label>
         <select asp-for="DieId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Dies"]!)"><option value="">None</option></select>
     </div>
-    <div class="col-md-6">
-        <label asp-for="ArtworkFilePath" class="form-label">Artwork path</label>
-        <input asp-for="ArtworkFilePath" class="form-control" />
-    </div>
+    <input type="hidden" asp-for="ArtworkFilePath" />
     <div class="col-12"><hr /><h2 class="h5">Roll spec</h2></div>
     <div class="col-md-2"><label asp-for="LabelsPerRoll" class="form-label">Labels/roll</label><input asp-for="LabelsPerRoll" class="form-control" /></div>
     <div class="col-md-2"><label asp-for="CoreSizeIn" class="form-label">Core (in)</label><input asp-for="CoreSizeIn" class="form-control" /></div>

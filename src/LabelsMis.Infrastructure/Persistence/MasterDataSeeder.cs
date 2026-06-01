@@ -16,7 +16,9 @@ public static class MasterDataSeeder
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<LabelsMisDbContext>>();
 
-        if (await db.Presses.AnyAsync(p => p.Id == Press.Indigo6800Id, cancellationToken))
+        var pressSeeded = await db.Presses.AnyAsync(p => p.Id == Press.Indigo6800Id, cancellationToken);
+        var shippingSeeded = await db.ShippingMethods.AnyAsync(cancellationToken);
+        if (pressSeeded && shippingSeeded)
         {
             return;
         }
@@ -29,9 +31,19 @@ public static class MasterDataSeeder
         }
 
         var seededAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        db.Presses.Add(Press.CreateIndigo6800(adminUser.Id, seededAt));
-        await db.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation("Seeded default Indigo 6800 press.");
+        if (!pressSeeded)
+        {
+            db.Presses.Add(Press.CreateIndigo6800(adminUser.Id, seededAt));
+            logger.LogInformation("Seeded default Indigo 6800 press.");
+        }
+
+        if (!shippingSeeded)
+        {
+            db.ShippingMethods.AddRange(ShippingMethod.CreateDefaults(adminUser.Id, seededAt));
+            logger.LogInformation("Seeded default shipping methods.");
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
     }
 }

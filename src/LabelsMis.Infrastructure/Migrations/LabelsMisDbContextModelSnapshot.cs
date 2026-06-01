@@ -461,6 +461,41 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<Guid?>("SalesRepId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ShipToCity")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ShipToCountry")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)");
+
+                    b.Property<string>("ShipToName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ShipToState")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ShipToStreet1")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ShipToStreet2")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ShipToZip")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("ShippingCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<Guid?>("ShippingMethodId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -484,6 +519,8 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.HasIndex("EstimateNumber");
 
                     b.HasIndex("ModifiedById");
+
+                    b.HasIndex("ShippingMethodId");
 
                     b.HasIndex("Status");
 
@@ -742,6 +779,9 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<Guid?>("DieId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("EquipmentName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -772,6 +812,8 @@ namespace LabelsMis.Infrastructure.Migrations
                         .IsUnique();
 
                     b.HasIndex("CreatedById");
+
+                    b.HasIndex("DieId");
 
                     b.HasIndex("ModifiedById");
 
@@ -1999,6 +2041,41 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<DateOnly?>("RequestedShipDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("ShipToCity")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ShipToCountry")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)");
+
+                    b.Property<string>("ShipToName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ShipToState")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ShipToStreet1")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ShipToStreet2")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ShipToZip")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("ShippingCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<Guid?>("ShippingMethodId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("SourceEstimateId")
                         .HasColumnType("uuid");
 
@@ -2020,6 +2097,8 @@ namespace LabelsMis.Infrastructure.Migrations
 
                     b.HasIndex("OrderNumber")
                         .IsUnique();
+
+                    b.HasIndex("ShippingMethodId");
 
                     b.HasIndex("SourceEstimateId");
 
@@ -2303,6 +2382,63 @@ namespace LabelsMis.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("ShipmentPackage", "public");
+                });
+
+            modelBuilder.Entity("LabelsMis.Domain.Entities.ShippingMethod", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("MethodType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ModifiedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<bool>("RequiresAddress")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<Guid>("TenantId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000001"));
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("ModifiedById");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("ShippingMethod", "public");
                 });
 
             modelBuilder.Entity("LabelsMis.Domain.Entities.Stock", b =>
@@ -3017,7 +3153,14 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasForeignKey("ModifiedById")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("LabelsMis.Domain.Entities.ShippingMethod", "ShippingMethod")
+                        .WithMany()
+                        .HasForeignKey("ShippingMethodId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Customer");
+
+                    b.Navigation("ShippingMethod");
                 });
 
             modelBuilder.Entity("LabelsMis.Domain.Entities.EstimateLine", b =>
@@ -3107,10 +3250,17 @@ namespace LabelsMis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("LabelsMis.Domain.Entities.Die", "Die")
+                        .WithMany()
+                        .HasForeignKey("DieId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("ModifiedById")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Die");
                 });
 
             modelBuilder.Entity("LabelsMis.Domain.Entities.Ink", b =>
@@ -3611,12 +3761,19 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasForeignKey("ModifiedById")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("LabelsMis.Domain.Entities.ShippingMethod", "ShippingMethod")
+                        .WithMany()
+                        .HasForeignKey("ShippingMethodId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("LabelsMis.Domain.Entities.Estimate", "SourceEstimate")
                         .WithMany()
                         .HasForeignKey("SourceEstimateId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Customer");
+
+                    b.Navigation("ShippingMethod");
 
                     b.Navigation("SourceEstimate");
                 });
@@ -3753,6 +3910,20 @@ namespace LabelsMis.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Shipment");
+                });
+
+            modelBuilder.Entity("LabelsMis.Domain.Entities.ShippingMethod", b =>
+                {
+                    b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ModifiedById")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("LabelsMis.Domain.Entities.Stock", b =>

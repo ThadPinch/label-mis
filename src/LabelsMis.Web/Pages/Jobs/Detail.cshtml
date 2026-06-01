@@ -42,10 +42,7 @@ else
         </div>
     }
 
-    @if (Model.CanOperate)
-    {
-        <partial name="_JobOperatorPanel" model="Model" />
-    }
+    <partial name="_JobOperatorPanel" model="Model" />
 
     <div class="row g-3 mb-4">
         <div class="col-md-6">
@@ -81,6 +78,27 @@ else
                         </form>
                     </div>
                 </div>
+            }
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2 class="h6">
+                Order notes
+                <a asp-page="/SalesOrders/Edit" asp-route-id="@Model.Detail.SalesOrderId" class="small ms-2">@Model.Detail.OrderNumber</a>
+            </h2>
+            @if (Model.CanEditOrderNotes)
+            {
+                <form method="post" asp-page-handler="SaveOrderNotes">
+                    <textarea asp-for="OrderNotes" class="form-control mb-2" rows="3" placeholder="Notes from the sales order"></textarea>
+                    <button type="submit" class="btn btn-outline-primary">Save order notes</button>
+                    <div class="form-text">Shared with the sales order and its other jobs.</div>
+                </form>
+            }
+            else
+            {
+                <p class="mb-0">@(string.IsNullOrWhiteSpace(Model.Detail.OrderNotes) ? "—" : Model.Detail.OrderNotes)</p>
             }
         </div>
     </div>

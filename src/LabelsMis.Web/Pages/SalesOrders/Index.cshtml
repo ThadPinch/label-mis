@@ -1,10 +1,15 @@
 @page "/sales-orders"
+@using LabelsMis.Domain.Enums
 @model LabelsMis.Web.Pages.SalesOrders.IndexModel
 @{ ViewData["Title"] = "Sales orders"; }
 <div class="d-flex justify-content-between mb-3">
     <h1 class="h3 mb-0">Sales orders</h1>
     @if (Model.CanEdit) { <a class="btn btn-primary" asp-page="Create">New order</a> }
 </div>
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
 <table class="table table-striped">
     <thead><tr><th>Order #</th><th>Customer</th><th>PO #</th><th>Ship date</th><th>Status</th><th>Total</th><th></th></tr></thead>
     <tbody>
@@ -14,7 +19,27 @@
             <td>@item.OrderNumber</td><td>@item.CustomerName</td><td>@(item.CustomerPoNumber ?? "—")</td>
             <td>@(item.RequestedShipDate?.ToString("yyyy-MM-dd") ?? "—")</td><td>@item.Status</td>
             <td>@item.OrderTotal.ToString("C2")</td>
-            <td class="text-end"><a asp-page="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a></td>
+            <td class="text-end text-nowrap">
+                <a asp-page="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a>
+                @if (Model.CanDelete && item.Status == SalesOrderStatus.Open)
+                {
+                    <form method="post" asp-page-handler="Delete" class="d-inline"
+                          onsubmit="return confirm('Delete order @item.OrderNumber and all its line items? This cannot be undone.');">
+                        <input type="hidden" name="id" value="@item.Id" />
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                    </form>
+                }
+                @if (item.Status != SalesOrderStatus.Open
+                    && item.Status != SalesOrderStatus.Cancelled
+                    && item.Status != SalesOrderStatus.Closed)
+                {
+                    <form method="post" asp-page-handler="Cancel" class="d-inline"
+                          onsubmit="return confirm('Cancel order @item.OrderNumber? This closes its jobs and voids unpaid invoices.');">
+                        <input type="hidden" name="id" value="@item.Id" />
+                        <button type="submit" class="btn btn-sm btn-outline-warning">Cancel</button>
+                    </form>
+                }
+            </td>
         </tr>
     }
     </tbody>

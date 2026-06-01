@@ -1,10 +1,12 @@
 @model LabelsMis.Web.Pages.Estimates.EstimatePageInput
 @using LabelsMis.Domain.Entities
 @using LabelsMis.Domain.Enums
+@using LabelsMis.Web.Services.Shipping
 @{
     var isReadOnly = (bool)(ViewData["IsReadOnly"] ?? false);
     var finishingOps = (IReadOnlyList<FinishingOperation>?)ViewData["FinishingOperations"] ?? Array.Empty<FinishingOperation>();
     var substrates = (IEnumerable<SelectListItem>?)ViewData["Substrates"] ?? Enumerable.Empty<SelectListItem>();
+    var shippingMethods = (IReadOnlyList<ShippingMethodListItem>?)ViewData["ShippingMethods"] ?? Array.Empty<ShippingMethodListItem>();
 }
 
 @if (isReadOnly)
@@ -39,6 +41,72 @@
         <textarea asp-for="Notes" class="form-control" rows="2" readonly="@isReadOnly"></textarea>
     </div>
 </div>
+
+<fieldset class="border rounded p-3 mt-4 estimate-shipping" id="estimate-shipping">
+    <legend class="float-none w-auto px-2 h6 mb-0">Shipping</legend>
+    <div class="row g-3">
+        <div class="col-md-3">
+            <label asp-for="ShippingMethodId" class="form-label">Method</label>
+            <select asp-for="ShippingMethodId" id="shipping-method-select" class="form-select" disabled="@isReadOnly">
+                <option value="" data-price="0" data-requires-address="true">No shipping</option>
+                @foreach (var m in shippingMethods)
+                {
+                    <option value="@m.Id" data-price="@m.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                            data-requires-address="@m.RequiresAddress.ToString().ToLowerInvariant()"
+                            selected="@(m.Id == Model.ShippingMethodId)">
+                        @m.Name — @m.Price.ToString("C2")@(m.IsActive ? "" : " (inactive)")
+                    </option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label asp-for="ShippingCost" class="form-label">Price</label>
+            <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input asp-for="ShippingCost" id="shipping-cost-input" class="form-control" readonly="@isReadOnly" />
+            </div>
+            <span asp-validation-for="ShippingCost" class="text-danger"></span>
+        </div>
+        @if (!isReadOnly)
+        {
+            <div class="col-md-6 shipto-group">
+                <label for="shipto-source" class="form-label">Ship-to address</label>
+                <select id="shipto-source" class="form-select">
+                    <option value="custom">Enter manually</option>
+                </select>
+                <div class="form-text">Pull a billing or shipping address from the customer, or enter one below.</div>
+            </div>
+        }
+        <div class="col-md-6 shipto-group">
+            <label asp-for="ShipToName" class="form-label">Recipient / company</label>
+            <input asp-for="ShipToName" class="form-control shipto-field" readonly="@isReadOnly" />
+        </div>
+        <div class="col-md-6 shipto-group">
+            <label asp-for="ShipToStreet1" class="form-label">Street</label>
+            <input asp-for="ShipToStreet1" class="form-control shipto-field" readonly="@isReadOnly" />
+        </div>
+        <div class="col-md-6 shipto-group">
+            <label asp-for="ShipToStreet2" class="form-label">Street 2</label>
+            <input asp-for="ShipToStreet2" class="form-control shipto-field" readonly="@isReadOnly" />
+        </div>
+        <div class="col-md-3 shipto-group">
+            <label asp-for="ShipToCity" class="form-label">City</label>
+            <input asp-for="ShipToCity" class="form-control shipto-field" readonly="@isReadOnly" />
+        </div>
+        <div class="col-md-1 shipto-group">
+            <label asp-for="ShipToState" class="form-label">State</label>
+            <input asp-for="ShipToState" class="form-control shipto-field" readonly="@isReadOnly" />
+        </div>
+        <div class="col-md-2 shipto-group">
+            <label asp-for="ShipToZip" class="form-label">Zip</label>
+            <input asp-for="ShipToZip" class="form-control shipto-field" readonly="@isReadOnly" />
+        </div>
+        <div class="col-md-2 shipto-group">
+            <label asp-for="ShipToCountry" class="form-label">Country</label>
+            <input asp-for="ShipToCountry" class="form-control shipto-field" readonly="@isReadOnly" placeholder="US" />
+        </div>
+    </div>
+</fieldset>
 
 <h2 class="h5 mt-4 mb-2">Lines</h2>
 @if (!isReadOnly)
@@ -216,9 +284,9 @@
                         <div class="row g-2 quantity-inputs">
                             @for (var q = 0; q < 3; q++)
                             {
-                                var qty = q < line.Quantities.Count ? line.Quantities[q] : 0;
+                                var qty = q < line.Quantities.Count ? line.Quantities[q] : null;
                                 <div class="col-md-2">
-                                    <input name="Input.Lines[@i].Quantities[@q]" value="@(qty == 0 ? "" : qty)" class="form-control calc-trigger quantity-input" placeholder="Qty" readonly="@isReadOnly" />
+                                    <input name="Input.Lines[@i].Quantities[@q]" value="@(qty is > 0 ? qty : "")" class="form-control calc-trigger quantity-input" placeholder="Qty" readonly="@isReadOnly" />
                                 </div>
                             }
                         </div>

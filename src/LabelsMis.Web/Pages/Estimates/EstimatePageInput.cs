@@ -1,4 +1,5 @@
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Web.Services.Estimates;
 using System.ComponentModel.DataAnnotations;
 
@@ -57,7 +58,7 @@ public class EstimateLinePageInput
 
     public List<FinishingOperationSelectionInput> FinishingOperations { get; set; } = [];
 
-    public List<int> Quantities { get; set; } = [];
+    public List<int?> Quantities { get; set; } = [];
 
     public EstimateLineFormInput ToForm() => new(
         Id,
@@ -76,7 +77,7 @@ public class EstimateLinePageInput
         SetupWasteImpressions,
         RunningWastePct,
         LineNotes,
-        Quantities.Where(q => q > 0).Distinct().OrderBy(q => q).ToList(),
+        Quantities.Where(q => q is > 0).Select(q => q!.Value).Distinct().OrderBy(q => q).ToList(),
         MarkupPctOverride,
         MaxLabelsAcrossOverride,
         LabelOrientationOverride);
@@ -105,7 +106,7 @@ public class EstimateLinePageInput
             LabelOrientationOverride = line.LabelOrientationOverride,
             FinishingOperations = EstimateCalculationMapper
                 .DeserializeFinishingOperations(line.FinishingOperationsJson).ToList(),
-            Quantities = line.QuantityBreaks.OrderBy(q => q.Quantity).Select(q => q.Quantity).ToList()
+            Quantities = line.QuantityBreaks.OrderBy(q => q.Quantity).Select(q => (int?)q.Quantity).ToList()
         };
     }
 }
@@ -123,14 +124,46 @@ public class EstimatePageInput
     [DataType(DataType.Date)]
     public DateOnly? ValidUntilDate { get; set; }
 
+    public Guid? ShippingMethodId { get; set; }
+
+    [Range(0, 999999)]
+    public decimal ShippingCost { get; set; }
+
+    [StringLength(200)]
+    public string? ShipToName { get; set; }
+
+    [StringLength(200)]
+    public string? ShipToStreet1 { get; set; }
+
+    [StringLength(200)]
+    public string? ShipToStreet2 { get; set; }
+
+    [StringLength(100)]
+    public string? ShipToCity { get; set; }
+
+    [StringLength(100)]
+    public string? ShipToState { get; set; }
+
+    [StringLength(20)]
+    public string? ShipToZip { get; set; }
+
+    [StringLength(2)]
+    public string? ShipToCountry { get; set; }
+
     public List<EstimateLinePageInput> Lines { get; set; } = [new()];
+
+    private ShippingAddress ToShippingAddress() => new(
+        ShipToName, ShipToStreet1, ShipToStreet2, ShipToCity, ShipToState, ShipToZip, ShipToCountry);
 
     public EstimateFormInput ToForm() => new(
         CustomerId,
         SalesRepId,
         Notes,
         ValidUntilDate,
-        Lines.Select(l => l.ToForm()).ToList());
+        Lines.Select(l => l.ToForm()).ToList(),
+        ShippingMethodId,
+        ShippingCost,
+        ToShippingAddress());
 
     public static EstimatePageInput FromEstimate(Domain.Entities.Estimate estimate)
     {
@@ -140,6 +173,15 @@ public class EstimatePageInput
             SalesRepId = estimate.SalesRepId,
             Notes = estimate.Notes,
             ValidUntilDate = estimate.ValidUntilDate,
+            ShippingMethodId = estimate.ShippingMethodId,
+            ShippingCost = estimate.ShippingCost,
+            ShipToName = estimate.ShipToName,
+            ShipToStreet1 = estimate.ShipToStreet1,
+            ShipToStreet2 = estimate.ShipToStreet2,
+            ShipToCity = estimate.ShipToCity,
+            ShipToState = estimate.ShipToState,
+            ShipToZip = estimate.ShipToZip,
+            ShipToCountry = estimate.ShipToCountry,
             Lines = estimate.Lines.OrderBy(l => l.LineNumber).Select(EstimateLinePageInput.FromLine).ToList()
         };
     }

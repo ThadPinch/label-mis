@@ -15,7 +15,7 @@ namespace LabelsMis.Web.Pages.Jobs;
 public class IndexModel(JobService jobService, LabelsMisDbContext db) : PageModel
 {
     [BindProperty(SupportsGet = true)] public string? Search { get; set; }
-    [BindProperty(SupportsGet = true)] public JobStatus? Status { get; set; }
+    [BindProperty(SupportsGet = true)] public string StatusFilter { get; set; } = "live";
     [BindProperty(SupportsGet = true)] public Guid? PressId { get; set; }
     [BindProperty(SupportsGet = true)] public Guid? CustomerId { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? DueFrom { get; set; }
@@ -30,8 +30,26 @@ public class IndexModel(JobService jobService, LabelsMisDbContext db) : PageMode
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler);
+
+        JobStatus? singleStatus = null;
+        IReadOnlyCollection<JobStatus>? includeStatuses = null;
+        if (string.Equals(StatusFilter, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            // No status filter — show everything.
+        }
+        else if (Enum.TryParse<JobStatus>(StatusFilter, ignoreCase: true, out var parsed))
+        {
+            singleStatus = parsed;
+        }
+        else
+        {
+            // Default "live" view: everything except Shipped/Closed.
+            includeStatuses = JobService.LiveStatuses;
+        }
+
         Result = await jobService.ListAsync(
-            Search, Status, PressId, CustomerId, DueFrom, DueTo, ScheduledDate, Sort, PageNumber, 25, cancellationToken);
+            Search, singleStatus, PressId, CustomerId, DueFrom, DueTo, ScheduledDate, Sort, PageNumber, 25,
+            cancellationToken, includeStatuses);
 
         ViewData["CustomerOptions"] = await db.Customers.AsNoTracking()
             .Where(c => c.IsActive).OrderBy(c => c.Name)

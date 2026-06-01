@@ -1,5 +1,6 @@
 using LabelsMis.Domain.Common;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.ValueObjects;
 
 namespace LabelsMis.Domain.Entities;
 
@@ -22,6 +23,20 @@ public class SalesOrder : EntityBase
     public SalesOrderStatus Status { get; private set; }
     public string? Notes { get; private set; }
 
+    public Guid? ShippingMethodId { get; private set; }
+    public ShippingMethod? ShippingMethod { get; private set; }
+    public decimal ShippingCost { get; private set; }
+    public string? ShipToName { get; private set; }
+    public string? ShipToStreet1 { get; private set; }
+    public string? ShipToStreet2 { get; private set; }
+    public string? ShipToCity { get; private set; }
+    public string? ShipToState { get; private set; }
+    public string? ShipToZip { get; private set; }
+    public string? ShipToCountry { get; private set; }
+
+    public ShippingAddress ShippingAddress => new(
+        ShipToName, ShipToStreet1, ShipToStreet2, ShipToCity, ShipToState, ShipToZip, ShipToCountry);
+
     public IReadOnlyCollection<SalesOrderLine> Lines => _lines;
 
     public static SalesOrder CreateOpen(
@@ -33,6 +48,9 @@ public class SalesOrder : EntityBase
         DateTime orderedAt,
         DateOnly? requestedShipDate,
         string? notes,
+        Guid? shippingMethodId,
+        decimal shippingCost,
+        ShippingAddress shippingAddress,
         Guid createdById,
         DateTime createdAt)
     {
@@ -47,6 +65,7 @@ public class SalesOrder : EntityBase
             Status = SalesOrderStatus.Open,
             Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim()
         };
+        order.SetShipping(shippingMethodId, shippingCost, shippingAddress);
         order.SetCreated(id, createdById, createdAt);
         return order;
     }
@@ -55,6 +74,9 @@ public class SalesOrder : EntityBase
         string? customerPoNumber,
         DateOnly? requestedShipDate,
         string? notes,
+        Guid? shippingMethodId,
+        decimal shippingCost,
+        ShippingAddress shippingAddress,
         Guid modifiedById,
         DateTime modifiedAt)
     {
@@ -62,6 +84,28 @@ public class SalesOrder : EntityBase
 
         CustomerPoNumber = string.IsNullOrWhiteSpace(customerPoNumber) ? null : customerPoNumber.Trim();
         RequestedShipDate = requestedShipDate;
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        SetShipping(shippingMethodId, shippingCost, shippingAddress);
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    private void SetShipping(Guid? shippingMethodId, decimal shippingCost, ShippingAddress shippingAddress)
+    {
+        var address = (shippingAddress ?? ShippingAddress.Empty).Normalized();
+        ShippingMethodId = shippingMethodId;
+        ShippingCost = shippingCost < 0 ? 0 : shippingCost;
+        ShipToName = address.RecipientName;
+        ShipToStreet1 = address.Street1;
+        ShipToStreet2 = address.Street2;
+        ShipToCity = address.City;
+        ShipToState = address.State;
+        ShipToZip = address.Zip;
+        ShipToCountry = address.Country;
+    }
+
+    /// <summary>Updates the order's header notes. Allowed in any status (e.g. edited from a job in production).</summary>
+    public void UpdateNotes(string? notes, Guid modifiedById, DateTime modifiedAt)
+    {
         Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
         SetModified(modifiedById, modifiedAt);
     }
@@ -90,6 +134,25 @@ public class SalesOrder : EntityBase
         {
             throw new InvalidOperationException("Sales orders cannot be edited once production has started.");
         }
+    }
+
+    public void EnsureCanDelete()
+    {
+        if (Status is not SalesOrderStatus.Open)
+        {
+            throw new InvalidOperationException("Only open sales orders can be deleted.");
+        }
+    }
+
+    public void Cancel(Guid modifiedById, DateTime modifiedAt)
+    {
+        if (Status is SalesOrderStatus.Cancelled)
+        {
+            throw new InvalidOperationException("Order is already cancelled.");
+        }
+
+        Status = SalesOrderStatus.Cancelled;
+        SetModified(modifiedById, modifiedAt);
     }
 
     public void AddLine(SalesOrderLine line) => _lines.Add(line);

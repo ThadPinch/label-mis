@@ -24,6 +24,17 @@ public record AddressInput(
     string Country,
     bool IsDefault);
 
+public record CustomerAddressOption(
+    Guid Id,
+    AddressType AddressType,
+    string Street1,
+    string? Street2,
+    string City,
+    string State,
+    string Zip,
+    string Country,
+    bool IsDefault);
+
 public record ContactInput(
     Guid? Id,
     string FirstName,
@@ -92,6 +103,25 @@ public class CustomerService(LabelsMisDbContext db, ICurrentUserService currentU
             .Include(c => c.Addresses)
             .Include(c => c.Contacts)
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+    /// <summary>Addresses for a customer, default-first within each type, for ship-to pickers.</summary>
+    public async Task<IReadOnlyList<CustomerAddressOption>> GetAddressOptionsAsync(
+        Guid customerId, CancellationToken cancellationToken = default) =>
+        await db.Addresses.AsNoTracking()
+            .Where(a => a.CustomerId == customerId)
+            .OrderBy(a => a.AddressType)
+            .ThenByDescending(a => a.IsDefault)
+            .Select(a => new CustomerAddressOption(
+                a.Id,
+                a.AddressType,
+                a.Street1,
+                a.Street2,
+                a.City,
+                a.State,
+                a.Zip,
+                a.Country,
+                a.IsDefault))
+            .ToListAsync(cancellationToken);
 
     public async Task<Customer> CreateAsync(CustomerForm form, CancellationToken cancellationToken = default)
     {

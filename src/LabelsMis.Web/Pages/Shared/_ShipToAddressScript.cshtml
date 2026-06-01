@@ -1,0 +1,68 @@
+@model string
+@*
+    Wires the #shipto-source dropdown to pull a customer's billing/shipping addresses
+    into the #order-shipping / #estimate-shipping .shipto-field inputs.
+    Model is the base URL of the addresses endpoint (e.g. "?handler=Addresses").
+*@
+<script>
+(() => {
+    const baseUrl = '@Html.Raw(Model)';
+    const customerSelect = document.getElementById('customer-select');
+    const shipToSource = document.getElementById('shipto-source');
+    if (!shipToSource) return;
+
+    const fields = () => ({
+        name: document.querySelector('[name="Input.ShipToName"]'),
+        street1: document.querySelector('[name="Input.ShipToStreet1"]'),
+        street2: document.querySelector('[name="Input.ShipToStreet2"]'),
+        city: document.querySelector('[name="Input.ShipToCity"]'),
+        state: document.querySelector('[name="Input.ShipToState"]'),
+        zip: document.querySelector('[name="Input.ShipToZip"]'),
+        country: document.querySelector('[name="Input.ShipToCountry"]'),
+    });
+
+    let options = [];
+
+    const load = async () => {
+        const customerId = customerSelect?.value;
+        const previous = shipToSource.value;
+        shipToSource.innerHTML = '<option value="custom">Enter manually</option>';
+        options = [];
+        if (!customerId) return;
+
+        const sep = baseUrl.includes('?') ? '&' : '?';
+        try {
+            const response = await fetch(`${baseUrl}${sep}customerId=${encodeURIComponent(customerId)}`);
+            if (!response.ok) return;
+            options = await response.json();
+        } catch { return; }
+
+        options.forEach((a, i) => {
+            const opt = document.createElement('option');
+            opt.value = String(i);
+            opt.textContent = a.label;
+            shipToSource.appendChild(opt);
+        });
+        if ([...shipToSource.options].some(o => o.value === previous)) {
+            shipToSource.value = previous;
+        }
+    };
+
+    shipToSource.addEventListener('change', () => {
+        if (shipToSource.value === 'custom') return;
+        const a = options[Number(shipToSource.value)];
+        if (!a) return;
+        const f = fields();
+        if (f.name) f.name.value = a.recipientName ?? '';
+        if (f.street1) f.street1.value = a.street1 ?? '';
+        if (f.street2) f.street2.value = a.street2 ?? '';
+        if (f.city) f.city.value = a.city ?? '';
+        if (f.state) f.state.value = a.state ?? '';
+        if (f.zip) f.zip.value = a.zip ?? '';
+        if (f.country) f.country.value = a.country ?? '';
+    });
+
+    customerSelect?.addEventListener('change', load);
+    load();
+})();
+</script>

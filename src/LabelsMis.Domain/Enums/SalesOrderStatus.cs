@@ -6,5 +6,6 @@ public enum SalesOrderStatus
     InProduction = 1,
     Shipped = 2,
     Invoiced = 3,
-    Closed = 4
+    Closed = 4,
+    Cancelled = 5
 }

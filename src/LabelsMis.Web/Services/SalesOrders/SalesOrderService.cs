@@ -1,5 +1,6 @@
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Services.Models;
 using Microsoft.EntityFrameworkCore;
@@ -21,7 +22,10 @@ public record SalesOrderFormInput(
     string? CustomerPoNumber,
     DateOnly? RequestedShipDate,
     string? Notes,
-    IReadOnlyList<SalesOrderLineInput> Lines);
+    IReadOnlyList<SalesOrderLineInput> Lines,
+    Guid? ShippingMethodId,
+    decimal ShippingCost,
+    ShippingAddress ShippingAddress);
 
 public record EstimateConversionLineInput(
     Guid EstimateLineId,
@@ -129,6 +133,7 @@ public class SalesOrderService(
     public async Task<SalesOrder?> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
         await db.SalesOrders
             .Include(o => o.Customer)
+            .Include(o => o.ShippingMethod)
             .Include(o => o.Lines).ThenInclude(l => l.Product)
             .SingleOrDefaultAsync(o => o.Id == id, cancellationToken);
 
@@ -138,6 +143,13 @@ public class SalesOrderService(
         var now = DateTime.UtcNow;
         ValidateLines(input.Lines);
 
+        if (input.CustomerId == Guid.Empty
+            || !await db.Customers.AnyAsync(c => c.Id == input.CustomerId, cancellationToken))
+        {
+            throw new InvalidOperationException("Select a customer before saving the order.");
+        }
+
+        await ValidateShippingMethodAsync(input.ShippingMethodId, cancellationToken);
         var orderNumber = await documentNumbers.NextSalesOrderNumberAsync(cancellationToken);
         var order = SalesOrder.CreateOpen(
             Guid.NewGuid(),
@@ -148,6 +160,9 @@ public class SalesOrderService(
             now,
             input.RequestedShipDate,
             input.Notes,
+            input.ShippingMethodId,
+            input.ShippingCost,
+            input.ShippingAddress,
             userId,
             now);
 
@@ -199,6 +214,9 @@ public class SalesOrderService(
             now,
             input.RequestedShipDate,
             input.Notes,
+            estimate.ShippingMethodId,
+            estimate.ShippingCost,
+            estimate.ShippingAddress,
             userId,
             now);
 
@@ -256,13 +274,89 @@ public class SalesOrderService(
             order.EnsureOpen();
         }
 
-        order.UpdateOpen(input.CustomerPoNumber, input.RequestedShipDate, input.Notes, userId, now);
+        await ValidateShippingMethodAsync(input.ShippingMethodId, cancellationToken);
+        order.UpdateOpen(
+            input.CustomerPoNumber,
+            input.RequestedShipDate,
+            input.Notes,
+            input.ShippingMethodId,
+            input.ShippingCost,
+            input.ShippingAddress,
+            userId,
+            now);
         db.SalesOrderLines.RemoveRange(order.Lines);
         var lines = BuildLines(order.Id, input.Lines, userId, now);
         order.ReplaceLines(lines);
         foreach (var line in lines)
         {
             db.SalesOrderLines.Add(line);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var order = await db.SalesOrders
+            .Include(o => o.Lines)
+            .SingleOrDefaultAsync(o => o.Id == id, cancellationToken)
+            ?? throw new InvalidOperationException("Sales order not found.");
+
+        order.EnsureCanDelete();
+
+        var lineIds = order.Lines.Select(l => l.Id).ToList();
+        if (await db.Jobs.AnyAsync(j => lineIds.Contains(j.SalesOrderLineId), cancellationToken))
+        {
+            throw new InvalidOperationException("Cannot delete an order that has scheduled jobs.");
+        }
+        if (await db.Invoices.AnyAsync(i => i.SalesOrderId == id, cancellationToken))
+        {
+            throw new InvalidOperationException("Cannot delete an order that has invoices.");
+        }
+        if (await db.Shipments.AnyAsync(s => s.SalesOrderId == id, cancellationToken))
+        {
+            throw new InvalidOperationException("Cannot delete an order that has shipments.");
+        }
+
+        db.SalesOrderLines.RemoveRange(order.Lines);
+        db.SalesOrders.Remove(order);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Cancels an order that can't be deleted (it's in production or has downstream records) and
+    /// deactivates everything tied to it: jobs are closed and non-paid invoices are voided.
+    /// Shipments have no cancel state and are left as historical records.
+    /// </summary>
+    public async Task CancelAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+
+        var order = await db.SalesOrders
+            .Include(o => o.Lines)
+            .SingleOrDefaultAsync(o => o.Id == id, cancellationToken)
+            ?? throw new InvalidOperationException("Sales order not found.");
+
+        order.Cancel(userId, now);
+
+        var lineIds = order.Lines.Select(l => l.Id).ToList();
+        var jobs = await db.Jobs
+            .Where(j => lineIds.Contains(j.SalesOrderLineId) && j.Status != JobStatus.Closed)
+            .ToListAsync(cancellationToken);
+        foreach (var job in jobs)
+        {
+            job.SetStatus(JobStatus.Closed, userId, now);
+        }
+
+        var invoices = await db.Invoices
+            .Where(i => i.SalesOrderId == id
+                && i.Status != InvoiceStatus.Void
+                && i.Status != InvoiceStatus.Paid)
+            .ToListAsync(cancellationToken);
+        foreach (var invoice in invoices)
+        {
+            invoice.Void("Sales order cancelled.", userId, now);
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -302,6 +396,20 @@ public class SalesOrderService(
                     userId,
                     now))
             .ToList();
+    }
+
+    private async Task ValidateShippingMethodAsync(Guid? shippingMethodId, CancellationToken cancellationToken)
+    {
+        if (shippingMethodId is not { } id || id == Guid.Empty)
+        {
+            return;
+        }
+
+        var exists = await db.ShippingMethods.AnyAsync(m => m.Id == id, cancellationToken);
+        if (!exists)
+        {
+            throw new InvalidOperationException("Selected shipping method was not found.");
+        }
     }
 
     private Guid RequireUserId() =>

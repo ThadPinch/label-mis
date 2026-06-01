@@ -31,7 +31,10 @@ public record JobDetail(
     string? ArtworkFilePath,
     Stock Substrate,
     JobCostSummary CostSummary,
-    IReadOnlyList<(JobOperation Operation, string? EquipmentName, string TypeLabel)> Operations);
+    IReadOnlyList<(JobOperation Operation, string? EquipmentName, string TypeLabel)> Operations,
+    Guid SalesOrderId,
+    string OrderNumber,
+    string? OrderNotes);
 
 public record JobTicketDetail(
     Job Job,
@@ -54,11 +57,31 @@ public record OperatorJobView(
 
 public record ScheduleJobInput(DateOnly ScheduledForDate, Guid? PressId);
 
+public record FinishingTaskView(Guid OperationId, string Label, JobOperationStatus Status)
+{
+    public bool IsDone => Status is JobOperationStatus.Complete or JobOperationStatus.Skipped;
+}
+
+public record FinishingJobView(
+    Guid JobId,
+    string JobNumber,
+    string CustomerName,
+    string ProductDescription,
+    DateOnly? DueDate,
+    int QuantityOrdered,
+    IReadOnlyList<FinishingTaskView> Tasks);
+
 public class JobService(
     LabelsMisDbContext db,
     ICurrentUserService currentUser,
     DocumentNumberService documentNumbers)
 {
+    /// <summary>Job statuses considered "live" — still moving through production.</summary>
+    public static readonly IReadOnlyList<JobStatus> LiveStatuses =
+    [
+        JobStatus.PrePress, JobStatus.Queued, JobStatus.Printed, JobStatus.Finished, JobStatus.Rewound
+    ];
+
     public async Task<PagedResult<JobListItem>> ListAsync(
         string? search,
         JobStatus? status,
@@ -70,7 +93,8 @@ public class JobService(
         string? sort,
         int page,
         int pageSize,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<JobStatus>? includeStatuses = null)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 5, 100);
@@ -80,7 +104,11 @@ public class JobService(
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder)
             .AsQueryable();
 
-        if (status.HasValue)
+        if (includeStatuses is { Count: > 0 })
+        {
+            query = query.Where(j => includeStatuses.Contains(j.Status));
+        }
+        else if (status.HasValue)
         {
             query = query.Where(j => j.Status == status.Value);
         }
@@ -154,6 +182,7 @@ public class JobService(
             .Include(j => j.Product).ThenInclude(p => p.Substrate)
             .Include(j => j.Operations).ThenInclude(o => o.TimeEntries)
             .Include(j => j.MaterialUsages).ThenInclude(m => m.Stock)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder)
             .SingleOrDefaultAsync(j => j.Id == id, cancellationToken);
 
         if (job is null)
@@ -173,6 +202,7 @@ public class JobService(
         var actualCost = await CalculateActualCostAsync(job, cancellationToken);
         var estimatedCost = await GetEstimatedCostAsync(job, cancellationToken);
 
+        var order = job.SalesOrderLine.SalesOrder;
         return new JobDetail(
             job,
             job.Product.PrimaryCustomer.Name,
@@ -180,7 +210,22 @@ public class JobService(
             job.Product.ArtworkFilePath,
             job.Product.Substrate,
             new JobCostSummary(estimatedCost, actualCost),
-            operations);
+            operations,
+            order.Id,
+            order.OrderNumber,
+            order.Notes);
+    }
+
+    /// <summary>Updates the parent sales order's header notes from the job page (shared notes).</summary>
+    public async Task UpdateOrderNotesAsync(Guid jobId, string? notes, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var job = await db.Jobs
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder)
+            .SingleAsync(j => j.Id == jobId, cancellationToken);
+        job.SalesOrderLine.SalesOrder.UpdateNotes(notes, userId, now);
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<JobTicketDetail?> GetTicketDetailAsync(Guid id, CancellationToken cancellationToken = default)
@@ -368,7 +413,6 @@ public class JobService(
         operation.Start(userId, now, userId, now);
         var entry = operation.ClockOn(Guid.NewGuid(), userId, now);
         db.JobTimeEntries.Add(entry);
-        SyncJobStatusFromOperations(operation.Job, userId, now);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -452,7 +496,6 @@ public class JobService(
             .SingleAsync(o => o.Id == operationId, cancellationToken);
 
         operation.Complete(userId, now);
-        SyncJobStatusFromOperations(operation.Job, userId, now);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -465,6 +508,151 @@ public class JobService(
         var now = DateTime.UtcNow;
         var job = await db.Jobs.SingleAsync(j => j.Id == jobId, cancellationToken);
         job.SetStatus(status, userId, now);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Counts of jobs in each of the supplied statuses (for the production stage nav).</summary>
+    public async Task<IReadOnlyDictionary<JobStatus, int>> GetStatusCountsAsync(
+        IEnumerable<JobStatus> statuses,
+        CancellationToken cancellationToken = default)
+    {
+        var wanted = statuses.Distinct().ToList();
+        var counts = await db.Jobs.AsNoTracking()
+            .Where(j => wanted.Contains(j.Status))
+            .GroupBy(j => j.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        return wanted.ToDictionary(s => s, s => counts.FirstOrDefault(c => c.Status == s)?.Count ?? 0);
+    }
+
+    /// <summary>Advances a job forward to the given status (used by the production stage pages).</summary>
+    public async Task AdvanceJobStatusAsync(
+        Guid jobId,
+        JobStatus target,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var job = await db.Jobs.SingleAsync(j => j.Id == jobId, cancellationToken);
+        job.AdvanceStatus(target, userId, now);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Jobs currently in the Printed (finishing) stage, with their finishing tasks.</summary>
+    public async Task<IReadOnlyList<FinishingJobView>> ListFinishingJobsAsync(
+        string? search,
+        CancellationToken cancellationToken = default)
+    {
+        var query = db.Jobs.AsNoTracking()
+            .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
+            .Include(j => j.Operations)
+            .Where(j => j.Status == JobStatus.Printed);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToUpperInvariant();
+            query = query.Where(j =>
+                j.JobNumber.ToUpper().Contains(term)
+                || j.Product.Description.ToUpper().Contains(term)
+                || j.Product.PrimaryCustomer.Name.ToUpper().Contains(term));
+        }
+
+        var jobs = await query.OrderBy(j => j.DueDate).ThenBy(j => j.Priority).ToListAsync(cancellationToken);
+        var finishing = await db.FinishingOperations.AsNoTracking().ToDictionaryAsync(f => f.Id, cancellationToken);
+
+        return jobs.Select(j => new FinishingJobView(
+            j.Id,
+            j.JobNumber,
+            j.Product.PrimaryCustomer.Name,
+            j.Product.Description,
+            j.DueDate,
+            j.QuantityOrdered,
+            j.Operations
+                .Where(o => o.OperationType == JobOperationType.Finishing)
+                .OrderBy(o => o.Sequence)
+                .Select(o => new FinishingTaskView(o.Id, GetOperationTypeLabel(o, finishing), o.Status))
+                .ToList()))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Records material consumed from a roll against a job — the operator scans the roll and enters
+    /// the linear feet used during the press run. Updates roll inventory and the job's material usage.
+    /// </summary>
+    public async Task RecordRollUsageAsync(
+        Guid jobId,
+        string barcode,
+        decimal consumedLf,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+
+        if (consumedLf <= 0)
+        {
+            throw new InvalidOperationException("Enter how many linear feet were used.");
+        }
+        if (string.IsNullOrWhiteSpace(barcode))
+        {
+            throw new InvalidOperationException("Scan or enter a roll barcode.");
+        }
+
+        var normalized = barcode.Trim().ToUpperInvariant();
+        var roll = await db.Rolls.SingleOrDefaultAsync(r => r.RollBarcode == normalized, cancellationToken)
+            ?? throw new InvalidOperationException("Roll not found.");
+
+        if (!await db.Jobs.AnyAsync(j => j.Id == jobId, cancellationToken))
+        {
+            throw new InvalidOperationException("Job not found.");
+        }
+
+        roll.Consume(consumedLf, userId, now);
+
+        var movement = RollMovement.Create(
+            Guid.NewGuid(), roll.Id, RollMovementType.Consume, -consumedLf, jobId, now, null, userId, now);
+        db.RollMovements.Add(movement);
+        roll.AddMovement(movement);
+
+        var usage = JobMaterialUsage.Create(
+            Guid.NewGuid(), jobId, roll.StockId, roll.Id, consumedLf, now, null, userId, now);
+        db.JobMaterialUsages.Add(usage);
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Marks a finishing task complete. When the last finishing task on a Printed job is done,
+    /// the job auto-advances to Finished so it moves on to the Rewinding stage.
+    /// </summary>
+    public async Task CompleteFinishingTaskAsync(Guid operationId, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var operation = await db.JobOperations
+            .Include(o => o.Job).ThenInclude(j => j.Operations)
+            .SingleAsync(o => o.Id == operationId, cancellationToken);
+
+        if (operation.OperationType != JobOperationType.Finishing)
+        {
+            throw new InvalidOperationException("Only finishing tasks can be completed here.");
+        }
+
+        if (operation.Status is not (JobOperationStatus.Complete or JobOperationStatus.Skipped))
+        {
+            operation.Complete(userId, now);
+        }
+
+        var job = operation.Job;
+        var allFinishingDone = job.Operations
+            .Where(o => o.OperationType == JobOperationType.Finishing)
+            .All(o => o.Status is JobOperationStatus.Complete or JobOperationStatus.Skipped);
+
+        if (allFinishingDone && job.Status == JobStatus.Printed)
+        {
+            job.AdvanceStatus(JobStatus.Finished, userId, now);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -580,39 +768,6 @@ public class JobService(
 
     private static bool IsEmptyJsonArray(string? json) =>
         string.IsNullOrWhiteSpace(json) || json.Trim() is "[]" or "{}" or "null";
-
-    private static void SyncJobStatusFromOperations(Job job, Guid userId, DateTime now)
-    {
-        var next = job.Operations
-            .OrderBy(o => o.Sequence)
-            .FirstOrDefault(o => o.Status is JobOperationStatus.Pending or JobOperationStatus.InProgress);
-
-        if (next is null)
-        {
-            if (job.Operations.All(o => o.Status is JobOperationStatus.Complete or JobOperationStatus.Skipped)
-                && job.Status < JobStatus.Shipped)
-            {
-                job.SetStatus(JobStatus.Shipped, userId, now);
-            }
-
-            return;
-        }
-
-        var mapped = next.OperationType switch
-        {
-            JobOperationType.Press => JobStatus.OnPress,
-            JobOperationType.Finishing => JobStatus.Finishing,
-            JobOperationType.Inspection => JobStatus.Qc,
-            JobOperationType.Pack => JobStatus.Packed,
-            JobOperationType.Ship => JobStatus.Shipped,
-            _ => (JobStatus?)null
-        };
-
-        if (mapped.HasValue && mapped.Value > job.Status)
-        {
-            job.SetStatus(mapped.Value, userId, now);
-        }
-    }
 
     private static string GetOperationTypeLabel(
         JobOperation operation,

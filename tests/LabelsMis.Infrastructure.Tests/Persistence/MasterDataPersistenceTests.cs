@@ -137,13 +137,45 @@ public class MasterDataPersistenceTests : IAsyncLifetime
     public async Task FinishingOperation_PersistsAndReadsBack()
     {
         var id = Guid.NewGuid();
-        var op = FinishingOperation.Create(id, "LAM-GLOSS", "Gloss laminate", FinishingOperationType.Laminate,
-            15m, 200m, "Laminator", 90m, TestUserId, DateTime.UtcNow);
+        var op = FinishingOperation.Create(
+            id,
+            "LAM-GLOSS",
+            "Gloss laminate",
+            FinishingOperationType.Laminate,
+            dieId: null,
+            15m,
+            200m,
+            "Laminator",
+            90m,
+            TestUserId,
+            DateTime.UtcNow);
         _db.FinishingOperations.Add(op);
         await _db.SaveChangesAsync();
 
         var loaded = await _db.FinishingOperations.SingleAsync(o => o.Id == id);
         loaded.OperationType.Should().Be(FinishingOperationType.Laminate);
+    }
+
+    [Fact]
+    public async Task ShippingMethod_PersistsAndReadsBack()
+    {
+        var id = Guid.NewGuid();
+        var method = ShippingMethod.Create(
+            id,
+            "FedEx Ground",
+            ShippingMethodType.Fedex,
+            35m,
+            requiresAddress: true,
+            TestUserId,
+            DateTime.UtcNow);
+        _db.ShippingMethods.Add(method);
+        await _db.SaveChangesAsync();
+
+        var loaded = await _db.ShippingMethods.SingleAsync(m => m.Id == id);
+        loaded.MethodType.Should().Be(ShippingMethodType.Fedex);
+        loaded.Price.Should().Be(35m);
+        loaded.RequiresAddress.Should().BeTrue();
+        loaded.IsActive.Should().BeTrue();
     }
 
     [Fact]

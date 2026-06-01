@@ -1,0 +1,28 @@
+@model LabelsMis.Web.Pages.ShippingMethods.ShippingMethodFormInput
+@using LabelsMis.Domain.Enums
+
+<div class="row g-3">
+    <div class="col-md-5">
+        <label asp-for="Name" class="form-label"></label>
+        <input asp-for="Name" class="form-control" />
+        <span asp-validation-for="Name" class="text-danger"></span>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="MethodType" class="form-label"></label>
+        <select asp-for="MethodType" asp-items="Html.GetEnumSelectList<ShippingMethodType>()" class="form-select"></select>
+        <span class="form-text">FedEx is a label only — no live rates are pulled.</span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="Price" class="form-label"></label>
+        <div class="input-group">
+            <span class="input-group-text">$</span>
+            <input asp-for="Price" class="form-control" />
+        </div>
+        <span asp-validation-for="Price" class="text-danger"></span>
+    </div>
+    <div class="col-12 form-check ms-1">
+        <input asp-for="RequiresAddress" class="form-check-input" />
+        <label asp-for="RequiresAddress" class="form-check-label"></label>
+        <div class="form-text">Uncheck for methods like pickup where no ship-to address is needed — the address fields are hidden on estimates and orders.</div>
+    </div>
+</div>

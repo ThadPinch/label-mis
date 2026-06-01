@@ -1,5 +1,6 @@
 using LabelsMis.Domain.Common;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.ValueObjects;
 
 namespace LabelsMis.Domain.Entities;
 
@@ -25,6 +26,20 @@ public class Estimate : EntityBase
     public string? LostReason { get; private set; }
     public string? PdfFilePath { get; private set; }
 
+    public Guid? ShippingMethodId { get; private set; }
+    public ShippingMethod? ShippingMethod { get; private set; }
+    public decimal ShippingCost { get; private set; }
+    public string? ShipToName { get; private set; }
+    public string? ShipToStreet1 { get; private set; }
+    public string? ShipToStreet2 { get; private set; }
+    public string? ShipToCity { get; private set; }
+    public string? ShipToState { get; private set; }
+    public string? ShipToZip { get; private set; }
+    public string? ShipToCountry { get; private set; }
+
+    public ShippingAddress ShippingAddress => new(
+        ShipToName, ShipToStreet1, ShipToStreet2, ShipToCity, ShipToState, ShipToZip, ShipToCountry);
+
     public IReadOnlyCollection<EstimateLine> Lines => _lines;
     public IReadOnlyCollection<EstimateRevision> Revisions => _revisions;
 
@@ -35,6 +50,9 @@ public class Estimate : EntityBase
         Guid? salesRepId,
         string? notes,
         DateOnly? validUntilDate,
+        Guid? shippingMethodId,
+        decimal shippingCost,
+        ShippingAddress shippingAddress,
         Guid createdById,
         DateTime createdAt)
     {
@@ -47,6 +65,7 @@ public class Estimate : EntityBase
             Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
             ValidUntilDate = validUntilDate
         };
+        estimate.SetShipping(shippingMethodId, shippingCost, shippingAddress);
         estimate.SetCreated(id, createdById, createdAt);
         return estimate;
     }
@@ -55,6 +74,9 @@ public class Estimate : EntityBase
         Guid? salesRepId,
         string? notes,
         DateOnly? validUntilDate,
+        Guid? shippingMethodId,
+        decimal shippingCost,
+        ShippingAddress shippingAddress,
         Guid modifiedById,
         DateTime modifiedAt)
     {
@@ -63,7 +85,22 @@ public class Estimate : EntityBase
         SalesRepId = salesRepId;
         Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
         ValidUntilDate = validUntilDate;
+        SetShipping(shippingMethodId, shippingCost, shippingAddress);
         SetModified(modifiedById, modifiedAt);
+    }
+
+    private void SetShipping(Guid? shippingMethodId, decimal shippingCost, ShippingAddress shippingAddress)
+    {
+        var address = (shippingAddress ?? ShippingAddress.Empty).Normalized();
+        ShippingMethodId = shippingMethodId;
+        ShippingCost = shippingCost < 0 ? 0 : shippingCost;
+        ShipToName = address.RecipientName;
+        ShipToStreet1 = address.Street1;
+        ShipToStreet2 = address.Street2;
+        ShipToCity = address.City;
+        ShipToState = address.State;
+        ShipToZip = address.Zip;
+        ShipToCountry = address.Country;
     }
 
     public void ReplaceLines(IEnumerable<EstimateLine> lines)

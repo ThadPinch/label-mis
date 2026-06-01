@@ -1,5 +1,6 @@
 @model LabelsMis.Web.Pages.FinishingOperations.FinishingOperationFormInput
 @using LabelsMis.Domain.Enums
+@using Microsoft.AspNetCore.Mvc.Rendering
 
 <div class="row g-3">
     <div class="col-md-3">
@@ -14,7 +15,15 @@
     </div>
     <div class="col-md-4">
         <label asp-for="OperationType" class="form-label"></label>
-        <select asp-for="OperationType" asp-items="Html.GetEnumSelectList<FinishingOperationType>()" class="form-select"></select>
+        <select asp-for="OperationType" asp-items="Html.GetEnumSelectList<FinishingOperationType>()" class="form-select" id="finishing-operation-type"></select>
+    </div>
+    <div class="col-md-6 @(Model.OperationType == FinishingOperationType.DieCut ? "" : "d-none")" id="finishing-operation-die-field">
+        <label asp-for="DieId" class="form-label"></label>
+        <select asp-for="DieId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Dies"]!)">
+            <option value="">Select die…</option>
+        </select>
+        <span class="form-text">Required when operation type is Die cut.</span>
+        <span asp-validation-for="DieId" class="text-danger"></span>
     </div>
     <div class="col-md-4">
         <label asp-for="EquipmentName" class="form-label"></label>
@@ -34,3 +43,25 @@
         <input asp-for="CostPerHour" class="form-control" />
     </div>
 </div>
+
+<script>
+(() => {
+    const dieCutValue = '@((int)FinishingOperationType.DieCut)';
+    const typeSelect = document.getElementById('finishing-operation-type');
+    const dieField = document.getElementById('finishing-operation-die-field');
+    const dieSelect = document.querySelector('[name="Input.DieId"]');
+    if (!typeSelect || !dieField) return;
+
+    const sync = () => {
+        const isDieCut = typeSelect.value === dieCutValue;
+        dieField.classList.toggle('d-none', !isDieCut);
+        if (dieSelect) {
+            dieSelect.required = isDieCut;
+            if (!isDieCut) dieSelect.value = '';
+        }
+    };
+
+    typeSelect.addEventListener('change', sync);
+    sync();
+})();
+</script>

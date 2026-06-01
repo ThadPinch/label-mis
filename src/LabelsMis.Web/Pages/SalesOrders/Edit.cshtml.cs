@@ -3,8 +3,10 @@ using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Services.Artwork;
+using LabelsMis.Web.Services.Customers;
 using LabelsMis.Web.Services.Jobs;
 using LabelsMis.Web.Services.SalesOrders;
+using LabelsMis.Web.Services.Shipping;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -18,6 +20,8 @@ public class EditModel(
     SalesOrderService salesOrderService,
     JobService jobService,
     ArtworkService artworkService,
+    ShippingMethodService shippingMethodService,
+    CustomerService customerService,
     LabelsMisDbContext db) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
@@ -25,6 +29,8 @@ public class EditModel(
     public Domain.Entities.SalesOrder? Order { get; private set; }
     public bool CanEdit { get; private set; }
     public bool CanSchedule { get; private set; }
+    public bool CanDelete { get; private set; }
+    public bool CanCancel { get; private set; }
     public bool IsLocked { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
@@ -36,24 +42,61 @@ public class EditModel(
         CanEdit = !IsLocked && (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Csr) || User.IsInRole(AppRoles.Estimator));
         CanSchedule = Order.Status == SalesOrderStatus.Open
             && (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler) || User.IsInRole(AppRoles.Csr));
-        Input = new SalesOrderPageInput
-        {
-            CustomerId = Order.CustomerId,
-            CustomerPoNumber = Order.CustomerPoNumber,
-            RequestedShipDate = Order.RequestedShipDate,
-            Notes = Order.Notes,
-            Lines = Order.Lines.OrderBy(l => l.LineNumber).Select(l => new SalesOrderLinePageInput
-            {
-                ProductId = l.ProductId,
-                Quantity = l.Quantity,
-                UnitPrice = l.UnitPrice,
-                LineNotes = l.LineNotes,
-                HasArtwork = !string.IsNullOrWhiteSpace(l.Product.ArtworkFilePath)
-            }).ToList()
-        };
+        CanDelete = Order.Status == SalesOrderStatus.Open && User.IsInRole(AppRoles.Admin);
+        CanCancel = Order.Status is not (SalesOrderStatus.Open or SalesOrderStatus.Cancelled or SalesOrderStatus.Closed);
+        Input = ToPageInput(Order);
         await LoadLookupsAsync(Order.CustomerId, cancellationToken);
         return Page();
     }
+
+    public async Task<IActionResult> OnPostCancelAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await salesOrderService.CancelAsync(Id, cancellationToken);
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            Order = await salesOrderService.GetAsync(Id, cancellationToken);
+            if (Order is null) return NotFound();
+            IsLocked = Order.Status != SalesOrderStatus.Open;
+            CanEdit = !IsLocked && (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Csr) || User.IsInRole(AppRoles.Estimator));
+            CanSchedule = Order.Status == SalesOrderStatus.Open
+                && (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler) || User.IsInRole(AppRoles.Csr));
+            CanDelete = Order.Status == SalesOrderStatus.Open && User.IsInRole(AppRoles.Admin);
+            CanCancel = Order.Status is not (SalesOrderStatus.Open or SalesOrderStatus.Cancelled or SalesOrderStatus.Closed);
+            Input = ToPageInput(Order);
+            await LoadLookupsAsync(Order.CustomerId, cancellationToken);
+            return Page();
+        }
+    }
+
+    private static SalesOrderPageInput ToPageInput(Domain.Entities.SalesOrder order) => new()
+    {
+        CustomerId = order.CustomerId,
+        CustomerPoNumber = order.CustomerPoNumber,
+        RequestedShipDate = order.RequestedShipDate,
+        Notes = order.Notes,
+        ShippingMethodId = order.ShippingMethodId,
+        ShippingCost = order.ShippingCost,
+        ShipToName = order.ShipToName,
+        ShipToStreet1 = order.ShipToStreet1,
+        ShipToStreet2 = order.ShipToStreet2,
+        ShipToCity = order.ShipToCity,
+        ShipToState = order.ShipToState,
+        ShipToZip = order.ShipToZip,
+        ShipToCountry = order.ShipToCountry,
+        Lines = order.Lines.OrderBy(l => l.LineNumber).Select(l => new SalesOrderLinePageInput
+        {
+            ProductId = l.ProductId,
+            Quantity = l.Quantity,
+            UnitPrice = l.UnitPrice,
+            LineNotes = l.LineNotes,
+            HasArtwork = !string.IsNullOrWhiteSpace(l.Product.ArtworkFilePath)
+        }).ToList()
+    };
 
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
     {
@@ -62,6 +105,31 @@ public class EditModel(
         await salesOrderService.UpdateAsync(Id, Input.ToForm(), admin, cancellationToken);
         await UploadLineArtworkAsync(cancellationToken);
         return RedirectToPage(new { id = Id });
+    }
+
+    public async Task<IActionResult> OnPostDeleteAsync(CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin)) return Forbid();
+
+        try
+        {
+            await salesOrderService.DeleteAsync(Id, cancellationToken);
+            return RedirectToPage("Index");
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            Order = await salesOrderService.GetAsync(Id, cancellationToken);
+            if (Order is null) return NotFound();
+            IsLocked = Order.Status != SalesOrderStatus.Open;
+            CanEdit = !IsLocked && (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Csr) || User.IsInRole(AppRoles.Estimator));
+            CanSchedule = Order.Status == SalesOrderStatus.Open
+                && (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler) || User.IsInRole(AppRoles.Csr));
+            CanDelete = Order.Status == SalesOrderStatus.Open && User.IsInRole(AppRoles.Admin);
+            Input = ToPageInput(Order);
+            await LoadLookupsAsync(Order.CustomerId, cancellationToken);
+            return Page();
+        }
     }
 
     private async Task UploadLineArtworkAsync(CancellationToken cancellationToken)
@@ -82,7 +150,7 @@ public class EditModel(
         try
         {
             var jobs = await jobService.ScheduleFromSalesOrderAsync(Id, cancellationToken);
-            return RedirectToPage("/Jobs/Index");
+            return RedirectToPage("/Production/PrePress");
         }
         catch (Exception ex)
         {
@@ -96,8 +164,13 @@ public class EditModel(
         }
     }
 
+    public Task<IActionResult> OnGetAddressesAsync(Guid? customerId, CancellationToken cancellationToken) =>
+        ShipToAddressJson.BuildAsync(customerService, customerId, cancellationToken);
+
     private async Task LoadLookupsAsync(Guid customerId, CancellationToken cancellationToken)
     {
+        ViewData["ShippingMethods"] = await shippingMethodService.GetSelectableAsync(
+            Input.ShippingMethodId, cancellationToken);
         ViewData["Customers"] = await db.Customers.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.Name)
             .Select(c => new SelectListItem(c.Name, c.Id.ToString())).ToListAsync(cancellationToken);
         ViewData["Products"] = await db.Products.AsNoTracking()

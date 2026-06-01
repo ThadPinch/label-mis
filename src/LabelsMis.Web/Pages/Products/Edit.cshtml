@@ -18,6 +18,52 @@
     </div>
 </form>
 
+<div class="card mt-4">
+    <div class="card-body">
+        <h2 class="h5">Artwork</h2>
+        @if (!string.IsNullOrWhiteSpace(Model.Product?.ArtworkFilePath))
+        {
+            var fileName = System.IO.Path.GetFileName(Model.Product!.ArtworkFilePath);
+            var ext = System.IO.Path.GetExtension(Model.Product.ArtworkFilePath)!.ToLowerInvariant();
+            var inlineUrl = Url.Page("/Artwork/Download", new { productId = Model.Id, inline = true });
+            <p class="mb-2">
+                Current file:
+                <a asp-page="/Artwork/Download" asp-route-productId="@Model.Id" target="_blank">@fileName</a>
+            </p>
+            @if (ext is ".png" or ".jpg" or ".jpeg")
+            {
+                <img src="@inlineUrl" alt="Artwork preview" class="img-fluid border rounded mb-3" style="max-height: 360px;" />
+            }
+            else if (ext == ".pdf")
+            {
+                <embed src="@inlineUrl" type="application/pdf" class="w-100 border rounded mb-3" style="height: 480px;" />
+            }
+            else
+            {
+                <p class="text-muted">No inline preview for @ext files — download to view.</p>
+            }
+        }
+        else
+        {
+            <p class="text-muted mb-2">No artwork uploaded yet.</p>
+        }
+
+        @if (Model.CanEdit)
+        {
+            <form method="post" asp-page-handler="UploadArtwork" enctype="multipart/form-data" class="row g-2 align-items-end">
+                <div class="col-md-6">
+                    <label asp-for="ArtworkFile" class="form-label">Upload @(string.IsNullOrWhiteSpace(Model.Product?.ArtworkFilePath) ? "" : "new ")artwork</label>
+                    <input asp-for="ArtworkFile" type="file" class="form-control" accept=".pdf,.ai,.eps,.png,.jpg,.jpeg,.tif,.tiff" />
+                </div>
+                <div class="col-md-auto">
+                    <button type="submit" class="btn btn-outline-primary">Upload</button>
+                </div>
+                <div class="form-text">Allowed: PDF, AI, EPS, PNG, JPG, TIFF. Replaces the current file.</div>
+            </form>
+        }
+    </div>
+</div>
+
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
 }

@@ -61,6 +61,22 @@ public class EstimatePdfGenerator(IOptions<EstimateOptions> options)
                         col.Item().Text($"{billingAddress.City}, {billingAddress.State} {billingAddress.Zip}");
                     }
 
+                    var shipTo = detail.Estimate.ShippingAddress;
+                    if (shipTo.HasAddress)
+                    {
+                        col.Item().PaddingTop(8).Text("Ship to").Bold();
+                        if (!string.IsNullOrWhiteSpace(shipTo.RecipientName))
+                        {
+                            col.Item().Text(shipTo.RecipientName!);
+                        }
+                        col.Item().Text(shipTo.Street1!);
+                        if (!string.IsNullOrWhiteSpace(shipTo.Street2))
+                        {
+                            col.Item().Text(shipTo.Street2!);
+                        }
+                        col.Item().Text($"{shipTo.City}, {shipTo.State} {shipTo.Zip}");
+                    }
+
                     foreach (var line in detail.Estimate.Lines.OrderBy(l => l.LineNumber))
                     {
                         col.Item().PaddingTop(14).Text($"Line {line.LineNumber}: {line.ProductDescription}").Bold();
@@ -99,6 +115,14 @@ public class EstimatePdfGenerator(IOptions<EstimateOptions> options)
                         {
                             col.Item().Text($"Notes: {line.LineNotes}");
                         }
+                    }
+
+                    if (detail.Estimate.ShippingMethodId is not null || detail.Estimate.ShippingCost > 0)
+                    {
+                        var methodName = detail.Estimate.ShippingMethod?.Name ?? "Shipping";
+                        col.Item().PaddingTop(14).Text(
+                            $"Shipping ({methodName}): {detail.Estimate.ShippingCost.ToString("C2")}").SemiBold();
+                        col.Item().Text("Shipping is added to each quantity total above.").FontSize(8).Italic();
                     }
 
                     if (!string.IsNullOrWhiteSpace(detail.Estimate.Notes))

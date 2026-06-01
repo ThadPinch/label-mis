@@ -2,6 +2,7 @@ using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Services.Estimates;
+using LabelsMis.Web.Services.Shipping;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -15,7 +16,8 @@ namespace LabelsMis.Web.Pages.Estimates;
 public class CreateModel(
     EstimateService estimateService,
     LabelsMisDbContext db,
-    UserManager<ApplicationUser> userManager) : PageModel
+    UserManager<ApplicationUser> userManager,
+    ShippingMethodService shippingMethodService) : PageModel
 {
     [BindProperty]
     public EstimatePageInput Input { get; set; } = new();
@@ -69,5 +71,8 @@ public class CreateModel(
         var users = await userManager.Users.OrderBy(u => u.Email).ToListAsync(cancellationToken);
         ViewData["SalesRepOptions"] = users.Select(u => new SelectListItem(
             u.Email ?? u.UserName ?? u.Id.ToString(), u.Id.ToString())).ToList();
+
+        ViewData["ShippingMethods"] = await shippingMethodService.GetSelectableAsync(
+            Input.ShippingMethodId, cancellationToken);
     }
 }

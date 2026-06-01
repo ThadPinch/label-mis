@@ -1,0 +1,16 @@
+@using LabelsMis.Web.Pages.Production
+@model LabelsMis.Web.Pages.Production.ProductionStageModel
+
+<ul class="nav nav-pills mb-3 flex-wrap">
+    @foreach (var stage in ProductionStages.All)
+    {
+        var count = Model.StageCounts.TryGetValue(stage.Status, out var c) ? c : 0;
+        var active = stage.Status == Model.Stage;
+        <li class="nav-item">
+            <a class="nav-link @(active ? "active" : "")" asp-page="@stage.Page">
+                @stage.Label
+                <span class="badge rounded-pill @(active ? "text-bg-light" : "text-bg-secondary") ms-1">@count</span>
+            </a>
+        </li>
+    }
+</ul>

@@ -26,6 +26,7 @@ public class EditModel(FinishingOperationService finishingOperationService, ICur
 
         Input = FinishingOperationFormInput.FromEntity(operation);
         IsActive = operation.IsActive;
+        await LoadLookupsAsync(cancellationToken);
         return Page();
     }
 
@@ -70,5 +71,9 @@ public class EditModel(FinishingOperationService finishingOperationService, ICur
     {
         var operation = await finishingOperationService.GetByIdAsync(id, cancellationToken);
         IsActive = operation?.IsActive ?? false;
+        await LoadLookupsAsync(cancellationToken);
     }
+
+    private async Task LoadLookupsAsync(CancellationToken cancellationToken) =>
+        ViewData["Dies"] = await finishingOperationService.GetDieSelectListAsync(cancellationToken);
 }

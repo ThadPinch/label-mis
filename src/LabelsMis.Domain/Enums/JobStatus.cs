@@ -2,13 +2,11 @@ namespace LabelsMis.Domain.Enums;
 
 public enum JobStatus
 {
-    Planned = 0,
-    Prepress = 1,
-    Scheduled = 2,
-    OnPress = 3,
-    Finishing = 4,
-    Qc = 5,
-    Packed = 6,
-    Shipped = 7,
-    Closed = 8
+    PrePress = 0,
+    Queued = 1,
+    Printed = 2,
+    Finished = 3,
+    Rewound = 4,
+    Shipped = 5,
+    Closed = 6
 }

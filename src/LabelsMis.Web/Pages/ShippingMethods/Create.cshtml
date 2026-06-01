@@ -1,0 +1,18 @@
+@page "/shipping-methods/create"
+@model LabelsMis.Web.Pages.ShippingMethods.CreateModel
+@{
+    ViewData["Title"] = "New shipping method";
+
+    ViewData["BackNav"] = new BackNavModel();
+}
+
+<h1 class="h3 mb-3">New shipping method</h1>
+<form method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <partial name="_ShippingMethodForm" model="Model.Input" />
+    <button type="submit" class="btn btn-primary mt-3">Create</button>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -3,6 +3,7 @@ using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Services.Estimates;
+using LabelsMis.Web.Services.Shipping;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -16,7 +17,8 @@ namespace LabelsMis.Web.Pages.Estimates;
 public class EditModel(
     EstimateService estimateService,
     LabelsMisDbContext db,
-    UserManager<ApplicationUser> userManager) : PageModel
+    UserManager<ApplicationUser> userManager,
+    ShippingMethodService shippingMethodService) : PageModel
 {
     [BindProperty(SupportsGet = true)]
     public Guid Id { get; set; }
@@ -54,6 +56,15 @@ public class EditModel(
             && Detail.SalesOrderId is null;
 
         Input = EstimatePageInput.FromEstimate(Detail.Estimate);
+
+        // Pre-fill the email field with a customer contact's address (primary
+        // first) and default the "Email PDF" checkbox to on.
+        EmailTo = Detail.Customer.Contacts
+            .OrderByDescending(c => c.IsPrimary)
+            .Select(c => c.Email)
+            .FirstOrDefault(e => !string.IsNullOrWhiteSpace(e));
+        SendEmail = true;
+
         await LoadLookupsAsync(cancellationToken);
         return Page();
     }
@@ -186,5 +197,8 @@ public class EditModel(
         var users = await userManager.Users.OrderBy(u => u.Email).ToListAsync(cancellationToken);
         ViewData["SalesRepOptions"] = users.Select(u => new SelectListItem(
             u.Email ?? u.UserName ?? u.Id.ToString(), u.Id.ToString())).ToList();
+
+        ViewData["ShippingMethods"] = await shippingMethodService.GetSelectableAsync(
+            Input.ShippingMethodId, cancellationToken);
     }
 }

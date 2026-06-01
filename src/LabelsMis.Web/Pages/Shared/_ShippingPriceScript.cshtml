@@ -1,0 +1,30 @@
+@*
+    Shipping method side-effects shared by sales order pages:
+    - default the editable price input to the selected method's price (override allowed)
+    - show/hide the ship-to address fields based on the method's RequiresAddress flag
+*@
+<script>
+(() => {
+    const methodSelect = document.getElementById('shipping-method-select');
+    const costInput = document.getElementById('shipping-cost-input');
+    if (!methodSelect) return;
+
+    const groups = document.querySelectorAll('.shipto-group');
+    const updateAddressVisibility = () => {
+        const opt = methodSelect.selectedOptions?.[0];
+        const requires = opt ? opt.dataset.requiresAddress !== 'false' : true;
+        groups.forEach(el => el.classList.toggle('d-none', !requires));
+    };
+
+    methodSelect.addEventListener('change', () => {
+        if (costInput && !methodSelect.disabled) {
+            const opt = methodSelect.selectedOptions?.[0];
+            const price = Number(opt?.dataset.price);
+            costInput.value = Number.isFinite(price) ? price : 0;
+        }
+        updateAddressVisibility();
+    });
+
+    updateAddressVisibility();
+})();
+</script>

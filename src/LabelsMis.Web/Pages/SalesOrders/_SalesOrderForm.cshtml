@@ -1,17 +1,66 @@
+@using LabelsMis.Web.Services.Shipping
 @model LabelsMis.Web.Pages.SalesOrders.SalesOrderPageInput
 @{
     var isLocked = ViewData["IsLocked"] as bool? ?? false;
     var products = (IEnumerable<SelectListItem>?)ViewData["Products"] ?? Enumerable.Empty<SelectListItem>();
+    var shippingMethods = (IReadOnlyList<ShippingMethodListItem>?)ViewData["ShippingMethods"] ?? Array.Empty<ShippingMethodListItem>();
 }
 <div class="row g-3">
     <div class="col-md-4">
         <label class="form-label">Customer</label>
-        <select asp-for="CustomerId" id="customer-select" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)" disabled="@isLocked"></select>
+        <select asp-for="CustomerId" id="customer-select" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)" disabled="@isLocked">
+            <option value="">Select customer</option>
+        </select>
     </div>
     <div class="col-md-4"><label asp-for="CustomerPoNumber" class="form-label">Customer PO #</label><input asp-for="CustomerPoNumber" class="form-control" readonly="@isLocked" /></div>
     <div class="col-md-4"><label asp-for="RequestedShipDate" class="form-label">Requested ship date</label><input asp-for="RequestedShipDate" type="date" class="form-control" readonly="@isLocked" /></div>
     <div class="col-12"><label asp-for="Notes" class="form-label">Notes</label><textarea asp-for="Notes" class="form-control" readonly="@isLocked"></textarea></div>
 </div>
+
+<fieldset class="border rounded p-3 mt-4 order-shipping" id="order-shipping">
+    <legend class="float-none w-auto px-2 h6 mb-0">Shipping</legend>
+    <div class="row g-3">
+        <div class="col-md-3">
+            <label asp-for="ShippingMethodId" class="form-label">Method</label>
+            <select asp-for="ShippingMethodId" id="shipping-method-select" class="form-select" disabled="@isLocked">
+                <option value="" data-price="0" data-requires-address="true">No shipping</option>
+                @foreach (var m in shippingMethods)
+                {
+                    <option value="@m.Id" data-price="@m.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                            data-requires-address="@m.RequiresAddress.ToString().ToLowerInvariant()"
+                            selected="@(m.Id == Model.ShippingMethodId)">
+                        @m.Name — @m.Price.ToString("C2")@(m.IsActive ? "" : " (inactive)")
+                    </option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label asp-for="ShippingCost" class="form-label">Price</label>
+            <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input asp-for="ShippingCost" id="shipping-cost-input" class="form-control" readonly="@isLocked" />
+            </div>
+            <span asp-validation-for="ShippingCost" class="text-danger"></span>
+        </div>
+        @if (!isLocked)
+        {
+            <div class="col-md-6 shipto-group">
+                <label for="shipto-source" class="form-label">Ship-to address</label>
+                <select id="shipto-source" class="form-select">
+                    <option value="custom">Enter manually</option>
+                </select>
+                <div class="form-text">Pull a billing or shipping address from the customer, or enter one below.</div>
+            </div>
+        }
+        <div class="col-md-6 shipto-group"><label asp-for="ShipToName" class="form-label">Recipient / company</label><input asp-for="ShipToName" class="form-control shipto-field" readonly="@isLocked" /></div>
+        <div class="col-md-6 shipto-group"><label asp-for="ShipToStreet1" class="form-label">Street</label><input asp-for="ShipToStreet1" class="form-control shipto-field" readonly="@isLocked" /></div>
+        <div class="col-md-6 shipto-group"><label asp-for="ShipToStreet2" class="form-label">Street 2</label><input asp-for="ShipToStreet2" class="form-control shipto-field" readonly="@isLocked" /></div>
+        <div class="col-md-3 shipto-group"><label asp-for="ShipToCity" class="form-label">City</label><input asp-for="ShipToCity" class="form-control shipto-field" readonly="@isLocked" /></div>
+        <div class="col-md-1 shipto-group"><label asp-for="ShipToState" class="form-label">State</label><input asp-for="ShipToState" class="form-control shipto-field" readonly="@isLocked" /></div>
+        <div class="col-md-2 shipto-group"><label asp-for="ShipToZip" class="form-label">Zip</label><input asp-for="ShipToZip" class="form-control shipto-field" readonly="@isLocked" /></div>
+    </div>
+</fieldset>
+
 <h2 class="h5 mt-4">Line items</h2>
 @if (ViewData["ShowProductFilter"] as bool? == true)
 {
@@ -41,7 +90,7 @@
     var line = Model.Lines[i];
     <div class="row g-2 mb-2 order-line">
         <div class="col-md-4">
-            <select name="Input.Lines[@i].ProductId" class="form-select product-select" asp-items="products" disabled="@isLocked"><option value="">Select product</option></select>
+            <select asp-for="Lines[@i].ProductId" class="form-select product-select" asp-items="products" disabled="@isLocked"><option value="">Select product</option></select>
         </div>
         <div class="col-md-2"><input name="Input.Lines[@i].Quantity" value="@line.Quantity" class="form-control line-qty" readonly="@isLocked" /></div>
         <div class="col-md-2"><input name="Input.Lines[@i].UnitPrice" value="@line.UnitPrice" class="form-control line-price" readonly="@isLocked" /></div>

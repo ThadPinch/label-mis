@@ -1,5 +1,6 @@
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -58,7 +59,8 @@ public class TransactionFlowPersistenceTests : IAsyncLifetime
         DateOnly? validUntil = null)
     {
         var estimate = Estimate.CreateDraft(
-            estimateId, estimateNumber, customerId, null, null, validUntil, userId, now);
+            estimateId, estimateNumber, customerId, null, null, validUntil,
+            null, 0m, ShippingAddress.Empty, userId, now);
         var line = EstimateLine.Create(
             Guid.NewGuid(), estimate.Id, 1, null, "Flow labels",
             4, 3, 0.125m, 0.0625m, 0.0625m, 0.0625m,
@@ -103,7 +105,8 @@ public class TransactionFlowPersistenceTests : IAsyncLifetime
         await _db.SaveChangesAsync();
 
         var order = SalesOrder.CreateOpen(
-            Guid.NewGuid(), "SO-2026-99999", customerId, estimateId, "PO-123", now, null, null, TestUserId, now);
+            Guid.NewGuid(), "SO-2026-99999", customerId, estimateId, "PO-123", now, null, null,
+            null, 0m, ShippingAddress.Empty, TestUserId, now);
         var orderLine = SalesOrderLine.Create(
             Guid.NewGuid(), order.Id, 1, product.Id, line.Id, 5000, 0.05m, null, TestUserId, now);
         order.AddLine(orderLine);
