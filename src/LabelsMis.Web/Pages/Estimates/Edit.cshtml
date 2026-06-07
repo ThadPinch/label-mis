@@ -19,6 +19,13 @@ else
         <div>
             <h1 class="h3 mb-1">@Model.Detail.Estimate.EstimateNumber</h1>
             <p class="text-muted mb-0">Revision @Model.Detail.Estimate.RevisionNumber · @Model.Detail.Estimate.Status</p>
+            @if (Model.Detail.SalesOrderId is not null)
+            {
+                <p class="mb-0 mt-1">
+                    <span class="text-muted">Sales order:</span>
+                    <a asp-page="/SalesOrders/Edit" asp-route-id="@Model.Detail.SalesOrderId">@(Model.Detail.SalesOrderNumber ?? "View sales order")</a>
+                </p>
+            }
         </div>
         <div class="text-end">
             @if (Model.Detail.Estimate.PdfFilePath is not null)
@@ -61,7 +68,7 @@ else
             }
             @if (Model.Detail.SalesOrderId is not null)
             {
-                <a asp-page="/SalesOrders/Edit" asp-route-id="@Model.Detail.SalesOrderId" class="btn btn-outline-secondary">View sales order</a>
+                <a asp-page="/SalesOrders/Edit" asp-route-id="@Model.Detail.SalesOrderId" class="btn btn-outline-secondary">View sales order @Model.Detail.SalesOrderNumber</a>
             }
             @if (Model.CanAdmin && Model.Detail.Estimate.Status is EstimateStatus.Sent or EstimateStatus.Draft)
             {

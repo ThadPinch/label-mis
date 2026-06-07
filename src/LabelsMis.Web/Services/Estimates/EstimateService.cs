@@ -26,7 +26,8 @@ public record EstimateDetail(
     Estimate Estimate,
     Customer Customer,
     IReadOnlyList<EstimateRevision> Revisions,
-    Guid? SalesOrderId);
+    Guid? SalesOrderId,
+    string? SalesOrderNumber);
 
 public class EstimateOptions
 {
@@ -171,16 +172,17 @@ public class EstimateService(
             return null;
         }
 
-        var salesOrderId = await db.SalesOrders.AsNoTracking()
+        var salesOrder = await db.SalesOrders.AsNoTracking()
             .Where(o => o.SourceEstimateId == id)
-            .Select(o => (Guid?)o.Id)
+            .Select(o => new { o.Id, o.OrderNumber })
             .FirstOrDefaultAsync(cancellationToken);
 
         return new EstimateDetail(
             estimate,
             estimate.Customer,
             estimate.Revisions.OrderByDescending(r => r.RevisionNumber).ToList(),
-            salesOrderId);
+            salesOrder?.Id,
+            salesOrder?.OrderNumber);
     }
 
     public async Task<EstimateCalculationResponse> CalculateAsync(

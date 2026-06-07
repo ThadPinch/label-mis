@@ -1,14 +1,16 @@
 /* ==========================================================================
-   Labels MIS — Design tokens (black · orange · white)
+   LabelShop — Design tokens (primary #565656 · accent #005d66 · white)
+   The --lm-black* / --lm-orange* names are retained for stability; their
+   values now carry the primary (grey) and accent (teal) brand colors.
    ========================================================================== */
 :root {
-  --lm-black: #0a0a0a;
-  --lm-black-soft: #141414;
-  --lm-black-muted: #1f1f1f;
-  --lm-orange: #f97316;
-  --lm-orange-hover: #fb923c;
-  --lm-orange-dark: #ea580c;
-  --lm-orange-subtle: rgba(249, 115, 22, 0.12);
+  --lm-black: #565656;
+  --lm-black-soft: #565656;
+  --lm-black-muted: #6e6e6e;
+  --lm-orange: #005d66;
+  --lm-orange-hover: #34b3bd;
+  --lm-orange-dark: #00474e;
+  --lm-orange-subtle: rgba(0, 93, 102, 0.12);
   --lm-white: #ffffff;
   --lm-gray-100: #f5f5f5;
   --lm-gray-200: #e5e5e5;
@@ -114,7 +116,7 @@ body {
   width: 1.75rem;
   height: 1.75rem;
   background: var(--lm-orange);
-  color: var(--lm-black);
+  color: var(--lm-white);
   font-weight: 800;
   font-size: 0.7rem;
   border-radius: var(--lm-radius);
@@ -122,7 +124,7 @@ body {
 }
 
 .app-navbar .brand-text-accent {
-  color: var(--lm-orange);
+  color: var(--lm-orange-hover);
 }
 
 .app-navbar .nav-link,
@@ -142,7 +144,7 @@ body {
 }
 
 .app-navbar .nav-link.active {
-  color: var(--lm-orange) !important;
+  color: var(--lm-orange-hover) !important;
   background: var(--lm-orange-subtle);
 }
 
@@ -160,7 +162,7 @@ body {
   --bs-dropdown-link-hover-color: var(--lm-black);
   --bs-dropdown-link-hover-bg: var(--lm-orange-subtle);
   --bs-dropdown-link-active-color: var(--lm-black);
-  --bs-dropdown-link-active-bg: rgba(249, 115, 22, 0.2);
+  --bs-dropdown-link-active-bg: rgba(0, 93, 102, 0.2);
   border: none;
   border-radius: var(--lm-radius);
   box-shadow: var(--lm-shadow);
@@ -235,11 +237,11 @@ body {
 .app-navbar .btn-logout:focus {
   background: var(--lm-orange);
   border-color: var(--lm-orange);
-  color: var(--lm-black) !important;
+  color: var(--lm-white) !important;
 }
 
 .app-navbar .btn-login {
-  color: var(--lm-black) !important;
+  color: var(--lm-white) !important;
   background: var(--lm-orange);
   font-weight: 600;
   padding: 0.45rem 1rem !important;
@@ -248,8 +250,8 @@ body {
 }
 
 .app-navbar .btn-login:hover {
-  background: var(--lm-orange-hover);
-  color: var(--lm-black) !important;
+  background: var(--lm-orange-dark);
+  color: var(--lm-white) !important;
 }
 
 /* Mobile toggler */
@@ -363,7 +365,7 @@ body {
 }
 
 .app-footer .footer-accent {
-  color: var(--lm-orange);
+  color: var(--lm-orange-hover);
 }
 
 /* ==========================================================================
@@ -432,7 +434,7 @@ body {
 }
 
 .imposition-diagram .legend-swatch--label {
-  background: rgba(249, 115, 22, 0.35);
+  background: rgba(0, 93, 102, 0.35);
   border-color: var(--lm-orange);
 }
 
@@ -779,7 +781,7 @@ body {
 
 .calc-qty-section[open] {
   border-color: var(--lm-orange);
-  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 93, 102, 0.12);
 }
 
 .calc-qty-summary {

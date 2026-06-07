@@ -32,6 +32,14 @@ public class EditModel(
     public bool CanDelete { get; private set; }
     public bool CanCancel { get; private set; }
     public bool IsLocked { get; private set; }
+    public IReadOnlyList<LineJobInfo> LineJobs { get; private set; } = [];
+
+    public record LineJobInfo(
+        int LineNumber,
+        string ProductLabel,
+        Guid? JobId,
+        string? JobNumber,
+        JobStatus? JobStatus);
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -45,8 +53,33 @@ public class EditModel(
         CanDelete = Order.Status == SalesOrderStatus.Open && User.IsInRole(AppRoles.Admin);
         CanCancel = Order.Status is not (SalesOrderStatus.Open or SalesOrderStatus.Cancelled or SalesOrderStatus.Closed);
         Input = ToPageInput(Order);
+        await LoadLineJobsAsync(cancellationToken);
         await LoadLookupsAsync(Order.CustomerId, cancellationToken);
         return Page();
+    }
+
+    private async Task LoadLineJobsAsync(CancellationToken cancellationToken)
+    {
+        if (Order is null)
+        {
+            return;
+        }
+
+        var jobs = await db.Jobs.AsNoTracking()
+            .Where(j => j.SalesOrderLine.SalesOrderId == Id)
+            .Select(j => new { j.SalesOrderLineId, j.Id, j.JobNumber, j.Status })
+            .ToListAsync(cancellationToken);
+
+        LineJobs = Order.Lines.OrderBy(l => l.LineNumber).Select(l =>
+        {
+            var job = jobs.FirstOrDefault(j => j.SalesOrderLineId == l.Id);
+            return new LineJobInfo(
+                l.LineNumber,
+                $"{l.Product.InternalSku} — {l.Product.Description}",
+                job?.Id,
+                job?.JobNumber,
+                job?.Status);
+        }).ToList();
     }
 
     public async Task<IActionResult> OnPostCancelAsync(CancellationToken cancellationToken)

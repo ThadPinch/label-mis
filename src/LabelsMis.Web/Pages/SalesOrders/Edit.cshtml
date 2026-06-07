@@ -3,6 +3,53 @@
 @{ ViewData["Title"] = Model.Order?.OrderNumber ?? "Sales order"; ViewData["BackNav"] = new BackNavModel(); }
 <h1 class="h3 mb-1">@Model.Order?.OrderNumber</h1>
 <p class="text-muted">@Model.Order?.Status</p>
+@if (Model.LineJobs.Any(j => j.JobId is not null))
+{
+    <div class="card mb-3">
+        <div class="card-header py-2">Production jobs</div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th style="width: 3rem;">#</th>
+                        <th>Product</th>
+                        <th>Job</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var lineJob in Model.LineJobs)
+                    {
+                        <tr>
+                            <td>@lineJob.LineNumber</td>
+                            <td>@lineJob.ProductLabel</td>
+                            <td>
+                                @if (lineJob.JobId is not null)
+                                {
+                                    <a asp-page="/Jobs/Detail" asp-route-id="@lineJob.JobId">@lineJob.JobNumber</a>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Not scheduled</span>
+                                }
+                            </td>
+                            <td>
+                                @if (lineJob.JobStatus is not null)
+                                {
+                                    <span class="badge text-bg-secondary">@lineJob.JobStatus</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
 @if (!ViewData.ModelState.IsValid)
 {
     <div asp-validation-summary="All" class="text-danger mb-3"></div>

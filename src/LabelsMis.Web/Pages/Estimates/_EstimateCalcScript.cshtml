@@ -213,7 +213,7 @@
             for (let col = 0; col < labelsAcross; col++) {
                 const x = labelsStartX + col * (labelAcross + gutterAcross);
                 const y = labelsStartY + row * (labelAround + gutterAround);
-                labels += `<rect x="${x}" y="${y}" width="${labelAcross}" height="${labelAround}" rx="${labelCornerRadius}" ry="${labelCornerRadius}" fill="rgba(249,115,22,0.35)" stroke="#ea580c" stroke-width="0.04"/>`;
+                labels += `<rect x="${x}" y="${y}" width="${labelAcross}" height="${labelAround}" rx="${labelCornerRadius}" ry="${labelCornerRadius}" fill="rgba(0,93,102,0.35)" stroke="#00474e" stroke-width="0.04"/>`;
                 if (labelsAcross * labelsAround <= 24) {
                     labels += `<text x="${x + labelAcross / 2}" y="${y + labelAround / 2}" text-anchor="middle" dominant-baseline="central" font-size="${Math.min(labelAcross, labelAround) * 0.24}" fill="#7c2d12" font-weight="700">${row * labelsAcross + col + 1}</text>`;
                 }
