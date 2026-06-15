@@ -12,7 +12,7 @@ internal static class IndigoClickCalculator
     public static ClickCostResult Calculate(
         EstimateRequest request,
         int impressions,
-        int framesPerImpression)
+        ImpositionResult imposition)
     {
         var warnings = new List<string>();
         var lineItems = new List<EstimateLineItem>();
@@ -22,7 +22,7 @@ internal static class IndigoClickCalculator
             return new ClickCostResult(0m, lineItems, warnings);
         }
 
-        var frameSlots = impressions * Math.Max(1, framesPerImpression);
+        var frameSlots = impressions * Math.Max(1, imposition.FramesPerImpression);
         var colorSeparations = IndigoInkSeparations.ColorSeparationsPerFrame(request.InkSet);
         var colorClicks = frameSlots * colorSeparations;
 
@@ -39,23 +39,62 @@ internal static class IndigoClickCalculator
 
         var totalClickCost = clickCost;
 
-        if (request.WhiteInkUsed)
-        {
-            var whiteClicks = frameSlots;
-            var whiteClickCost = EstimatingMath.RoundCurrency(
-                (whiteClicks / 1000m) * request.WhiteClickRatePer1000);
+        // Printed label area for ink-consumption costing (across the whole run, incl. waste).
+        var jobAreaSqIn = impressions
+            * imposition.LabelsPerImpression
+            * imposition.EffectiveLabelAcrossIn
+            * imposition.EffectiveLabelAroundIn;
 
-            lineItems.Add(new EstimateLineItem(
-                "Press click",
-                "White ink (1 separation × frame slots)",
-                whiteClicks,
-                "clicks",
-                EstimatingMath.RoundMoney(request.WhiteClickRatePer1000 / 1000m),
-                whiteClickCost));
-
-            totalClickCost += whiteClickCost;
-        }
+        totalClickCost += AddSpecialInk(request.WhiteInk, frameSlots, jobAreaSqIn, lineItems);
+        totalClickCost += AddSpecialInk(request.SilverInk, frameSlots, jobAreaSqIn, lineItems);
 
         return new ClickCostResult(totalClickCost, lineItems, warnings);
+    }
+
+    private static decimal AddSpecialInk(
+        SpecialInkSpec? spec,
+        int frameSlots,
+        decimal jobAreaSqIn,
+        List<EstimateLineItem> lineItems)
+    {
+        if (spec is null || spec.Hits <= 0)
+        {
+            return 0m;
+        }
+
+        var added = 0m;
+
+        // One click per hit, per frame slot.
+        var clicks = frameSlots * spec.Hits;
+        var clickCost = EstimatingMath.RoundCurrency((clicks / 1000m) * spec.ClickRatePer1000);
+        lineItems.Add(new EstimateLineItem(
+            "Press click",
+            $"{spec.Label} ({spec.Hits} hit{(spec.Hits == 1 ? "" : "s")} × {frameSlots} frame slots)",
+            clicks,
+            "clicks",
+            EstimatingMath.RoundMoney(spec.ClickRatePer1000 / 1000m),
+            clickCost));
+        added += clickCost;
+
+        // Ink consumption from the bottle, scaled by coverage and hits.
+        if (spec.BottleSizeMl > 0 && spec.BottleCost > 0 && spec.MlPer1000SqIn > 0)
+        {
+            var mlUsed = (jobAreaSqIn / 1000m) * spec.MlPer1000SqIn * spec.CoveragePct * spec.Hits;
+            var costPerMl = spec.BottleCost / spec.BottleSizeMl;
+            var inkCost = EstimatingMath.RoundCurrency(costPerMl * mlUsed);
+            if (inkCost > 0)
+            {
+                lineItems.Add(new EstimateLineItem(
+                    "Ink",
+                    $"{spec.Label} ink ({spec.CoveragePct * 100m:0.#}% coverage × {spec.Hits} hit{(spec.Hits == 1 ? "" : "s")})",
+                    EstimatingMath.RoundTwoDecimals(mlUsed),
+                    "mL",
+                    EstimatingMath.RoundMoney(costPerMl),
+                    inkCost));
+                added += inkCost;
+            }
+        }
+
+        return added;
     }
 }

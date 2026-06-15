@@ -4,6 +4,13 @@ namespace LabelsMis.Web.Pages.Production;
 
 public record ProductionStageLink(string Page, string Label, JobStatus Status);
 
+/// <summary>Minimal data the stage nav bar needs, so both the stage pages and the shipping workspace can render it.</summary>
+public interface IProductionStageNav
+{
+    JobStatus Stage { get; }
+    IReadOnlyDictionary<JobStatus, int> StageCounts { get; }
+}
+
 /// <summary>The ordered production stage pages, used to render the stage nav bar with counts.</summary>
 public static class ProductionStages
 {

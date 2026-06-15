@@ -25,7 +25,10 @@ public class EstimateLine : EntityBase
     public Guid SubstrateId { get; private set; }
     public Stock Substrate { get; private set; } = null!;
     public InkSet InkSet { get; private set; }
-    public bool WhiteInkUsed { get; private set; }
+    public int WhiteHits { get; private set; }
+    public int SilverHits { get; private set; }
+    public decimal WhiteCoveragePct { get; private set; } = 1m;
+    public decimal SilverCoveragePct { get; private set; } = 1m;
     public string FinishingOperationsJson { get; private set; } = "[]";
     public decimal SetupWasteImpressions { get; private set; }
     public decimal RunningWastePct { get; private set; }
@@ -50,7 +53,10 @@ public class EstimateLine : EntityBase
         decimal bleedIn,
         Guid substrateId,
         InkSet inkSet,
-        bool whiteInkUsed,
+        int whiteHits,
+        int silverHits,
+        decimal whiteCoveragePct,
+        decimal silverCoveragePct,
         string finishingOperationsJson,
         decimal setupWasteImpressions,
         decimal runningWastePct,
@@ -81,7 +87,10 @@ public class EstimateLine : EntityBase
             BleedIn = bleedIn,
             SubstrateId = substrateId,
             InkSet = inkSet,
-            WhiteInkUsed = whiteInkUsed,
+            WhiteHits = Math.Max(0, whiteHits),
+            SilverHits = Math.Max(0, silverHits),
+            WhiteCoveragePct = whiteCoveragePct <= 0 ? 1m : whiteCoveragePct,
+            SilverCoveragePct = silverCoveragePct <= 0 ? 1m : silverCoveragePct,
             FinishingOperationsJson = string.IsNullOrWhiteSpace(finishingOperationsJson) ? "[]" : finishingOperationsJson,
             SetupWasteImpressions = setupWasteImpressions,
             RunningWastePct = runningWastePct,
@@ -106,7 +115,10 @@ public class EstimateLine : EntityBase
         decimal bleedIn,
         Guid substrateId,
         InkSet inkSet,
-        bool whiteInkUsed,
+        int whiteHits,
+        int silverHits,
+        decimal whiteCoveragePct,
+        decimal silverCoveragePct,
         string finishingOperationsJson,
         decimal setupWasteImpressions,
         decimal runningWastePct,
@@ -134,7 +146,10 @@ public class EstimateLine : EntityBase
         BleedIn = bleedIn;
         SubstrateId = substrateId;
         InkSet = inkSet;
-        WhiteInkUsed = whiteInkUsed;
+        WhiteHits = Math.Max(0, whiteHits);
+        SilverHits = Math.Max(0, silverHits);
+        WhiteCoveragePct = whiteCoveragePct <= 0 ? 1m : whiteCoveragePct;
+        SilverCoveragePct = silverCoveragePct <= 0 ? 1m : silverCoveragePct;
         FinishingOperationsJson = string.IsNullOrWhiteSpace(finishingOperationsJson) ? "[]" : finishingOperationsJson;
         SetupWasteImpressions = setupWasteImpressions;
         RunningWastePct = runningWastePct;

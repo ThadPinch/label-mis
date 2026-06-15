@@ -14,12 +14,20 @@ public class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
         builder.Property(s => s.ShipmentNumber).HasMaxLength(20).IsRequired();
         builder.Property(s => s.ShipDate).IsRequired();
         builder.Property(s => s.Carrier).IsRequired();
-        builder.Property(s => s.ServiceLevel).IsRequired();
         builder.Property(s => s.Status).IsRequired();
         builder.Property(s => s.TotalDeclaredValue).HasMoneyPrecision();
         builder.Property(s => s.BillingType).IsRequired();
         builder.Property(s => s.BillingAccountNumber).HasMaxLength(50);
         builder.Property(s => s.TotalShippingCost).HasMoneyPrecision();
+
+        builder.Property(s => s.ShipFromName).HasMaxLength(200);
+        builder.Property(s => s.ShipFromStreet1).HasMaxLength(200);
+        builder.Property(s => s.ShipFromStreet2).HasMaxLength(200);
+        builder.Property(s => s.ShipFromCity).HasMaxLength(100);
+        builder.Property(s => s.ShipFromState).HasMaxLength(50);
+        builder.Property(s => s.ShipFromZip).HasMaxLength(20);
+        builder.Property(s => s.ShipFromCountry).HasMaxLength(2);
+        builder.Ignore(s => s.ShipFromSnapshot);
 
         builder.HasIndex(s => s.ShipmentNumber).IsUnique();
         builder.HasIndex(s => s.Status);

@@ -25,7 +25,7 @@ public record RollSpecInput(
     string? CaseLabelFormat);
 
 public record ProductFormInput(
-    Guid PrimaryCustomerId,
+    Guid? PrimaryCustomerId,
     IReadOnlyList<Guid> CustomerIds,
     string? CustomerSku,
     string Description,
@@ -99,7 +99,7 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
         query = sort switch
         {
             "sku" => query.OrderBy(p => p.InternalSku),
-            "customer" => query.OrderBy(p => p.PrimaryCustomer.Name).ThenBy(p => p.InternalSku),
+            "customer" => query.OrderBy(p => p.PrimaryCustomer != null ? p.PrimaryCustomer.Name : "").ThenBy(p => p.InternalSku),
             _ => query.OrderBy(p => p.InternalSku)
         };
 
@@ -202,17 +202,35 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
         CancellationToken cancellationToken = default) =>
         await ListPickerAsync(query => query, cancellationToken);
 
+    public async Task<IReadOnlyList<ProductPickerItem>> ListPickerHouseAsync(
+        CancellationToken cancellationToken = default) =>
+        await ListPickerAsync(
+            query => query.Where(p => p.PrimaryCustomerId == null && !p.CustomerAssignments.Any()),
+            cancellationToken);
+
     public async Task<Product> CreateAsync(ProductFormInput input, CancellationToken cancellationToken = default)
     {
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
-        var customer = await db.Customers.AsNoTracking()
-            .SingleAsync(c => c.Id == input.PrimaryCustomerId, cancellationToken);
 
-        var internalSku = await NextInternalSkuAsync(input.PrimaryCustomerId, customer.Code, cancellationToken);
+        var primaryCustomerId = input.PrimaryCustomerId is { } pid && pid != Guid.Empty ? pid : (Guid?)null;
+        string skuPrefix;
+        if (primaryCustomerId is { } cid)
+        {
+            var customer = await db.Customers.AsNoTracking()
+                .SingleAsync(c => c.Id == cid, cancellationToken);
+            skuPrefix = customer.Code;
+        }
+        else
+        {
+            // Stock product with no customer affiliation.
+            skuPrefix = "STK";
+        }
+
+        var internalSku = await NextInternalSkuAsync(primaryCustomerId, skuPrefix, cancellationToken);
         var product = Product.Create(
             Guid.NewGuid(),
-            input.PrimaryCustomerId,
+            primaryCustomerId,
             input.CustomerIds,
             internalSku,
             input.CustomerSku,
@@ -380,7 +398,7 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
 
     private void SyncCustomerAssignments(
         Product product,
-        Guid primaryCustomerId,
+        Guid? primaryCustomerId,
         IReadOnlyList<Guid> customerIds,
         Guid userId,
         DateTime now)
@@ -396,11 +414,13 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
             .OrderBy(name => name));
 
     private async Task<string> NextInternalSkuAsync(
-        Guid customerId,
+        Guid? customerId,
         string customerCode,
         CancellationToken cancellationToken)
     {
-        var count = await db.Products.CountAsync(p => p.PrimaryCustomerId == customerId, cancellationToken);
+        var count = customerId is { } cid
+            ? await db.Products.CountAsync(p => p.PrimaryCustomerId == cid, cancellationToken)
+            : await db.Products.CountAsync(p => p.PrimaryCustomerId == null, cancellationToken);
         return $"{customerCode.Trim().ToUpperInvariant()}-{(count + 1):D4}";
     }
 

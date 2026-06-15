@@ -1,0 +1,175 @@
+@model LabelsMis.Web.Services.PurchaseOrders.PurchaseOrderFormInput
+@{
+    var stockOptions = (IEnumerable<LabelsMis.Web.Pages.PurchaseOrders.StockOptionView>)ViewData["StockOptions"]!;
+    var stockTypes = Enum.GetNames<LabelsMis.Domain.Enums.StockType>();
+
+    async Task RenderStockOptions(Guid? selectedId)
+    {
+        foreach (var s in stockOptions)
+        {
+            <option value="@s.Id"
+                    data-supplier-id="@s.SupplierId"
+                    data-stock-type="@s.Type"
+                    data-reorder-qty="@s.ReorderQty.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                    data-cost-per-msi="@s.CostPerMsi.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                    data-width-in="@s.WidthIn.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                    selected="@(selectedId == s.Id)">@s.Label</option>
+        }
+    }
+
+    async Task RenderLineRow(string idx, Guid? lineId, Guid? stockId, decimal qty)
+    {
+        <div class="row g-2 mb-2 align-items-end po-line">
+            <input type="hidden" name="Input.Lines[@idx].Id" value="@(lineId)" />
+            <div class="col-md-1 col-3">
+                <label class="form-label line-number">Line</label>
+            </div>
+            <div class="col-md-2 col-9">
+                <label class="form-label">Stock type</label>
+                <select class="form-select stock-type-filter">
+                    <option value="">All types</option>
+                    @foreach (var t in stockTypes)
+                    {
+                        <option value="@t">@t</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Stock</label>
+                <select name="Input.Lines[@idx].StockId" class="form-select stock-select">
+                    @{ await RenderStockOptions(stockId); }
+                </select>
+            </div>
+            <div class="col-md-2 col-6">
+                <label class="form-label">Quantity (LF)</label>
+                <div class="form-text reorder-note"></div>
+                <input name="Input.Lines[@idx].QuantityLf" value="@(qty > 0 ? qty.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")" class="form-control qty-input" />
+            </div>
+            <div class="col-md-2 col-6">
+                <label class="form-label">Unit cost <span class="text-muted">(from stock)</span></label>
+                <div class="form-text line-total"></div>
+                <input class="form-control unit-cost-display bg-light" readonly tabindex="-1" />
+            </div>
+            <div class="col-md-1 col-12">
+                <button type="button" class="btn btn-outline-danger remove-line w-100" aria-label="Remove line">Remove</button>
+            </div>
+        </div>
+    }
+}
+
+<h2 class="h6">Lines</h2>
+<div id="po-lines">
+    @for (var i = 0; i < Model.Lines.Count; i++)
+    {
+        var line = Model.Lines[i];
+        await RenderLineRow(i.ToString(), line.Id, line.StockId == Guid.Empty ? null : line.StockId, line.QuantityLf);
+    }
+</div>
+<button type="button" id="add-line" class="btn btn-outline-secondary btn-sm mb-3">+ Add line</button>
+
+<template id="po-line-template">
+    @{ await RenderLineRow("__INDEX__", null, null, 0); }
+</template>
+
+<script>
+    (() => {
+        const supplierEl = document.getElementById('po-supplier') || document.getElementById('po-supplier-id');
+        const container = document.getElementById('po-lines');
+        const template = document.getElementById('po-line-template');
+        const addBtn = document.getElementById('add-line');
+        if (!container || !template) return;
+
+        const money = (n, decimals) => n.toLocaleString(undefined, {
+            style: 'currency', currency: 'USD', minimumFractionDigits: decimals, maximumFractionDigits: decimals
+        });
+
+        const reindex = () => {
+            container.querySelectorAll('.po-line').forEach((row, idx) => {
+                row.querySelectorAll('[name^="Input.Lines["]').forEach(el => {
+                    el.name = el.name.replace(/Input\.Lines\[\d+\]/, `Input.Lines[${idx}]`);
+                });
+                const label = row.querySelector('.line-number');
+                if (label) label.textContent = `Line ${idx + 1}`;
+            });
+        };
+
+        // Cost per LF derives from the stock's cost-per-MSI and roll width:
+        // one LF covers 12" × width in², so cost/LF = costPerMsi × (12 × width) / 1000.
+        const refreshRow = (row) => {
+            const select = row.querySelector('.stock-select');
+            const opt = select?.selectedOptions[0];
+            const note = row.querySelector('.reorder-note');
+            if (note) {
+                const reorder = opt ? parseFloat(opt.dataset.reorderQty) : NaN;
+                note.textContent = Number.isFinite(reorder) && reorder > 0
+                    ? `Re-Order Quantity: ${reorder.toLocaleString()} LF`
+                    : '';
+            }
+
+            const costPerMsi = opt ? parseFloat(opt.dataset.costPerMsi) : NaN;
+            const width = opt ? parseFloat(opt.dataset.widthIn) : NaN;
+            const unitCost = (Number.isFinite(costPerMsi) && Number.isFinite(width))
+                ? costPerMsi * 12 * width / 1000
+                : 0;
+            const qty = parseFloat(row.querySelector('.qty-input')?.value) || 0;
+
+            const costEl = row.querySelector('.unit-cost-display');
+            if (costEl) costEl.value = money(unitCost, 4) + ' / LF';
+            const totalEl = row.querySelector('.line-total');
+            if (totalEl) totalEl.textContent = qty > 0 ? `Line total: ${money(unitCost * qty, 2)}` : '';
+        };
+
+        const filterRow = (row) => {
+            const select = row.querySelector('.stock-select');
+            const typeFilter = row.querySelector('.stock-type-filter');
+            if (!select) return;
+            const supplierId = supplierEl ? supplierEl.value : '';
+            const type = typeFilter ? typeFilter.value : '';
+            let firstVisible = null;
+            [...select.options].forEach(opt => {
+                if (!opt.value) return;
+                const match = (!supplierId || opt.dataset.supplierId === supplierId)
+                    && (!type || opt.dataset.stockType === type);
+                opt.hidden = !match;
+                opt.disabled = !match;
+                if (match && firstVisible === null) firstVisible = opt;
+            });
+            if ((!select.selectedOptions[0] || select.selectedOptions[0].hidden) && firstVisible) {
+                select.value = firstVisible.value;
+            }
+            refreshRow(row);
+        };
+
+        const wireRow = (row) => {
+            row.querySelector('.stock-type-filter')?.addEventListener('change', () => filterRow(row));
+            row.querySelector('.stock-select')?.addEventListener('change', () => refreshRow(row));
+            row.querySelector('.qty-input')?.addEventListener('input', () => refreshRow(row));
+            row.querySelector('.remove-line')?.addEventListener('click', () => {
+                if (container.querySelectorAll('.po-line').length <= 1) return;
+                row.remove();
+                reindex();
+            });
+            filterRow(row);
+        };
+
+        container.querySelectorAll('.po-line').forEach(wireRow);
+        reindex();
+
+        if (supplierEl && supplierEl.tagName === 'SELECT') {
+            supplierEl.addEventListener('change', () => {
+                container.querySelectorAll('.po-line').forEach(filterRow);
+            });
+        }
+
+        addBtn?.addEventListener('click', () => {
+            const idx = container.querySelectorAll('.po-line').length;
+            const html = template.innerHTML.replace(/__INDEX__/g, String(idx));
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = html.trim();
+            const row = wrapper.firstElementChild;
+            container.appendChild(row);
+            wireRow(row);
+            reindex();
+        });
+    })();
+</script>

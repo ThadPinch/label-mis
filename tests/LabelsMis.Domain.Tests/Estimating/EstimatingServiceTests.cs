@@ -97,7 +97,7 @@ public class EstimatingServiceTests
 
         result.Errors.Should().BeEmpty();
         result.QuantityBreaks[0].CostBreakdown.Should().Contain(item =>
-            item.Description.Contains("White ink", StringComparison.Ordinal) && item.LineCost == 17.53m);
+            item.Description.Contains("White", StringComparison.Ordinal) && item.LineCost == 17.53m);
     }
 
     [Fact]
@@ -350,8 +350,8 @@ public class EstimatingServiceTests
             PressClickBased: true,
             InkSet: IndigoInkSet.CMYK,
             ClickRatePer1000: 35m,
-            WhiteInkUsed: false,
-            WhiteClickRatePer1000: 0m,
+            WhiteInk: null,
+            SilverInk: null,
             StockId: EstimatingTestData.BoppStockId,
             StockWidthIn: 4.5m,
             StockCostPerMsi: 0.85m,

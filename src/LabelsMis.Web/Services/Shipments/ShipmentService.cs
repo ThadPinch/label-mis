@@ -1,6 +1,7 @@
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Fedex;
+using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Services.Models;
 using Microsoft.EntityFrameworkCore;
@@ -41,6 +42,53 @@ public record ShipmentDetail(
     Shipment Shipment,
     string CustomerName,
     string? LatestTrackingStatus);
+
+public record ReadyToShipOrder(
+    Guid SalesOrderId,
+    string OrderNumber,
+    string CustomerName,
+    string? CustomerPoNumber,
+    DateOnly? RequestedShipDate,
+    int ReadyItemCount,
+    int TotalItemCount);
+
+public record ManualShipmentAddress(Guid Id, string Label);
+
+public record ManualShipmentLineView(
+    Guid SalesOrderLineId,
+    int LineNumber,
+    string ProductDescription,
+    int QuantityOrdered,
+    int QuantityShipped,
+    int QuantityRemaining,
+    Guid? JobId,
+    bool IsReady);
+
+public record ManualShipmentOrderView(
+    Guid SalesOrderId,
+    string OrderNumber,
+    string CustomerName,
+    Guid? DefaultShipToAddressId,
+    IReadOnlyList<ManualShipmentAddress> ShipToAddresses,
+    IReadOnlyList<ManualShipmentLineView> Lines);
+
+public record ManualShipmentLineInput(Guid SalesOrderLineId, Guid? JobId, int QuantityShipped);
+
+public record ManualPackageInput(
+    decimal WeightLb,
+    decimal LengthIn,
+    decimal WidthIn,
+    decimal HeightIn,
+    decimal DeclaredValue,
+    string TrackingNumber,
+    decimal ShippingCost);
+
+public record ManualShipmentInput(
+    DateOnly ShipDate,
+    Carrier Carrier,
+    Guid ShipToAddressId,
+    IReadOnlyList<ManualShipmentLineInput> Lines,
+    IReadOnlyList<ManualPackageInput> Packages);
 
 public class ShipmentService(
     LabelsMisDbContext db,
@@ -154,6 +202,196 @@ public class ShipmentService(
             .Include(o => o.Lines).ThenInclude(l => l.Product)
             .SingleOrDefaultAsync(o => o.Id == salesOrderId, cancellationToken);
 
+    /// <summary>Sales orders that have at least one job sitting at the Rewound (ready-to-ship) stage.</summary>
+    public async Task<PagedResult<ReadyToShipOrder>> GetReadyToShipAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 5, 100);
+
+        var query = db.SalesOrders.AsNoTracking()
+            .Where(o => db.Jobs.Any(j => j.Status == JobStatus.Rewound && j.SalesOrderLine.SalesOrderId == o.Id));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToUpperInvariant();
+            query = query.Where(o =>
+                o.OrderNumber.ToUpper().Contains(term)
+                || o.Customer.Name.ToUpper().Contains(term));
+        }
+
+        query = query.OrderBy(o => o.RequestedShipDate ?? DateOnly.MaxValue).ThenBy(o => o.OrderNumber);
+
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(o => new ReadyToShipOrder(
+                o.Id,
+                o.OrderNumber,
+                o.Customer.Name,
+                o.CustomerPoNumber,
+                o.RequestedShipDate,
+                o.Lines.Count(l => db.Jobs.Any(j => j.Status == JobStatus.Rewound && j.SalesOrderLineId == l.Id)),
+                o.Lines.Count))
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<ReadyToShipOrder>(items, page, pageSize, total);
+    }
+
+    /// <summary>Loads an order with per-line ship readiness for the manual "record shipment" form.</summary>
+    public async Task<ManualShipmentOrderView?> GetOrderForManualShipmentAsync(
+        Guid salesOrderId,
+        CancellationToken cancellationToken = default)
+    {
+        var order = await db.SalesOrders.AsNoTracking()
+            .Include(o => o.Customer).ThenInclude(c => c.Addresses)
+            .Include(o => o.Lines).ThenInclude(l => l.Product)
+            .SingleOrDefaultAsync(o => o.Id == salesOrderId, cancellationToken);
+
+        if (order is null)
+        {
+            return null;
+        }
+
+        var lineIds = order.Lines.Select(l => l.Id).ToList();
+
+        var jobs = await db.Jobs.AsNoTracking()
+            .Where(j => lineIds.Contains(j.SalesOrderLineId))
+            .Select(j => new { j.Id, j.SalesOrderLineId, j.Status })
+            .ToListAsync(cancellationToken);
+
+        var shipped = await db.ShipmentLines.AsNoTracking()
+            .Where(l => lineIds.Contains(l.SalesOrderLineId) && l.Shipment.Status != ShipmentStatus.Pending)
+            .GroupBy(l => l.SalesOrderLineId)
+            .Select(g => new { Id = g.Key, Qty = g.Sum(x => x.QuantityShipped) })
+            .ToDictionaryAsync(x => x.Id, x => x.Qty, cancellationToken);
+
+        var lineViews = order.Lines.OrderBy(l => l.LineNumber).Select(l =>
+        {
+            var job = jobs.Where(j => j.SalesOrderLineId == l.Id)
+                .OrderByDescending(j => j.Status)
+                .FirstOrDefault();
+            var shippedQty = shipped.GetValueOrDefault(l.Id);
+            var remaining = Math.Max(0, l.Quantity - shippedQty);
+            var ready = job is not null && job.Status == JobStatus.Rewound && remaining > 0;
+            return new ManualShipmentLineView(
+                l.Id, l.LineNumber, l.Product.Description, l.Quantity, shippedQty, remaining, job?.Id, ready);
+        }).ToList();
+
+        var shippingAddresses = order.Customer.Addresses
+            .Where(a => a.AddressType == AddressType.Shipping)
+            .OrderByDescending(a => a.IsDefault)
+            .ToList();
+
+        return new ManualShipmentOrderView(
+            order.Id,
+            order.OrderNumber,
+            order.Customer.Name,
+            shippingAddresses.FirstOrDefault()?.Id,
+            shippingAddresses.Select(a => new ManualShipmentAddress(a.Id, $"{a.Street1}, {a.City}, {a.State} {a.Zip}")).ToList(),
+            lineViews);
+    }
+
+    /// <summary>
+    /// Records a shipment with manually entered tracking numbers, marks it in transit immediately,
+    /// advances the shipped jobs to Shipped, and rolls up the sales-order status.
+    /// </summary>
+    public async Task<Shipment> CreateManualShipmentAsync(
+        Guid salesOrderId,
+        ManualShipmentInput input,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+
+        var shipLines = input.Lines.Where(l => l.QuantityShipped > 0).ToList();
+        if (shipLines.Count == 0)
+        {
+            throw new InvalidOperationException("Select at least one item to ship.");
+        }
+
+        if (input.Packages.Count == 0)
+        {
+            throw new InvalidOperationException("At least one package is required.");
+        }
+
+        if (input.Packages.Any(p => string.IsNullOrWhiteSpace(p.TrackingNumber)))
+        {
+            throw new InvalidOperationException("Each package needs a tracking number.");
+        }
+
+        var shipFrom = await GetCompanyShipFromAsync(cancellationToken);
+
+        var shipmentNumber = await documentNumbers.NextShipmentNumberAsync(cancellationToken);
+        var declaredValue = input.Packages.Sum(p => p.DeclaredValue);
+        var totalCost = input.Packages.Sum(p => p.ShippingCost);
+
+        var shipment = Shipment.CreatePending(
+            Guid.NewGuid(),
+            shipmentNumber,
+            salesOrderId,
+            input.ShipDate,
+            input.Carrier,
+            null,
+            null,
+            shipFrom,
+            input.ShipToAddressId,
+            declaredValue,
+            BillingType.Sender,
+            null,
+            userId,
+            now);
+
+        var packages = input.Packages.Select((pkg, index) =>
+        {
+            var package = ShipmentPackage.Create(
+                Guid.NewGuid(), shipment.Id, index + 1,
+                pkg.WeightLb, pkg.LengthIn, pkg.WidthIn, pkg.HeightIn, pkg.DeclaredValue,
+                userId, now);
+            package.SetManualTracking(pkg.TrackingNumber, pkg.ShippingCost, userId, now);
+            return package;
+        }).ToList();
+
+        shipment.ReplacePackages(packages);
+        foreach (var package in packages)
+        {
+            db.ShipmentPackages.Add(package);
+        }
+
+        foreach (var line in shipLines)
+        {
+            var shipmentLine = ShipmentLine.Create(
+                Guid.NewGuid(), shipment.Id, line.SalesOrderLineId, line.JobId, line.QuantityShipped, userId, now);
+            shipment.AddLine(shipmentLine);
+            db.ShipmentLines.Add(shipmentLine);
+        }
+
+        shipment.MarkInTransit(totalCost, userId, now);
+        db.Shipments.Add(shipment);
+
+        var jobIds = shipLines.Where(l => l.JobId.HasValue).Select(l => l.JobId!.Value).Distinct().ToList();
+        if (jobIds.Count > 0)
+        {
+            var jobs = await db.Jobs.Where(j => jobIds.Contains(j.Id)).ToListAsync(cancellationToken);
+            foreach (var job in jobs.Where(j => j.Status < JobStatus.Shipped))
+            {
+                job.AdvanceStatus(JobStatus.Shipped, userId, now);
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        // Roll up the order status after the lines are persisted, so the query sees this shipment.
+        await UpdateSalesOrderStatusAsync(salesOrderId, userId, now, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return shipment;
+    }
+
     public async Task<Shipment> CreateAsync(
         Guid salesOrderId,
         CreateShipmentInput input,
@@ -188,6 +426,7 @@ public class ShipmentService(
             Carrier.Fedex,
             input.ServiceLevel,
             shipFrom.Id,
+            new ShippingAddress(null, shipFrom.Street1, shipFrom.Street2, shipFrom.City, shipFrom.State, shipFrom.Zip, shipFrom.Country),
             input.ShipToAddressId,
             declaredValue,
             input.BillingType,
@@ -327,8 +566,10 @@ public class ShipmentService(
     private static FedexRateRequest BuildRateRequest(Shipment shipment, ShipmentPackage? package = null)
     {
         package ??= shipment.Packages.OrderBy(p => p.PackageNumber).First();
+        var shipFrom = shipment.ShipFromAddress
+            ?? throw new InvalidOperationException("Carrier rating requires a ship-from address on file.");
         return new FedexRateRequest(
-            ToFedexAddress(shipment.ShipFromAddress),
+            ToFedexAddress(shipFrom),
             ToFedexAddress(shipment.ShipToAddress),
             package.WeightLb,
             package.LengthIn,
@@ -354,6 +595,20 @@ public class ShipmentService(
         FedexServiceLevel.FedexOvernight => "FEDEX_OVERNIGHT",
         _ => "FEDEX_GROUND"
     };
+
+    /// <summary>Builds the ship-from snapshot from the company address in General Settings.</summary>
+    private async Task<ShippingAddress> GetCompanyShipFromAsync(CancellationToken cancellationToken)
+    {
+        var settings = await db.GeneralSettings.AsNoTracking().FirstOrDefaultAsync(cancellationToken);
+        return new ShippingAddress(
+            settings?.CompanyName,
+            settings?.AddressLine1,
+            settings?.AddressLine2,
+            settings?.City,
+            settings?.State,
+            settings?.Zip,
+            "US");
+    }
 
     private Guid RequireUserId() =>
         currentUser.UserId ?? throw new InvalidOperationException("User is not authenticated.");

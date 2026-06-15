@@ -17,7 +17,14 @@ public record InvoiceListItem(
     DateOnly DueDate,
     decimal Total,
     decimal BalanceDue,
-    DateTime? QbExportedAt);
+    DateTime? QbExportedAt,
+    int ShippedLines,
+    int TotalLines,
+    Guid SalesOrderId,
+    string OrderNumber)
+{
+    public bool IsFullyShipped => TotalLines > 0 && ShippedLines >= TotalLines;
+}
 
 public record PaymentInput(
     DateOnly PaymentDate,
@@ -29,6 +36,8 @@ public record PaymentInput(
 public record InvoiceDetail(
     Invoice Invoice,
     string CustomerName,
+    Guid SalesOrderId,
+    string OrderNumber,
     IReadOnlyList<Payment> Payments);
 
 public record ArAgingRow(
@@ -130,20 +139,62 @@ public class InvoiceService(
         };
 
         var total = await query.CountAsync(cancellationToken);
-        var items = await query
+        var rows = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(i => new InvoiceListItem(
+            .Select(i => new
+            {
                 i.Id,
                 i.InvoiceNumber,
-                i.Customer.Name,
+                CustomerName = i.Customer.Name,
                 i.Status,
                 i.InvoiceDate,
                 i.DueDate,
                 i.Total,
                 i.BalanceDue,
-                i.QbExportedAt))
+                i.QbExportedAt,
+                i.SalesOrderId,
+                OrderNumber = i.SalesOrder.OrderNumber
+            })
             .ToListAsync(cancellationToken);
+
+        var orderIds = rows.Select(r => r.SalesOrderId).Distinct().ToList();
+        var lineProgress = await db.SalesOrderLines.AsNoTracking()
+            .Where(l => orderIds.Contains(l.SalesOrderId))
+            .Select(l => new
+            {
+                l.SalesOrderId,
+                l.Quantity,
+                Shipped = db.ShipmentLines
+                    .Where(sl => sl.SalesOrderLineId == l.Id && sl.Shipment.Status != ShipmentStatus.Pending)
+                    .Sum(sl => (int?)sl.QuantityShipped) ?? 0
+            })
+            .ToListAsync(cancellationToken);
+
+        var progressByOrder = lineProgress
+            .GroupBy(l => l.SalesOrderId)
+            .ToDictionary(
+                g => g.Key,
+                g => (Shipped: g.Count(x => x.Shipped >= x.Quantity), Total: g.Count()));
+
+        var items = rows.Select(r =>
+        {
+            var progress = progressByOrder.GetValueOrDefault(r.SalesOrderId);
+            return new InvoiceListItem(
+                r.Id,
+                r.InvoiceNumber,
+                r.CustomerName,
+                r.Status,
+                r.InvoiceDate,
+                r.DueDate,
+                r.Total,
+                r.BalanceDue,
+                r.QbExportedAt,
+                progress.Shipped,
+                progress.Total,
+                r.SalesOrderId,
+                r.OrderNumber);
+        }).ToList();
 
         return new PagedResult<InvoiceListItem>(items, page, pageSize, total);
     }
@@ -152,11 +203,89 @@ public class InvoiceService(
     {
         var invoice = await db.Invoices
             .Include(i => i.Customer)
+            .Include(i => i.SalesOrder)
             .Include(i => i.Lines)
             .Include(i => i.Payments)
             .SingleOrDefaultAsync(i => i.Id == id, cancellationToken);
 
-        return invoice is null ? null : new InvoiceDetail(invoice, invoice.Customer.Name, invoice.Payments.ToList());
+        return invoice is null
+            ? null
+            : new InvoiceDetail(
+                invoice,
+                invoice.Customer.Name,
+                invoice.SalesOrderId,
+                invoice.SalesOrder.OrderNumber,
+                invoice.Payments.ToList());
+    }
+
+    /// <summary>
+    /// Generates a draft invoice for the full sales order. Called automatically when a sales order
+    /// is created. Idempotent: returns the existing invoice if one already exists.
+    /// </summary>
+    public async Task<Invoice> CreateFromSalesOrderAsync(Guid salesOrderId, CancellationToken cancellationToken = default)
+    {
+        var existing = await db.Invoices
+            .Where(i => i.SalesOrderId == salesOrderId && i.Status != InvoiceStatus.Void)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var today = DateOnly.FromDateTime(now);
+
+        var order = await db.SalesOrders
+            .Include(o => o.Customer)
+            .Include(o => o.Lines).ThenInclude(l => l.Product)
+            .SingleAsync(o => o.Id == salesOrderId, cancellationToken);
+
+        var invoiceNumber = await documentNumbers.NextInvoiceNumberAsync(cancellationToken);
+        var dueDate = today.AddDays((int)order.Customer.Terms);
+        var subtotal = order.Lines.Sum(l => l.Quantity * l.UnitPrice);
+        var taxAmount = order.Customer.TaxExempt
+            ? 0m
+            : Math.Round(subtotal * options.Value.DefaultTaxRate, 4, MidpointRounding.AwayFromZero);
+        var shippingAmount = order.ShippingCost;
+
+        var invoice = Invoice.CreateDraft(
+            Guid.NewGuid(),
+            invoiceNumber,
+            order.CustomerId,
+            order.Id,
+            null,
+            today,
+            dueDate,
+            subtotal,
+            taxAmount,
+            shippingAmount,
+            null,
+            userId,
+            now);
+
+        var lineNumber = 1;
+        foreach (var orderLine in order.Lines.OrderBy(l => l.LineNumber))
+        {
+            var line = InvoiceLine.Create(
+                Guid.NewGuid(),
+                invoice.Id,
+                lineNumber++,
+                orderLine.Id,
+                null,
+                orderLine.Product.Description,
+                orderLine.Quantity,
+                orderLine.UnitPrice,
+                order.Customer.TaxExempt ? "NON" : "TAX",
+                userId,
+                now);
+            invoice.AddLine(line);
+            db.InvoiceLines.Add(line);
+        }
+
+        db.Invoices.Add(invoice);
+        await db.SaveChangesAsync(cancellationToken);
+        return invoice;
     }
 
     public async Task<Invoice> CreateFromShipmentAsync(Guid shipmentId, CancellationToken cancellationToken = default)
@@ -176,8 +305,16 @@ public class InvoiceService(
             throw new InvalidOperationException("Invoice can only be generated for shipped orders.");
         }
 
+        var existing = await db.Invoices
+            .Where(i => i.SalesOrderId == shipment.SalesOrderId && i.Status != InvoiceStatus.Void)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
         var invoiceNumber = await documentNumbers.NextInvoiceNumberAsync(cancellationToken);
-        var dueDate = today.AddDays(ParseTermsDays(shipment.SalesOrder.Customer.Terms));
+        var dueDate = today.AddDays((int)shipment.SalesOrder.Customer.Terms);
         var subtotal = shipment.Lines.Sum(l => l.QuantityShipped * l.SalesOrderLine.UnitPrice);
         var taxAmount = shipment.SalesOrder.Customer.TaxExempt
             ? 0m
@@ -343,12 +480,6 @@ public class InvoiceService(
 
     private static int GetAgeDays(DateOnly invoiceDate, DateOnly asOf) =>
         asOf.DayNumber - invoiceDate.DayNumber;
-
-    private static int ParseTermsDays(string terms)
-    {
-        var digits = new string(terms.Where(char.IsDigit).ToArray());
-        return int.TryParse(digits, out var days) && days > 0 ? days : 30;
-    }
 
     private static string Csv(string? value)
     {

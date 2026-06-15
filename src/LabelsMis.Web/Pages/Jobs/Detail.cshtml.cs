@@ -220,9 +220,25 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
         Detail = await jobService.GetDetailAsync(Id, cancellationToken);
         if (Detail is null) return;
 
+        var finishingEquipmentIds = Detail.Operations
+            .Where(o => o.Operation.OperationType == JobOperationType.Finishing && o.Operation.EquipmentId.HasValue)
+            .Select(o => o.Operation.EquipmentId!.Value)
+            .Distinct()
+            .ToList();
+        var laminationOpIds = finishingEquipmentIds.Count == 0
+            ? new HashSet<Guid>()
+            : (await db.FinishingOperations.AsNoTracking()
+                .Where(f => finishingEquipmentIds.Contains(f.Id) && f.OperationType == FinishingOperationType.Laminate)
+                .Select(f => f.Id)
+                .ToListAsync(cancellationToken)).ToHashSet();
+
         FinishingTasks = Detail.Operations
             .Where(o => o.Operation.OperationType == JobOperationType.Finishing)
-            .Select(o => new FinishingTaskView(o.Operation.Id, o.TypeLabel, o.Operation.Status))
+            .Select(o => new FinishingTaskView(
+                o.Operation.Id,
+                o.TypeLabel,
+                o.Operation.Status,
+                o.Operation.EquipmentId is Guid eid && laminationOpIds.Contains(eid)))
             .ToList();
 
         if (CanOperate)

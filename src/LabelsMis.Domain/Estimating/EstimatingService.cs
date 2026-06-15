@@ -53,7 +53,7 @@ public class EstimatingService
         var clickResult = IndigoClickCalculator.Calculate(
             request,
             impressions,
-            imposition.FramesPerImpression);
+            imposition);
         var substrateResult = SubstrateCalculator.Calculate(
             request,
             impressions,

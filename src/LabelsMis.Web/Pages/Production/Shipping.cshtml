@@ -1,4 +1,58 @@
 @page "/production/shipping"
 @model LabelsMis.Web.Pages.Production.ShippingModel
-@{ ViewData["Title"] = Model.StageTitle; }
-<partial name="_ProductionStageTable" model="Model" />
+@{ ViewData["Title"] = "Shipping"; }
+
+<partial name="_ProductionStageNav" model="Model" />
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Shipping</h1>
+    <a asp-page="/Shipments/Index" class="btn btn-outline-secondary btn-sm">All shipments</a>
+</div>
+
+<p class="text-muted">Orders with items finished and ready to ship. Record a shipment to capture packages and tracking.</p>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-4"><input asp-for="Search" class="form-control" placeholder="Search order or customer" /></div>
+    <div class="col-md-2"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
+</form>
+
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="alert alert-light border">Nothing is ready to ship right now.</div>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr><th>Order #</th><th>Customer</th><th>Customer PO</th><th>Requested ship</th><th>Ready</th><th></th></tr>
+        </thead>
+        <tbody>
+        @foreach (var order in Model.Result.Items)
+        {
+            <tr>
+                <td>@order.OrderNumber</td>
+                <td>@order.CustomerName</td>
+                <td>@(order.CustomerPoNumber ?? "—")</td>
+                <td>@(order.RequestedShipDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                <td>
+                    <span class="badge @(order.ReadyItemCount == order.TotalItemCount ? "bg-success" : "bg-warning text-dark")">
+                        @order.ReadyItemCount of @order.TotalItemCount items
+                    </span>
+                </td>
+                <td class="text-end">
+                    @if (Model.CanShip)
+                    {
+                        <a asp-page="/Shipments/Record" asp-route-salesOrderId="@order.SalesOrderId" class="btn btn-sm btn-success">Record shipment</a>
+                    }
+                    <a asp-page="/SalesOrders/Edit" asp-route-id="@order.SalesOrderId" class="btn btn-sm btn-outline-primary">View order</a>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    @await Html.PartialAsync("Shared/_Pager", new PagerModel(
+        Model.Result.Page,
+        Model.Result.TotalPages,
+        Model.Result.TotalCount))
+}

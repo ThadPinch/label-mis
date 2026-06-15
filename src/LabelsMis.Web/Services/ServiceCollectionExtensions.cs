@@ -49,11 +49,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<JobService>();
         services.AddScoped<JobTicketPdfGenerator>();
         services.AddScoped<PurchaseOrderService>();
+        services.AddScoped<PurchaseOrderPdfGenerator>();
         services.AddScoped<RollService>();
         services.AddScoped<ShipmentService>();
         services.AddScoped<InvoiceService>();
         services.AddScoped<UserAdminService>();
         services.AddScoped<StorageSettingsService>();
+        services.AddScoped<EmailSettingsService>();
+        services.AddScoped<GeneralSettingsService>();
         services.AddScoped<ArtworkService>();
         services.AddHostedService<ShipmentTrackingPoller>();
         return services;

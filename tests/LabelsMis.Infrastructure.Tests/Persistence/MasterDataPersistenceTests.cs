@@ -56,7 +56,7 @@ public class MasterDataPersistenceTests : IAsyncLifetime
     {
         var id = Guid.NewGuid();
         var now = DateTime.UtcNow;
-        var customer = Customer.Create(id, "Acme Labels", "ACME", "Net 30", false, 0.45m,
+        var customer = Customer.Create(id, "Acme Labels", "ACME", PaymentTerms.Net30, false, 0.45m,
             CustomerStatus.Active, null, TestUserId, now);
         customer.AddAddress(Address.Create(Guid.NewGuid(), id, AddressType.Billing, "123 Main St", null,
             "Chicago", "IL", "60601", "US", true, TestUserId, now));
@@ -125,7 +125,7 @@ public class MasterDataPersistenceTests : IAsyncLifetime
     public async Task Ink_PersistsAndReadsBack()
     {
         var id = Guid.NewGuid();
-        var ink = Ink.Create(id, "CMYK-STD", "CMYK standard", InkSet.CMYK, 35m, false, TestUserId, DateTime.UtcNow);
+        var ink = Ink.Create(id, "CMYK-STD", "CMYK standard", InkSet.CMYK, 35m, false, false, 0m, 1500m, 0m, 1m, TestUserId, DateTime.UtcNow);
         _db.Inks.Add(ink);
         await _db.SaveChangesAsync();
 

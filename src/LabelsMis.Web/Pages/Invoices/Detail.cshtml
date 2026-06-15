@@ -8,6 +8,10 @@
 
 <h1 class="h3 mb-1">@Model.Detail.Invoice.InvoiceNumber</h1>
 <p class="text-muted">@Model.Detail.CustomerName — @Model.Detail.Invoice.Status</p>
+<p class="mb-3">
+    Sales order:
+    <a asp-page="/SalesOrders/Edit" asp-route-id="@Model.Detail.SalesOrderId">@Model.Detail.OrderNumber</a>
+</p>
 
 <div class="row mb-4">
     <div class="col-md-6">

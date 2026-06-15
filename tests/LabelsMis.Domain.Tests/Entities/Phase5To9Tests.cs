@@ -87,7 +87,8 @@ public class ShipmentTests
     {
         var shipment = Shipment.CreatePending(
             Guid.NewGuid(), "SHP-2026-00001", Guid.NewGuid(), DateOnly.FromDateTime(Now),
-            Carrier.Fedex, FedexServiceLevel.FedexGround, Guid.NewGuid(), Guid.NewGuid(),
+            Carrier.Fedex, FedexServiceLevel.FedexGround, Guid.NewGuid(),
+            LabelsMis.Domain.ValueObjects.ShippingAddress.Empty, Guid.NewGuid(),
             100m, BillingType.Sender, null, UserId, Now);
 
         var act = () => shipment.MarkInTransit(10m, UserId, Now);

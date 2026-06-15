@@ -21,8 +21,37 @@
         <input asp-for="ClickRatePer1000" class="form-control" />
         <span asp-validation-for="ClickRatePer1000" class="text-danger"></span>
     </div>
-    <div class="col-md-4 form-check align-self-end">
+    <div class="col-md-2 form-check align-self-end">
         <input asp-for="IsWhite" class="form-check-input" />
         <label asp-for="IsWhite" class="form-check-label"></label>
+    </div>
+    <div class="col-md-2 form-check align-self-end">
+        <input asp-for="IsSilver" class="form-check-input" />
+        <label asp-for="IsSilver" class="form-check-label"></label>
+    </div>
+    <div class="col-12"><hr /><h2 class="h6 mb-0">Bottle &amp; coverage</h2>
+        <p class="text-muted small mb-0">Used for white, silver, and PMS spot inks to cost ink consumption. Leave mL/in² at 0 to charge clicks only.</p>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="BottleCost" class="form-label"></label>
+        <div class="input-group"><span class="input-group-text">$</span><input asp-for="BottleCost" class="form-control" /></div>
+        <span asp-validation-for="BottleCost" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="BottleSizeMl" class="form-label"></label>
+        <input asp-for="BottleSizeMl" class="form-control" />
+        <div class="form-text">Colors typically 1500 mL, white 1800 mL.</div>
+        <span asp-validation-for="BottleSizeMl" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="MlPer1000SqIn" class="form-label"></label>
+        <input asp-for="MlPer1000SqIn" class="form-control" />
+        <div class="form-text">Ink laid down per 1000 in² at 100% coverage.</div>
+        <span asp-validation-for="MlPer1000SqIn" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="DefaultCoveragePct" class="form-label"></label>
+        <div class="input-group"><input asp-for="DefaultCoveragePct" class="form-control" /><span class="input-group-text">%</span></div>
+        <span asp-validation-for="DefaultCoveragePct" class="text-danger"></span>
     </div>
 </div>

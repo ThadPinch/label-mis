@@ -1,4 +1,5 @@
 using LabelsMis.Domain.Common;
+using LabelsMis.Domain.Enums;
 
 namespace LabelsMis.Domain.Entities;
 
@@ -22,6 +23,7 @@ public class Stock : MasterDataEntity
     public string? SupplierPartNumber { get; private set; }
     public decimal CostPerMsi { get; private set; }
     public decimal MinOrderQtyLf { get; private set; }
+    public StockType StockType { get; private set; } = StockType.Substrate;
 
     public IReadOnlyCollection<StockCostHistory> CostHistory => _costHistory;
 
@@ -39,12 +41,14 @@ public class Stock : MasterDataEntity
         decimal costPerMsi,
         decimal minOrderQtyLf,
         Guid createdById,
-        DateTime createdAt)
+        DateTime createdAt,
+        StockType stockType = StockType.Substrate)
     {
         Validate(code, description, widthIn, costPerMsi, minOrderQtyLf);
 
         var stock = new Stock
         {
+            StockType = stockType,
             Code = code.Trim().ToUpperInvariant(),
             Description = description.Trim(),
             FaceMaterial = faceMaterial.Trim(),
@@ -74,10 +78,12 @@ public class Stock : MasterDataEntity
         decimal costPerMsi,
         decimal minOrderQtyLf,
         Guid modifiedById,
-        DateTime modifiedAt)
+        DateTime modifiedAt,
+        StockType stockType = StockType.Substrate)
     {
         Validate(code, description, widthIn, costPerMsi, minOrderQtyLf);
 
+        StockType = stockType;
         Code = code.Trim().ToUpperInvariant();
         Description = description.Trim();
         FaceMaterial = faceMaterial.Trim();

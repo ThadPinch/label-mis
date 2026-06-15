@@ -14,7 +14,7 @@ public class Customer : MasterDataEntity
 
     public string Name { get; private set; } = string.Empty;
     public string Code { get; private set; } = string.Empty;
-    public string Terms { get; private set; } = string.Empty;
+    public PaymentTerms Terms { get; private set; } = PaymentTerms.Net30;
     public bool TaxExempt { get; private set; }
     public decimal DefaultMarkupPct { get; private set; }
     public CustomerStatus Status { get; private set; }
@@ -27,7 +27,7 @@ public class Customer : MasterDataEntity
         Guid id,
         string name,
         string code,
-        string terms,
+        PaymentTerms terms,
         bool taxExempt,
         decimal defaultMarkupPct,
         CustomerStatus status,
@@ -54,7 +54,7 @@ public class Customer : MasterDataEntity
         {
             Name = name.Trim(),
             Code = code.Trim().ToUpperInvariant(),
-            Terms = terms.Trim(),
+            Terms = terms,
             TaxExempt = taxExempt,
             DefaultMarkupPct = defaultMarkupPct,
             Status = status,
@@ -67,7 +67,7 @@ public class Customer : MasterDataEntity
     public void Update(
         string name,
         string code,
-        string terms,
+        PaymentTerms terms,
         bool taxExempt,
         decimal defaultMarkupPct,
         CustomerStatus status,
@@ -92,7 +92,7 @@ public class Customer : MasterDataEntity
 
         Name = name.Trim();
         Code = code.Trim().ToUpperInvariant();
-        Terms = terms.Trim();
+        Terms = terms;
         TaxExempt = taxExempt;
         DefaultMarkupPct = defaultMarkupPct;
         Status = status;

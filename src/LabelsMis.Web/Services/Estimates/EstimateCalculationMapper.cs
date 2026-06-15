@@ -32,7 +32,10 @@ public record EstimateLineFormInput(
     decimal BleedIn,
     Guid SubstrateId,
     InkSet InkSet,
-    bool WhiteInkUsed,
+    int WhiteHits,
+    int SilverHits,
+    decimal WhiteCoveragePct,
+    decimal SilverCoveragePct,
     IReadOnlyList<FinishingOperationSelectionInput> FinishingOperations,
     decimal SetupWasteImpressions,
     decimal RunningWastePct,
@@ -102,9 +105,10 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
 
         var inkSet = EstimateInkSetMapper.ToIndigoInkSet(line.InkSet);
         var clickRate = await GetClickRateAsync(line.InkSet, isWhite: false, cancellationToken);
-        var whiteClickRate = line.WhiteInkUsed
-            ? await GetClickRateAsync(InkSet.CMYKW, isWhite: true, cancellationToken)
-            : 0m;
+        var whiteInk = await BuildSpecialInkAsync(
+            "White", line.WhiteHits, line.WhiteCoveragePct, i => i.IsWhite, cancellationToken);
+        var silverInk = await BuildSpecialInkAsync(
+            "Silver", line.SilverHits, line.SilverCoveragePct, i => i.IsSilver, cancellationToken);
 
         var operationIds = line.FinishingOperations.Select(o => o.OperationId).ToList();
         var operations = await db.FinishingOperations.AsNoTracking()
@@ -144,8 +148,8 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             press.IsClickBased,
             inkSet,
             clickRate,
-            line.WhiteInkUsed,
-            whiteClickRate,
+            whiteInk,
+            silverInk,
             stock.Id,
             stock.WidthIn,
             stock.CostPerMsi,
@@ -170,6 +174,40 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             .FirstOrDefaultAsync(cancellationToken);
 
         return ink?.ClickRatePer1000 ?? 0m;
+    }
+
+    private async Task<SpecialInkSpec?> BuildSpecialInkAsync(
+        string label,
+        int hits,
+        decimal coveragePct,
+        System.Linq.Expressions.Expression<Func<Ink, bool>> match,
+        CancellationToken cancellationToken)
+    {
+        if (hits <= 0)
+        {
+            return null;
+        }
+
+        var ink = await db.Inks.AsNoTracking()
+            .Where(i => i.IsActive)
+            .Where(match)
+            .OrderBy(i => i.Code)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (ink is null)
+        {
+            return null;
+        }
+
+        var coverage = coveragePct > 0 ? coveragePct : ink.DefaultCoveragePct;
+        return new SpecialInkSpec(
+            label,
+            hits,
+            ink.ClickRatePer1000,
+            coverage,
+            ink.BottleCost,
+            ink.BottleSizeMl,
+            ink.MlPer1000SqIn);
     }
 
     public static string SerializeFinishingOperations(IReadOnlyList<FinishingOperationSelectionInput> operations) =>

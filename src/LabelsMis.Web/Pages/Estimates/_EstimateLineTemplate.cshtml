@@ -16,6 +16,7 @@
                 <button type="button" class="btn btn-sm btn-outline-danger remove-line">Remove</button>
             </summary>
             <div class="estimate-line-body card-body border-top">
+            <div class="estimate-line-grid">
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label">Pull from existing product</label>
@@ -27,117 +28,159 @@
                     <label class="form-label">Product description</label>
                     <input name="Input.Lines[@i].ProductDescription" class="form-control calc-trigger" />
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Label across (in)</label>
-                    <input name="Input.Lines[@i].LabelAcrossIn" value="4" class="form-control calc-trigger" />
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Label around (in)</label>
-                    <input name="Input.Lines[@i].LabelAroundIn" value="3" class="form-control calc-trigger" />
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Corner radius (in)</label>
-                    <input name="Input.Lines[@i].CornerRadiusIn" value="0.125" class="form-control calc-trigger" />
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Gutter across (in)</label>
-                    <input name="Input.Lines[@i].GutterAcrossIn" value="0.0625" class="form-control calc-trigger" />
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Gutter around (in)</label>
-                    <input name="Input.Lines[@i].GutterAroundIn" value="0.0625" class="form-control calc-trigger" />
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Bleed (in)</label>
-                    <input name="Input.Lines[@i].BleedIn" value="0.0625" class="form-control calc-trigger" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Substrate</label>
-                    <select name="Input.Lines[@i].SubstrateId" class="form-select calc-immediate substrate-select">
-                        <option value="">Select substrate</option>
-                        @foreach (var s in substrates)
-                        {
-                            <option value="@s.Value">@s.Text</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Ink set</label>
-                    <select name="Input.Lines[@i].InkSet" class="form-select calc-immediate">
-                        @foreach (var v in Enum.GetValues<LabelsMis.Domain.Enums.InkSet>())
-                        {
-                            <option value="@((int)v)">@v</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-3 form-check align-self-end">
-                    <input type="checkbox" name="Input.Lines[@i].WhiteInkUsed" value="true" class="form-check-input calc-immediate" />
-                    <label class="form-check-label">White ink</label>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Setup waste (imp)</label>
-                    <input name="Input.Lines[@i].SetupWasteImpressions" value="30" class="form-control calc-trigger" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Running waste %</label>
-                    <input name="Input.Lines[@i].RunningWastePct" value="0.03" class="form-control calc-trigger" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Labels across <span class="form-text d-inline labels-across-max">(auto)</span></label>
-                    <select name="Input.Lines[@i].MaxLabelsAcrossOverride" class="form-select calc-immediate labels-across-select">
-                        <option value="" selected>Auto</option>
-                        @for (var n = 1; n <= 12; n++)
-                        {
-                            <option value="@n">@n up</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Orientation</label>
-                    <select name="Input.Lines[@i].LabelOrientationOverride" class="form-select calc-immediate orientation-select">
-                        <option value="" selected>Auto (best fit)</option>
-                        <option value="@((int)LabelOrientation.AsEntered)">As entered</option>
-                        <option value="@((int)LabelOrientation.Rotated)">Rotated 90°</option>
-                    </select>
-                </div>
-                <div class="col-12">
-                    <label class="form-label">Finishing operations</label>
-                    <div class="finishing-ops">
-                        @for (var j = 0; j < finishingOps.Count; j++)
-                        {
-                            var op = finishingOps[j];
-                            <div class="border rounded p-2 mb-2">
-                                <div class="form-check">
-                                    <input type="checkbox" class="form-check-input finishing-toggle calc-immediate" data-op-id="@op.Id" />
-                                    <label class="form-check-label">@op.Code — @op.Description</label>
-                                </div>
-                                <div class="row g-2 mt-1 finishing-fields d-none">
-                                    <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].OperationId" value="@op.Id" class="finishing-op-id" disabled />
-                                    <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].SortOrder" value="@j" class="finishing-sort" disabled />
-                                    <div class="col-md-3">
-                                        <label class="form-label">Setup min override</label>
-                                        <input name="Input.Lines[@i].FinishingOperations[@j].SetupMinutesOverride" class="form-control calc-trigger" disabled />
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label">Run speed fpm override</label>
-                                        <input name="Input.Lines[@i].FinishingOperations[@j].RunSpeedFpmOverride" class="form-control calc-trigger" disabled />
-                                    </div>
-                                </div>
-                            </div>
-                        }
+            </div>
+
+            <div class="estimate-line-section">
+                <div class="estimate-line-section-title">Dimensions <span class="text-muted text-lowercase fw-normal">(in)</span></div>
+                <div class="row g-3">
+                    <div class="col-6 col-md-2">
+                        <label class="form-label">Across</label>
+                        <input name="Input.Lines[@i].LabelAcrossIn" value="4" class="form-control calc-trigger" />
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label">Around</label>
+                        <input name="Input.Lines[@i].LabelAroundIn" value="3" class="form-control calc-trigger" />
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label">Corner radius</label>
+                        <input name="Input.Lines[@i].CornerRadiusIn" value="0.125" class="form-control calc-trigger" />
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label">Gutter across</label>
+                        <input name="Input.Lines[@i].GutterAcrossIn" value="0.0625" class="form-control calc-trigger" />
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label">Gutter around</label>
+                        <input name="Input.Lines[@i].GutterAroundIn" value="0.0625" class="form-control calc-trigger" />
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label">Bleed</label>
+                        <input name="Input.Lines[@i].BleedIn" value="0.0625" class="form-control calc-trigger" />
                     </div>
                 </div>
-                <div class="col-12">
-                    <label class="form-label">Quantity breaks</label>
-                    <div class="form-text mb-1">Enter one to three quantity breaks. Values shift to the first slots automatically.</div>
+            </div>
+
+            <div class="estimate-line-section">
+                <div class="estimate-line-section-title">Material &amp; ink</div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Substrate</label>
+                        <select name="Input.Lines[@i].SubstrateId" class="form-select calc-immediate substrate-select">
+                            <option value="">Select substrate</option>
+                            @foreach (var s in substrates)
+                            {
+                                <option value="@s.Value">@s.Text</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Ink set</label>
+                        <select name="Input.Lines[@i].InkSet" class="form-select calc-immediate">
+                            @foreach (var v in Enum.GetValues<LabelsMis.Domain.Enums.InkSet>())
+                            {
+                                <option value="@((int)v)">@v</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label">White hits</label>
+                        <select name="Input.Lines[@i].WhiteHits" class="form-select calc-immediate special-hits-select" data-coverage-group="white-coverage-group">
+                            <option value="0" selected>None</option>
+                            <option value="1">1 hit</option>
+                            <option value="2">2 hits</option>
+                            <option value="3">3 hits</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-3 white-coverage-group d-none">
+                        <label class="form-label">White coverage <span class="coverage-readout">100%</span></label>
+                        <input type="range" min="0" max="100" step="1" name="Input.Lines[@i].WhiteCoveragePct" value="100" class="form-range calc-immediate coverage-slider" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label">Silver hits</label>
+                        <select name="Input.Lines[@i].SilverHits" class="form-select calc-immediate special-hits-select" data-coverage-group="silver-coverage-group">
+                            <option value="0" selected>None</option>
+                            <option value="1">1 hit</option>
+                            <option value="2">2 hits</option>
+                            <option value="3">3 hits</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-3 silver-coverage-group d-none">
+                        <label class="form-label">Silver coverage <span class="coverage-readout">100%</span></label>
+                        <input type="range" min="0" max="100" step="1" name="Input.Lines[@i].SilverCoveragePct" value="100" class="form-range calc-immediate coverage-slider" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="estimate-line-section">
+                <div class="estimate-line-section-title">Imposition &amp; waste</div>
+                <div class="row g-3">
+                    <div class="col-6 col-md-3">
+                        <label class="form-label">Labels across <span class="form-text d-inline labels-across-max">(auto)</span></label>
+                        <select name="Input.Lines[@i].MaxLabelsAcrossOverride" class="form-select calc-immediate labels-across-select">
+                            <option value="" selected>Auto</option>
+                            @for (var n = 1; n <= 12; n++)
+                            {
+                                <option value="@n">@n up</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label">Orientation</label>
+                        <select name="Input.Lines[@i].LabelOrientationOverride" class="form-select calc-immediate orientation-select">
+                            <option value="" selected>Auto (best fit)</option>
+                            <option value="@((int)LabelOrientation.AsEntered)">As entered</option>
+                            <option value="@((int)LabelOrientation.Rotated)">Rotated 90°</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label">Setup waste (imp)</label>
+                        <input name="Input.Lines[@i].SetupWasteImpressions" value="30" class="form-control calc-trigger" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label">Running waste %</label>
+                        <input name="Input.Lines[@i].RunningWastePct" value="0.03" class="form-control calc-trigger" />
+                    </div>
+                </div>
+            </div>
+                <div class="estimate-line-section">
+                    <div class="estimate-line-section-title">Finishing operations</div>
+                    <div class="finishing-builder row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">Category</label>
+                            <select class="form-select finishing-category-select">
+                                <option value="">Select category</option>
+                                @foreach (var cat in finishingOps.Select(o => o.OperationType).Distinct())
+                                {
+                                    <option value="@cat">@cat</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small mb-1">Operation</label>
+                            <select class="form-select finishing-operation-select" disabled>
+                                <option value="">Select operation</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-outline-primary finishing-add w-100" disabled>Add operation</button>
+                        </div>
+                    </div>
+                    <div class="finishing-selected mt-2"></div>
+                </div>
+                <div class="estimate-line-section">
+                    <div class="estimate-line-section-title">Quantity breaks</div>
+                    <div class="form-text mb-2">Enter up to six quantity breaks. Values shift to the first slots automatically.</div>
                     <div class="row g-2 quantity-inputs">
-                        <div class="col-md-2"><input name="Input.Lines[@i].Quantities[0]" value="" class="form-control calc-trigger quantity-input" placeholder="Qty" /></div>
-                        <div class="col-md-2"><input name="Input.Lines[@i].Quantities[1]" value="" class="form-control calc-trigger quantity-input" placeholder="Qty" /></div>
-                        <div class="col-md-2"><input name="Input.Lines[@i].Quantities[2]" value="" class="form-control calc-trigger quantity-input" placeholder="Qty" /></div>
+                        <div class="col-4 col-sm-3 col-md-2"><div class="input-group"><span class="input-group-text">1</span><input name="Input.Lines[@i].Quantities[0]" value="" class="form-control calc-trigger quantity-input" placeholder="Qty" /></div></div>
+                        <div class="col-4 col-sm-3 col-md-2"><div class="input-group"><span class="input-group-text">2</span><input name="Input.Lines[@i].Quantities[1]" value="" class="form-control calc-trigger quantity-input" placeholder="Qty" /></div></div>
+                        <div class="col-4 col-sm-3 col-md-2"><div class="input-group"><span class="input-group-text">3</span><input name="Input.Lines[@i].Quantities[2]" value="" class="form-control calc-trigger quantity-input" placeholder="Qty" /></div></div>
+                        <div class="col-4 col-sm-3 col-md-2"><div class="input-group"><span class="input-group-text">4</span><input name="Input.Lines[@i].Quantities[3]" value="" class="form-control calc-trigger quantity-input" placeholder="Qty" /></div></div>
+                        <div class="col-4 col-sm-3 col-md-2"><div class="input-group"><span class="input-group-text">5</span><input name="Input.Lines[@i].Quantities[4]" value="" class="form-control calc-trigger quantity-input" placeholder="Qty" /></div></div>
+                        <div class="col-4 col-sm-3 col-md-2"><div class="input-group"><span class="input-group-text">6</span><input name="Input.Lines[@i].Quantities[5]" value="" class="form-control calc-trigger quantity-input" placeholder="Qty" /></div></div>
                     </div>
                 </div>
-                <div class="col-12">
-                    <label class="form-label">Line notes</label>
+                <div class="estimate-line-section">
+                    <div class="estimate-line-section-title">Line notes</div>
                     <textarea name="Input.Lines[@i].LineNotes" class="form-control" rows="2"></textarea>
                 </div>
             </div>

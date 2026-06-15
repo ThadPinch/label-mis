@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using LabelsMis.Domain.Enums;
 using LabelsMis.Web.Pages.Shared;
 using LabelsMis.Web.Services.Stocks;
 
@@ -8,6 +9,9 @@ public class StockFormInput
 {
     [Required]
     public string Code { get; set; } = string.Empty;
+
+    [Display(Name = "Stock type")]
+    public StockType StockType { get; set; } = StockType.Substrate;
 
     [Required]
     public string Description { get; set; } = string.Empty;
@@ -42,7 +46,7 @@ public class StockFormInput
     public decimal CostPerMsi { get; set; }
 
     [Range(0, 999999999)]
-    [Display(Name = "Min order qty (LF)")]
+    [Display(Name = "Re-Order Quantity")]
     public decimal MinOrderQtyLf { get; set; }
 
     public StockForm ToForm() => new(
@@ -56,11 +60,13 @@ public class StockFormInput
         SupplierId,
         SupplierPartNumber,
         CostPerMsi,
-        MinOrderQtyLf);
+        MinOrderQtyLf,
+        StockType);
 
     public static StockFormInput FromEntity(Domain.Entities.Stock stock) => new()
     {
         Code = stock.Code,
+        StockType = stock.StockType,
         Description = stock.Description,
         FaceMaterial = stock.FaceMaterial,
         Adhesive = stock.Adhesive,

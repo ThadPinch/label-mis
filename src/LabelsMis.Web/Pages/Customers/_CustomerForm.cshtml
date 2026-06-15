@@ -21,7 +21,7 @@
     </div>
     <div class="col-md-4">
         <label asp-for="Terms" class="form-label"></label>
-        <input asp-for="Terms" class="form-control" />
+        <select asp-for="Terms" asp-items="Html.GetEnumSelectList<PaymentTerms>()" class="form-select"></select>
     </div>
     <div class="col-md-4">
         <label asp-for="DefaultMarkupPct" class="form-label"></label>

@@ -138,31 +138,34 @@ public class EditModel(ProductService productService, ArtworkService artworkServ
             .Select(s => new SelectListItem(s.Description, s.Id.ToString())).ToListAsync(cancellationToken);
         ViewData["Dies"] = await db.Dies.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.Description)
             .Select(d => new SelectListItem(d.Description, d.Id.ToString())).ToListAsync(cancellationToken);
+        ViewData["FinishingOperations"] = await db.FinishingOperations.AsNoTracking()
+            .Where(o => o.IsActive).OrderBy(o => o.Code).ToListAsync(cancellationToken);
     }
 
     private void EnsureCustomerSelection()
     {
-        if (Input.CustomerIds.Count == 0 && Input.PrimaryCustomerId != Guid.Empty)
+        // Products may have no customer. When one is chosen, keep primary and
+        // assignments consistent: include the primary, or promote the first
+        // assigned customer to primary when none is set.
+        Input.CustomerIds ??= [];
+        if (Input.PrimaryCustomerId is { } primary && primary != Guid.Empty)
         {
-            Input.CustomerIds.Add(Input.PrimaryCustomerId);
+            if (!Input.CustomerIds.Contains(primary))
+            {
+                Input.CustomerIds.Add(primary);
+            }
+        }
+        else if (Input.CustomerIds.Count > 0)
+        {
+            Input.PrimaryCustomerId = Input.CustomerIds[0];
         }
     }
 
     private void ValidateRequiredSelections()
     {
-        if (Input.PrimaryCustomerId == Guid.Empty)
-        {
-            ModelState.AddModelError(nameof(Input.PrimaryCustomerId), "Select a primary customer.");
-        }
-
         if (Input.SubstrateId == Guid.Empty)
         {
             ModelState.AddModelError(nameof(Input.SubstrateId), "Select a substrate.");
-        }
-
-        if (Input.CustomerIds.Count == 0)
-        {
-            ModelState.AddModelError(nameof(Input.CustomerIds), "Select at least one customer.");
         }
     }
 }

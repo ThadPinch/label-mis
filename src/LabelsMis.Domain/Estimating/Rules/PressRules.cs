@@ -8,11 +8,6 @@ internal static class PressRules
     {
         var warnings = new List<string>();
 
-        if (request.WhiteInkUsed && request.InkSet is not (IndigoInkSet.CMYKW or IndigoInkSet.CMYKW_PlusSpot))
-        {
-            warnings.Add("White ink configured but not in ink set");
-        }
-
         if (!request.PressClickBased && request.ClickRatePer1000 > 0)
         {
             warnings.Add("Click rate provided but press is not click-based");

@@ -1,5 +1,6 @@
 using LabelsMis.Domain.Common;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.ValueObjects;
 
 namespace LabelsMis.Domain.Entities;
 
@@ -17,9 +18,24 @@ public class Shipment : EntityBase
     public SalesOrder SalesOrder { get; private set; } = null!;
     public DateOnly ShipDate { get; private set; }
     public Carrier Carrier { get; private set; }
-    public FedexServiceLevel ServiceLevel { get; private set; }
-    public Guid ShipFromAddressId { get; private set; }
-    public Address ShipFromAddress { get; private set; } = null!;
+    public FedexServiceLevel? ServiceLevel { get; private set; }
+
+    // Ship-from may be a customer Address (FedEx flow) or a point-in-time snapshot of the
+    // company address from General Settings (manual flow). The snapshot columns are always
+    // populated; the FK is optional.
+    public Guid? ShipFromAddressId { get; private set; }
+    public Address? ShipFromAddress { get; private set; }
+    public string? ShipFromName { get; private set; }
+    public string? ShipFromStreet1 { get; private set; }
+    public string? ShipFromStreet2 { get; private set; }
+    public string? ShipFromCity { get; private set; }
+    public string? ShipFromState { get; private set; }
+    public string? ShipFromZip { get; private set; }
+    public string? ShipFromCountry { get; private set; }
+
+    public ShippingAddress ShipFromSnapshot => new(
+        ShipFromName, ShipFromStreet1, ShipFromStreet2, ShipFromCity, ShipFromState, ShipFromZip, ShipFromCountry);
+
     public Guid ShipToAddressId { get; private set; }
     public Address ShipToAddress { get; private set; } = null!;
     public ShipmentStatus Status { get; private set; }
@@ -37,8 +53,9 @@ public class Shipment : EntityBase
         Guid salesOrderId,
         DateOnly shipDate,
         Carrier carrier,
-        FedexServiceLevel serviceLevel,
-        Guid shipFromAddressId,
+        FedexServiceLevel? serviceLevel,
+        Guid? shipFromAddressId,
+        ShippingAddress shipFrom,
         Guid shipToAddressId,
         decimal totalDeclaredValue,
         BillingType billingType,
@@ -46,6 +63,7 @@ public class Shipment : EntityBase
         Guid createdById,
         DateTime createdAt)
     {
+        var snapshot = (shipFrom ?? ShippingAddress.Empty).Normalized();
         var shipment = new Shipment
         {
             ShipmentNumber = shipmentNumber,
@@ -54,6 +72,13 @@ public class Shipment : EntityBase
             Carrier = carrier,
             ServiceLevel = serviceLevel,
             ShipFromAddressId = shipFromAddressId,
+            ShipFromName = snapshot.RecipientName,
+            ShipFromStreet1 = snapshot.Street1,
+            ShipFromStreet2 = snapshot.Street2,
+            ShipFromCity = snapshot.City,
+            ShipFromState = snapshot.State,
+            ShipFromZip = snapshot.Zip,
+            ShipFromCountry = snapshot.Country,
             ShipToAddressId = shipToAddressId,
             Status = ShipmentStatus.Pending,
             TotalDeclaredValue = totalDeclaredValue,

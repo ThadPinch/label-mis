@@ -27,37 +27,123 @@
 </div>
 
 <h2 class="h5 mt-4">Contacts</h2>
-@for (var i = 0; i < Model.Contacts.Count; i++)
-{
-    <div class="border rounded p-3 mb-3">
-        <input type="hidden" asp-for="Contacts[i].Id" />
+<div id="supplier-contacts">
+    @for (var i = 0; i < Model.Contacts.Count; i++)
+    {
+        <div class="border rounded p-3 mb-3 contact-row">
+            <input type="hidden" asp-for="Contacts[i].Id" />
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label asp-for="Contacts[i].FirstName" class="form-label">First name</label>
+                    <input asp-for="Contacts[i].FirstName" class="form-control" />
+                    <span asp-validation-for="Contacts[i].FirstName" class="text-danger"></span>
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="Contacts[i].LastName" class="form-label">Last name</label>
+                    <input asp-for="Contacts[i].LastName" class="form-control" />
+                    <span asp-validation-for="Contacts[i].LastName" class="text-danger"></span>
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="Contacts[i].Email" class="form-label">Email</label>
+                    <input asp-for="Contacts[i].Email" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="Contacts[i].Phone" class="form-label">Phone</label>
+                    <input asp-for="Contacts[i].Phone" class="form-control" />
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Contacts[i].Role" class="form-label">Role</label>
+                    <input asp-for="Contacts[i].Role" class="form-control" />
+                </div>
+                <div class="col-md-3 form-check align-self-end">
+                    <input asp-for="Contacts[i].IsPrimary" class="form-check-input" />
+                    <label asp-for="Contacts[i].IsPrimary" class="form-check-label">Primary contact</label>
+                </div>
+                <div class="col-md-3 align-self-end">
+                    <button type="button" class="btn btn-outline-danger remove-contact w-100">Remove</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+<button type="button" id="add-contact" class="btn btn-outline-secondary btn-sm">+ Add contact</button>
+
+<template id="supplier-contact-template">
+    <div class="border rounded p-3 mb-3 contact-row">
+        <input type="hidden" name="Contacts[__INDEX__].Id" value="" />
         <div class="row g-2">
             <div class="col-md-3">
-                <label asp-for="Contacts[i].FirstName" class="form-label"></label>
-                <input asp-for="Contacts[i].FirstName" class="form-control" />
-                <span asp-validation-for="Contacts[i].FirstName" class="text-danger"></span>
+                <label class="form-label">First name</label>
+                <input name="Contacts[__INDEX__].FirstName" class="form-control" required />
             </div>
             <div class="col-md-3">
-                <label asp-for="Contacts[i].LastName" class="form-label"></label>
-                <input asp-for="Contacts[i].LastName" class="form-control" />
-                <span asp-validation-for="Contacts[i].LastName" class="text-danger"></span>
+                <label class="form-label">Last name</label>
+                <input name="Contacts[__INDEX__].LastName" class="form-control" required />
             </div>
             <div class="col-md-3">
-                <label asp-for="Contacts[i].Email" class="form-label"></label>
-                <input asp-for="Contacts[i].Email" class="form-control" />
+                <label class="form-label">Email</label>
+                <input name="Contacts[__INDEX__].Email" type="email" class="form-control" />
             </div>
             <div class="col-md-3">
-                <label asp-for="Contacts[i].Phone" class="form-label"></label>
-                <input asp-for="Contacts[i].Phone" class="form-control" />
+                <label class="form-label">Phone</label>
+                <input name="Contacts[__INDEX__].Phone" class="form-control" />
             </div>
             <div class="col-md-6">
-                <label asp-for="Contacts[i].Role" class="form-label"></label>
-                <input asp-for="Contacts[i].Role" class="form-control" />
+                <label class="form-label">Role</label>
+                <input name="Contacts[__INDEX__].Role" class="form-control" />
             </div>
             <div class="col-md-3 form-check align-self-end">
-                <input asp-for="Contacts[i].IsPrimary" class="form-check-input" />
-                <label asp-for="Contacts[i].IsPrimary" class="form-check-label"></label>
+                <input name="Contacts[__INDEX__].IsPrimary" type="checkbox" value="true" class="form-check-input" />
+                <input name="Contacts[__INDEX__].IsPrimary" type="hidden" value="false" />
+                <label class="form-check-label">Primary contact</label>
+            </div>
+            <div class="col-md-3 align-self-end">
+                <button type="button" class="btn btn-outline-danger remove-contact w-100">Remove</button>
             </div>
         </div>
     </div>
-}
+</template>
+
+<script>
+    (() => {
+        const container = document.getElementById('supplier-contacts');
+        const template = document.getElementById('supplier-contact-template');
+        const addBtn = document.getElementById('add-contact');
+        if (!container || !template) return;
+
+        const reindex = () => {
+            container.querySelectorAll('.contact-row').forEach((row, idx) => {
+                row.querySelectorAll('[name],[id],[for],[data-valmsg-for]').forEach(el => {
+                    ['name', 'id', 'for', 'data-valmsg-for'].forEach(attr => {
+                        const val = el.getAttribute(attr);
+                        if (val && /Contacts(\[|_)\d+/.test(val)) {
+                            el.setAttribute(attr, val
+                                .replace(/Contacts\[\d+\]/g, `Contacts[${idx}]`)
+                                .replace(/Contacts_\d+__/g, `Contacts_${idx}__`));
+                        }
+                    });
+                });
+            });
+        };
+
+        container.querySelectorAll('.remove-contact').forEach(btn => wireRemove(btn));
+
+        function wireRemove(btn) {
+            btn.addEventListener('click', () => {
+                btn.closest('.contact-row')?.remove();
+                reindex();
+            });
+        }
+
+        addBtn?.addEventListener('click', () => {
+            const idx = container.querySelectorAll('.contact-row').length;
+            const html = template.innerHTML.replace(/__INDEX__/g, String(idx));
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = html.trim();
+            const row = wrapper.firstElementChild;
+            container.appendChild(row);
+            row.querySelectorAll('.remove-contact').forEach(btn => wireRemove(btn));
+            reindex();
+        });
+    })();
+</script>

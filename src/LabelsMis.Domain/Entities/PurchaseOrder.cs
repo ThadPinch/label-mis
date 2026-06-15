@@ -44,6 +44,18 @@ public class PurchaseOrder : EntityBase
         return po;
     }
 
+    public void UpdateDraftDetails(DateOnly? expectedAt, string? notes, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (Status is not PurchaseOrderStatus.Draft)
+        {
+            throw new InvalidOperationException("Only draft POs can be edited.");
+        }
+
+        ExpectedAt = expectedAt;
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        SetModified(modifiedById, modifiedAt);
+    }
+
     public void MarkSent(Guid modifiedById, DateTime modifiedAt)
     {
         if (Status is not PurchaseOrderStatus.Draft)

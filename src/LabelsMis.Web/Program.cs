@@ -17,6 +17,7 @@ builder.Services.AddMasterDataAuthorization();
 builder.Services.Configure<EstimateOptions>(builder.Configuration.GetSection(EstimateOptions.SectionName));
 builder.Services.Configure<JobOptions>(builder.Configuration.GetSection(JobOptions.SectionName));
 builder.Services.Configure<InvoiceOptions>(builder.Configuration.GetSection(InvoiceOptions.SectionName));
+builder.Services.Configure<PurchaseOrderOptions>(builder.Configuration.GetSection(PurchaseOrderOptions.SectionName));
 builder.Services.AddRazorPages()
     .AddMvcOptions(options =>
     {

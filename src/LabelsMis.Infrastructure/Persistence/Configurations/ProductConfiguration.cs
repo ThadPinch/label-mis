@@ -29,6 +29,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.HasOne(p => p.PrimaryCustomer)
             .WithMany()
             .HasForeignKey(p => p.PrimaryCustomerId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(p => p.SourceEstimateLine)

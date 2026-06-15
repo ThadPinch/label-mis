@@ -9,11 +9,13 @@ namespace LabelsMis.Web.Pages.Estimates;
 [Authorize(Policy = TransactionPolicies.EstimatesEdit)]
 public class ProductsModel(ProductService productService) : PageModel
 {
-    public async Task<IActionResult> OnGetAsync(Guid? customerId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(Guid? customerId, bool house, CancellationToken cancellationToken)
     {
-        var items = !customerId.HasValue || customerId.Value == Guid.Empty
-            ? await productService.ListPickerAllAsync(cancellationToken)
-            : await productService.ListPickerForCustomerAsync(customerId.Value, cancellationToken);
+        var items = house
+            ? await productService.ListPickerHouseAsync(cancellationToken)
+            : !customerId.HasValue || customerId.Value == Guid.Empty
+                ? await productService.ListPickerAllAsync(cancellationToken)
+                : await productService.ListPickerForCustomerAsync(customerId.Value, cancellationToken);
 
         return new JsonResult(items);
     }

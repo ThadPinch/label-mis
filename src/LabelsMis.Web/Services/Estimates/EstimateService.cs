@@ -27,7 +27,8 @@ public record EstimateDetail(
     Customer Customer,
     IReadOnlyList<EstimateRevision> Revisions,
     Guid? SalesOrderId,
-    string? SalesOrderNumber);
+    string? SalesOrderNumber,
+    string? SalesRepName = null);
 
 public class EstimateOptions
 {
@@ -177,12 +178,22 @@ public class EstimateService(
             .Select(o => new { o.Id, o.OrderNumber })
             .FirstOrDefaultAsync(cancellationToken);
 
+        string? salesRepName = null;
+        if (estimate.SalesRepId is { } repId)
+        {
+            salesRepName = await db.Users.AsNoTracking()
+                .Where(u => u.Id == repId)
+                .Select(u => u.Email ?? u.UserName)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
         return new EstimateDetail(
             estimate,
             estimate.Customer,
             estimate.Revisions.OrderByDescending(r => r.RevisionNumber).ToList(),
             salesOrder?.Id,
-            salesOrder?.OrderNumber);
+            salesOrder?.OrderNumber,
+            salesRepName);
     }
 
     public async Task<EstimateCalculationResponse> CalculateAsync(
@@ -336,6 +347,115 @@ public class EstimateService(
         }
     }
 
+    public async Task ResendAsync(Guid id, string? emailTo, CancellationToken cancellationToken = default)
+    {
+        RequireUserId();
+        if (string.IsNullOrWhiteSpace(emailTo))
+        {
+            throw new InvalidOperationException("An email address is required to resend the estimate.");
+        }
+
+        var detail = await GetDetailAsync(id, cancellationToken)
+            ?? throw new InvalidOperationException("Estimate not found.");
+        var tracked = await db.Estimates.SingleAsync(e => e.Id == id, cancellationToken);
+
+        // Reuse the existing PDF when it is still on disk; otherwise regenerate it.
+        var pdfPath = !string.IsNullOrWhiteSpace(tracked.PdfFilePath) && File.Exists(tracked.PdfFilePath)
+            ? tracked.PdfFilePath!
+            : await pdfGenerator.GenerateAsync(detail, cancellationToken);
+
+        await emailSender.SendAsync(
+            emailTo,
+            $"Estimate {tracked.EstimateNumber}",
+            $"Please find attached estimate {tracked.EstimateNumber}.",
+            [pdfPath],
+            cancellationToken);
+    }
+
+    /// <summary>Renders the official PDF for a saved estimate as bytes (no persistence).</summary>
+    public async Task<byte[]?> RenderPdfBytesAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var detail = await GetDetailAsync(id, cancellationToken);
+        return detail is null ? null : await pdfGenerator.GenerateBytesAsync(detail, cancellationToken);
+    }
+
+    /// <summary>Renders a preview PDF from in-progress (unsaved) form state.</summary>
+    public async Task<byte[]> GeneratePreviewAsync(
+        EstimateFormInput input,
+        string? estimateNumber,
+        int revisionNumber,
+        CancellationToken cancellationToken = default)
+    {
+        var calc = await CalculateAsync(input, cancellationToken);
+
+        Customer? customer = null;
+        if (input.CustomerId != Guid.Empty)
+        {
+            customer = await db.Customers.AsNoTracking()
+                .Include(c => c.Addresses)
+                .FirstOrDefaultAsync(c => c.Id == input.CustomerId, cancellationToken);
+        }
+
+        var substrateIds = input.Lines.Select(l => l.SubstrateId).Where(id => id != Guid.Empty).Distinct().ToList();
+        var substrates = await db.Stocks.AsNoTracking()
+            .Where(s => substrateIds.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, s => s.Description, cancellationToken);
+
+        string? shippingName = null;
+        if (input.ShippingMethodId is { } smId && smId != Guid.Empty)
+        {
+            shippingName = await db.ShippingMethods.AsNoTracking()
+                .Where(m => m.Id == smId).Select(m => m.Name).FirstOrDefaultAsync(cancellationToken);
+        }
+
+        string? salesRepName = null;
+        if (input.SalesRepId is { } repId)
+        {
+            salesRepName = await db.Users.AsNoTracking()
+                .Where(u => u.Id == repId).Select(u => u.Email ?? u.UserName).FirstOrDefaultAsync(cancellationToken);
+        }
+
+        var billing = customer?.Addresses.FirstOrDefault(a => a.IsDefault) ?? customer?.Addresses.FirstOrDefault();
+        var ship = input.ShippingAddress;
+
+        var lines = new List<EstimatePdfLine>();
+        for (var i = 0; i < input.Lines.Count; i++)
+        {
+            var l = input.Lines[i];
+            var lineCalc = calc.Lines.FirstOrDefault(c => c.LineIndex == i);
+            var breaks = (lineCalc?.QuantityBreaks ?? [])
+                .OrderBy(b => b.Quantity)
+                .Select(b => new EstimatePdfBreak(b.Quantity, b.UnitPrice, b.TotalPrice))
+                .ToList();
+            lines.Add(new EstimatePdfLine(
+                i + 1,
+                string.IsNullOrWhiteSpace(l.ProductDescription) ? "Untitled line" : l.ProductDescription,
+                l.LabelAcrossIn,
+                l.LabelAroundIn,
+                substrates.TryGetValue(l.SubstrateId, out var desc) ? desc : "—",
+                l.InkSet.ToString(),
+                l.LineNotes,
+                breaks));
+        }
+
+        var model = new EstimatePdfModel(
+            string.IsNullOrWhiteSpace(estimateNumber) ? "DRAFT" : estimateNumber,
+            revisionNumber <= 0 ? 1 : revisionNumber,
+            DateTime.UtcNow,
+            input.ValidUntilDate,
+            customer?.Name ?? "—",
+            billing is null ? null : new EstimatePdfAddress(null, billing.Street1, billing.Street2, billing.City, billing.State, billing.Zip),
+            ship.HasAddress ? new EstimatePdfAddress(ship.RecipientName, ship.Street1, ship.Street2, ship.City, ship.State, ship.Zip) : null,
+            lines,
+            shippingName,
+            input.ShippingCost,
+            (input.ShippingMethodId is { } m && m != Guid.Empty) || input.ShippingCost > 0,
+            input.Notes,
+            salesRepName);
+
+        return await pdfGenerator.GenerateBytesAsync(model, cancellationToken);
+    }
+
     public async Task MarkWonAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var userId = RequireUserId();
@@ -380,7 +500,10 @@ public class EstimateService(
                 l.BleedIn,
                 l.SubstrateId,
                 l.InkSet,
-                l.WhiteInkUsed,
+                l.WhiteHits,
+                l.SilverHits,
+                l.WhiteCoveragePct,
+                l.SilverCoveragePct,
                 l.FinishingOperationsJson,
                 l.SetupWasteImpressions,
                 l.RunningWastePct,
@@ -462,7 +585,10 @@ public class EstimateService(
                 input.BleedIn,
                 input.SubstrateId,
                 input.InkSet,
-                input.WhiteInkUsed,
+                input.WhiteHits,
+                input.SilverHits,
+                input.WhiteCoveragePct,
+                input.SilverCoveragePct,
                 EstimateCalculationMapper.SerializeFinishingOperations(input.FinishingOperations),
                 input.SetupWasteImpressions,
                 input.RunningWastePct,

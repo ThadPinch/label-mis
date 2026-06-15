@@ -107,7 +107,60 @@ public class EditModel(
             await estimateService.UpdateDraftAsync(Id, Input.ToForm(), cancellationToken);
         }
 
-        await estimateService.SendAsync(Id, SendEmail, EmailTo, cancellationToken);
+        try
+        {
+            await estimateService.SendAsync(Id, SendEmail, EmailTo, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, $"Estimate marked sent, but the email could not be delivered: {ex.Message}");
+            await ReloadAsync(cancellationToken);
+            return Page();
+        }
+
+        return RedirectToPage(new { id = Id });
+    }
+
+    public async Task<IActionResult> OnPostPreviewPdfAsync(CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.Estimator))
+        {
+            return Forbid();
+        }
+
+        var info = await db.Estimates.AsNoTracking()
+            .Where(e => e.Id == Id)
+            .Select(e => new { e.EstimateNumber, e.RevisionNumber })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var bytes = await estimateService.GeneratePreviewAsync(
+            Input.ToForm(), info?.EstimateNumber, info?.RevisionNumber ?? 1, cancellationToken);
+        return File(bytes, "application/pdf");
+    }
+
+    public async Task<IActionResult> OnGetPdfAsync(CancellationToken cancellationToken)
+    {
+        var bytes = await estimateService.RenderPdfBytesAsync(Id, cancellationToken);
+        return bytes is null ? NotFound() : File(bytes, "application/pdf");
+    }
+
+    public async Task<IActionResult> OnPostResendAsync(CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.Estimator))
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            await estimateService.ResendAsync(Id, EmailTo, cancellationToken);
+            TempData["EstimateStatus"] = $"Estimate emailed to {EmailTo}.";
+        }
+        catch (Exception ex)
+        {
+            TempData["EstimateError"] = $"Could not send the estimate email: {ex.Message}";
+        }
+
         return RedirectToPage(new { id = Id });
     }
 

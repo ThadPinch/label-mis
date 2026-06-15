@@ -23,9 +23,40 @@
     }
 </div>
 
-<h2 class="h6">Ship to</h2>
-<p>@Model.Detail.Shipment.ShipToAddress.Street1<br />
-@Model.Detail.Shipment.ShipToAddress.City, @Model.Detail.Shipment.ShipToAddress.State @Model.Detail.Shipment.ShipToAddress.Zip</p>
+@{
+    var shipFrom = Model.Detail.Shipment.ShipFromSnapshot;
+}
+<div class="row">
+    <div class="col-md-6">
+        <h2 class="h6">Ship from</h2>
+        @if (shipFrom.HasAddress)
+        {
+            <p>
+                @if (!string.IsNullOrWhiteSpace(shipFrom.RecipientName)) { <text>@shipFrom.RecipientName<br /></text> }
+                @shipFrom.Street1<br />
+                @shipFrom.City, @shipFrom.State @shipFrom.Zip
+            </p>
+        }
+        else if (Model.Detail.Shipment.ShipFromAddress is { } from)
+        {
+            <p>@from.Street1<br />@from.City, @from.State @from.Zip</p>
+        }
+        else
+        {
+            <p class="text-muted">—</p>
+        }
+    </div>
+    <div class="col-md-6">
+        <h2 class="h6">Ship to</h2>
+        <p>@Model.Detail.Shipment.ShipToAddress.Street1<br />
+        @Model.Detail.Shipment.ShipToAddress.City, @Model.Detail.Shipment.ShipToAddress.State @Model.Detail.Shipment.ShipToAddress.Zip</p>
+    </div>
+</div>
+
+<p class="text-muted">
+    Carrier: @Model.Detail.Shipment.Carrier@(Model.Detail.Shipment.ServiceLevel is { } svc ? $" · {svc}" : "")
+    · Ship date: @Model.Detail.Shipment.ShipDate.ToString("yyyy-MM-dd")
+</p>
 
 <h2 class="h6">Lines</h2>
 <table class="table table-sm table-striped mb-3">

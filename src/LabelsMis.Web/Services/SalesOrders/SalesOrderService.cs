@@ -54,7 +54,8 @@ public class SalesOrderService(
     LabelsMisDbContext db,
     ICurrentUserService currentUser,
     DocumentNumberService documentNumbers,
-    ProductService productService)
+    ProductService productService,
+    Invoices.InvoiceService invoiceService)
 {
     public async Task<PagedResult<SalesOrderListItem>> ListAsync(
         string? search,
@@ -175,6 +176,7 @@ public class SalesOrderService(
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        await invoiceService.CreateFromSalesOrderAsync(order.Id, cancellationToken);
         return order;
     }
 
@@ -252,6 +254,7 @@ public class SalesOrderService(
 
         order.ReplaceLines(orderLines);
         await db.SaveChangesAsync(cancellationToken);
+        await invoiceService.CreateFromSalesOrderAsync(order.Id, cancellationToken);
         return order;
     }
 

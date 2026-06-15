@@ -10,6 +10,38 @@
 {
     <div class="alert alert-danger">@Model.ErrorMessage</div>
 }
+
+<form method="get" class="row g-2 mb-3 align-items-end">
+    <div class="col-md-3">
+        <label asp-for="Search" class="form-label">Search</label>
+        <input asp-for="Search" class="form-control" placeholder="Order #, PO #, customer" />
+    </div>
+    <div class="col-md-2">
+        <label asp-for="Status" class="form-label">Status</label>
+        <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<SalesOrderStatus>()">
+            <option value="">All statuses</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="CustomerId" class="form-label">Customer</label>
+        <select asp-for="CustomerId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["CustomerOptions"]!)">
+            <option value="">All customers</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label asp-for="ShipFrom" class="form-label">Ship from</label>
+        <input asp-for="ShipFrom" class="form-control" type="date" />
+    </div>
+    <div class="col-md-2">
+        <label asp-for="ShipTo" class="form-label">Ship to</label>
+        <input asp-for="ShipTo" class="form-control" type="date" />
+    </div>
+    <div class="col-12 d-flex gap-2">
+        <button type="submit" class="btn btn-outline-secondary">Filter</button>
+        <a asp-page="Index" class="btn btn-link">Clear</a>
+    </div>
+</form>
+
 <table class="table table-striped">
     <thead><tr><th>Order #</th><th>Customer</th><th>PO #</th><th>Ship date</th><th>Status</th><th>Total</th><th></th></tr></thead>
     <tbody>
@@ -42,5 +74,52 @@
             </td>
         </tr>
     }
+    @if (Model.Result.Items.Count == 0)
+    {
+        <tr><td colspan="7" class="text-center text-muted py-4">No sales orders match your filters.</td></tr>
+    }
     </tbody>
 </table>
+
+@{
+    Dictionary<string, string> PageRoute(int page)
+    {
+        var rv = new Dictionary<string, string> { ["page"] = page.ToString() };
+        if (!string.IsNullOrWhiteSpace(Model.Search)) rv["Search"] = Model.Search!;
+        if (Model.Status.HasValue) rv["Status"] = Model.Status.Value.ToString();
+        if (Model.CustomerId.HasValue) rv["CustomerId"] = Model.CustomerId.Value.ToString();
+        if (Model.ShipFrom.HasValue) rv["ShipFrom"] = Model.ShipFrom.Value.ToString("yyyy-MM-dd");
+        if (Model.ShipTo.HasValue) rv["ShipTo"] = Model.ShipTo.Value.ToString("yyyy-MM-dd");
+        return rv;
+    }
+}
+@if (Model.Result.TotalPages > 1)
+{
+    <nav aria-label="Pagination">
+        <ul class="pagination">
+            <li class="page-item @(Model.Result.HasPreviousPage ? "" : "disabled")">
+                @if (Model.Result.HasPreviousPage)
+                {
+                    <a class="page-link" asp-page="Index" asp-all-route-data="PageRoute(Model.Result.Page - 1)">Previous</a>
+                }
+                else
+                {
+                    <span class="page-link">Previous</span>
+                }
+            </li>
+            <li class="page-item disabled">
+                <span class="page-link">Page @Model.Result.Page of @Model.Result.TotalPages (@Model.Result.TotalCount total)</span>
+            </li>
+            <li class="page-item @(Model.Result.HasNextPage ? "" : "disabled")">
+                @if (Model.Result.HasNextPage)
+                {
+                    <a class="page-link" asp-page="Index" asp-all-route-data="PageRoute(Model.Result.Page + 1)">Next</a>
+                }
+                else
+                {
+                    <span class="page-link">Next</span>
+                }
+            </li>
+        </ul>
+    </nav>
+}

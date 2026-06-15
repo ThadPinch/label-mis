@@ -57,7 +57,7 @@ public record OperatorJobView(
 
 public record ScheduleJobInput(DateOnly ScheduledForDate, Guid? PressId);
 
-public record FinishingTaskView(Guid OperationId, string Label, JobOperationStatus Status)
+public record FinishingTaskView(Guid OperationId, string Label, JobOperationStatus Status, bool IsLamination = false)
 {
     public bool IsDone => Status is JobOperationStatus.Complete or JobOperationStatus.Skipped;
 }
@@ -144,7 +144,7 @@ public class JobService(
             query = query.Where(j =>
                 j.JobNumber.ToUpper().Contains(term)
                 || j.Product.Description.ToUpper().Contains(term)
-                || j.Product.PrimaryCustomer.Name.ToUpper().Contains(term));
+                || (j.Product.PrimaryCustomer != null && j.Product.PrimaryCustomer.Name.ToUpper().Contains(term)));
         }
 
         query = sort switch
@@ -163,7 +163,7 @@ public class JobService(
             .Select(j => new JobListItem(
                 j.Id,
                 j.JobNumber,
-                j.Product.PrimaryCustomer.Name,
+                j.Product.PrimaryCustomer != null ? j.Product.PrimaryCustomer.Name : "",
                 j.Product.Description,
                 j.Status,
                 j.DueDate,
@@ -205,7 +205,7 @@ public class JobService(
         var order = job.SalesOrderLine.SalesOrder;
         return new JobDetail(
             job,
-            job.Product.PrimaryCustomer.Name,
+            job.Product.PrimaryCustomer != null ? job.Product.PrimaryCustomer.Name : "",
             job.Product.Description,
             job.Product.ArtworkFilePath,
             job.Product.Substrate,
@@ -261,7 +261,7 @@ public class JobService(
 
         return new JobTicketDetail(
             job,
-            job.Product.PrimaryCustomer.Name,
+            job.Product.PrimaryCustomer != null ? job.Product.PrimaryCustomer.Name : "",
             job.Product.Description,
             job.Product.LabelAcrossIn,
             job.Product.LabelAroundIn,
@@ -314,7 +314,7 @@ public class JobService(
 
         return new OperatorJobView(
             job,
-            job.Product.PrimaryCustomer.Name,
+            job.Product.PrimaryCustomer != null ? job.Product.PrimaryCustomer.Name : "",
             job.Product.Description,
             current,
             isClockedOn,
@@ -555,7 +555,7 @@ public class JobService(
             query = query.Where(j =>
                 j.JobNumber.ToUpper().Contains(term)
                 || j.Product.Description.ToUpper().Contains(term)
-                || j.Product.PrimaryCustomer.Name.ToUpper().Contains(term));
+                || (j.Product.PrimaryCustomer != null && j.Product.PrimaryCustomer.Name.ToUpper().Contains(term)));
         }
 
         var jobs = await query.OrderBy(j => j.DueDate).ThenBy(j => j.Priority).ToListAsync(cancellationToken);
@@ -564,7 +564,7 @@ public class JobService(
         return jobs.Select(j => new FinishingJobView(
             j.Id,
             j.JobNumber,
-            j.Product.PrimaryCustomer.Name,
+            j.Product.PrimaryCustomer?.Name ?? "",
             j.Product.Description,
             j.DueDate,
             j.QuantityOrdered,

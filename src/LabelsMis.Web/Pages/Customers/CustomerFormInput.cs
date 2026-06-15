@@ -15,7 +15,7 @@ public class CustomerFormInput
     public string Code { get; set; } = string.Empty;
 
     [Display(Name = "Terms")]
-    public string Terms { get; set; } = "Net 30";
+    public PaymentTerms Terms { get; set; } = PaymentTerms.Net30;
 
     [Display(Name = "Tax exempt")]
     public bool TaxExempt { get; set; }

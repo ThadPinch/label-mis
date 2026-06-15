@@ -47,7 +47,7 @@ public record ContactInput(
 public record CustomerForm(
     string Name,
     string Code,
-    string Terms,
+    PaymentTerms Terms,
     bool TaxExempt,
     decimal DefaultMarkupPct,
     CustomerStatus Status,

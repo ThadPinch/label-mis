@@ -14,6 +14,13 @@ public class Ink : MasterDataEntity
     public InkSet InkSet { get; private set; }
     public decimal ClickRatePer1000 { get; private set; }
     public bool IsWhite { get; private set; }
+    public bool IsSilver { get; private set; }
+
+    // Bottle/coverage costing for special inks (white, silver, PMS spots).
+    public decimal BottleCost { get; private set; }
+    public decimal BottleSizeMl { get; private set; }
+    public decimal MlPer1000SqIn { get; private set; }
+    public decimal DefaultCoveragePct { get; private set; } = 1m;
 
     public static Ink Create(
         Guid id,
@@ -22,6 +29,11 @@ public class Ink : MasterDataEntity
         InkSet inkSet,
         decimal clickRatePer1000,
         bool isWhite,
+        bool isSilver,
+        decimal bottleCost,
+        decimal bottleSizeMl,
+        decimal mlPer1000SqIn,
+        decimal defaultCoveragePct,
         Guid createdById,
         DateTime createdAt)
     {
@@ -46,7 +58,12 @@ public class Ink : MasterDataEntity
             Description = description.Trim(),
             InkSet = inkSet,
             ClickRatePer1000 = clickRatePer1000,
-            IsWhite = isWhite
+            IsWhite = isWhite,
+            IsSilver = isSilver,
+            BottleCost = bottleCost,
+            BottleSizeMl = bottleSizeMl,
+            MlPer1000SqIn = mlPer1000SqIn,
+            DefaultCoveragePct = defaultCoveragePct <= 0 ? 1m : defaultCoveragePct
         };
         ink.SetCreated(id, createdById, createdAt);
         return ink;
@@ -58,6 +75,11 @@ public class Ink : MasterDataEntity
         InkSet inkSet,
         decimal clickRatePer1000,
         bool isWhite,
+        bool isSilver,
+        decimal bottleCost,
+        decimal bottleSizeMl,
+        decimal mlPer1000SqIn,
+        decimal defaultCoveragePct,
         Guid modifiedById,
         DateTime modifiedAt)
     {
@@ -81,6 +103,11 @@ public class Ink : MasterDataEntity
         InkSet = inkSet;
         ClickRatePer1000 = clickRatePer1000;
         IsWhite = isWhite;
+        IsSilver = isSilver;
+        BottleCost = bottleCost;
+        BottleSizeMl = bottleSizeMl;
+        MlPer1000SqIn = mlPer1000SqIn;
+        DefaultCoveragePct = defaultCoveragePct <= 0 ? 1m : defaultCoveragePct;
         SetModified(modifiedById, modifiedAt);
     }
 }

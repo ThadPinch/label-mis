@@ -1,0 +1,42 @@
+@page "/settings/email"
+@model LabelsMis.Web.Pages.Settings.EmailModel
+@{
+    ViewData["Title"] = "Email settings";
+    ViewData["BackNav"] = new BackNavModel();
+}
+<h1 class="h3 mb-3">Email settings</h1>
+<p class="text-muted">Configure Mailgun to send estimate and document emails. When disabled or incomplete, outgoing emails are logged only and not delivered.</p>
+
+<form method="post">
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+    <div class="row g-3">
+        <div class="col-md-4 form-check align-self-end">
+            <input asp-for="Input.Enabled" class="form-check-input" />
+            <label asp-for="Input.Enabled" class="form-check-label">Enable Mailgun email</label>
+        </div>
+        <div class="col-md-8">
+            <label asp-for="Input.ApiBaseUrl" class="form-label">API base URL</label>
+            <input asp-for="Input.ApiBaseUrl" class="form-control" placeholder="https://api.mailgun.net" />
+            <div class="form-text">Use <code>https://api.mailgun.net</code> (US) or <code>https://api.eu.mailgun.net</code> (EU).</div>
+        </div>
+        <div class="col-md-6">
+            <label asp-for="Input.Domain" class="form-label">Sending domain</label>
+            <input asp-for="Input.Domain" class="form-control" placeholder="mg.yourcompany.com" />
+            <div class="form-text">The Mailgun domain configured in your account.</div>
+        </div>
+        <div class="col-md-6">
+            <label asp-for="Input.ApiKey" class="form-label">API key</label>
+            <input asp-for="Input.ApiKey" type="password" class="form-control" autocomplete="new-password" placeholder="@(Model.HasApiKey ? "(unchanged)" : "")" />
+            <div class="form-text">Mailgun sending API key. Leave blank to keep the current key.</div>
+        </div>
+        <div class="col-md-6">
+            <label asp-for="Input.FromName" class="form-label">From name</label>
+            <input asp-for="Input.FromName" class="form-control" placeholder="Printing Solutions" />
+        </div>
+        <div class="col-md-6">
+            <label asp-for="Input.FromEmail" class="form-label">From email</label>
+            <input asp-for="Input.FromEmail" class="form-control" placeholder="estimates@mg.yourcompany.com" />
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary mt-3">Save settings</button>
+</form>

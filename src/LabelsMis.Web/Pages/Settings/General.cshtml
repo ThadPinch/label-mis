@@ -1,0 +1,91 @@
+@page "/settings/general"
+@model LabelsMis.Web.Pages.Settings.GeneralModel
+@{
+    ViewData["Title"] = "General settings";
+    ViewData["BackNav"] = new BackNavModel();
+}
+<h1 class="h3 mb-3">General settings</h1>
+<p class="text-muted">Company branding used across documents. The logo and company details appear on the estimate PDF.</p>
+
+@if (TempData["GeneralStatus"] is string statusMessage)
+{
+    <div class="alert alert-success">@statusMessage</div>
+}
+
+<form method="post" enctype="multipart/form-data">
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="row g-3">
+                <div class="col-12">
+                    <label asp-for="Input.CompanyName" class="form-label"></label>
+                    <input asp-for="Input.CompanyName" class="form-control" />
+                    <span asp-validation-for="Input.CompanyName" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Input.AddressLine1" class="form-label"></label>
+                    <input asp-for="Input.AddressLine1" class="form-control" />
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Input.AddressLine2" class="form-label"></label>
+                    <input asp-for="Input.AddressLine2" class="form-control" placeholder="Suite / unit (optional)" />
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Input.City" class="form-label"></label>
+                    <input asp-for="Input.City" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="Input.State" class="form-label"></label>
+                    <input asp-for="Input.State" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="Input.Zip" class="form-label"></label>
+                    <input asp-for="Input.Zip" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="Input.Phone" class="form-label"></label>
+                    <input asp-for="Input.Phone" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="Input.Email" class="form-label"></label>
+                    <input asp-for="Input.Email" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="Input.Website" class="form-label"></label>
+                    <input asp-for="Input.Website" class="form-control" placeholder="www.example.com" />
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.TermsText" class="form-label"></label>
+                    <textarea asp-for="Input.TermsText" class="form-control" rows="3"></textarea>
+                    <div class="form-text">Shown in the Terms section of the estimate PDF.</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <label class="form-label">Logo</label>
+            <div class="border rounded p-3 text-center bg-light">
+                @if (Model.LogoDataUri is not null)
+                {
+                    <img src="@Model.LogoDataUri" alt="Company logo" style="max-height: 120px; max-width: 100%;" />
+                }
+                else
+                {
+                    <p class="text-muted mb-0">No logo uploaded yet.</p>
+                }
+            </div>
+            <input asp-for="LogoUpload" type="file" accept="image/*" class="form-control mt-2" />
+            <span asp-validation-for="LogoUpload" class="text-danger"></span>
+            <div class="form-text">PNG, JPEG, GIF, or WebP up to 2&nbsp;MB. Uploading replaces the current logo when you save.</div>
+            @if (Model.LogoDataUri is not null)
+            {
+                <button type="submit" asp-page-handler="RemoveLogo" class="btn btn-sm btn-outline-danger mt-2"
+                        formnovalidate>Remove logo</button>
+            }
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary mt-3">Save settings</button>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

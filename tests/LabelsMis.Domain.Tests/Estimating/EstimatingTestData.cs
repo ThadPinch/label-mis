@@ -55,8 +55,10 @@ internal static class EstimatingTestData
             PressClickBased: true,
             InkSet: inkSet ?? IndigoInkSet.CMYK,
             ClickRatePer1000: clickRatePer1000 ?? 35m,
-            WhiteInkUsed: whiteInkUsed ?? false,
-            WhiteClickRatePer1000: whiteClickRatePer1000 ?? 0m,
+            WhiteInk: (whiteInkUsed ?? false)
+                ? new SpecialInkSpec("White", 1, whiteClickRatePer1000 ?? 0m, 1m, 0m, 0m, 0m)
+                : null,
+            SilverInk: null,
             StockId: BoppStockId,
             StockWidthIn: 13.5m,
             StockCostPerMsi: 0.85m,

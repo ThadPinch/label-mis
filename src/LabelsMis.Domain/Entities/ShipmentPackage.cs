@@ -68,5 +68,18 @@ public class ShipmentPackage : EntityBase
         SetModified(modifiedById, modifiedAt);
     }
 
+    /// <summary>Records a manually entered tracking number (no carrier label is generated).</summary>
+    public void SetManualTracking(string trackingNumber, decimal shippingCost, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (string.IsNullOrWhiteSpace(trackingNumber))
+        {
+            throw new ArgumentException("Tracking number is required.", nameof(trackingNumber));
+        }
+
+        TrackingNumber = trackingNumber.Trim();
+        ShippingCost = shippingCost;
+        SetModified(modifiedById, modifiedAt);
+    }
+
     public void AddTrackingEvent(TrackingEvent trackingEvent) => _trackingEvents.Add(trackingEvent);
 }

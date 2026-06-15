@@ -101,7 +101,7 @@ public sealed class CustomerImporter : CsvImporterBase
                 }
 
                 var customer = Customer.Create(
-                    Guid.NewGuid(), row.Name.Trim(), code, row.Terms.Trim(),
+                    Guid.NewGuid(), row.Name.Trim(), code, PaymentTermsParser.Parse(row.Terms),
                     row.TaxExempt, row.DefaultMarkupPct, CustomerStatus.Active, null, actorId, now);
                 db.Customers.Add(customer);
                 success++;

@@ -33,6 +33,8 @@ public class EditModel(
     public bool CanCancel { get; private set; }
     public bool IsLocked { get; private set; }
     public IReadOnlyList<LineJobInfo> LineJobs { get; private set; } = [];
+    public IReadOnlyList<OrderShipmentInfo> Shipments { get; private set; } = [];
+    public IReadOnlyList<OrderInvoiceInfo> Invoices { get; private set; } = [];
 
     public record LineJobInfo(
         int LineNumber,
@@ -40,6 +42,20 @@ public class EditModel(
         Guid? JobId,
         string? JobNumber,
         JobStatus? JobStatus);
+
+    public record OrderShipmentInfo(
+        Guid Id,
+        string ShipmentNumber,
+        DateOnly ShipDate,
+        ShipmentStatus Status);
+
+    public record OrderInvoiceInfo(
+        Guid Id,
+        string InvoiceNumber,
+        DateOnly InvoiceDate,
+        InvoiceStatus Status,
+        decimal Total,
+        decimal BalanceDue);
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -54,8 +70,24 @@ public class EditModel(
         CanCancel = Order.Status is not (SalesOrderStatus.Open or SalesOrderStatus.Cancelled or SalesOrderStatus.Closed);
         Input = ToPageInput(Order);
         await LoadLineJobsAsync(cancellationToken);
+        await LoadRelatedDocumentsAsync(cancellationToken);
         await LoadLookupsAsync(Order.CustomerId, cancellationToken);
         return Page();
+    }
+
+    private async Task LoadRelatedDocumentsAsync(CancellationToken cancellationToken)
+    {
+        Shipments = await db.Shipments.AsNoTracking()
+            .Where(s => s.SalesOrderId == Id)
+            .OrderBy(s => s.ShipDate)
+            .Select(s => new OrderShipmentInfo(s.Id, s.ShipmentNumber, s.ShipDate, s.Status))
+            .ToListAsync(cancellationToken);
+
+        Invoices = await db.Invoices.AsNoTracking()
+            .Where(i => i.SalesOrderId == Id)
+            .OrderBy(i => i.InvoiceDate)
+            .Select(i => new OrderInvoiceInfo(i.Id, i.InvoiceNumber, i.InvoiceDate, i.Status, i.Total, i.BalanceDue))
+            .ToListAsync(cancellationToken);
     }
 
     private async Task LoadLineJobsAsync(CancellationToken cancellationToken)

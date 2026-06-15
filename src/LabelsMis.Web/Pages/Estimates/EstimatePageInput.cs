@@ -37,7 +37,17 @@ public class EstimateLinePageInput
 
     public InkSet InkSet { get; set; } = InkSet.CMYK;
 
-    public bool WhiteInkUsed { get; set; }
+    [Range(0, 3)]
+    public int WhiteHits { get; set; }
+
+    [Range(0, 3)]
+    public int SilverHits { get; set; }
+
+    [Range(0, 100)]
+    public decimal WhiteCoveragePct { get; set; } = 100m;
+
+    [Range(0, 100)]
+    public decimal SilverCoveragePct { get; set; } = 100m;
 
     [Range(0, 10000)]
     public decimal SetupWasteImpressions { get; set; } = 30m;
@@ -72,7 +82,10 @@ public class EstimateLinePageInput
         BleedIn,
         SubstrateId ?? Guid.Empty,
         InkSet,
-        WhiteInkUsed,
+        WhiteHits,
+        SilverHits,
+        WhiteCoveragePct / 100m,
+        SilverCoveragePct / 100m,
         FinishingOperations,
         SetupWasteImpressions,
         RunningWastePct,
@@ -97,7 +110,10 @@ public class EstimateLinePageInput
             BleedIn = line.BleedIn,
             SubstrateId = line.SubstrateId,
             InkSet = line.InkSet,
-            WhiteInkUsed = line.WhiteInkUsed,
+            WhiteHits = line.WhiteHits,
+            SilverHits = line.SilverHits,
+            WhiteCoveragePct = line.WhiteCoveragePct * 100m,
+            SilverCoveragePct = line.SilverCoveragePct * 100m,
             SetupWasteImpressions = line.SetupWasteImpressions,
             RunningWastePct = line.RunningWastePct,
             LineNotes = line.LineNotes,

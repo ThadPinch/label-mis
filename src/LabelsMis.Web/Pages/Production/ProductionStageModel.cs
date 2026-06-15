@@ -14,7 +14,7 @@ namespace LabelsMis.Web.Pages.Production;
 /// Each derived page fixes the job status it lists and the status its advance button moves jobs to.
 /// </summary>
 [Authorize(Policy = TransactionPolicies.JobsRead)]
-public abstract class ProductionStageModel(JobService jobService) : PageModel
+public abstract class ProductionStageModel(JobService jobService) : PageModel, IProductionStageNav
 {
     protected JobService JobService => jobService;
 

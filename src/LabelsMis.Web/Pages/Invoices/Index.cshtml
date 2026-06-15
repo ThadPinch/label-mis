@@ -33,14 +33,26 @@
 </form>
 
 <table class="table table-striped">
-    <thead><tr><th>Invoice #</th><th>Customer</th><th>Date</th><th>Due</th><th>Status</th><th>Total</th><th>Balance</th><th></th></tr></thead>
+    <thead><tr><th>Invoice #</th><th>Customer</th><th>Order</th><th>Date</th><th>Due</th><th>Status</th><th>Order status</th><th>Total</th><th>Balance</th><th></th></tr></thead>
     <tbody>
     @foreach (var item in Model.Result.Items)
     {
         <tr>
             <td>@item.InvoiceNumber</td><td>@item.CustomerName</td>
+            <td><a asp-page="/SalesOrders/Edit" asp-route-id="@item.SalesOrderId">@item.OrderNumber</a></td>
             <td>@item.InvoiceDate.ToString("yyyy-MM-dd")</td><td>@item.DueDate.ToString("yyyy-MM-dd")</td>
-            <td>@item.Status</td><td>@item.Total.ToString("C2")</td><td>@item.BalanceDue.ToString("C2")</td>
+            <td>@item.Status</td>
+            <td>
+                @if (item.IsFullyShipped)
+                {
+                    <span class="badge bg-success">Shipped @item.ShippedLines/@item.TotalLines</span>
+                }
+                else
+                {
+                    <span class="badge bg-secondary">Shipped @item.ShippedLines/@item.TotalLines</span>
+                }
+            </td>
+            <td>@item.Total.ToString("C2")</td><td>@item.BalanceDue.ToString("C2")</td>
             <td class="text-end"><a asp-page="Detail" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a></td>
         </tr>
     }

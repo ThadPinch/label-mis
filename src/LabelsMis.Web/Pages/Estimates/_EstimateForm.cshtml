@@ -13,6 +13,10 @@
 {
     <input type="hidden" asp-for="CustomerId" />
 }
+@if (!isReadOnly)
+{
+    <script type="application/json" id="finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString() })))</script>
+}
 <div class="estimate-workspace">
     <div class="estimate-workspace-main">
 <div class="row g-3">
@@ -116,6 +120,7 @@
             <label for="product-filter-customer" class="form-label">Pull from existing product — customer</label>
             <select id="product-filter-customer" class="form-select">
                 <option value="">All products</option>
+                <option value="house">House products (no customer)</option>
                 @foreach (var customer in (IEnumerable<SelectListItem>)ViewData["Customers"]!)
                 {
                     <option value="@customer.Value">@customer.Text</option>
@@ -129,7 +134,6 @@
     @for (var i = 0; i < Model.Lines.Count; i++)
     {
         var line = Model.Lines[i];
-        var selectedFinIds = line.FinishingOperations.Select(f => f.OperationId).ToHashSet();
         <div class="card mb-3 estimate-line" data-line-index="@i">
             <details class="estimate-line-details">
                 <summary class="estimate-line-summary card-header">
@@ -147,6 +151,7 @@
                 {
                     <input type="hidden" name="Input.Lines[@i].Id" value="@line.Id" />
                 }
+                <div class="estimate-line-grid">
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label">Pull from existing product</label>
@@ -163,105 +168,170 @@
                         <label class="form-label">Product description</label>
                         <input name="Input.Lines[@i].ProductDescription" value="@line.ProductDescription" class="form-control calc-trigger" readonly="@isReadOnly" />
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Label across (in)</label>
-                        <input name="Input.Lines[@i].LabelAcrossIn" value="@line.LabelAcrossIn" class="form-control calc-trigger" readonly="@isReadOnly" />
+                </div>
+
+                <div class="estimate-line-section">
+                    <div class="estimate-line-section-title">Dimensions <span class="text-muted text-lowercase fw-normal">(in)</span></div>
+                    <div class="row g-3">
+                        <div class="col-6 col-md-2">
+                            <label class="form-label">Across</label>
+                            <input name="Input.Lines[@i].LabelAcrossIn" value="@line.LabelAcrossIn" class="form-control calc-trigger" readonly="@isReadOnly" />
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label">Around</label>
+                            <input name="Input.Lines[@i].LabelAroundIn" value="@line.LabelAroundIn" class="form-control calc-trigger" readonly="@isReadOnly" />
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label">Corner radius</label>
+                            <input name="Input.Lines[@i].CornerRadiusIn" value="@line.CornerRadiusIn" class="form-control calc-trigger" readonly="@isReadOnly" />
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label">Gutter across</label>
+                            <input name="Input.Lines[@i].GutterAcrossIn" value="@line.GutterAcrossIn" class="form-control calc-trigger" readonly="@isReadOnly" />
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label">Gutter around</label>
+                            <input name="Input.Lines[@i].GutterAroundIn" value="@line.GutterAroundIn" class="form-control calc-trigger" readonly="@isReadOnly" />
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label">Bleed</label>
+                            <input name="Input.Lines[@i].BleedIn" value="@line.BleedIn" class="form-control calc-trigger" readonly="@isReadOnly" />
+                        </div>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Label around (in)</label>
-                        <input name="Input.Lines[@i].LabelAroundIn" value="@line.LabelAroundIn" class="form-control calc-trigger" readonly="@isReadOnly" />
+                </div>
+
+                <div class="estimate-line-section">
+                    <div class="estimate-line-section-title">Material &amp; ink</div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Substrate</label>
+                            <select name="Input.Lines[@i].SubstrateId" class="form-select calc-immediate substrate-select" disabled="@isReadOnly">
+                                <option value="">Select substrate</option>
+                                @foreach (var s in substrates)
+                                {
+                                    <option value="@s.Value" selected="@(s.Value == line.SubstrateId?.ToString())">@s.Text</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Ink set</label>
+                            <select name="Input.Lines[@i].InkSet" class="form-select calc-immediate" disabled="@isReadOnly">
+                                @foreach (var v in Enum.GetValues<LabelsMis.Domain.Enums.InkSet>())
+                                {
+                                    <option value="@((int)v)" selected="@(v == line.InkSet)">@v</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label">White hits</label>
+                            <select name="Input.Lines[@i].WhiteHits" class="form-select calc-immediate special-hits-select" data-coverage-group="white-coverage-group" disabled="@isReadOnly">
+                                @for (var h = 0; h <= 3; h++)
+                                {
+                                    <option value="@h" selected="@(h == line.WhiteHits)">@(h == 0 ? "None" : $"{h} hit{(h == 1 ? "" : "s")}")</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3 white-coverage-group @(line.WhiteHits > 0 ? "" : "d-none")">
+                            <label class="form-label">White coverage <span class="coverage-readout">@((int)line.WhiteCoveragePct)%</span></label>
+                            <input type="range" min="0" max="100" step="1" name="Input.Lines[@i].WhiteCoveragePct" value="@((int)line.WhiteCoveragePct)" class="form-range calc-immediate coverage-slider" disabled="@isReadOnly" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label">Silver hits</label>
+                            <select name="Input.Lines[@i].SilverHits" class="form-select calc-immediate special-hits-select" data-coverage-group="silver-coverage-group" disabled="@isReadOnly">
+                                @for (var h = 0; h <= 3; h++)
+                                {
+                                    <option value="@h" selected="@(h == line.SilverHits)">@(h == 0 ? "None" : $"{h} hit{(h == 1 ? "" : "s")}")</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3 silver-coverage-group @(line.SilverHits > 0 ? "" : "d-none")">
+                            <label class="form-label">Silver coverage <span class="coverage-readout">@((int)line.SilverCoveragePct)%</span></label>
+                            <input type="range" min="0" max="100" step="1" name="Input.Lines[@i].SilverCoveragePct" value="@((int)line.SilverCoveragePct)" class="form-range calc-immediate coverage-slider" disabled="@isReadOnly" />
+                        </div>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Corner radius (in)</label>
-                        <input name="Input.Lines[@i].CornerRadiusIn" value="@line.CornerRadiusIn" class="form-control calc-trigger" readonly="@isReadOnly" />
+                </div>
+
+                <div class="estimate-line-section">
+                    <div class="estimate-line-section-title">Imposition &amp; waste</div>
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label" for="line-@(i)-max-across">Labels across <span class="form-text d-inline labels-across-max">(auto)</span></label>
+                            <select id="line-@(i)-max-across" name="Input.Lines[@i].MaxLabelsAcrossOverride" class="form-select calc-immediate labels-across-select" disabled="@isReadOnly">
+                                <option value="" selected="@(!line.MaxLabelsAcrossOverride.HasValue)">Auto</option>
+                                @for (var n = 1; n <= 12; n++)
+                                {
+                                    <option value="@n" selected="@(line.MaxLabelsAcrossOverride == n)">@n up</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label" for="line-@(i)-orientation">Orientation</label>
+                            <select id="line-@(i)-orientation" name="Input.Lines[@i].LabelOrientationOverride" class="form-select calc-immediate orientation-select" disabled="@isReadOnly">
+                                <option value="" selected="@(!line.LabelOrientationOverride.HasValue)">Auto (best fit)</option>
+                                <option value="@((int)LabelOrientation.AsEntered)" selected="@(line.LabelOrientationOverride == LabelOrientation.AsEntered)">As entered</option>
+                                <option value="@((int)LabelOrientation.Rotated)" selected="@(line.LabelOrientationOverride == LabelOrientation.Rotated)">Rotated 90°</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label">Setup waste (imp)</label>
+                            <input name="Input.Lines[@i].SetupWasteImpressions" value="@line.SetupWasteImpressions" class="form-control calc-trigger" readonly="@isReadOnly" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label">Running waste %</label>
+                            <input name="Input.Lines[@i].RunningWastePct" value="@line.RunningWastePct" class="form-control calc-trigger" readonly="@isReadOnly" />
+                        </div>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Gutter across (in)</label>
-                        <input name="Input.Lines[@i].GutterAcrossIn" value="@line.GutterAcrossIn" class="form-control calc-trigger" readonly="@isReadOnly" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Gutter around (in)</label>
-                        <input name="Input.Lines[@i].GutterAroundIn" value="@line.GutterAroundIn" class="form-control calc-trigger" readonly="@isReadOnly" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Bleed (in)</label>
-                        <input name="Input.Lines[@i].BleedIn" value="@line.BleedIn" class="form-control calc-trigger" readonly="@isReadOnly" />
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Substrate</label>
-                        <select name="Input.Lines[@i].SubstrateId" class="form-select calc-immediate substrate-select" disabled="@isReadOnly">
-                            <option value="">Select substrate</option>
-                            @foreach (var s in substrates)
-                            {
-                                <option value="@s.Value" selected="@(s.Value == line.SubstrateId?.ToString())">@s.Text</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Ink set</label>
-                        <select name="Input.Lines[@i].InkSet" class="form-select calc-immediate" disabled="@isReadOnly">
-                            @foreach (var v in Enum.GetValues<LabelsMis.Domain.Enums.InkSet>())
-                            {
-                                <option value="@((int)v)" selected="@(v == line.InkSet)">@v</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-3 form-check align-self-end">
-                        <input type="checkbox" name="Input.Lines[@i].WhiteInkUsed" value="true" class="form-check-input calc-immediate" disabled="@isReadOnly" checked="@line.WhiteInkUsed" />
-                        <label class="form-check-label">White ink</label>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Setup waste (imp)</label>
-                        <input name="Input.Lines[@i].SetupWasteImpressions" value="@line.SetupWasteImpressions" class="form-control calc-trigger" readonly="@isReadOnly" />
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Running waste %</label>
-                        <input name="Input.Lines[@i].RunningWastePct" value="@line.RunningWastePct" class="form-control calc-trigger" readonly="@isReadOnly" />
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label" for="line-@(i)-max-across">Labels across <span class="form-text d-inline labels-across-max">(auto)</span></label>
-                        <select id="line-@(i)-max-across" name="Input.Lines[@i].MaxLabelsAcrossOverride" class="form-select calc-immediate labels-across-select" disabled="@isReadOnly">
-                            <option value="" selected="@(!line.MaxLabelsAcrossOverride.HasValue)">Auto</option>
-                            @for (var n = 1; n <= 12; n++)
-                            {
-                                <option value="@n" selected="@(line.MaxLabelsAcrossOverride == n)">@n up</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label" for="line-@(i)-orientation">Orientation</label>
-                        <select id="line-@(i)-orientation" name="Input.Lines[@i].LabelOrientationOverride" class="form-select calc-immediate orientation-select" disabled="@isReadOnly">
-                            <option value="" selected="@(!line.LabelOrientationOverride.HasValue)">Auto (best fit)</option>
-                            <option value="@((int)LabelOrientation.AsEntered)" selected="@(line.LabelOrientationOverride == LabelOrientation.AsEntered)">As entered</option>
-                            <option value="@((int)LabelOrientation.Rotated)" selected="@(line.LabelOrientationOverride == LabelOrientation.Rotated)">Rotated 90°</option>
-                        </select>
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label">Finishing operations</label>
+                </div>
+                    <div class="estimate-line-section">
+                        <div class="estimate-line-section-title">Finishing operations</div>
                         @if (!isReadOnly)
                         {
-                            <div class="finishing-ops">
-                                @for (var j = 0; j < finishingOps.Count; j++)
+                            <div class="finishing-builder row g-2 align-items-end">
+                                <div class="col-md-4">
+                                    <label class="form-label small mb-1">Category</label>
+                                    <select class="form-select finishing-category-select">
+                                        <option value="">Select category</option>
+                                        @foreach (var cat in finishingOps.Select(o => o.OperationType).Distinct())
+                                        {
+                                            <option value="@cat">@cat</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label small mb-1">Operation</label>
+                                    <select class="form-select finishing-operation-select" disabled>
+                                        <option value="">Select operation</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <button type="button" class="btn btn-outline-primary finishing-add w-100" disabled>Add operation</button>
+                                </div>
+                            </div>
+                            <div class="finishing-selected mt-2">
+                                @for (var j = 0; j < line.FinishingOperations.Count; j++)
                                 {
-                                    var op = finishingOps[j];
-                                    var selected = selectedFinIds.Contains(op.Id);
-                                    var existing = line.FinishingOperations.FirstOrDefault(f => f.OperationId == op.Id);
-                                    <div class="border rounded p-2 mb-2">
-                                        <div class="form-check">
-                                            <input type="checkbox" class="form-check-input finishing-toggle calc-immediate" data-op-id="@op.Id" @(selected ? "checked" : "") />
-                                            <label class="form-check-label">@op.Code — @op.Description</label>
-                                        </div>
-                                        <div class="row g-2 mt-1 finishing-fields @(selected ? "" : "d-none")">
-                                            <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].OperationId" value="@op.Id" class="finishing-op-id" disabled="@(!selected)" />
-                                            <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].SortOrder" value="@j" class="finishing-sort" disabled="@(!selected)" />
-                                            <div class="col-md-3">
-                                                <label class="form-label">Setup min override</label>
-                                                <input name="Input.Lines[@i].FinishingOperations[@j].SetupMinutesOverride" value="@existing?.SetupMinutesOverride" class="form-control calc-trigger" disabled="@(!selected)" />
+                                    var sel = line.FinishingOperations[j];
+                                    var op = finishingOps.FirstOrDefault(o => o.Id == sel.OperationId);
+                                    <div class="finishing-item border rounded p-2 mb-2" data-op-id="@sel.OperationId">
+                                        <div class="d-flex flex-wrap gap-2 align-items-end">
+                                            <div class="flex-grow-1">
+                                                <div class="fw-semibold">@(op is null ? sel.OperationId.ToString() : $"{op.Code} — {op.Description}")</div>
+                                                @if (op is not null)
+                                                {
+                                                    <span class="text-muted small">@op.OperationType</span>
+                                                }
+                                                <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].OperationId" value="@sel.OperationId" class="finishing-op-id" />
+                                                <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].SortOrder" value="@j" class="finishing-sort" />
                                             </div>
-                                            <div class="col-md-3">
-                                                <label class="form-label">Run speed fpm override</label>
-                                                <input name="Input.Lines[@i].FinishingOperations[@j].RunSpeedFpmOverride" value="@existing?.RunSpeedFpmOverride" class="form-control calc-trigger" disabled="@(!selected)" />
+                                            <div>
+                                                <label class="form-label small mb-0">Setup min override</label>
+                                                <input name="Input.Lines[@i].FinishingOperations[@j].SetupMinutesOverride" value="@(sel.SetupMinutesOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" class="form-control form-control-sm calc-trigger" style="max-width: 8rem;" />
                                             </div>
+                                            <div>
+                                                <label class="form-label small mb-0">Run speed fpm override</label>
+                                                <input name="Input.Lines[@i].FinishingOperations[@j].RunSpeedFpmOverride" value="@(sel.RunSpeedFpmOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" class="form-control form-control-sm calc-trigger" style="max-width: 8rem;" />
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-danger finishing-remove">Remove</button>
                                         </div>
                                     </div>
                                 }
@@ -278,21 +348,24 @@
                             </ul>
                         }
                     </div>
-                    <div class="col-12">
-                        <label class="form-label">Quantity breaks</label>
-                        <div class="form-text mb-1">Enter one to three quantity breaks. Values shift to the first slots automatically.</div>
+                    <div class="estimate-line-section">
+                        <div class="estimate-line-section-title">Quantity breaks</div>
+                        <div class="form-text mb-2">Enter up to six quantity breaks. Values shift to the first slots automatically.</div>
                         <div class="row g-2 quantity-inputs">
-                            @for (var q = 0; q < 3; q++)
+                            @for (var q = 0; q < 6; q++)
                             {
                                 var qty = q < line.Quantities.Count ? line.Quantities[q] : null;
-                                <div class="col-md-2">
-                                    <input name="Input.Lines[@i].Quantities[@q]" value="@(qty is > 0 ? qty : "")" class="form-control calc-trigger quantity-input" placeholder="Qty" readonly="@isReadOnly" />
+                                <div class="col-4 col-sm-3 col-md-2">
+                                    <div class="input-group">
+                                        <span class="input-group-text">@(q + 1)</span>
+                                        <input name="Input.Lines[@i].Quantities[@q]" value="@(qty is > 0 ? qty : "")" class="form-control calc-trigger quantity-input" placeholder="Qty" readonly="@isReadOnly" />
+                                    </div>
                                 </div>
                             }
                         </div>
                     </div>
-                    <div class="col-12">
-                        <label class="form-label">Line notes</label>
+                    <div class="estimate-line-section">
+                        <div class="estimate-line-section-title">Line notes</div>
                         <textarea name="Input.Lines[@i].LineNotes" class="form-control" rows="2" readonly="@isReadOnly">@line.LineNotes</textarea>
                     </div>
                 </div>

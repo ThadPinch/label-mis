@@ -36,7 +36,7 @@
             <td>@item.InternalSku</td>
             <td>@(item.CustomerSku ?? "—")</td>
             <td>@item.Description</td>
-            <td>@item.CustomerNames</td>
+            <td>@(string.IsNullOrWhiteSpace(item.CustomerNames) ? "—" : item.CustomerNames)</td>
             <td>@item.Status</td>
             <td class="text-end"><a asp-page="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a></td>
         </tr>

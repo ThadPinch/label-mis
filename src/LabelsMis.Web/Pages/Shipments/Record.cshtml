@@ -1,0 +1,193 @@
+@page "/shipments/record"
+@model LabelsMis.Web.Pages.Shipments.RecordModel
+@{
+    ViewData["Title"] = "Record shipment";
+    ViewData["BackNav"] = new BackNavModel();
+    var order = Model.Order!;
+    var lineLookup = order.Lines.ToDictionary(l => l.SalesOrderLineId);
+}
+
+<h1 class="h3 mb-1">Record shipment</h1>
+<p class="text-muted">@order.OrderNumber — @order.CustomerName</p>
+
+<form method="post">
+    <input type="hidden" asp-for="SalesOrderId" />
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <label asp-for="Input.ShipDate" class="form-label">Ship date</label>
+            <input asp-for="Input.ShipDate" type="date" class="form-control" />
+        </div>
+        <div class="col-md-3">
+            <label asp-for="Input.Carrier" class="form-label">Carrier</label>
+            <select asp-for="Input.Carrier" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.Carrier>()"></select>
+        </div>
+        <div class="col-md-6">
+            <label asp-for="Input.ShipToAddressId" class="form-label">Ship to</label>
+            <select asp-for="Input.ShipToAddressId" class="form-select"
+                    asp-items="@(new SelectList(order.ShipToAddresses, nameof(LabelsMis.Web.Services.Shipments.ManualShipmentAddress.Id), nameof(LabelsMis.Web.Services.Shipments.ManualShipmentAddress.Label)))"></select>
+        </div>
+    </div>
+
+    <h2 class="h6">Items ready to ship</h2>
+    @if (Model.Input.Lines.Count == 0)
+    {
+        <div class="alert alert-warning">No items on this order are at the ready-to-ship stage.</div>
+    }
+    else
+    {
+        <table class="table table-sm align-middle">
+            <thead><tr><th style="width:3rem;">Ship</th><th>Item</th><th>Ordered</th><th>Already shipped</th><th>Quantity to ship</th></tr></thead>
+            <tbody>
+            @for (var i = 0; i < Model.Input.Lines.Count; i++)
+            {
+                var lineInput = Model.Input.Lines[i];
+                var info = lineLookup.GetValueOrDefault(lineInput.SalesOrderLineId);
+                <tr>
+                    <td>
+                        <input type="hidden" asp-for="Input.Lines[i].SalesOrderLineId" />
+                        <input type="hidden" asp-for="Input.Lines[i].JobId" />
+                        <input type="checkbox" asp-for="Input.Lines[i].Include" class="form-check-input" />
+                    </td>
+                    <td>@(info?.ProductDescription ?? "Item")</td>
+                    <td>@(info?.QuantityOrdered)</td>
+                    <td>@(info?.QuantityShipped)</td>
+                    <td style="max-width:10rem;"><input asp-for="Input.Lines[i].Quantity" type="number" min="0" class="form-control form-control-sm" /></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+
+    @{
+        var notReady = order.Lines.Where(l => !l.IsReady).ToList();
+    }
+    @if (notReady.Count > 0)
+    {
+        <div class="form-text mb-3">
+            Not yet ready: @string.Join(", ", notReady.Select(l => $"{l.ProductDescription} ({l.QuantityRemaining} remaining)"))
+        </div>
+    }
+
+    <h2 class="h6">Packages &amp; tracking</h2>
+    <div id="package-rows">
+        @for (var i = 0; i < Model.Input.Packages.Count; i++)
+        {
+            <div class="row g-2 mb-2 align-items-end package-row">
+                <div class="col-md-3">
+                    <label asp-for="Input.Packages[i].TrackingNumber" class="form-label">Tracking #</label>
+                    <input asp-for="Input.Packages[i].TrackingNumber" class="form-control" />
+                </div>
+                <div class="col-md-1">
+                    <label asp-for="Input.Packages[i].WeightLb" class="form-label">Wt (lb)</label>
+                    <input asp-for="Input.Packages[i].WeightLb" class="form-control" />
+                </div>
+                <div class="col-md-1">
+                    <label asp-for="Input.Packages[i].LengthIn" class="form-label">L</label>
+                    <input asp-for="Input.Packages[i].LengthIn" class="form-control" />
+                </div>
+                <div class="col-md-1">
+                    <label asp-for="Input.Packages[i].WidthIn" class="form-label">W</label>
+                    <input asp-for="Input.Packages[i].WidthIn" class="form-control" />
+                </div>
+                <div class="col-md-1">
+                    <label asp-for="Input.Packages[i].HeightIn" class="form-label">H</label>
+                    <input asp-for="Input.Packages[i].HeightIn" class="form-control" />
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="Input.Packages[i].DeclaredValue" class="form-label">Declared $</label>
+                    <input asp-for="Input.Packages[i].DeclaredValue" class="form-control" />
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="Input.Packages[i].ShippingCost" class="form-label">Cost $</label>
+                    <input asp-for="Input.Packages[i].ShippingCost" class="form-control" />
+                </div>
+                <div class="col-md-1">
+                    <button type="button" class="btn btn-outline-danger remove-package w-100">×</button>
+                </div>
+            </div>
+        }
+    </div>
+    <button type="button" id="add-package" class="btn btn-outline-secondary btn-sm mb-3">+ Add package</button>
+
+    <template id="package-template">
+        <div class="row g-2 mb-2 align-items-end package-row">
+            <div class="col-md-3">
+                <label class="form-label">Tracking #</label>
+                <input name="Input.Packages[__INDEX__].TrackingNumber" class="form-control" />
+            </div>
+            <div class="col-md-1">
+                <label class="form-label">Wt (lb)</label>
+                <input name="Input.Packages[__INDEX__].WeightLb" value="1" class="form-control" />
+            </div>
+            <div class="col-md-1">
+                <label class="form-label">L</label>
+                <input name="Input.Packages[__INDEX__].LengthIn" value="12" class="form-control" />
+            </div>
+            <div class="col-md-1">
+                <label class="form-label">W</label>
+                <input name="Input.Packages[__INDEX__].WidthIn" value="12" class="form-control" />
+            </div>
+            <div class="col-md-1">
+                <label class="form-label">H</label>
+                <input name="Input.Packages[__INDEX__].HeightIn" value="6" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Declared $</label>
+                <input name="Input.Packages[__INDEX__].DeclaredValue" value="0" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Cost $</label>
+                <input name="Input.Packages[__INDEX__].ShippingCost" value="0" class="form-control" />
+            </div>
+            <div class="col-md-1">
+                <button type="button" class="btn btn-outline-danger remove-package w-100">×</button>
+            </div>
+        </div>
+    </template>
+
+    <div class="mt-2">
+        <button type="submit" class="btn btn-success">Record shipment</button>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        (() => {
+            const container = document.getElementById('package-rows');
+            const template = document.getElementById('package-template');
+            const addBtn = document.getElementById('add-package');
+            if (!container || !template) return;
+
+            const reindex = () => {
+                container.querySelectorAll('.package-row').forEach((row, idx) => {
+                    row.querySelectorAll('[name^="Input.Packages["]').forEach(el => {
+                        el.name = el.name.replace(/Input\.Packages\[\d+\]/, `Input.Packages[${idx}]`);
+                    });
+                });
+            };
+
+            const wireRemove = (row) => {
+                row.querySelector('.remove-package')?.addEventListener('click', () => {
+                    if (container.querySelectorAll('.package-row').length <= 1) return;
+                    row.remove();
+                    reindex();
+                });
+            };
+
+            container.querySelectorAll('.package-row').forEach(wireRemove);
+
+            addBtn?.addEventListener('click', () => {
+                const idx = container.querySelectorAll('.package-row').length;
+                const html = template.innerHTML.replace(/__INDEX__/g, String(idx));
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = html.trim();
+                const row = wrapper.firstElementChild;
+                container.appendChild(row);
+                wireRemove(row);
+                reindex();
+            });
+        })();
+    </script>
+}

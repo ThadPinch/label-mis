@@ -22,6 +22,12 @@ public class CreateModel(
     [BindProperty]
     public EstimatePageInput Input { get; set; } = new();
 
+    [BindProperty]
+    public bool SendEmail { get; set; } = true;
+
+    [BindProperty]
+    public string? EmailTo { get; set; }
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Input.ValidUntilDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
@@ -47,6 +53,49 @@ public class CreateModel(
             await LoadLookupsAsync(cancellationToken);
             return Page();
         }
+    }
+
+    public async Task<IActionResult> OnPostPreviewPdfAsync(CancellationToken cancellationToken)
+    {
+        var bytes = await estimateService.GeneratePreviewAsync(Input.ToForm(), "DRAFT", 1, cancellationToken);
+        return File(bytes, "application/pdf");
+    }
+
+    public async Task<IActionResult> OnPostSaveAndSendAsync(CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            await LoadLookupsAsync(cancellationToken);
+            return Page();
+        }
+
+        Guid estimateId;
+        try
+        {
+            var estimate = await estimateService.CreateDraftAsync(Input.ToForm(), cancellationToken);
+            estimateId = estimate.Id;
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            await LoadLookupsAsync(cancellationToken);
+            return Page();
+        }
+
+        // The draft now exists; send it and surface any email failure on the edit page.
+        try
+        {
+            await estimateService.SendAsync(estimateId, SendEmail, EmailTo, cancellationToken);
+            TempData["EstimateStatus"] = SendEmail && !string.IsNullOrWhiteSpace(EmailTo)
+                ? $"Estimate created and emailed to {EmailTo}."
+                : "Estimate created and marked sent.";
+        }
+        catch (Exception ex)
+        {
+            TempData["EstimateError"] = $"Estimate created and marked sent, but the email could not be delivered: {ex.Message}";
+        }
+
+        return RedirectToPage("Edit", new { id = estimateId });
     }
 
     private async Task LoadLookupsAsync(CancellationToken cancellationToken)

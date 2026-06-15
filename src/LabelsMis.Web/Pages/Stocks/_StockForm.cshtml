@@ -1,4 +1,5 @@
 @model LabelsMis.Web.Pages.Stocks.StockFormInput
+@using LabelsMis.Domain.Enums
 
 <div class="row g-3">
     <div class="col-md-3">
@@ -6,10 +7,15 @@
         <input asp-for="Code" class="form-control" />
         <span asp-validation-for="Code" class="text-danger"></span>
     </div>
-    <div class="col-md-9">
+    <div class="col-md-6">
         <label asp-for="Description" class="form-label"></label>
         <input asp-for="Description" class="form-control" />
         <span asp-validation-for="Description" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="StockType" class="form-label"></label>
+        <select asp-for="StockType" asp-items="Html.GetEnumSelectList<StockType>()" class="form-select"></select>
+        <div class="form-text">Laminate stocks can be consumed by lamination finishing tasks.</div>
     </div>
     <div class="col-md-4">
         <label asp-for="FaceMaterial" class="form-label"></label>

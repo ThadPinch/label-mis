@@ -50,6 +50,64 @@
         </div>
     </div>
 }
+@if (Model.Shipments.Any())
+{
+    <div class="card mb-3">
+        <div class="card-header py-2">Shipments</div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>Shipment</th>
+                        <th>Ship date</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var shipment in Model.Shipments)
+                    {
+                        <tr>
+                            <td><a asp-page="/Shipments/Detail" asp-route-id="@shipment.Id">@shipment.ShipmentNumber</a></td>
+                            <td>@shipment.ShipDate.ToString("yyyy-MM-dd")</td>
+                            <td><span class="badge text-bg-secondary">@shipment.Status</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+@if (Model.Invoices.Any())
+{
+    <div class="card mb-3">
+        <div class="card-header py-2">Invoices</div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>Invoice</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-end">Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var invoice in Model.Invoices)
+                    {
+                        <tr>
+                            <td><a asp-page="/Invoices/Detail" asp-route-id="@invoice.Id">@invoice.InvoiceNumber</a></td>
+                            <td>@invoice.InvoiceDate.ToString("yyyy-MM-dd")</td>
+                            <td><span class="badge text-bg-secondary">@invoice.Status</span></td>
+                            <td class="text-end">@invoice.Total.ToString("C2")</td>
+                            <td class="text-end">@invoice.BalanceDue.ToString("C2")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
 @if (!ViewData.ModelState.IsValid)
 {
     <div asp-validation-summary="All" class="text-danger mb-3"></div>

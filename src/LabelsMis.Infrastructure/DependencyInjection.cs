@@ -45,7 +45,7 @@ public static class DependencyInjection
             options.AccessDeniedPath = "/Account/Login";
         });
 
-        services.AddScoped<IEmailSender, LoggingEmailSender>();
+        services.AddHttpClient<IEmailSender, MailgunEmailSender>();
 
         services.Configure<FedexOptions>(configuration.GetSection(FedexOptions.SectionName));
         var fedexOptions = configuration.GetSection(FedexOptions.SectionName).Get<FedexOptions>() ?? new FedexOptions();

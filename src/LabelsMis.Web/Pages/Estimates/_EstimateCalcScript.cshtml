@@ -635,9 +635,9 @@
 
     const buildProductsUrl = () => {
         const key = getProductFilterKey();
-        return key === 'all'
-            ? '/estimates/products'
-            : `/estimates/products?customerId=${encodeURIComponent(key)}`;
+        if (key === 'all') return '/estimates/products';
+        if (key === 'house') return '/estimates/products?house=true';
+        return `/estimates/products?customerId=${encodeURIComponent(key)}`;
     };
 
     const loadProducts = async () => {
@@ -678,6 +678,92 @@
         }
     };
 
+    let FINISHING_OPS = [];
+    try {
+        const finishingDataEl = document.getElementById('finishing-ops-data');
+        if (finishingDataEl) FINISHING_OPS = JSON.parse(finishingDataEl.textContent || '[]');
+    } catch { FINISHING_OPS = []; }
+    const finishingById = new Map(FINISHING_OPS.map(o => [String(o.id), o]));
+
+    const populateFinishingOperations = (categorySel) => {
+        const builder = categorySel.closest('.finishing-builder');
+        if (!builder) return;
+        const opSel = builder.querySelector('.finishing-operation-select');
+        const addBtn = builder.querySelector('.finishing-add');
+        const category = categorySel.value;
+        opSel.innerHTML = '<option value="">Select operation</option>';
+        FINISHING_OPS.filter(o => o.category === category).forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o.id;
+            opt.textContent = `${o.code} — ${o.description}`;
+            opSel.appendChild(opt);
+        });
+        opSel.disabled = !category;
+        if (addBtn) addBtn.disabled = true;
+    };
+
+    const renumberFinishing = (lineEl) => {
+        const lineIdx = lineEl.dataset.lineIndex;
+        lineEl.querySelectorAll('.finishing-selected .finishing-item').forEach((item, j) => {
+            item.querySelectorAll('[name]').forEach(el => {
+                el.name = el.name.replace(/Input\.Lines\[\d+\]\.FinishingOperations\[\d+\]/, `Input.Lines[${lineIdx}].FinishingOperations[${j}]`);
+            });
+            const sort = item.querySelector('.finishing-sort');
+            if (sort) sort.value = String(j);
+        });
+    };
+
+    const wireFinishingRemove = (btn) => {
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+            const lineEl = btn.closest('.estimate-line');
+            btn.closest('.finishing-item')?.remove();
+            if (lineEl) renumberFinishing(lineEl);
+            calculate();
+        });
+    };
+
+    const buildFinishingItem = (lineEl, op, setupOverride, runOverride) => {
+        const lineIdx = lineEl.dataset.lineIndex;
+        const item = document.createElement('div');
+        item.className = 'finishing-item border rounded p-2 mb-2';
+        item.dataset.opId = op.id;
+        item.innerHTML = `
+            <div class="d-flex flex-wrap gap-2 align-items-end">
+                <div class="flex-grow-1">
+                    <div class="fw-semibold">${escapeHtml(op.code)} — ${escapeHtml(op.description)}</div>
+                    <span class="text-muted small">${escapeHtml(op.category)}</span>
+                    <input type="hidden" name="Input.Lines[${lineIdx}].FinishingOperations[0].OperationId" value="${escapeHtml(op.id)}" class="finishing-op-id" />
+                    <input type="hidden" name="Input.Lines[${lineIdx}].FinishingOperations[0].SortOrder" value="0" class="finishing-sort" />
+                </div>
+                <div>
+                    <label class="form-label small mb-0">Setup min override</label>
+                    <input name="Input.Lines[${lineIdx}].FinishingOperations[0].SetupMinutesOverride" value="${escapeHtml(setupOverride || '')}" class="form-control form-control-sm calc-trigger" style="max-width: 8rem;" />
+                </div>
+                <div>
+                    <label class="form-label small mb-0">Run speed fpm override</label>
+                    <input name="Input.Lines[${lineIdx}].FinishingOperations[0].RunSpeedFpmOverride" value="${escapeHtml(runOverride || '')}" class="form-control form-control-sm calc-trigger" style="max-width: 8rem;" />
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger finishing-remove">Remove</button>
+            </div>`;
+        return item;
+    };
+
+    const addFinishingToLine = (lineEl, op, setupOverride, runOverride) => {
+        const list = lineEl?.querySelector('.finishing-selected');
+        if (!list || !op) return false;
+        if (list.querySelector(`.finishing-item[data-op-id="${op.id}"]`)) return false;
+        const item = buildFinishingItem(lineEl, op, setupOverride, runOverride);
+        list.appendChild(item);
+        renumberFinishing(lineEl);
+        wireFinishingRemove(item.querySelector('.finishing-remove'));
+        item.querySelectorAll('.calc-trigger').forEach(el => {
+            el.addEventListener('input', scheduleCalculate);
+            el.addEventListener('blur', calculate);
+        });
+        return true;
+    };
+
     const applyProductToLine = (lineEl, product) => {
         const set = (selector, value) => {
             const el = lineEl.querySelector(selector);
@@ -701,14 +787,18 @@
 
         try {
             const finishing = JSON.parse(product.finishingOperationsJson || '[]');
-            const selectedIds = new Set(finishing.map(f => f.OperationId || f.operationId));
-            lineEl.querySelectorAll('.finishing-toggle').forEach(cb => {
-                const checked = selectedIds.has(cb.dataset.opId);
-                cb.checked = checked;
-                const fields = cb.closest('.border').querySelector('.finishing-fields');
-                fields.classList.toggle('d-none', !checked);
-                fields.querySelectorAll('input').forEach(i => i.disabled = !checked);
-            });
+            const list = lineEl.querySelector('.finishing-selected');
+            if (list) {
+                list.innerHTML = '';
+                finishing.forEach(f => {
+                    const opId = String(f.OperationId || f.operationId || '');
+                    const op = finishingById.get(opId);
+                    if (!op) return;
+                    const setup = f.SetupMinutesOverride ?? f.setupMinutesOverride;
+                    const run = f.RunSpeedFpmOverride ?? f.runSpeedFpmOverride;
+                    addFinishingToLine(lineEl, op, setup == null ? '' : String(setup), run == null ? '' : String(run));
+                });
+            }
         } catch { /* ignore */ }
     };
 
@@ -718,7 +808,7 @@
             .map(i => parseInt(i.value, 10))
             .filter(q => !Number.isNaN(q) && q > 0)
             .sort((a, b) => a - b)
-            .slice(0, 3);
+            .slice(0, 6);
         inputs.forEach((input, idx) => {
             input.value = values[idx] !== undefined ? String(values[idx]) : '';
         });
@@ -738,20 +828,23 @@
         };
         const finishing = [];
         let sort = 0;
-        lineEl.querySelectorAll('.finishing-toggle:checked').forEach(cb => {
-            const container = cb.closest('.border');
-            finishing.push({
-                operationId: cb.dataset.opId,
-                setupMinutesOverride: container.querySelector('[name*="SetupMinutesOverride"]')?.value || null,
-                runSpeedFpmOverride: container.querySelector('[name*="RunSpeedFpmOverride"]')?.value || null,
-                sortOrder: sort++
+        const finishingItems = lineEl.querySelectorAll('.finishing-selected .finishing-item');
+        if (finishingItems.length > 0) {
+            finishingItems.forEach(item => {
+                const opId = item.querySelector('.finishing-op-id')?.value;
+                if (!opId) return;
+                finishing.push({
+                    operationId: opId,
+                    setupMinutesOverride: item.querySelector('[name*="SetupMinutesOverride"]')?.value || null,
+                    runSpeedFpmOverride: item.querySelector('[name*="RunSpeedFpmOverride"]')?.value || null,
+                    sortOrder: sort++
+                });
             });
-        });
-        if (finishing.length === 0) {
+        } else {
+            // Read-only view posts finishing operations as plain hidden inputs.
             lineEl.querySelectorAll('[name*="FinishingOperations"][name*="OperationId"]').forEach(input => {
                 if (input.disabled || !input.value) return;
-                const name = input.name;
-                const prefix = name.replace(/\.OperationId$/, '');
+                const prefix = input.name.replace(/\.OperationId$/, '');
                 finishing.push({
                     operationId: input.value,
                     setupMinutesOverride: lineEl.querySelector(`[name="${prefix}.SetupMinutesOverride"]`)?.value || null,
@@ -770,7 +863,6 @@
         });
         const quantities = normalizeQuantityInputs(lineEl);
 
-        const whiteInk = lineEl.querySelector('[name$=".WhiteInkUsed"]');
         return {
             id: val('[name$=".Id"]') || null,
             sourceProductId: val('[name$=".SourceProductId"]') || null,
@@ -783,7 +875,10 @@
             bleedIn: num('[name$=".BleedIn"]'),
             substrateId: val('.substrate-select') || null,
             inkSet: int('[name$=".InkSet"]'),
-            whiteInkUsed: whiteInk?.checked === true,
+            whiteHits: int('[name$=".WhiteHits"]'),
+            silverHits: int('[name$=".SilverHits"]'),
+            whiteCoveragePct: num('[name$=".WhiteCoveragePct"]'),
+            silverCoveragePct: num('[name$=".SilverCoveragePct"]'),
             setupWasteImpressions: num('[name$=".SetupWasteImpressions"]'),
             runningWastePct: num('[name$=".RunningWastePct"]'),
             lineNotes: val('[name$=".LineNotes"]') || null,
@@ -948,14 +1043,42 @@
         root.querySelectorAll('.calc-immediate').forEach(el => {
             el.addEventListener('change', calculate);
         });
-        root.querySelectorAll('.finishing-toggle').forEach(cb => {
-            cb.addEventListener('change', () => {
-                const fields = cb.closest('.border').querySelector('.finishing-fields');
-                fields.classList.toggle('d-none', !cb.checked);
-                fields.querySelectorAll('input').forEach(i => i.disabled = !cb.checked);
-                calculate();
+        root.querySelectorAll('.special-hits-select').forEach(sel => {
+            const sync = () => {
+                const line = sel.closest('.estimate-line');
+                const group = line?.querySelector('.' + sel.dataset.coverageGroup);
+                if (group) group.classList.toggle('d-none', (parseInt(sel.value, 10) || 0) <= 0);
+            };
+            sel.addEventListener('change', sync);
+            sync();
+        });
+        root.querySelectorAll('.coverage-slider').forEach(sl => {
+            const readout = sl.closest('[class*="coverage-group"]')?.querySelector('.coverage-readout');
+            sl.addEventListener('input', () => { if (readout) readout.textContent = `${sl.value}%`; });
+        });
+        root.querySelectorAll('.finishing-category-select').forEach(sel => {
+            sel.addEventListener('change', () => populateFinishingOperations(sel));
+        });
+        root.querySelectorAll('.finishing-operation-select').forEach(sel => {
+            sel.addEventListener('change', () => {
+                const addBtn = sel.closest('.finishing-builder')?.querySelector('.finishing-add');
+                if (addBtn) addBtn.disabled = !sel.value;
             });
         });
+        root.querySelectorAll('.finishing-add').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const builder = btn.closest('.finishing-builder');
+                const opSel = builder?.querySelector('.finishing-operation-select');
+                const op = finishingById.get(opSel?.value);
+                const lineEl = btn.closest('.estimate-line');
+                if (op && lineEl && addFinishingToLine(lineEl, op, '', '')) {
+                    calculate();
+                }
+                if (opSel) opSel.value = '';
+                btn.disabled = true;
+            });
+        });
+        root.querySelectorAll('.finishing-remove').forEach(wireFinishingRemove);
         root.querySelectorAll('.source-product').forEach(sel => {
             sel.addEventListener('change', () => {
                 if (!sel.value) return;
@@ -1063,6 +1186,36 @@
         }
     };
 
+    const loadContactEmail = async ({ overwrite }) => {
+        const emailToInput = document.getElementById('EmailTo');
+        const addContactLink = document.getElementById('estimate-add-contact');
+        if (!emailToInput && !addContactLink) return;
+
+        const customerId = customerSelect?.value;
+        const hideLink = () => { if (addContactLink) addContactLink.hidden = true; };
+        if (!customerId) { hideLink(); return; }
+
+        let data;
+        try {
+            const response = await fetch(`/estimates/contact-email?customerId=${encodeURIComponent(customerId)}`);
+            if (!response.ok) { hideLink(); return; }
+            data = await response.json();
+        } catch { hideLink(); return; }
+
+        if (emailToInput && data.email && (overwrite || !emailToInput.value)) {
+            emailToInput.value = data.email;
+        }
+
+        if (addContactLink) {
+            if (data.email) {
+                addContactLink.hidden = true;
+            } else {
+                addContactLink.href = `/customers/edit/${customerId}`;
+                addContactLink.hidden = false;
+            }
+        }
+    };
+
     shipToSource?.addEventListener('change', () => {
         if (shipToSource.value === 'custom') return;
         const a = shipToOptions[Number(shipToSource.value)];
@@ -1093,6 +1246,7 @@
     customerSelect?.addEventListener('change', () => {
         syncProductFilterToEstimateCustomer();
         loadShipToAddresses();
+        loadContactEmail({ overwrite: true });
         loadProducts().then(calculate);
     });
 
@@ -1104,6 +1258,7 @@
     wireUp(root);
     syncProductFilterToEstimateCustomer();
     loadShipToAddresses();
+    loadContactEmail({ overwrite: false });
     loadProducts().then(() => {
         calculate();
         updateEstimateTotals();

@@ -1,4 +1,5 @@
 using LabelsMis.Domain.Entities;
+using LabelsMis.Domain.Enums;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Services.Models;
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +19,8 @@ public record StockForm(
     Guid SupplierId,
     string? SupplierPartNumber,
     decimal CostPerMsi,
-    decimal MinOrderQtyLf);
+    decimal MinOrderQtyLf,
+    StockType StockType);
 
 public class StockService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
@@ -48,9 +50,10 @@ public class StockService(LabelsMisDbContext db, ICurrentUserService currentUser
     {
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
+        await EnsureCodeAvailableAsync(form.Code, null, ct);
         var stock = Stock.Create(Guid.NewGuid(), form.Code, form.Description, form.FaceMaterial, form.Adhesive,
             form.Liner, form.TotalCaliperMil, form.WidthIn, form.SupplierId, form.SupplierPartNumber,
-            form.CostPerMsi, form.MinOrderQtyLf, userId, now);
+            form.CostPerMsi, form.MinOrderQtyLf, userId, now, form.StockType);
         stock.RecordCostChange(Guid.NewGuid(), form.CostPerMsi, now.Date, userId, now);
         db.Stocks.Add(stock);
         await db.SaveChangesAsync(ct);
@@ -62,18 +65,24 @@ public class StockService(LabelsMisDbContext db, ICurrentUserService currentUser
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
         var stock = await db.Stocks
-            .Include(s => s.CostHistory)        // ← add this
+            .Include(s => s.CostHistory)
             .FirstOrDefaultAsync(s => s.Id == id, ct)
             ?? throw new InvalidOperationException("Stock not found.");
 
+        await EnsureCodeAvailableAsync(form.Code, id, ct);
+
         if (stock.CostPerMsi != form.CostPerMsi)
         {
-            stock.RecordCostChange(Guid.NewGuid(), form.CostPerMsi, now.Date, userId, now);
+            var history = stock.RecordCostChange(Guid.NewGuid(), form.CostPerMsi, now.Date, userId, now);
+            // The stock is already tracked, so adding a child via its navigation lets change
+            // detection mistake the app-assigned Guid key for an existing row and emit an UPDATE.
+            // Mark the new history Added explicitly so it is INSERTed.
+            db.StockCostHistory.Add(history);
         }
 
         stock.Update(form.Code, form.Description, form.FaceMaterial, form.Adhesive, form.Liner,
             form.TotalCaliperMil, form.WidthIn, form.SupplierId, form.SupplierPartNumber,
-            form.CostPerMsi, form.MinOrderQtyLf, userId, now);
+            form.CostPerMsi, form.MinOrderQtyLf, userId, now, form.StockType);
 
         await db.SaveChangesAsync(ct);
     }
@@ -89,6 +98,24 @@ public class StockService(LabelsMisDbContext db, ICurrentUserService currentUser
     public Task<List<(Guid Id, string Name)>> GetSupplierOptionsAsync(CancellationToken ct = default) =>
         db.Suppliers.AsNoTracking().Where(s => s.IsActive).OrderBy(s => s.Name)
             .Select(s => new ValueTuple<Guid, string>(s.Id, s.Name)).ToListAsync(ct);
+
+    // Codes are stored normalized (Trim + upper). Guard the unique IX_Stock_Code index with a
+    // friendly message instead of surfacing the raw "duplicate key value" database error.
+    private async Task EnsureCodeAvailableAsync(string code, Guid? excludeId, CancellationToken ct)
+    {
+        var normalized = (code ?? string.Empty).Trim().ToUpperInvariant();
+        if (normalized.Length == 0)
+        {
+            return; // entity validation reports the missing-code error
+        }
+
+        var clash = await db.Stocks.AsNoTracking()
+            .AnyAsync(s => s.Code == normalized && (excludeId == null || s.Id != excludeId), ct);
+        if (clash)
+        {
+            throw new InvalidOperationException($"A stock with code \"{normalized}\" already exists.");
+        }
+    }
 
     private Guid RequireUserId() =>
         currentUser.UserId ?? throw new InvalidOperationException("User is not authenticated.");

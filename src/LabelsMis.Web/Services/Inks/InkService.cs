@@ -8,7 +8,17 @@ namespace LabelsMis.Web.Services.Inks;
 
 public record InkListItem(Guid Id, string Code, string Description, InkSet InkSet, bool IsActive);
 
-public record InkForm(string Code, string Description, InkSet InkSet, decimal ClickRatePer1000, bool IsWhite);
+public record InkForm(
+    string Code,
+    string Description,
+    InkSet InkSet,
+    decimal ClickRatePer1000,
+    bool IsWhite,
+    bool IsSilver,
+    decimal BottleCost,
+    decimal BottleSizeMl,
+    decimal MlPer1000SqIn,
+    decimal DefaultCoveragePct);
 
 public class InkService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
@@ -38,7 +48,8 @@ public class InkService(LabelsMisDbContext db, ICurrentUserService currentUser)
     {
         var userId = RequireUserId();
         var ink = Ink.Create(Guid.NewGuid(), form.Code, form.Description, form.InkSet,
-            form.ClickRatePer1000, form.IsWhite, userId, DateTime.UtcNow);
+            form.ClickRatePer1000, form.IsWhite, form.IsSilver, form.BottleCost, form.BottleSizeMl,
+            form.MlPer1000SqIn, form.DefaultCoveragePct, userId, DateTime.UtcNow);
         db.Inks.Add(ink);
         await db.SaveChangesAsync(ct);
         return ink;
@@ -49,6 +60,7 @@ public class InkService(LabelsMisDbContext db, ICurrentUserService currentUser)
         var ink = await db.Inks.FirstOrDefaultAsync(i => i.Id == id, ct)
             ?? throw new InvalidOperationException("Ink not found.");
         ink.Update(form.Code, form.Description, form.InkSet, form.ClickRatePer1000, form.IsWhite,
+            form.IsSilver, form.BottleCost, form.BottleSizeMl, form.MlPer1000SqIn, form.DefaultCoveragePct,
             RequireUserId(), DateTime.UtcNow);
         await db.SaveChangesAsync(ct);
     }

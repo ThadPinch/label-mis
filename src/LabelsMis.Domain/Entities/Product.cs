@@ -12,8 +12,8 @@ public class Product : MasterDataEntity
     {
     }
 
-    public Guid PrimaryCustomerId { get; private set; }
-    public Customer PrimaryCustomer { get; private set; } = null!;
+    public Guid? PrimaryCustomerId { get; private set; }
+    public Customer? PrimaryCustomer { get; private set; }
     public string? CustomerSku { get; private set; }
     public string InternalSku { get; private set; } = string.Empty;
     public string Description { get; private set; } = string.Empty;
@@ -36,7 +36,7 @@ public class Product : MasterDataEntity
 
     public static Product Create(
         Guid id,
-        Guid primaryCustomerId,
+        Guid? primaryCustomerId,
         IEnumerable<Guid> customerIds,
         string internalSku,
         string? customerSku,
@@ -67,7 +67,7 @@ public class Product : MasterDataEntity
 
         var product = new Product
         {
-            PrimaryCustomerId = primaryCustomerId,
+            PrimaryCustomerId = primaryCustomerId is { } pc && pc != Guid.Empty ? pc : null,
             InternalSku = internalSku.Trim().ToUpperInvariant(),
             CustomerSku = string.IsNullOrWhiteSpace(customerSku) ? null : customerSku.Trim(),
             Description = description.Trim(),
@@ -120,13 +120,13 @@ public class Product : MasterDataEntity
     }
 
     public void SetCustomers(
-        Guid primaryCustomerId,
+        Guid? primaryCustomerId,
         IEnumerable<Guid> customerIds,
         Guid modifiedById,
         DateTime modifiedAt)
     {
         var distinctCustomerIds = NormalizeCustomerIds(primaryCustomerId, customerIds);
-        PrimaryCustomerId = primaryCustomerId;
+        PrimaryCustomerId = primaryCustomerId is { } pc && pc != Guid.Empty ? pc : null;
         ReplaceCustomerAssignments(distinctCustomerIds, modifiedById, modifiedAt);
         SetModified(modifiedById, modifiedAt);
     }
@@ -159,23 +159,15 @@ public class Product : MasterDataEntity
         }
     }
 
-    private static IReadOnlyList<Guid> NormalizeCustomerIds(Guid primaryCustomerId, IEnumerable<Guid> customerIds)
+    private static IReadOnlyList<Guid> NormalizeCustomerIds(Guid? primaryCustomerId, IEnumerable<Guid> customerIds)
     {
-        var distinctCustomerIds = customerIds
-            .Append(primaryCustomerId)
-            .Distinct()
-            .ToList();
-
-        if (distinctCustomerIds.Count == 0)
+        var ids = customerIds.Where(id => id != Guid.Empty);
+        if (primaryCustomerId is { } primary && primary != Guid.Empty)
         {
-            throw new ArgumentException("At least one customer is required.", nameof(customerIds));
+            ids = ids.Append(primary);
         }
 
-        if (!distinctCustomerIds.Contains(primaryCustomerId))
-        {
-            throw new ArgumentException("Primary customer must be included in customer assignments.", nameof(primaryCustomerId));
-        }
-
-        return distinctCustomerIds;
+        // May be empty: a product can exist without any customer affiliation.
+        return ids.Distinct().ToList();
     }
 }

@@ -9,10 +9,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LabelsMis.Web.Pages.PurchaseOrders;
 
+public record StockOptionView(Guid Id, string Label, string Type, decimal ReorderQty, Guid SupplierId, decimal CostPerMsi, decimal WidthIn);
+
 [Authorize(Policy = TransactionPolicies.InventoryEdit)]
 public class CreateModel(PurchaseOrderService purchaseOrderService, LabelsMisDbContext db) : PageModel
 {
-    [BindProperty] public PurchaseOrderFormInput Input { get; set; } = new(Guid.Empty, null, null, [new(null, Guid.Empty, 0, 0)]);
+    [BindProperty] public PurchaseOrderFormInput Input { get; set; } = new(Guid.Empty, null, null, [new(null, Guid.Empty, 0)]);
 
     public async Task OnGetAsync(CancellationToken cancellationToken) =>
         await LoadLookupsAsync(cancellationToken);
@@ -42,7 +44,8 @@ public class CreateModel(PurchaseOrderService purchaseOrderService, LabelsMisDbC
     {
         ViewData["Suppliers"] = await db.Suppliers.AsNoTracking().Where(s => s.IsActive).OrderBy(s => s.Name)
             .Select(s => new SelectListItem(s.Name, s.Id.ToString())).ToListAsync(cancellationToken);
-        ViewData["Stocks"] = await db.Stocks.AsNoTracking().Where(s => s.IsActive).OrderBy(s => s.Code)
-            .Select(s => new SelectListItem($"{s.Code} — {s.Description}", s.Id.ToString())).ToListAsync(cancellationToken);
+        ViewData["StockOptions"] = await db.Stocks.AsNoTracking().Where(s => s.IsActive).OrderBy(s => s.Code)
+            .Select(s => new StockOptionView(s.Id, $"{s.Code} — {s.Description}", s.StockType.ToString(), s.MinOrderQtyLf, s.SupplierId, s.CostPerMsi, s.WidthIn))
+            .ToListAsync(cancellationToken);
     }
 }

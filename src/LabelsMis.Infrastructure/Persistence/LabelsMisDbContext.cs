@@ -53,6 +53,8 @@ public class LabelsMisDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<StorageSettings> StorageSettings => Set<StorageSettings>();
+    public DbSet<EmailSettings> EmailSettings => Set<EmailSettings>();
+    public DbSet<GeneralSettings> GeneralSettings => Set<GeneralSettings>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
