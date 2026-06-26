@@ -1,3 +1,4 @@
+using LabelsMis.Domain.Enums;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
@@ -115,6 +116,11 @@ public class CreateModel(
         ViewData["FinishingOperations"] = await db.FinishingOperations.AsNoTracking()
             .Where(o => o.IsActive)
             .OrderBy(o => o.Code)
+            .ToListAsync(cancellationToken);
+
+        ViewData["SpotInks"] = await db.Inks.AsNoTracking()
+            .Where(i => i.IsActive && i.IsSpot && i.SpotColor != SpotColor.White)
+            .OrderBy(i => i.Code)
             .ToListAsync(cancellationToken);
 
         var users = await userManager.Users.OrderBy(u => u.Email).ToListAsync(cancellationToken);

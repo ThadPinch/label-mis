@@ -21,9 +21,8 @@ public class EstimateLineConfiguration : IEntityTypeConfiguration<EstimateLine>
         builder.Property(l => l.BleedIn).HasDimensionPrecision();
         builder.Property(l => l.InkSet).IsRequired();
         builder.Property(l => l.WhiteHits);
-        builder.Property(l => l.SilverHits);
         builder.Property(l => l.WhiteCoveragePct).HasPrecision(18, 4);
-        builder.Property(l => l.SilverCoveragePct).HasPrecision(18, 4);
+        builder.Property(l => l.SpotsJson).HasColumnType("jsonb").IsRequired();
         builder.Property(l => l.FinishingOperationsJson).HasColumnType("jsonb").IsRequired();
         builder.Property(l => l.SetupWasteImpressions).HasQuantityPrecision();
         builder.Property(l => l.RunningWastePct).HasMoneyPrecision();

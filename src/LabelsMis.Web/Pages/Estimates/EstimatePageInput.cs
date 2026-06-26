@@ -5,6 +5,19 @@ using System.ComponentModel.DataAnnotations;
 
 namespace LabelsMis.Web.Pages.Estimates;
 
+public class SpotSelectionPageInput
+{
+    public Guid InkId { get; set; }
+
+    [Range(0, 3)]
+    public int Hits { get; set; }
+
+    [Range(0, 100)]
+    public decimal CoveragePct { get; set; } = 100m;
+
+    public int SortOrder { get; set; }
+}
+
 public class EstimateLinePageInput
 {
     public Guid? Id { get; set; }
@@ -40,14 +53,10 @@ public class EstimateLinePageInput
     [Range(0, 3)]
     public int WhiteHits { get; set; }
 
-    [Range(0, 3)]
-    public int SilverHits { get; set; }
-
     [Range(0, 100)]
     public decimal WhiteCoveragePct { get; set; } = 100m;
 
-    [Range(0, 100)]
-    public decimal SilverCoveragePct { get; set; } = 100m;
+    public List<SpotSelectionPageInput> Spots { get; set; } = [];
 
     [Range(0, 10000)]
     public decimal SetupWasteImpressions { get; set; } = 30m;
@@ -83,9 +92,8 @@ public class EstimateLinePageInput
         SubstrateId ?? Guid.Empty,
         InkSet,
         WhiteHits,
-        SilverHits,
         WhiteCoveragePct / 100m,
-        SilverCoveragePct / 100m,
+        Spots.Select((s, idx) => new SpotSelectionInput(s.InkId, s.Hits, s.CoveragePct / 100m, idx)).ToList(),
         FinishingOperations,
         SetupWasteImpressions,
         RunningWastePct,
@@ -111,9 +119,16 @@ public class EstimateLinePageInput
             SubstrateId = line.SubstrateId,
             InkSet = line.InkSet,
             WhiteHits = line.WhiteHits,
-            SilverHits = line.SilverHits,
             WhiteCoveragePct = line.WhiteCoveragePct * 100m,
-            SilverCoveragePct = line.SilverCoveragePct * 100m,
+            Spots = EstimateCalculationMapper.DeserializeSpots(line.SpotsJson)
+                .OrderBy(s => s.SortOrder)
+                .Select(s => new SpotSelectionPageInput
+                {
+                    InkId = s.InkId,
+                    Hits = s.Hits,
+                    CoveragePct = s.CoveragePct * 100m,
+                    SortOrder = s.SortOrder
+                }).ToList(),
             SetupWasteImpressions = line.SetupWasteImpressions,
             RunningWastePct = line.RunningWastePct,
             LineNotes = line.LineNotes,

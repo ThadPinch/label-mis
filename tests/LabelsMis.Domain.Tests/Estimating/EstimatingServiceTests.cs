@@ -101,6 +101,75 @@ public class EstimatingServiceTests
     }
 
     [Fact]
+    public void Calculate_WhiteInkSpeedOverride_SlowsPressRunAndIncreasesRunTime()
+    {
+        var baseline = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [25000],
+            inkSet: IndigoInkSet.CMYKW,
+            whiteInkUsed: true,
+            pressSpeedFpm: 100m);
+
+        var slowed = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [25000],
+            inkSet: IndigoInkSet.CMYKW,
+            whiteInkUsed: true,
+            whiteSpeedFpmOverride: 40m,
+            pressSpeedFpm: 100m);
+
+        var baselineRun = _sut.Calculate(baseline).QuantityBreaks[0].RunTimeMinutes;
+        var slowedRun = _sut.Calculate(slowed).QuantityBreaks[0].RunTimeMinutes;
+
+        slowedRun.Should().BeGreaterThan(baselineRun);
+        _sut.Calculate(slowed).QuantityBreaks[0].CostBreakdown.Should().Contain(item =>
+            item.Category == "Press run" && item.Description.Contains("40", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Calculate_WhiteAndSilverOverrides_UsesSlowestSpeed()
+    {
+        var request = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [25000],
+            inkSet: IndigoInkSet.CMYKW,
+            whiteInkUsed: true,
+            whiteSpeedFpmOverride: 60m,
+            silverInkUsed: true,
+            silverSpeedFpmOverride: 35m,
+            pressSpeedFpm: 100m);
+
+        var result = _sut.Calculate(request);
+
+        result.Errors.Should().BeEmpty();
+        result.QuantityBreaks[0].CostBreakdown.Should().Contain(item =>
+            item.Category == "Press run"
+            && item.Description.Contains("35", StringComparison.Ordinal)
+            && item.Description.Contains("Silver", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Calculate_OverrideFasterThanPress_DoesNotSlowRun()
+    {
+        var baseline = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [25000],
+            inkSet: IndigoInkSet.CMYKW,
+            whiteInkUsed: true,
+            pressSpeedFpm: 100m);
+
+        var fasterOverride = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [25000],
+            inkSet: IndigoInkSet.CMYKW,
+            whiteInkUsed: true,
+            whiteSpeedFpmOverride: 150m,
+            pressSpeedFpm: 100m);
+
+        var baselineRun = _sut.Calculate(baseline).QuantityBreaks[0].RunTimeMinutes;
+        var overrideResult = _sut.Calculate(fasterOverride);
+
+        overrideResult.QuantityBreaks[0].RunTimeMinutes.Should().Be(baselineRun);
+        overrideResult.QuantityBreaks[0].CostBreakdown.Should().Contain(item =>
+            item.Category == "Press run" && item.Description == "Press run labor");
+    }
+
+    [Fact]
     public void Calculate_LabelTooWide_ReturnsErrorAndNoQuantityBreaks()
     {
         var request = EstimatingTestData.CreateWorkedExampleRequest(
@@ -350,8 +419,7 @@ public class EstimatingServiceTests
             PressClickBased: true,
             InkSet: IndigoInkSet.CMYK,
             ClickRatePer1000: 35m,
-            WhiteInk: null,
-            SilverInk: null,
+            SpecialInks: [],
             StockId: EstimatingTestData.BoppStockId,
             StockWidthIn: 4.5m,
             StockCostPerMsi: 0.85m,

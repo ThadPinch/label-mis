@@ -64,7 +64,7 @@ public class TransactionFlowPersistenceTests : IAsyncLifetime
         var line = EstimateLine.Create(
             Guid.NewGuid(), estimate.Id, 1, null, "Flow labels",
             4, 3, 0.125m, 0.0625m, 0.0625m, 0.0625m,
-            stockId, InkSet.CMYK, 0, 0, 1m, 1m, "[]", 30, 0.03m, null, null, null, null, userId, now);
+            stockId, InkSet.CMYK, 0, 1m, "[]", "[]", 30, 0.03m, null, null, null, null, userId, now);
         estimate.AddLine(line);
         return (estimate, line);
     }

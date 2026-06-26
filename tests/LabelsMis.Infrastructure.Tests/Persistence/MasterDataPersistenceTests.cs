@@ -125,7 +125,7 @@ public class MasterDataPersistenceTests : IAsyncLifetime
     public async Task Ink_PersistsAndReadsBack()
     {
         var id = Guid.NewGuid();
-        var ink = Ink.Create(id, "CMYK-STD", "CMYK standard", InkSet.CMYK, 35m, false, false, 0m, 1500m, 0m, 1m, TestUserId, DateTime.UtcNow);
+        var ink = Ink.Create(id, "CMYK-STD", "CMYK standard", InkSet.CMYK, 35m, false, null, 0m, 1500m, 0m, 1m, TestUserId, DateTime.UtcNow);
         _db.Inks.Add(ink);
         await _db.SaveChangesAsync();
 

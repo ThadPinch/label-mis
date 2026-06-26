@@ -1189,6 +1189,15 @@ body {
   background: var(--lm-white);
 }
 
+.docs-callout--warning {
+  border-left-color: #b45309;
+  background: #fff7ed;
+}
+
+.docs-callout--warning .docs-list {
+  margin-bottom: 0;
+}
+
 .docs-callout p {
   color: var(--lm-text-muted);
 }

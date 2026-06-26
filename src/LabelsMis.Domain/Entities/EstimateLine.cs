@@ -26,9 +26,8 @@ public class EstimateLine : EntityBase
     public Stock Substrate { get; private set; } = null!;
     public InkSet InkSet { get; private set; }
     public int WhiteHits { get; private set; }
-    public int SilverHits { get; private set; }
     public decimal WhiteCoveragePct { get; private set; } = 1m;
-    public decimal SilverCoveragePct { get; private set; } = 1m;
+    public string SpotsJson { get; private set; } = "[]";
     public string FinishingOperationsJson { get; private set; } = "[]";
     public decimal SetupWasteImpressions { get; private set; }
     public decimal RunningWastePct { get; private set; }
@@ -54,9 +53,8 @@ public class EstimateLine : EntityBase
         Guid substrateId,
         InkSet inkSet,
         int whiteHits,
-        int silverHits,
         decimal whiteCoveragePct,
-        decimal silverCoveragePct,
+        string spotsJson,
         string finishingOperationsJson,
         decimal setupWasteImpressions,
         decimal runningWastePct,
@@ -88,9 +86,8 @@ public class EstimateLine : EntityBase
             SubstrateId = substrateId,
             InkSet = inkSet,
             WhiteHits = Math.Max(0, whiteHits),
-            SilverHits = Math.Max(0, silverHits),
             WhiteCoveragePct = whiteCoveragePct <= 0 ? 1m : whiteCoveragePct,
-            SilverCoveragePct = silverCoveragePct <= 0 ? 1m : silverCoveragePct,
+            SpotsJson = string.IsNullOrWhiteSpace(spotsJson) ? "[]" : spotsJson,
             FinishingOperationsJson = string.IsNullOrWhiteSpace(finishingOperationsJson) ? "[]" : finishingOperationsJson,
             SetupWasteImpressions = setupWasteImpressions,
             RunningWastePct = runningWastePct,
@@ -116,9 +113,8 @@ public class EstimateLine : EntityBase
         Guid substrateId,
         InkSet inkSet,
         int whiteHits,
-        int silverHits,
         decimal whiteCoveragePct,
-        decimal silverCoveragePct,
+        string spotsJson,
         string finishingOperationsJson,
         decimal setupWasteImpressions,
         decimal runningWastePct,
@@ -147,9 +143,8 @@ public class EstimateLine : EntityBase
         SubstrateId = substrateId;
         InkSet = inkSet;
         WhiteHits = Math.Max(0, whiteHits);
-        SilverHits = Math.Max(0, silverHits);
         WhiteCoveragePct = whiteCoveragePct <= 0 ? 1m : whiteCoveragePct;
-        SilverCoveragePct = silverCoveragePct <= 0 ? 1m : silverCoveragePct;
+        SpotsJson = string.IsNullOrWhiteSpace(spotsJson) ? "[]" : spotsJson;
         FinishingOperationsJson = string.IsNullOrWhiteSpace(finishingOperationsJson) ? "[]" : finishingOperationsJson;
         SetupWasteImpressions = setupWasteImpressions;
         RunningWastePct = runningWastePct;

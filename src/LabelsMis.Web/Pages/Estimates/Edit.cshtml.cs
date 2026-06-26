@@ -247,6 +247,11 @@ public class EditModel(
             .OrderBy(o => o.Code)
             .ToListAsync(cancellationToken);
 
+        ViewData["SpotInks"] = await db.Inks.AsNoTracking()
+            .Where(i => i.IsActive && i.IsSpot && i.SpotColor != SpotColor.White)
+            .OrderBy(i => i.Code)
+            .ToListAsync(cancellationToken);
+
         var users = await userManager.Users.OrderBy(u => u.Email).ToListAsync(cancellationToken);
         ViewData["SalesRepOptions"] = users.Select(u => new SelectListItem(
             u.Email ?? u.UserName ?? u.Id.ToString(), u.Id.ToString())).ToList();

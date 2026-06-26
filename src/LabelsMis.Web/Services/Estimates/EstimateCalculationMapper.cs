@@ -20,6 +20,12 @@ public record FinishingOperationSelectionInput(
     decimal? RunSpeedFpmOverride,
     int SortOrder);
 
+public record SpotSelectionInput(
+    Guid InkId,
+    int Hits,
+    decimal CoveragePct,
+    int SortOrder);
+
 public record EstimateLineFormInput(
     Guid? Id,
     Guid? SourceProductId,
@@ -33,9 +39,8 @@ public record EstimateLineFormInput(
     Guid SubstrateId,
     InkSet InkSet,
     int WhiteHits,
-    int SilverHits,
     decimal WhiteCoveragePct,
-    decimal SilverCoveragePct,
+    IReadOnlyList<SpotSelectionInput> Spots,
     IReadOnlyList<FinishingOperationSelectionInput> FinishingOperations,
     decimal SetupWasteImpressions,
     decimal RunningWastePct,
@@ -104,11 +109,8 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             .SingleAsync(s => s.Id == line.SubstrateId, cancellationToken);
 
         var inkSet = EstimateInkSetMapper.ToIndigoInkSet(line.InkSet);
-        var clickRate = await GetClickRateAsync(line.InkSet, isWhite: false, cancellationToken);
-        var whiteInk = await BuildSpecialInkAsync(
-            "White", line.WhiteHits, line.WhiteCoveragePct, i => i.IsWhite, cancellationToken);
-        var silverInk = await BuildSpecialInkAsync(
-            "Silver", line.SilverHits, line.SilverCoveragePct, i => i.IsSilver, cancellationToken);
+        var clickRate = await GetClickRateAsync(line.InkSet, cancellationToken);
+        var specialInks = await BuildSpecialInksAsync(line, cancellationToken);
 
         var operationIds = line.FinishingOperations.Select(o => o.OperationId).ToList();
         var operations = await db.FinishingOperations.AsNoTracking()
@@ -148,8 +150,7 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             press.IsClickBased,
             inkSet,
             clickRate,
-            whiteInk,
-            silverInk,
+            specialInks,
             stock.Id,
             stock.WidthIn,
             stock.CostPerMsi,
@@ -165,41 +166,85 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
 
     private async Task<decimal> GetClickRateAsync(
         InkSet inkSet,
-        bool isWhite,
         CancellationToken cancellationToken)
     {
         var ink = await db.Inks.AsNoTracking()
-            .Where(i => i.IsActive && i.InkSet == inkSet && i.IsWhite == isWhite)
+            .Where(i => i.IsActive && i.InkSet == inkSet && !i.IsSpot)
             .OrderBy(i => i.Code)
             .FirstOrDefaultAsync(cancellationToken);
 
         return ink?.ClickRatePer1000 ?? 0m;
     }
 
-    private async Task<SpecialInkSpec?> BuildSpecialInkAsync(
-        string label,
-        int hits,
-        decimal coveragePct,
-        System.Linq.Expressions.Expression<Func<Ink, bool>> match,
+    // White (driven by the W in the ink set) and each selected spot are all priced
+    // uniformly as hit-based special inks.
+    private async Task<IReadOnlyList<SpecialInkSpec>> BuildSpecialInksAsync(
+        EstimateLineFormInput line,
         CancellationToken cancellationToken)
     {
-        if (hits <= 0)
+        var specialInks = new List<SpecialInkSpec>();
+
+        var whiteAllowed = line.InkSet is InkSet.CMYKW or InkSet.CMYKW_PlusSpot;
+        var spotsAllowed = line.InkSet is InkSet.CMYK_PlusSpot or InkSet.CMYKW_PlusSpot;
+
+        if (whiteAllowed && line.WhiteHits > 0)
         {
-            return null;
+            var whiteInk = await db.Inks.AsNoTracking()
+                .Where(i => i.IsActive && i.IsSpot && i.SpotColor == SpotColor.White)
+                .OrderBy(i => i.Code)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var whiteSpec = BuildSpec(whiteInk, "White", line.WhiteHits, line.WhiteCoveragePct);
+            if (whiteSpec is not null)
+            {
+                specialInks.Add(whiteSpec);
+            }
         }
 
-        var ink = await db.Inks.AsNoTracking()
-            .Where(i => i.IsActive)
-            .Where(match)
-            .OrderBy(i => i.Code)
-            .FirstOrDefaultAsync(cancellationToken);
+        var spots = spotsAllowed
+            ? line.Spots.Where(s => s.Hits > 0).OrderBy(s => s.SortOrder).ToList()
+            : [];
+        if (spots.Count > 0)
+        {
+            var spotIds = spots.Select(s => s.InkId).ToList();
+            var spotInks = await db.Inks.AsNoTracking()
+                .Where(i => i.IsActive && i.IsSpot && spotIds.Contains(i.Id))
+                .ToDictionaryAsync(i => i.Id, cancellationToken);
 
-        if (ink is null)
+            foreach (var spot in spots)
+            {
+                if (!spotInks.TryGetValue(spot.InkId, out var ink))
+                {
+                    continue;
+                }
+
+                var label = ink.SpotColor?.ToString() ?? ink.Description;
+                var spec = BuildSpec(ink, label, spot.Hits, spot.CoveragePct);
+                if (spec is not null)
+                {
+                    specialInks.Add(spec);
+                }
+            }
+        }
+
+        return specialInks;
+    }
+
+    private static SpecialInkSpec? BuildSpec(Ink? ink, string label, int hits, decimal coveragePct)
+    {
+        if (ink is null || hits <= 0)
         {
             return null;
         }
 
         var coverage = coveragePct > 0 ? coveragePct : ink.DefaultCoveragePct;
+        var speedOverride = hits switch
+        {
+            1 => ink.SpeedFpm1Hit,
+            2 => ink.SpeedFpm2Hit,
+            >= 3 => ink.SpeedFpm3Hit,
+            _ => null
+        };
         return new SpecialInkSpec(
             label,
             hits,
@@ -207,7 +252,8 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             coverage,
             ink.BottleCost,
             ink.BottleSizeMl,
-            ink.MlPer1000SqIn);
+            ink.MlPer1000SqIn,
+            speedOverride);
     }
 
     public static string SerializeFinishingOperations(IReadOnlyList<FinishingOperationSelectionInput> operations) =>
@@ -221,6 +267,19 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
         }
 
         return JsonSerializer.Deserialize<List<FinishingOperationSelectionInput>>(json, FinishingJsonOptions) ?? [];
+    }
+
+    public static string SerializeSpots(IReadOnlyList<SpotSelectionInput> spots) =>
+        JsonSerializer.Serialize(spots.OrderBy(s => s.SortOrder));
+
+    public static IReadOnlyList<SpotSelectionInput> DeserializeSpots(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return [];
+        }
+
+        return JsonSerializer.Deserialize<List<SpotSelectionInput>>(json, FinishingJsonOptions) ?? [];
     }
 
     public static string SerializeCostBreakdown(IReadOnlyList<EstimateLineItem> items) =>

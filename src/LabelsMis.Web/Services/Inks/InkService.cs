@@ -13,12 +13,15 @@ public record InkForm(
     string Description,
     InkSet InkSet,
     decimal ClickRatePer1000,
-    bool IsWhite,
-    bool IsSilver,
+    bool IsSpot,
+    SpotColor? SpotColor,
     decimal BottleCost,
     decimal BottleSizeMl,
     decimal MlPer1000SqIn,
-    decimal DefaultCoveragePct);
+    decimal DefaultCoveragePct,
+    decimal? SpeedFpm1Hit = null,
+    decimal? SpeedFpm2Hit = null,
+    decimal? SpeedFpm3Hit = null);
 
 public class InkService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
@@ -48,8 +51,9 @@ public class InkService(LabelsMisDbContext db, ICurrentUserService currentUser)
     {
         var userId = RequireUserId();
         var ink = Ink.Create(Guid.NewGuid(), form.Code, form.Description, form.InkSet,
-            form.ClickRatePer1000, form.IsWhite, form.IsSilver, form.BottleCost, form.BottleSizeMl,
-            form.MlPer1000SqIn, form.DefaultCoveragePct, userId, DateTime.UtcNow);
+            form.ClickRatePer1000, form.IsSpot, form.SpotColor, form.BottleCost, form.BottleSizeMl,
+            form.MlPer1000SqIn, form.DefaultCoveragePct, userId, DateTime.UtcNow,
+            form.SpeedFpm1Hit, form.SpeedFpm2Hit, form.SpeedFpm3Hit);
         db.Inks.Add(ink);
         await db.SaveChangesAsync(ct);
         return ink;
@@ -59,9 +63,10 @@ public class InkService(LabelsMisDbContext db, ICurrentUserService currentUser)
     {
         var ink = await db.Inks.FirstOrDefaultAsync(i => i.Id == id, ct)
             ?? throw new InvalidOperationException("Ink not found.");
-        ink.Update(form.Code, form.Description, form.InkSet, form.ClickRatePer1000, form.IsWhite,
-            form.IsSilver, form.BottleCost, form.BottleSizeMl, form.MlPer1000SqIn, form.DefaultCoveragePct,
-            RequireUserId(), DateTime.UtcNow);
+        ink.Update(form.Code, form.Description, form.InkSet, form.ClickRatePer1000, form.IsSpot,
+            form.SpotColor, form.BottleCost, form.BottleSizeMl, form.MlPer1000SqIn, form.DefaultCoveragePct,
+            RequireUserId(), DateTime.UtcNow,
+            form.SpeedFpm1Hit, form.SpeedFpm2Hit, form.SpeedFpm3Hit);
         await db.SaveChangesAsync(ct);
     }
 

@@ -683,6 +683,95 @@
         const finishingDataEl = document.getElementById('finishing-ops-data');
         if (finishingDataEl) FINISHING_OPS = JSON.parse(finishingDataEl.textContent || '[]');
     } catch { FINISHING_OPS = []; }
+
+    let SPOT_INKS = [];
+    try {
+        const spotDataEl = document.getElementById('spot-inks-data');
+        if (spotDataEl) SPOT_INKS = JSON.parse(spotDataEl.textContent || '[]');
+    } catch { SPOT_INKS = []; }
+    const spotInkById = new Map(SPOT_INKS.map(s => [String(s.id), s]));
+
+    const WHITE_INK_SETS = new Set([3, 4]);
+    const SPOT_INK_SETS = new Set([2, 4]);
+
+    const toggleInkGroups = (lineEl) => {
+        const inkSetSel = lineEl.querySelector('[name$=".InkSet"]');
+        const inkSet = parseInt(inkSetSel?.value, 10);
+        const whiteGroup = lineEl.querySelector('.white-ink-group');
+        const spotGroup = lineEl.querySelector('.spot-ink-group');
+        if (whiteGroup) whiteGroup.classList.toggle('d-none', !WHITE_INK_SETS.has(inkSet));
+        if (spotGroup) spotGroup.classList.toggle('d-none', !SPOT_INK_SETS.has(inkSet));
+    };
+
+    const renumberSpots = (lineEl) => {
+        const lineIdx = lineEl.dataset.lineIndex;
+        lineEl.querySelectorAll('.spot-selected .spot-item').forEach((item, j) => {
+            item.querySelectorAll('[name]').forEach(el => {
+                el.name = el.name.replace(/Input\.Lines\[\d+\]\.Spots\[\d+\]/, `Input.Lines[${lineIdx}].Spots[${j}]`);
+            });
+            const sort = item.querySelector('.spot-sort');
+            if (sort) sort.value = String(j);
+        });
+    };
+
+    const wireSpotRemove = (btn) => {
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+            const lineEl = btn.closest('.estimate-line');
+            btn.closest('.spot-item')?.remove();
+            if (lineEl) renumberSpots(lineEl);
+            calculate();
+        });
+    };
+
+    const buildSpotItem = (lineEl, ink) => {
+        const lineIdx = lineEl.dataset.lineIndex;
+        const item = document.createElement('div');
+        item.className = 'spot-item border rounded p-2 mb-2';
+        item.dataset.inkId = ink.id;
+        item.innerHTML = `
+            <div class="d-flex flex-wrap gap-2 align-items-end">
+                <div class="flex-grow-1">
+                    <div class="fw-semibold spot-name">${escapeHtml(ink.code)} &mdash; ${escapeHtml(ink.description)}</div>
+                    <input type="hidden" name="Input.Lines[${lineIdx}].Spots[0].InkId" value="${escapeHtml(ink.id)}" class="spot-ink-id" />
+                    <input type="hidden" name="Input.Lines[${lineIdx}].Spots[0].SortOrder" value="0" class="spot-sort" />
+                </div>
+                <div>
+                    <label class="form-label small mb-0">Hits</label>
+                    <select name="Input.Lines[${lineIdx}].Spots[0].Hits" class="form-select form-select-sm calc-immediate spot-hits" style="max-width: 7rem;">
+                        <option value="1" selected>1 hit</option>
+                        <option value="2">2 hits</option>
+                        <option value="3">3 hits</option>
+                    </select>
+                </div>
+                <div class="spot-coverage-group">
+                    <label class="form-label small mb-0">Coverage <span class="coverage-readout">100%</span></label>
+                    <input type="range" min="0" max="100" step="1" name="Input.Lines[${lineIdx}].Spots[0].CoveragePct" value="100" class="form-range calc-immediate coverage-slider" />
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger spot-remove">Remove</button>
+            </div>`;
+        return item;
+    };
+
+    const wireSpotRow = (item) => {
+        wireSpotRemove(item.querySelector('.spot-remove'));
+        item.querySelectorAll('.calc-immediate').forEach(el => el.addEventListener('change', calculate));
+        const slider = item.querySelector('.coverage-slider');
+        const readout = item.querySelector('.coverage-readout');
+        if (slider && readout) {
+            slider.addEventListener('input', () => { readout.textContent = `${slider.value}%`; });
+        }
+    };
+
+    const addSpotToLine = (lineEl, ink) => {
+        const list = lineEl?.querySelector('.spot-selected');
+        if (!list || !ink) return false;
+        const item = buildSpotItem(lineEl, ink);
+        list.appendChild(item);
+        renumberSpots(lineEl);
+        wireSpotRow(item);
+        return true;
+    };
     const finishingById = new Map(FINISHING_OPS.map(o => [String(o.id), o]));
 
     const populateFinishingOperations = (categorySel) => {
@@ -780,6 +869,7 @@
         if (substrateSel) substrateSel.value = product.substrateId;
         const inkSetSel = lineEl.querySelector('[name$=".InkSet"]');
         if (inkSetSel) inkSetSel.value = product.inkSet;
+        toggleInkGroups(lineEl);
         const acrossSel = lineEl.querySelector('.labels-across-select');
         if (acrossSel) acrossSel.value = '';
         const orientationSel = lineEl.querySelector('.orientation-select');
@@ -861,6 +951,20 @@
                 op.runSpeedFpmOverride = null;
             }
         });
+        const spots = [];
+        let spotSort = 0;
+        lineEl.querySelectorAll('.spot-selected .spot-item').forEach(item => {
+            const inkId = item.querySelector('.spot-ink-id')?.value;
+            if (!inkId) return;
+            const hitsEl = item.querySelector('.spot-hits');
+            const coverageEl = item.querySelector('[name*="CoveragePct"]');
+            spots.push({
+                inkId,
+                hits: hitsEl ? (parseInt(hitsEl.value, 10) || 0) : 0,
+                coveragePct: coverageEl ? (parseFloat(coverageEl.value) || 0) : 0,
+                sortOrder: spotSort++
+            });
+        });
         const quantities = normalizeQuantityInputs(lineEl);
 
         return {
@@ -876,9 +980,8 @@
             substrateId: val('.substrate-select') || null,
             inkSet: int('[name$=".InkSet"]'),
             whiteHits: int('[name$=".WhiteHits"]'),
-            silverHits: int('[name$=".SilverHits"]'),
             whiteCoveragePct: num('[name$=".WhiteCoveragePct"]'),
-            silverCoveragePct: num('[name$=".SilverCoveragePct"]'),
+            spots,
             setupWasteImpressions: num('[name$=".SetupWasteImpressions"]'),
             runningWastePct: num('[name$=".RunningWastePct"]'),
             lineNotes: val('[name$=".LineNotes"]') || null,
@@ -1079,6 +1182,30 @@
             });
         });
         root.querySelectorAll('.finishing-remove').forEach(wireFinishingRemove);
+        root.querySelectorAll('.spot-ink-select').forEach(sel => {
+            sel.addEventListener('change', () => {
+                const addBtn = sel.closest('.spot-builder')?.querySelector('.spot-add');
+                if (addBtn) addBtn.disabled = !sel.value;
+            });
+        });
+        root.querySelectorAll('.spot-add').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const builder = btn.closest('.spot-builder');
+                const sel = builder?.querySelector('.spot-ink-select');
+                const ink = spotInkById.get(sel?.value);
+                const lineEl = btn.closest('.estimate-line');
+                if (ink && lineEl && addSpotToLine(lineEl, ink)) {
+                    calculate();
+                }
+                if (sel) sel.value = '';
+                btn.disabled = true;
+            });
+        });
+        root.querySelectorAll('.spot-remove').forEach(wireSpotRemove);
+        root.querySelectorAll('[name$=".InkSet"]').forEach(sel => {
+            sel.addEventListener('change', () => toggleInkGroups(sel.closest('.estimate-line')));
+        });
+        root.querySelectorAll('.estimate-line').forEach(toggleInkGroups);
         root.querySelectorAll('.source-product').forEach(sel => {
             sel.addEventListener('change', () => {
                 if (!sel.value) return;
@@ -1144,6 +1271,7 @@
             linesContainer.appendChild(newLine);
             wireUp(newLine);
             wireLineAccordion(newLine);
+            toggleInkGroups(newLine);
             populateProductSelects();
             calculate();
         });

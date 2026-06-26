@@ -8,6 +8,15 @@ using LabelsMis.Web.Services.Estimates;
 using LabelsMis.Web.Services.Invoices;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+
+// Pin the runtime culture so currency/number formatting is deterministic
+// regardless of the host OS locale. Without this, the app falls back to the
+// invariant culture on Linux containers, which renders "$" as the generic
+// currency sign "¤" in PDFs and Razor pages.
+var defaultCulture = new CultureInfo("en-US");
+CultureInfo.DefaultThreadCurrentCulture = defaultCulture;
+CultureInfo.DefaultThreadCurrentUICulture = defaultCulture;
 
 var builder = WebApplication.CreateBuilder(args);
 

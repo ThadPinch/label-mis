@@ -3,6 +3,7 @@
 @{
     var finishingOps = (IReadOnlyList<FinishingOperation>?)ViewData["FinishingOperations"] ?? Array.Empty<FinishingOperation>();
     var substrates = (IEnumerable<SelectListItem>?)ViewData["Substrates"] ?? Enumerable.Empty<SelectListItem>();
+    var spotInks = (IReadOnlyList<Ink>?)ViewData["SpotInks"] ?? Array.Empty<Ink>();
     var i = "__INDEX__";
 }
 <template id="estimate-line-template">
@@ -82,31 +83,40 @@
                             }
                         </select>
                     </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label">White hits</label>
-                        <select name="Input.Lines[@i].WhiteHits" class="form-select calc-immediate special-hits-select" data-coverage-group="white-coverage-group">
-                            <option value="0" selected>None</option>
-                            <option value="1">1 hit</option>
-                            <option value="2">2 hits</option>
-                            <option value="3">3 hits</option>
-                        </select>
+                    <div class="col-12 white-ink-group d-none">
+                        <div class="row g-3">
+                            <div class="col-6 col-md-3">
+                                <label class="form-label">White hits</label>
+                                <select name="Input.Lines[@i].WhiteHits" class="form-select calc-immediate special-hits-select" data-coverage-group="white-coverage-group">
+                                    <option value="0" selected>None</option>
+                                    <option value="1">1 hit</option>
+                                    <option value="2">2 hits</option>
+                                    <option value="3">3 hits</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-3 white-coverage-group d-none">
+                                <label class="form-label">White coverage <span class="coverage-readout">100%</span></label>
+                                <input type="range" min="0" max="100" step="1" name="Input.Lines[@i].WhiteCoveragePct" value="100" class="form-range calc-immediate coverage-slider" />
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-6 col-md-3 white-coverage-group d-none">
-                        <label class="form-label">White coverage <span class="coverage-readout">100%</span></label>
-                        <input type="range" min="0" max="100" step="1" name="Input.Lines[@i].WhiteCoveragePct" value="100" class="form-range calc-immediate coverage-slider" />
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label">Silver hits</label>
-                        <select name="Input.Lines[@i].SilverHits" class="form-select calc-immediate special-hits-select" data-coverage-group="silver-coverage-group">
-                            <option value="0" selected>None</option>
-                            <option value="1">1 hit</option>
-                            <option value="2">2 hits</option>
-                            <option value="3">3 hits</option>
-                        </select>
-                    </div>
-                    <div class="col-6 col-md-3 silver-coverage-group d-none">
-                        <label class="form-label">Silver coverage <span class="coverage-readout">100%</span></label>
-                        <input type="range" min="0" max="100" step="1" name="Input.Lines[@i].SilverCoveragePct" value="100" class="form-range calc-immediate coverage-slider" />
+                    <div class="col-12 spot-ink-group d-none">
+                        <label class="form-label">Spot colors</label>
+                        <div class="spot-builder row g-2 align-items-end mb-2">
+                            <div class="col-md-6">
+                                <select class="form-select spot-ink-select">
+                                    <option value="">Select spot color</option>
+                                    @foreach (var si in spotInks)
+                                    {
+                                        <option value="@si.Id">@si.Code — @si.Description</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <button type="button" class="btn btn-outline-primary spot-add w-100" disabled>Add spot</button>
+                            </div>
+                        </div>
+                        <div class="spot-selected"></div>
                     </div>
                 </div>
             </div>

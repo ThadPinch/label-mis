@@ -9,9 +9,9 @@ internal static class IndigoInkSeparations
         {
             IndigoInkSet.EPM => 3,
             IndigoInkSet.CMYK => 4,
-            IndigoInkSet.CMYK_PlusSpot => 5,
+            IndigoInkSet.CMYK_PlusSpot => 4,
             IndigoInkSet.CMYKW => 4,
-            IndigoInkSet.CMYKW_PlusSpot => 5,
+            IndigoInkSet.CMYKW_PlusSpot => 4,
             _ => 4
         };
 }

@@ -30,6 +30,9 @@
                 <p class="docs-nav-heading">Workflows</p>
                 <ul class="docs-nav-list">
                     <li><a class="docs-nav-link" href="#estimating">Estimating</a></li>
+                    <li><a class="docs-nav-link" href="#purchase-orders">Purchase orders</a></li>
+                    <li><a class="docs-nav-link" href="#shipping">Shipping &amp; fulfillment</a></li>
+                    <li><a class="docs-nav-link" href="#invoicing">Invoicing</a></li>
                 </ul>
             </div>
         </nav>
@@ -92,7 +95,7 @@
                 <ul class="docs-list">
                     <li>Assign a short <strong>code</strong> and full <strong>name</strong> (e.g. Avery, RotoMetrics).</li>
                     <li>Record <strong>terms</strong>, <strong>account number</strong>, and <strong>default lead time</strong> in days.</li>
-                    <li>Add vendor <strong>contacts</strong> for purchasing and reorder follow-up.</li>
+                    <li>Add one or more vendor <strong>contacts</strong> for purchasing and reorder follow-up. Use <strong>+ Add contact</strong> to add rows and <strong>Remove</strong> to drop them; existing contacts stay editable when you edit the supplier. Mark one as the <strong>primary contact</strong>.</li>
                 </ul>
 
                 <h3 class="docs-subtitle">Usage</h3>
@@ -162,22 +165,64 @@
                     <a class="docs-section-action" asp-page="/Inks/Index">Open inks</a>
                 </div>
                 <p>
-                    Inks represent print stations on digital presses — CMYK, spot colors, white, and varnish.
-                    For click-based presses, each ink carries a click rate used in estimating.
+                    Ink records are <strong>pricing rows</strong>, not individual color stations. An estimate line
+                    picks an <strong>ink set</strong> (CMYK, EPM, CMYK+Spot, CMYKW, CMYKW+Spot) plus optional
+                    <strong>white</strong> hits and <strong>spot colors</strong>. The engine looks up the matching ink
+                    rows to get click rates and ink-consumption costs. You do <strong>not</strong> create separate
+                    Cyan / Magenta / Yellow / Black records.
                 </p>
 
                 <h3 class="docs-subtitle">Setup</h3>
                 <ul class="docs-list">
-                    <li>Create a <strong>code</strong> and <strong>description</strong> (e.g. Cyan, White, Pantone 185 C).</li>
-                    <li>Assign the <strong>ink set</strong> (process, spot, varnish, etc.).</li>
-                    <li>For HP Indigo and similar presses, set <strong>click rate per 1,000 impressions</strong>.</li>
-                    <li>Mark <strong>white ink</strong> when the station uses white — it affects coverage and cost assumptions.</li>
+                    <li>Create <strong>one process row per ink set you quote</strong> (e.g. one row with ink set
+                        <strong>CMYK</strong>, <strong>Spot color</strong> off, carrying the press
+                        <strong>click rate per 1,000</strong>). The separation count (CMYK = 4, EPM = 3) is applied
+                        automatically — you do not create four rows for the four colors.</li>
+                    <li>Create <strong>one row per spot color</strong>: check <strong>Spot color</strong> and pick the
+                        <strong>color</strong> (White, Silver, Green, Orange, Red, Blue, Violet). White is the special
+                        spot tied to the <strong>W</strong> in the ink set; every other color (including silver) is a
+                        selectable spot.</li>
+                    <li>Process color is billed as <strong>clicks only</strong> — leave the bottle/coverage fields at 0.</li>
+                    <li>For spot consumption costing, set <strong>bottle cost</strong>, <strong>bottle size (mL)</strong>,
+                        <strong>mL per 1,000 in²</strong>, and <strong>default coverage %</strong>. Leave mL per 1,000 in²
+                        at 0 to charge clicks only. These fields appear only when <strong>Spot color</strong> is checked.</li>
+                    <li>On spot rows, optionally set <strong>press speed overrides (fpm)</strong> for 1, 2, and 3 hits.
+                        These fields appear only when <strong>Spot color</strong> is checked; leave blank for no slowdown.</li>
                 </ul>
+
+                <div class="docs-callout docs-callout--warning">
+                    <strong>Critical: how rows are matched</strong>
+                    <ul class="docs-list mb-0">
+                        <li><strong>Process color</strong> is matched by <em>ink set + not-spot</em>. The
+                            <strong>White</strong> control is matched <strong>only by the spot color White</strong> — its
+                            ink set is ignored, so one white row covers every ink set.</li>
+                        <li>Other <strong>spot colors</strong> are matched by the <strong>specific row you pick</strong>
+                            in the estimate's spot dropdown.</li>
+                        <li>Only the <strong>first active match by code (alphabetical)</strong> is used for process and
+                            white. Do <strong>not</strong> create two process rows for the same set or two White rows —
+                            duplicates are silently ignored and the alphabetically-first code wins.</li>
+                        <li>If <strong>no matching row exists</strong>, the click rate falls back to <strong>$0</strong>
+                            with no warning, silently under-pricing the quote. Ink rows are <strong>not seeded</strong> —
+                            create them before estimating.</li>
+                    </ul>
+                </div>
 
                 <h3 class="docs-subtitle">Usage</h3>
                 <ul class="docs-list">
-                    <li>Selected per estimate line to count color stations and sum click charges.</li>
-                    <li>Works with <strong>EPM</strong> (Enhanced Productivity Mode) options on supported presses where applicable.</li>
+                    <li>The estimate line's <strong>ink set</strong> drives process click cost
+                        (impressions × frame slots × separations × click rate).</li>
+                    <li><strong>White hits</strong> (0–3) and coverage % appear on <strong>CMYKW</strong> and
+                        <strong>CMYKW+Spot</strong> lines and add white on top of process.</li>
+                    <li>A repeating <strong>Spot colors</strong> picker appears on <strong>CMYK+Spot</strong> and
+                        <strong>CMYKW+Spot</strong> lines: choose a configured spot color, set its hits (1–3) and
+                        coverage %, and use <strong>+ Add spot</strong> for more. Each spot is priced just like white.</li>
+                    <li>Each white/spot hit adds a click charge; configured bottle fields add an
+                        <strong>mL ink-consumption</strong> cost on top.</li>
+                    <li>If a white or spot row has a press speed override for the selected hit count, the estimate's
+                        press run uses the <strong>slowest applicable speed</strong> (the slowest of the base press
+                        speed and any white/spot override), increasing press run time and cost.</li>
+                    <li><strong>EPM</strong> (Enhanced Productivity Mode) is its own ink set (3 separations) — create an
+                        EPM row if you quote it.</li>
                 </ul>
             </section>
 
@@ -267,6 +312,108 @@
                         (orientation, labels across/around) when you need a manual layout different from the die default.
                     </p>
                 </div>
+            </section>
+
+            <section class="docs-section docs-section--workflows" id="purchase-orders">
+                <div class="docs-section-header">
+                    <h2 class="docs-section-title">Purchase orders</h2>
+                    <a class="docs-section-action" asp-page="/PurchaseOrders/Index">Open purchase orders</a>
+                </div>
+                <p>
+                    Purchase orders (POs) order stock from a supplier. A PO starts as a <strong>draft</strong>,
+                    is <strong>sent</strong> to the vendor, and is later received against inventory.
+                </p>
+
+                <h3 class="docs-subtitle">Creating &amp; editing</h3>
+                <ul class="docs-list">
+                    <li>Pick the <strong>supplier</strong> first. Each line's <strong>Stock</strong> dropdown is then filtered to that supplier's stock, with a per-line <strong>Stock type</strong> filter to narrow it further.</li>
+                    <li>Add as many lines as needed with <strong>+ Add line</strong>; use <strong>Remove</strong> to drop a line.</li>
+                    <li>Enter the <strong>quantity (LF)</strong>. <strong>Unit cost is derived automatically</strong> from the stock's cost per MSI and roll width — it is read-only and shown with a live line total. You no longer type a unit price.</li>
+                    <li>Set the <strong>expected date</strong> and <strong>notes</strong>. On a draft you can edit these, add/remove lines, then <strong>Save</strong> (saving re-derives unit costs from current stock costs).</li>
+                    <li><strong>Delete draft</strong> removes a draft PO entirely.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">View &amp; send</h3>
+                <ul class="docs-list">
+                    <li><strong>View PO</strong> opens the purchase order as a PDF in a new tab, using your company name and logo from <a asp-page="/Settings/General">General settings</a>. It is available at any status.</li>
+                    <li><strong>Send PO</strong> marks the PO sent and can email the PO PDF to the vendor. The recipient dropdown lists the supplier's <strong>contact emails</strong> (primary first); if none are on file the PO is marked sent without emailing.</li>
+                    <li>Email delivery requires Mailgun to be configured under <a asp-page="/Settings/Email">Setup → Email</a>; otherwise the send is logged and skipped.</li>
+                </ul>
+
+                <div class="docs-callout docs-callout--tip">
+                    <strong>Cost basis</strong>
+                    <p class="mb-0">
+                        Line cost per linear foot is computed as <em>cost&nbsp;per&nbsp;MSI × (12 × roll&nbsp;width) ÷ 1000</em>.
+                        Keep each stock's <strong>cost per MSI</strong> and <strong>width</strong> current so PO pricing stays accurate.
+                    </p>
+                </div>
+            </section>
+
+            <section class="docs-section docs-section--workflows" id="shipping">
+                <div class="docs-section-header">
+                    <h2 class="docs-section-title">Shipping &amp; fulfillment</h2>
+                    <a class="docs-section-action" asp-page="/Production/Shipping">Open shipping</a>
+                </div>
+                <p>
+                    <strong>Production → Shipping</strong> is the shipping workspace. It lists sales orders that have
+                    items finished and ready to ship (jobs at the <strong>Rewound</strong> stage), each with an
+                    <strong>“N of M items ready”</strong> badge. Recording a shipment here captures packages and tracking
+                    and posts the shipment to the shipments list.
+                </p>
+
+                <h3 class="docs-subtitle">Prerequisites</h3>
+                <ul class="docs-list">
+                    <li>Jobs must progress through production to the <strong>Rewound</strong> (ready-to-ship) stage to appear here.</li>
+                    <li>The <strong>ship-from address</strong> is taken from your company address in <a asp-page="/Settings/General">General settings</a> — set it before shipping.</li>
+                    <li>The order's customer needs a <strong>shipping address</strong> for the ship-to selection.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Recording a shipment</h3>
+                <ol class="docs-list docs-list--ordered">
+                    <li>On the Shipping workspace, click <strong>Record shipment</strong> for an order.</li>
+                    <li>Set the <strong>ship date</strong>, <strong>carrier</strong> (FedEx, UPS, USPS, DHL, or Other), and <strong>ship-to</strong> address.</li>
+                    <li>Check the <strong>items</strong> to ship and the quantity for each. Partial shipments are allowed — ship what's ready and the rest of the order stays open.</li>
+                    <li>Add one or more <strong>packages</strong> with weight, dimensions, declared value, <strong>tracking number</strong>, and cost. Every package needs a tracking number.</li>
+                    <li>Click <strong>Record shipment</strong>. The shipment is created as <strong>In transit</strong>, the shipped jobs advance to <strong>Shipped</strong>, and the sales order rolls up to Shipped once all lines are out.</li>
+                </ol>
+
+                <h3 class="docs-subtitle">Usage</h3>
+                <ul class="docs-list">
+                    <li>Recorded shipments appear under <a asp-page="/Shipments/Index">Shipping → all shipments</a> and on each shipment's detail page (ship-from/ship-to, carrier, packages, and tracking).</li>
+                    <li>Tracking numbers are <strong>entered manually</strong>; there is no live carrier label generation.</li>
+                </ul>
+
+                <div class="docs-callout">
+                    <strong>Ship-from address</strong>
+                    <p class="mb-0">
+                        The company address from General settings is snapshotted onto each shipment at the time it is
+                        recorded, so later edits to your company address don't change historical shipments.
+                    </p>
+                </div>
+            </section>
+
+            <section class="docs-section docs-section--workflows" id="invoicing">
+                <div class="docs-section-header">
+                    <h2 class="docs-section-title">Invoicing</h2>
+                    <a class="docs-section-action" asp-page="/Invoices/Index">Open invoices</a>
+                </div>
+                <p>
+                    Invoices are generated <strong>from a shipment</strong>. An order appears on the Invoices page only
+                    after an invoice has been created — shipping an order does not invoice it automatically.
+                </p>
+
+                <h3 class="docs-subtitle">Generating an invoice</h3>
+                <ul class="docs-list">
+                    <li>Open a shipment that is <strong>In transit</strong> or <strong>Delivered</strong> and click <strong>Generate invoice</strong> (Admin or Accounting roles).</li>
+                    <li>The invoice copies the shipped lines, quantities, and unit prices from the sales order. Tax is applied at the configured rate unless the customer is <strong>tax exempt</strong>; shipping cost is carried over.</li>
+                    <li>Due date is calculated from the customer's payment <strong>terms</strong>.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Usage</h3>
+                <ul class="docs-list">
+                    <li>The invoices list shows all non-void invoices; filter by status, customer, date, or AR aging bucket.</li>
+                    <li>Record <strong>payments</strong>, <strong>void</strong> an invoice, or <strong>export</strong> a date range to a QuickBooks-style CSV from the invoice screens.</li>
+                </ul>
             </section>
         </div>
     </div>

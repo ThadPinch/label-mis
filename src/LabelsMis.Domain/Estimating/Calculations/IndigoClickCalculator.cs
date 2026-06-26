@@ -45,8 +45,10 @@ internal static class IndigoClickCalculator
             * imposition.EffectiveLabelAcrossIn
             * imposition.EffectiveLabelAroundIn;
 
-        totalClickCost += AddSpecialInk(request.WhiteInk, frameSlots, jobAreaSqIn, lineItems);
-        totalClickCost += AddSpecialInk(request.SilverInk, frameSlots, jobAreaSqIn, lineItems);
+        foreach (var specialInk in request.SpecialInks)
+        {
+            totalClickCost += AddSpecialInk(specialInk, frameSlots, jobAreaSqIn, lineItems);
+        }
 
         return new ClickCostResult(totalClickCost, lineItems, warnings);
     }

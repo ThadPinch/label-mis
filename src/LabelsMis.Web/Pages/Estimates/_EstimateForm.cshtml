@@ -6,6 +6,7 @@
     var isReadOnly = (bool)(ViewData["IsReadOnly"] ?? false);
     var finishingOps = (IReadOnlyList<FinishingOperation>?)ViewData["FinishingOperations"] ?? Array.Empty<FinishingOperation>();
     var substrates = (IEnumerable<SelectListItem>?)ViewData["Substrates"] ?? Enumerable.Empty<SelectListItem>();
+    var spotInks = (IReadOnlyList<Ink>?)ViewData["SpotInks"] ?? Array.Empty<Ink>();
     var shippingMethods = (IReadOnlyList<ShippingMethodListItem>?)ViewData["ShippingMethods"] ?? Array.Empty<ShippingMethodListItem>();
 }
 
@@ -16,6 +17,7 @@
 @if (!isReadOnly)
 {
     <script type="application/json" id="finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString() })))</script>
+    <script type="application/json" id="spot-inks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(spotInks.Select(s => new { id = s.Id, code = s.Code, description = s.Description })))</script>
 }
 <div class="estimate-workspace">
     <div class="estimate-workspace-main">
@@ -222,31 +224,75 @@
                                 }
                             </select>
                         </div>
-                        <div class="col-6 col-md-3">
-                            <label class="form-label">White hits</label>
-                            <select name="Input.Lines[@i].WhiteHits" class="form-select calc-immediate special-hits-select" data-coverage-group="white-coverage-group" disabled="@isReadOnly">
-                                @for (var h = 0; h <= 3; h++)
+                        <div class="col-12 white-ink-group @(line.InkSet is InkSet.CMYKW or InkSet.CMYKW_PlusSpot ? "" : "d-none")">
+                            <div class="row g-3">
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label">White hits</label>
+                                    <select name="Input.Lines[@i].WhiteHits" class="form-select calc-immediate special-hits-select" data-coverage-group="white-coverage-group" disabled="@isReadOnly">
+                                        @for (var h = 0; h <= 3; h++)
+                                        {
+                                            <option value="@h" selected="@(h == line.WhiteHits)">@(h == 0 ? "None" : $"{h} hit{(h == 1 ? "" : "s")}")</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-3 white-coverage-group @(line.WhiteHits > 0 ? "" : "d-none")">
+                                    <label class="form-label">White coverage <span class="coverage-readout">@((int)line.WhiteCoveragePct)%</span></label>
+                                    <input type="range" min="0" max="100" step="1" name="Input.Lines[@i].WhiteCoveragePct" value="@((int)line.WhiteCoveragePct)" class="form-range calc-immediate coverage-slider" disabled="@isReadOnly" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 spot-ink-group @(line.InkSet is InkSet.CMYK_PlusSpot or InkSet.CMYKW_PlusSpot ? "" : "d-none")">
+                            <label class="form-label">Spot colors</label>
+                            @if (!isReadOnly)
+                            {
+                                <div class="spot-builder row g-2 align-items-end mb-2">
+                                    <div class="col-md-6">
+                                        <select class="form-select spot-ink-select">
+                                            <option value="">Select spot color</option>
+                                            @foreach (var si in spotInks)
+                                            {
+                                                <option value="@si.Id">@si.Code — @si.Description</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button type="button" class="btn btn-outline-primary spot-add w-100" disabled>Add spot</button>
+                                    </div>
+                                </div>
+                            }
+                            <div class="spot-selected">
+                                @for (var j = 0; j < line.Spots.Count; j++)
                                 {
-                                    <option value="@h" selected="@(h == line.WhiteHits)">@(h == 0 ? "None" : $"{h} hit{(h == 1 ? "" : "s")}")</option>
+                                    var sp = line.Spots[j];
+                                    var spInk = spotInks.FirstOrDefault(x => x.Id == sp.InkId);
+                                    <div class="spot-item border rounded p-2 mb-2" data-ink-id="@sp.InkId">
+                                        <div class="d-flex flex-wrap gap-2 align-items-end">
+                                            <div class="flex-grow-1">
+                                                <div class="fw-semibold spot-name">@(spInk is null ? sp.InkId.ToString() : $"{spInk.Code} — {spInk.Description}")</div>
+                                                <input type="hidden" name="Input.Lines[@i].Spots[@j].InkId" value="@sp.InkId" class="spot-ink-id" />
+                                                <input type="hidden" name="Input.Lines[@i].Spots[@j].SortOrder" value="@j" class="spot-sort" />
+                                            </div>
+                                            <div>
+                                                <label class="form-label small mb-0">Hits</label>
+                                                <select name="Input.Lines[@i].Spots[@j].Hits" class="form-select form-select-sm calc-immediate spot-hits" style="max-width: 7rem;" disabled="@isReadOnly">
+                                                    @for (var h = 1; h <= 3; h++)
+                                                    {
+                                                        <option value="@h" selected="@(h == sp.Hits)">@h hit@(h == 1 ? "" : "s")</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="spot-coverage-group">
+                                                <label class="form-label small mb-0">Coverage <span class="coverage-readout">@((int)sp.CoveragePct)%</span></label>
+                                                <input type="range" min="0" max="100" step="1" name="Input.Lines[@i].Spots[@j].CoveragePct" value="@((int)sp.CoveragePct)" class="form-range calc-immediate coverage-slider" disabled="@isReadOnly" />
+                                            </div>
+                                            @if (!isReadOnly)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-outline-danger spot-remove">Remove</button>
+                                            }
+                                        </div>
+                                    </div>
                                 }
-                            </select>
-                        </div>
-                        <div class="col-6 col-md-3 white-coverage-group @(line.WhiteHits > 0 ? "" : "d-none")">
-                            <label class="form-label">White coverage <span class="coverage-readout">@((int)line.WhiteCoveragePct)%</span></label>
-                            <input type="range" min="0" max="100" step="1" name="Input.Lines[@i].WhiteCoveragePct" value="@((int)line.WhiteCoveragePct)" class="form-range calc-immediate coverage-slider" disabled="@isReadOnly" />
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <label class="form-label">Silver hits</label>
-                            <select name="Input.Lines[@i].SilverHits" class="form-select calc-immediate special-hits-select" data-coverage-group="silver-coverage-group" disabled="@isReadOnly">
-                                @for (var h = 0; h <= 3; h++)
-                                {
-                                    <option value="@h" selected="@(h == line.SilverHits)">@(h == 0 ? "None" : $"{h} hit{(h == 1 ? "" : "s")}")</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-6 col-md-3 silver-coverage-group @(line.SilverHits > 0 ? "" : "d-none")">
-                            <label class="form-label">Silver coverage <span class="coverage-readout">@((int)line.SilverCoveragePct)%</span></label>
-                            <input type="range" min="0" max="100" step="1" name="Input.Lines[@i].SilverCoveragePct" value="@((int)line.SilverCoveragePct)" class="form-range calc-immediate coverage-slider" disabled="@isReadOnly" />
+                            </div>
                         </div>
                     </div>
                 </div>

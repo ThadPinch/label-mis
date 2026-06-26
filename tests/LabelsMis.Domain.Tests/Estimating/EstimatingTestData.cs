@@ -23,6 +23,12 @@ internal static class EstimatingTestData
         decimal? clickRatePer1000 = null,
         bool? whiteInkUsed = null,
         decimal? whiteClickRatePer1000 = null,
+        decimal? whiteSpeedFpmOverride = null,
+        bool? silverInkUsed = null,
+        decimal? silverClickRatePer1000 = null,
+        decimal? silverSpeedFpmOverride = null,
+        decimal? pressSpeedFpm = null,
+        IReadOnlyList<SpecialInkSpec>? specialInks = null,
         IReadOnlyList<FinishingOperationRequest>? finishingOperations = null,
         decimal? labelAcrossIn = null,
         decimal? labelAroundIn = null,
@@ -36,6 +42,14 @@ internal static class EstimatingTestData
         int? maxLabelsAcrossOverride = null,
         LabelOrientation? labelOrientationOverride = LabelOrientation.AsEntered)
     {
+        var specials = specialInks?.ToList() ?? BuildSpecialInks(
+            whiteInkUsed ?? false,
+            whiteClickRatePer1000,
+            whiteSpeedFpmOverride,
+            silverInkUsed ?? false,
+            silverClickRatePer1000,
+            silverSpeedFpmOverride);
+
         return new EstimateRequest(
             LabelAcrossIn: labelAcrossIn ?? 4.0m,
             LabelAroundIn: labelAroundIn ?? 3.0m,
@@ -51,14 +65,11 @@ internal static class EstimatingTestData
             PressEdgeMarginIn: pressEdgeMarginIn ?? 0.25m,
             PressSetupMinutes: 20m,
             PressCostPerHour: 150m,
-            PressSpeedFpm: 100m,
+            PressSpeedFpm: pressSpeedFpm ?? 100m,
             PressClickBased: true,
             InkSet: inkSet ?? IndigoInkSet.CMYK,
             ClickRatePer1000: clickRatePer1000 ?? 35m,
-            WhiteInk: (whiteInkUsed ?? false)
-                ? new SpecialInkSpec("White", 1, whiteClickRatePer1000 ?? 0m, 1m, 0m, 0m, 0m)
-                : null,
-            SilverInk: null,
+            SpecialInks: specials,
             StockId: BoppStockId,
             StockWidthIn: 13.5m,
             StockCostPerMsi: 0.85m,
@@ -70,6 +81,28 @@ internal static class EstimatingTestData
             MinimumMarginPct: minimumMarginPct ?? 0.25m,
             MaxLabelsAcrossOverride: maxLabelsAcrossOverride,
             LabelOrientationOverride: labelOrientationOverride);
+    }
+
+    private static List<SpecialInkSpec> BuildSpecialInks(
+        bool whiteInkUsed,
+        decimal? whiteClickRatePer1000,
+        decimal? whiteSpeedFpmOverride,
+        bool silverInkUsed,
+        decimal? silverClickRatePer1000,
+        decimal? silverSpeedFpmOverride)
+    {
+        var specials = new List<SpecialInkSpec>();
+        if (whiteInkUsed)
+        {
+            specials.Add(new SpecialInkSpec("White", 1, whiteClickRatePer1000 ?? 0m, 1m, 0m, 0m, 0m, whiteSpeedFpmOverride));
+        }
+
+        if (silverInkUsed)
+        {
+            specials.Add(new SpecialInkSpec("Silver", 1, silverClickRatePer1000 ?? 0m, 1m, 0m, 0m, 0m, silverSpeedFpmOverride));
+        }
+
+        return specials;
     }
 
     internal static IReadOnlyList<FinishingOperationRequest> DefaultFinishingOperations() =>

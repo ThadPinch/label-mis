@@ -3,6 +3,7 @@ using System;
 using LabelsMis.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LabelsMis.Infrastructure.Migrations
 {
     [DbContext(typeof(LabelsMisDbContext))]
-    partial class LabelsMisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260625010116_AddInkSpeedOverrides")]
+    partial class AddInkSpeedOverrides
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -667,12 +670,15 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasPrecision(14, 4)
                         .HasColumnType("numeric(14,4)");
 
+                    b.Property<decimal>("SilverCoveragePct")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<int>("SilverHits")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("SourceProductId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("SpotsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
 
                     b.Property<Guid>("SubstrateId")
                         .HasColumnType("uuid");
@@ -1012,7 +1018,10 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
-                    b.Property<bool>("IsSpot")
+                    b.Property<bool>("IsSilver")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsWhite")
                         .HasColumnType("boolean");
 
                     b.Property<decimal>("MlPer1000SqIn")
@@ -1036,9 +1045,6 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<decimal?>("SpeedFpm3Hit")
                         .HasPrecision(10, 4)
                         .HasColumnType("numeric(10,4)");
-
-                    b.Property<int?>("SpotColor")
-                        .HasColumnType("integer");
 
                     b.Property<Guid>("TenantId")
                         .ValueGeneratedOnAdd()
