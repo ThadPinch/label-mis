@@ -2,6 +2,7 @@ using System.Text.Json;
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Jobs;
+using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Services.Estimates;
 using LabelsMis.Web.Services.Models;
@@ -354,6 +355,11 @@ public class JobService(
 
             var jobNumber = await documentNumbers.NextJobNumberAsync(cancellationToken);
             var quantityPlanned = (int)Math.Ceiling(line.Quantity * 1.05m);
+
+            // Snapshot the ordered spec onto the job; seed from the product for pre-refactor lines
+            // whose Spec hasn't been backfilled yet.
+            var spec = line.Spec ?? line.Product.ToLabelSpec();
+
             var job = Job.CreatePlanned(
                 Guid.NewGuid(),
                 jobNumber,
@@ -364,11 +370,11 @@ public class JobService(
                 order.RequestedShipDate,
                 priority: 5,
                 notes: line.LineNotes,
+                spec,
                 userId,
                 now);
 
-            var operations = await BuildOperationsAsync(
-                job.Id, line.Product, line.SourceEstimateLineId, userId, now, cancellationToken);
+            var operations = await BuildOperationsAsync(job.Id, spec, userId, now, cancellationToken);
             foreach (var operation in operations)
             {
                 job.AddOperation(operation);
@@ -499,6 +505,39 @@ public class JobService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    // The job status by which each operation type is considered done (i.e. its production stage is
+    // behind the job). Moving the job past a stage completes that stage's still-pending operations, so
+    // the operations list stays in sync with the status stepper. Finishing ops are completed
+    // individually in the operator panel, but are covered here too as a backstop.
+    private static readonly IReadOnlyDictionary<JobOperationType, JobStatus> OperationCompletedByStatus =
+        new Dictionary<JobOperationType, JobStatus>
+        {
+            [JobOperationType.Press] = JobStatus.Printed,
+            [JobOperationType.Finishing] = JobStatus.Finished,
+            [JobOperationType.Inspection] = JobStatus.Rewound,
+            [JobOperationType.Pack] = JobStatus.Shipped,
+            [JobOperationType.Ship] = JobStatus.Shipped,
+        };
+
+    /// <summary>Completes any still-pending operations whose stage the job has now moved past. Only
+    /// touches Pending ops (they have no open time entries, so <see cref="JobOperation.Complete"/> is
+    /// safe); an InProgress op is left for the operator who is actively on it.</summary>
+    private static void CompletePassedOperations(Job job, JobStatus status, Guid userId, DateTime now)
+    {
+        foreach (var operation in job.Operations)
+        {
+            if (operation.Status != JobOperationStatus.Pending)
+            {
+                continue;
+            }
+
+            if (OperationCompletedByStatus.TryGetValue(operation.OperationType, out var doneBy) && doneBy <= status)
+            {
+                operation.Complete(userId, now);
+            }
+        }
+    }
+
     public async Task SetJobStatusAsync(
         Guid jobId,
         JobStatus status,
@@ -506,8 +545,9 @@ public class JobService(
     {
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
-        var job = await db.Jobs.SingleAsync(j => j.Id == jobId, cancellationToken);
+        var job = await db.Jobs.Include(j => j.Operations).SingleAsync(j => j.Id == jobId, cancellationToken);
         job.SetStatus(status, userId, now);
+        CompletePassedOperations(job, status, userId, now);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -534,8 +574,9 @@ public class JobService(
     {
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
-        var job = await db.Jobs.SingleAsync(j => j.Id == jobId, cancellationToken);
+        var job = await db.Jobs.Include(j => j.Operations).SingleAsync(j => j.Id == jobId, cancellationToken);
         job.AdvanceStatus(target, userId, now);
+        CompletePassedOperations(job, target, userId, now);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -670,8 +711,7 @@ public class JobService(
 
     private async Task<List<JobOperation>> BuildOperationsAsync(
         Guid jobId,
-        Product product,
-        Guid? sourceEstimateLineId,
+        LabelSpec spec,
         Guid userId,
         DateTime now,
         CancellationToken cancellationToken)
@@ -694,8 +734,7 @@ public class JobService(
                 now)
         };
 
-        var finishingJson = await ResolveFinishingOperationsJsonAsync(product, sourceEstimateLineId, cancellationToken);
-        var finishingSelections = EstimateCalculationMapper.DeserializeFinishingOperations(finishingJson)
+        var finishingSelections = EstimateCalculationMapper.DeserializeFinishingOperations(spec.FinishingOperationsJson)
             .Where(s => s.OperationId != Guid.Empty)
             .ToList();
         var finishingIds = finishingSelections.Select(s => s.OperationId).ToList();
@@ -733,41 +772,6 @@ public class JobService(
 
         return operations;
     }
-
-    private async Task<string> ResolveFinishingOperationsJsonAsync(
-        Product product,
-        Guid? sourceEstimateLineId,
-        CancellationToken cancellationToken)
-    {
-        if (!IsEmptyJsonArray(product.FinishingOperationsJson))
-        {
-            return product.FinishingOperationsJson;
-        }
-
-        var lineIds = new[] { sourceEstimateLineId, product.SourceEstimateLineId }
-            .Where(id => id.HasValue)
-            .Select(id => id!.Value)
-            .Distinct()
-            .ToList();
-
-        foreach (var lineId in lineIds)
-        {
-            var lineJson = await db.EstimateLines.AsNoTracking()
-                .Where(l => l.Id == lineId)
-                .Select(l => l.FinishingOperationsJson)
-                .SingleOrDefaultAsync(cancellationToken);
-
-            if (!IsEmptyJsonArray(lineJson))
-            {
-                return lineJson!;
-            }
-        }
-
-        return "[]";
-    }
-
-    private static bool IsEmptyJsonArray(string? json) =>
-        string.IsNullOrWhiteSpace(json) || json.Trim() is "[]" or "{}" or "null";
 
     private static string GetOperationTypeLabel(
         JobOperation operation,

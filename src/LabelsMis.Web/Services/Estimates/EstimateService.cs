@@ -324,7 +324,13 @@ public class EstimateService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task SendAsync(Guid id, bool sendEmail, string? emailTo, CancellationToken cancellationToken = default)
+    public async Task SendAsync(
+        Guid id,
+        string? emailTo,
+        string? subject,
+        string? body,
+        bool includePdf,
+        CancellationToken cancellationToken = default)
     {
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
@@ -336,18 +342,24 @@ public class EstimateService(
         tracked.MarkSent(pdfPath, userId, now);
         await db.SaveChangesAsync(cancellationToken);
 
-        if (sendEmail && !string.IsNullOrWhiteSpace(emailTo))
+        if (!string.IsNullOrWhiteSpace(emailTo))
         {
             await emailSender.SendAsync(
                 emailTo,
-                $"Estimate {tracked.EstimateNumber}",
-                $"Please find attached estimate {tracked.EstimateNumber}.",
-                [pdfPath],
+                DefaultIfBlank(subject, $"Estimate {tracked.EstimateNumber}"),
+                DefaultIfBlank(body, $"Please find attached estimate {tracked.EstimateNumber}."),
+                includePdf ? [pdfPath] : null,
                 cancellationToken);
         }
     }
 
-    public async Task ResendAsync(Guid id, string? emailTo, CancellationToken cancellationToken = default)
+    public async Task ResendAsync(
+        Guid id,
+        string? emailTo,
+        string? subject,
+        string? body,
+        bool includePdf,
+        CancellationToken cancellationToken = default)
     {
         RequireUserId();
         if (string.IsNullOrWhiteSpace(emailTo))
@@ -359,18 +371,26 @@ public class EstimateService(
             ?? throw new InvalidOperationException("Estimate not found.");
         var tracked = await db.Estimates.SingleAsync(e => e.Id == id, cancellationToken);
 
-        // Reuse the existing PDF when it is still on disk; otherwise regenerate it.
-        var pdfPath = !string.IsNullOrWhiteSpace(tracked.PdfFilePath) && File.Exists(tracked.PdfFilePath)
-            ? tracked.PdfFilePath!
-            : await pdfGenerator.GenerateAsync(detail, cancellationToken);
+        IReadOnlyList<string>? attachments = null;
+        if (includePdf)
+        {
+            // Reuse the existing PDF when it is still on disk; otherwise regenerate it.
+            var pdfPath = !string.IsNullOrWhiteSpace(tracked.PdfFilePath) && File.Exists(tracked.PdfFilePath)
+                ? tracked.PdfFilePath!
+                : await pdfGenerator.GenerateAsync(detail, cancellationToken);
+            attachments = [pdfPath];
+        }
 
         await emailSender.SendAsync(
             emailTo,
-            $"Estimate {tracked.EstimateNumber}",
-            $"Please find attached estimate {tracked.EstimateNumber}.",
-            [pdfPath],
+            DefaultIfBlank(subject, $"Estimate {tracked.EstimateNumber}"),
+            DefaultIfBlank(body, $"Please find attached estimate {tracked.EstimateNumber}."),
+            attachments,
             cancellationToken);
     }
+
+    private static string DefaultIfBlank(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value;
 
     /// <summary>Renders the official PDF for a saved estimate as bytes (no persistence).</summary>
     public async Task<byte[]?> RenderPdfBytesAsync(Guid id, CancellationToken cancellationToken = default)

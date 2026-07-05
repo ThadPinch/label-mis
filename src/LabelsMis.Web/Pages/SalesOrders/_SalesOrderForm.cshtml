@@ -1,65 +1,72 @@
 @using LabelsMis.Web.Services.Shipping
+@using LabelsMis.Web.Pages.SalesOrders
 @model LabelsMis.Web.Pages.SalesOrders.SalesOrderPageInput
 @{
     var isLocked = ViewData["IsLocked"] as bool? ?? false;
     var products = (IEnumerable<SelectListItem>?)ViewData["Products"] ?? Enumerable.Empty<SelectListItem>();
     var shippingMethods = (IReadOnlyList<ShippingMethodListItem>?)ViewData["ShippingMethods"] ?? Array.Empty<ShippingMethodListItem>();
+    var lineDetails = ViewData["LineDetails"] as IReadOnlyList<SalesOrderLineDetail>;
 }
-<div class="row g-3">
-    <div class="col-md-4">
-        <label class="form-label">Customer</label>
-        <select asp-for="CustomerId" id="customer-select" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)" disabled="@isLocked">
-            <option value="">Select customer</option>
-        </select>
-    </div>
-    <div class="col-md-4"><label asp-for="CustomerPoNumber" class="form-label">Customer PO #</label><input asp-for="CustomerPoNumber" class="form-control" readonly="@isLocked" /></div>
-    <div class="col-md-4"><label asp-for="RequestedShipDate" class="form-label">Requested ship date</label><input asp-for="RequestedShipDate" type="date" class="form-control" readonly="@isLocked" /></div>
-    <div class="col-12"><label asp-for="Notes" class="form-label">Notes</label><textarea asp-for="Notes" class="form-control" readonly="@isLocked"></textarea></div>
-</div>
-
-<fieldset class="border rounded p-3 mt-4 order-shipping" id="order-shipping">
-    <legend class="float-none w-auto px-2 h6 mb-0">Shipping</legend>
-    <div class="row g-3">
-        <div class="col-md-3">
-            <label asp-for="ShippingMethodId" class="form-label">Method</label>
-            <select asp-for="ShippingMethodId" id="shipping-method-select" class="form-select" disabled="@isLocked">
-                <option value="" data-price="0" data-requires-address="true">No shipping</option>
-                @foreach (var m in shippingMethods)
-                {
-                    <option value="@m.Id" data-price="@m.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                            data-requires-address="@m.RequiresAddress.ToString().ToLowerInvariant()"
-                            selected="@(m.Id == Model.ShippingMethodId)">
-                        @m.Name — @m.Price.ToString("C2")@(m.IsActive ? "" : " (inactive)")
-                    </option>
-                }
-            </select>
-        </div>
-        <div class="col-md-3">
-            <label asp-for="ShippingCost" class="form-label">Price</label>
-            <div class="input-group">
-                <span class="input-group-text">$</span>
-                <input asp-for="ShippingCost" id="shipping-cost-input" class="form-control" readonly="@isLocked" />
-            </div>
-            <span asp-validation-for="ShippingCost" class="text-danger"></span>
-        </div>
-        @if (!isLocked)
-        {
-            <div class="col-md-6 shipto-group">
-                <label for="shipto-source" class="form-label">Ship-to address</label>
-                <select id="shipto-source" class="form-select">
-                    <option value="custom">Enter manually</option>
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label">Customer</label>
+                <select asp-for="CustomerId" id="customer-select" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)" disabled="@isLocked">
+                    <option value="">Select customer</option>
                 </select>
-                <div class="form-text">Pull a billing or shipping address from the customer, or enter one below.</div>
             </div>
-        }
-        <div class="col-md-6 shipto-group"><label asp-for="ShipToName" class="form-label">Recipient / company</label><input asp-for="ShipToName" class="form-control shipto-field" readonly="@isLocked" /></div>
-        <div class="col-md-6 shipto-group"><label asp-for="ShipToStreet1" class="form-label">Street</label><input asp-for="ShipToStreet1" class="form-control shipto-field" readonly="@isLocked" /></div>
-        <div class="col-md-6 shipto-group"><label asp-for="ShipToStreet2" class="form-label">Street 2</label><input asp-for="ShipToStreet2" class="form-control shipto-field" readonly="@isLocked" /></div>
-        <div class="col-md-3 shipto-group"><label asp-for="ShipToCity" class="form-label">City</label><input asp-for="ShipToCity" class="form-control shipto-field" readonly="@isLocked" /></div>
-        <div class="col-md-1 shipto-group"><label asp-for="ShipToState" class="form-label">State</label><input asp-for="ShipToState" class="form-control shipto-field" readonly="@isLocked" /></div>
-        <div class="col-md-2 shipto-group"><label asp-for="ShipToZip" class="form-label">Zip</label><input asp-for="ShipToZip" class="form-control shipto-field" readonly="@isLocked" /></div>
+            <div class="col-md-6"><label asp-for="CustomerPoNumber" class="form-label">Customer PO #</label><input asp-for="CustomerPoNumber" class="form-control" readonly="@isLocked" /></div>
+            <div class="col-md-6"><label asp-for="RequestedShipDate" class="form-label">Requested ship date</label><input asp-for="RequestedShipDate" type="date" class="form-control" readonly="@isLocked" /></div>
+            <div class="col-12"><label asp-for="Notes" class="form-label">Notes</label><textarea asp-for="Notes" class="form-control" rows="3" readonly="@isLocked"></textarea></div>
+        </div>
     </div>
-</fieldset>
+    <div class="col-lg-6">
+        <fieldset class="border rounded p-3 order-shipping h-100" id="order-shipping">
+            <legend class="float-none w-auto px-2 h6 mb-0">Shipping</legend>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="ShippingMethodId" class="form-label">Method</label>
+                    <select asp-for="ShippingMethodId" id="shipping-method-select" class="form-select" disabled="@isLocked">
+                        <option value="" data-price="0" data-requires-address="true">No shipping</option>
+                        @foreach (var m in shippingMethods)
+                        {
+                            <option value="@m.Id" data-price="@m.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                    data-requires-address="@m.RequiresAddress.ToString().ToLowerInvariant()"
+                                    selected="@(m.Id == Model.ShippingMethodId)">
+                                @m.Name — @m.Price.ToString("C2")@(m.IsActive ? "" : " (inactive)")
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="ShippingCost" class="form-label">Price</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input asp-for="ShippingCost" id="shipping-cost-input" class="form-control" readonly="@isLocked" />
+                    </div>
+                    <span asp-validation-for="ShippingCost" class="text-danger"></span>
+                </div>
+                @if (!isLocked)
+                {
+                    <div class="col-12 shipto-group">
+                        <label for="shipto-source" class="form-label">Ship-to address</label>
+                        <select id="shipto-source" class="form-select">
+                            <option value="custom">Enter manually</option>
+                        </select>
+                        <div class="form-text">Pull a billing or shipping address from the customer, or enter one below.</div>
+                    </div>
+                }
+                <div class="col-12 shipto-group"><label asp-for="ShipToName" class="form-label">Recipient / company</label><input asp-for="ShipToName" class="form-control shipto-field" readonly="@isLocked" /></div>
+                <div class="col-12 shipto-group"><label asp-for="ShipToStreet1" class="form-label">Street</label><input asp-for="ShipToStreet1" class="form-control shipto-field" readonly="@isLocked" /></div>
+                <div class="col-12 shipto-group"><label asp-for="ShipToStreet2" class="form-label">Street 2</label><input asp-for="ShipToStreet2" class="form-control shipto-field" readonly="@isLocked" /></div>
+                <div class="col-md-6 shipto-group"><label asp-for="ShipToCity" class="form-label">City</label><input asp-for="ShipToCity" class="form-control shipto-field" readonly="@isLocked" /></div>
+                <div class="col-md-3 shipto-group"><label asp-for="ShipToState" class="form-label">State</label><input asp-for="ShipToState" class="form-control shipto-field" readonly="@isLocked" /></div>
+                <div class="col-md-3 shipto-group"><label asp-for="ShipToZip" class="form-label">Zip</label><input asp-for="ShipToZip" class="form-control shipto-field" readonly="@isLocked" /></div>
+            </div>
+        </fieldset>
+    </div>
+</div>
 
 <h2 class="h5 mt-4">Line items</h2>
 @if (ViewData["ShowProductFilter"] as bool? == true)
@@ -78,38 +85,82 @@
         </div>
     </div>
 }
-<div class="row g-2 mb-1 text-muted small">
-    <div class="col-md-4">Product</div>
-    <div class="col-md-2">Qty</div>
-    <div class="col-md-2">Unit price</div>
-    <div class="col-md-2">Artwork</div>
-    <div class="col-md-2">Line notes</div>
-</div>
 @for (var i = 0; i < Model.Lines.Count; i++)
 {
     var line = Model.Lines[i];
-    <div class="row g-2 mb-2 order-line">
-        <div class="col-md-4">
-            <select asp-for="Lines[@i].ProductId" class="form-select product-select" asp-items="products" disabled="@isLocked"><option value="">Select product</option></select>
-        </div>
-        <div class="col-md-2"><input name="Input.Lines[@i].Quantity" value="@line.Quantity" class="form-control line-qty" readonly="@isLocked" /></div>
-        <div class="col-md-2"><input name="Input.Lines[@i].UnitPrice" value="@line.UnitPrice" class="form-control line-price" readonly="@isLocked" /></div>
-        <div class="col-md-2 artwork-upload-cell">
-            @if (line.HasArtwork && line.ProductId != Guid.Empty)
-            {
-                <a asp-page="/Artwork/Download" asp-route-productId="@line.ProductId" target="_blank" class="small d-block mb-1 artwork-download-link">Download</a>
-            }
-            @if (!isLocked)
-            {
-                <input type="file" name="Input.Lines[@i].ArtworkFile" class="form-control form-control-sm artwork-file-input" accept=".pdf,.ai,.eps,.png,.jpg,.jpeg,.tif,.tiff" />
-                <div class="artwork-upload-status d-none">
-                    <div class="progress mt-1" style="height: 6px;">
-                        <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    var detail = lineDetails is not null && i < lineDetails.Count ? lineDetails[i] : null;
+    var collapseId = $"order-line-details-{i}";
+    <div class="border rounded p-2 mb-2 order-line">
+        <input type="hidden" name="Input.Lines[@i].SourceEstimateLineId" value="@(line.SourceEstimateLineId?.ToString())" />
+        <input type="hidden" name="Input.Lines[@i].SpecJson" value="@line.SpecJson" />
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label small mb-1">Product</label>
+                <select asp-for="Lines[@i].ProductId" class="form-select product-select" asp-items="products" disabled="@isLocked"><option value="">Select product</option></select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Qty</label>
+                <input name="Input.Lines[@i].Quantity" value="@line.Quantity" class="form-control line-qty" readonly="@isLocked" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Unit price</label>
+                <input name="Input.Lines[@i].UnitPrice" value="@line.UnitPrice" class="form-control line-price" readonly="@isLocked" />
+            </div>
+            <div class="col-md-2 artwork-upload-cell">
+                <label class="form-label small mb-1">Artwork</label>
+                @if (line.HasArtwork && line.ProductId != Guid.Empty)
+                {
+                    <a asp-page="/Artwork/Download" asp-route-productId="@line.ProductId" target="_blank" class="small d-block mb-1 artwork-download-link">Download</a>
+                }
+                @if (!isLocked)
+                {
+                    <input type="file" name="Input.Lines[@i].ArtworkFile" class="form-control form-control-sm artwork-file-input" accept=".pdf,.ai,.eps,.png,.jpg,.jpeg,.tif,.tiff" />
+                    <div class="artwork-upload-status d-none">
+                        <div class="progress mt-1" style="height: 6px;">
+                            <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <div class="small artwork-upload-message mt-1 text-muted"></div>
                     </div>
-                    <div class="small artwork-upload-message mt-1 text-muted"></div>
-                </div>
-            }
+                }
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Line notes</label>
+                <input name="Input.Lines[@i].LineNotes" value="@line.LineNotes" class="form-control" placeholder="Notes" readonly="@isLocked" />
+            </div>
         </div>
-        <div class="col-md-2"><input name="Input.Lines[@i].LineNotes" value="@line.LineNotes" class="form-control" placeholder="Notes" readonly="@isLocked" /></div>
+        @if (detail is not null)
+        {
+            <div class="mt-2">
+                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none order-line-toggle" data-bs-toggle="collapse" data-bs-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId">
+                    Product &amp; finishing details
+                </button>
+            </div>
+            <div class="collapse mt-2 order-line-details" id="@collapseId">
+                <div class="border-top pt-2">
+                    <div class="row g-2 small">
+                        <div class="col-md-4"><span class="text-muted d-block">Product</span>@detail.ProductSku — @detail.ProductDescription</div>
+                        <div class="col-md-3"><span class="text-muted d-block">Label size</span>@detail.LabelAcrossIn.ToString("0.###")" × @detail.LabelAroundIn.ToString("0.###")"</div>
+                        <div class="col-md-2"><span class="text-muted d-block">Corner radius</span>@detail.CornerRadiusIn.ToString("0.###")"</div>
+                        <div class="col-md-3"><span class="text-muted d-block">Ink set</span>@detail.InkSet</div>
+                        <div class="col-md-6"><span class="text-muted d-block">Substrate</span>@detail.SubstrateLabel</div>
+                        <div class="col-md-6"><span class="text-muted d-block">Die</span>@(string.IsNullOrWhiteSpace(detail.DieLabel) ? "—" : detail.DieLabel)</div>
+                        <div class="col-12">
+                            <span class="text-muted d-block">Finishing operations</span>
+                            @if (detail.FinishingOperations.Count == 0)
+                            {
+                                <span>None</span>
+                            }
+                            else
+                            {
+                                @foreach (var op in detail.FinishingOperations)
+                                {
+                                    <span class="badge text-bg-light border me-1 mb-1">@op</span>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
     </div>
 }

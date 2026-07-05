@@ -35,7 +35,7 @@ public class SalesOrderPageInput
 
     public SalesOrderFormInput ToForm() => new(
         CustomerId, CustomerPoNumber, RequestedShipDate, Notes,
-        Lines.Select(l => new SalesOrderLineInput(null, l.ProductId, null, l.Quantity, l.UnitPrice, l.LineNotes)).ToList(),
+        Lines.Select(l => new SalesOrderLineInput(null, l.ProductId, l.SourceEstimateLineId, l.Quantity, l.UnitPrice, l.LineNotes, l.DeserializeSpec())).ToList(),
         ShippingMethodId,
         ShippingCost,
         new ShippingAddress(ShipToName, ShipToStreet1, ShipToStreet2, ShipToCity, ShipToState, ShipToZip, ShipToCountry));
@@ -44,11 +44,20 @@ public class SalesOrderPageInput
 public class SalesOrderLinePageInput
 {
     public Guid ProductId { get; set; }
+    public Guid? SourceEstimateLineId { get; set; }
     [Range(1, int.MaxValue)] public int Quantity { get; set; } = 1000;
     [Range(0, double.MaxValue)] public decimal UnitPrice { get; set; }
     public string? LineNotes { get; set; }
     public bool HasArtwork { get; set; }
     public IFormFile? ArtworkFile { get; set; }
+
+    /// <summary>The line's ordered spec, round-tripped through the form as JSON so a save preserves
+    /// it (until the editable spec UI lands). Rendered as a hidden field.</summary>
+    public string? SpecJson { get; set; }
+
+    public LabelSpec? DeserializeSpec() => string.IsNullOrWhiteSpace(SpecJson)
+        ? null
+        : System.Text.Json.JsonSerializer.Deserialize<LabelSpec>(SpecJson);
 }
 
 [Authorize(Policy = TransactionPolicies.SalesOrdersEdit)]

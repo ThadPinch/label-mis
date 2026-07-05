@@ -1,4 +1,5 @@
 using LabelsMis.Domain.Common;
+using LabelsMis.Domain.ValueObjects;
 
 namespace LabelsMis.Domain.Entities;
 
@@ -20,6 +21,11 @@ public class SalesOrderLine : EntityBase
     public decimal LineTotal { get; private set; }
     public string? LineNotes { get; private set; }
 
+    /// <summary>Snapshot of the ordered spec, copied from the estimate line (or seeded from the
+    /// product on direct orders). Nullable only for rows created before the LabelSpec refactor and
+    /// awaiting backfill — new lines always carry it. See docs/labelspec-refactor.md.</summary>
+    public LabelSpec? Spec { get; private set; }
+
     public static SalesOrderLine Create(
         Guid id,
         Guid salesOrderId,
@@ -29,6 +35,7 @@ public class SalesOrderLine : EntityBase
         int quantity,
         decimal unitPrice,
         string? lineNotes,
+        LabelSpec? spec,
         Guid createdById,
         DateTime createdAt)
     {
@@ -56,10 +63,18 @@ public class SalesOrderLine : EntityBase
             Quantity = quantity,
             UnitPrice = unitPrice,
             LineTotal = unitPrice * quantity,
-            LineNotes = string.IsNullOrWhiteSpace(lineNotes) ? null : lineNotes.Trim()
+            LineNotes = string.IsNullOrWhiteSpace(lineNotes) ? null : lineNotes.Trim(),
+            Spec = spec
         };
         line.SetCreated(id, createdById, createdAt);
         return line;
+    }
+
+    /// <summary>Replaces the ordered spec (CSR edit while the order is open, or one-time backfill).</summary>
+    public void SetSpec(LabelSpec spec, Guid modifiedById, DateTime modifiedAt)
+    {
+        Spec = spec;
+        SetModified(modifiedById, modifiedAt);
     }
 
     public void Update(int quantity, decimal unitPrice, string? lineNotes, Guid modifiedById, DateTime modifiedAt)

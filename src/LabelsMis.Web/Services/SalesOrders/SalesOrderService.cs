@@ -15,7 +15,8 @@ public record SalesOrderLineInput(
     Guid? SourceEstimateLineId,
     int Quantity,
     decimal UnitPrice,
-    string? LineNotes);
+    string? LineNotes,
+    LabelSpec? Spec = null);
 
 public record SalesOrderFormInput(
     Guid CustomerId,
@@ -167,7 +168,8 @@ public class SalesOrderService(
             userId,
             now);
 
-        var lines = BuildLines(order.Id, input.Lines, userId, now);
+        var seedSpecs = await LoadProductSeedSpecsAsync(input.Lines, cancellationToken);
+        var lines = BuildLines(order.Id, input.Lines, seedSpecs, userId, now);
         order.ReplaceLines(lines);
         db.SalesOrders.Add(order);
         foreach (var line in lines)
@@ -237,6 +239,9 @@ public class SalesOrderService(
 
             var product = await productService.EnsureProductForLineAsync(estimateLine.Id, userId, now, cancellationToken);
 
+            // Snapshot the spec the customer was quoted, pinning the product's die + artwork.
+            var spec = estimateLine.ToLabelSpec(product.DieId, product.ArtworkFilePath);
+
             var orderLine = SalesOrderLine.Create(
                 Guid.NewGuid(),
                 order.Id,
@@ -246,6 +251,7 @@ public class SalesOrderService(
                 lineInput.Quantity,
                 lineInput.UnitPrice,
                 lineInput.LineNotes,
+                spec,
                 userId,
                 now);
             orderLines.Add(orderLine);
@@ -288,7 +294,8 @@ public class SalesOrderService(
             userId,
             now);
         db.SalesOrderLines.RemoveRange(order.Lines);
-        var lines = BuildLines(order.Id, input.Lines, userId, now);
+        var seedSpecs = await LoadProductSeedSpecsAsync(input.Lines, cancellationToken);
+        var lines = BuildLines(order.Id, input.Lines, seedSpecs, userId, now);
         order.ReplaceLines(lines);
         foreach (var line in lines)
         {
@@ -382,6 +389,7 @@ public class SalesOrderService(
     private static List<SalesOrderLine> BuildLines(
         Guid salesOrderId,
         IReadOnlyList<SalesOrderLineInput> lines,
+        IReadOnlyDictionary<Guid, LabelSpec> productSeedSpecs,
         Guid userId,
         DateTime now)
     {
@@ -396,9 +404,22 @@ public class SalesOrderService(
                     line.Quantity,
                     line.UnitPrice,
                     line.LineNotes,
+                    // Preserve the spec carried through the form; otherwise seed from the product.
+                    line.Spec ?? productSeedSpecs.GetValueOrDefault(line.ProductId),
                     userId,
                     now))
             .ToList();
+    }
+
+    private async Task<Dictionary<Guid, LabelSpec>> LoadProductSeedSpecsAsync(
+        IReadOnlyList<SalesOrderLineInput> lines,
+        CancellationToken cancellationToken)
+    {
+        var productIds = lines.Select(l => l.ProductId).Where(id => id != Guid.Empty).Distinct().ToList();
+        var products = await db.Products.AsNoTracking()
+            .Where(p => productIds.Contains(p.Id))
+            .ToListAsync(cancellationToken);
+        return products.ToDictionary(p => p.Id, p => p.ToLabelSpec());
     }
 
     private async Task ValidateShippingMethodAsync(Guid? shippingMethodId, CancellationToken cancellationToken)

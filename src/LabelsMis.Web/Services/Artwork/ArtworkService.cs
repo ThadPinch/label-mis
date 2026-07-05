@@ -30,18 +30,9 @@ public class ArtworkService(
         var extension = Path.GetExtension(file.FileName);
         var key = $"{settings.ArtworkKeyPrefix}{productId}/{now:yyyyMMddHHmmss}{extension}";
 
-        if (!string.IsNullOrWhiteSpace(product.ArtworkFilePath))
-        {
-            try
-            {
-                await fileStorage.DeleteAsync(product.ArtworkFilePath, cancellationToken);
-            }
-            catch (FileNotFoundException)
-            {
-                // ignore missing prior file
-            }
-        }
-
+        // Keys are timestamped and unique per upload, and orders/jobs snapshot the exact key they
+        // ran. We intentionally do NOT delete the prior file — old versions must remain resolvable
+        // for those snapshots. The product simply points at the newest key. See docs/labelspec-refactor.md.
         await using var stream = file.OpenReadStream();
         await fileStorage.UploadAsync(key, stream, file.ContentType, cancellationToken);
 

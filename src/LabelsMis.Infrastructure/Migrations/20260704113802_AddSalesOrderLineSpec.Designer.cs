@@ -3,6 +3,7 @@ using System;
 using LabelsMis.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LabelsMis.Infrastructure.Migrations
 {
     [DbContext(typeof(LabelsMisDbContext))]
-    partial class LabelsMisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260704113802_AddSalesOrderLineSpec")]
+    partial class AddSalesOrderLineSpec
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3612,108 +3615,9 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasForeignKey("ScheduledPressId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.OwnsOne("LabelsMis.Domain.ValueObjects.LabelSpec", "Spec", b1 =>
-                        {
-                            b1.Property<Guid>("JobId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<string>("ArtworkFilePath")
-                                .HasMaxLength(500)
-                                .HasColumnType("character varying(500)")
-                                .HasColumnName("SpecArtworkFilePath");
-
-                            b1.Property<decimal>("BleedIn")
-                                .HasPrecision(10, 4)
-                                .HasColumnType("numeric(10,4)")
-                                .HasColumnName("SpecBleedIn");
-
-                            b1.Property<decimal>("CornerRadiusIn")
-                                .HasPrecision(10, 4)
-                                .HasColumnType("numeric(10,4)")
-                                .HasColumnName("SpecCornerRadiusIn");
-
-                            b1.Property<Guid?>("DieId")
-                                .HasColumnType("uuid")
-                                .HasColumnName("SpecDieId");
-
-                            b1.Property<string>("FinishingOperationsJson")
-                                .IsRequired()
-                                .HasColumnType("jsonb")
-                                .HasColumnName("SpecFinishingOperationsJson");
-
-                            b1.Property<decimal>("GutterAcrossIn")
-                                .HasPrecision(10, 4)
-                                .HasColumnType("numeric(10,4)")
-                                .HasColumnName("SpecGutterAcrossIn");
-
-                            b1.Property<decimal>("GutterAroundIn")
-                                .HasPrecision(10, 4)
-                                .HasColumnType("numeric(10,4)")
-                                .HasColumnName("SpecGutterAroundIn");
-
-                            b1.Property<int>("InkSet")
-                                .HasColumnType("integer")
-                                .HasColumnName("SpecInkSet");
-
-                            b1.Property<decimal>("LabelAcrossIn")
-                                .HasPrecision(10, 4)
-                                .HasColumnType("numeric(10,4)")
-                                .HasColumnName("SpecLabelAcrossIn");
-
-                            b1.Property<decimal>("LabelAroundIn")
-                                .HasPrecision(10, 4)
-                                .HasColumnType("numeric(10,4)")
-                                .HasColumnName("SpecLabelAroundIn");
-
-                            b1.Property<int?>("LabelOrientationOverride")
-                                .HasColumnType("integer")
-                                .HasColumnName("SpecLabelOrientationOverride");
-
-                            b1.Property<int?>("MaxLabelsAcrossOverride")
-                                .HasColumnType("integer")
-                                .HasColumnName("SpecMaxLabelsAcrossOverride");
-
-                            b1.Property<decimal>("RunningWastePct")
-                                .HasPrecision(18, 4)
-                                .HasColumnType("numeric(18,4)")
-                                .HasColumnName("SpecRunningWastePct");
-
-                            b1.Property<decimal>("SetupWasteImpressions")
-                                .HasPrecision(14, 4)
-                                .HasColumnType("numeric(14,4)")
-                                .HasColumnName("SpecSetupWasteImpressions");
-
-                            b1.Property<string>("SpotsJson")
-                                .IsRequired()
-                                .HasColumnType("jsonb")
-                                .HasColumnName("SpecSpotsJson");
-
-                            b1.Property<Guid>("SubstrateId")
-                                .HasColumnType("uuid")
-                                .HasColumnName("SpecSubstrateId");
-
-                            b1.Property<decimal>("WhiteCoveragePct")
-                                .HasPrecision(18, 4)
-                                .HasColumnType("numeric(18,4)")
-                                .HasColumnName("SpecWhiteCoveragePct");
-
-                            b1.Property<int>("WhiteHits")
-                                .HasColumnType("integer")
-                                .HasColumnName("SpecWhiteHits");
-
-                            b1.HasKey("JobId");
-
-                            b1.ToTable("Job", "public");
-
-                            b1.WithOwner()
-                                .HasForeignKey("JobId");
-                        });
-
                     b.Navigation("Product");
 
                     b.Navigation("SalesOrderLine");
-
-                    b.Navigation("Spec");
                 });
 
             modelBuilder.Entity("LabelsMis.Domain.Entities.JobMaterialUsage", b =>

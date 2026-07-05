@@ -1,5 +1,6 @@
 using LabelsMis.Domain.Common;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.ValueObjects;
 
 namespace LabelsMis.Domain.Entities;
 
@@ -26,6 +27,10 @@ public class Job : EntityBase
     public string? Notes { get; private set; }
     public Guid? ScheduledPressId { get; private set; }
 
+    /// <summary>Snapshot of the spec this job runs — copied from the order line at scheduling and
+    /// editable on the floor. Nullable only for pre-refactor rows awaiting backfill.</summary>
+    public LabelSpec? Spec { get; private set; }
+
     public IReadOnlyCollection<JobOperation> Operations => _operations;
     public IReadOnlyCollection<JobMaterialUsage> MaterialUsages => _materialUsages;
 
@@ -39,6 +44,7 @@ public class Job : EntityBase
         DateOnly? dueDate,
         int priority,
         string? notes,
+        LabelSpec? spec,
         Guid createdById,
         DateTime createdAt)
     {
@@ -62,10 +68,18 @@ public class Job : EntityBase
             Status = JobStatus.PrePress,
             DueDate = dueDate,
             Priority = priority,
-            Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim()
+            Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+            Spec = spec
         };
         job.SetCreated(id, createdById, createdAt);
         return job;
+    }
+
+    /// <summary>Replaces the job's spec — a production edit on the floor, or one-time backfill.</summary>
+    public void SetSpec(LabelSpec spec, Guid modifiedById, DateTime modifiedAt)
+    {
+        Spec = spec;
+        SetModified(modifiedById, modifiedAt);
     }
 
     /// <summary>Assigns a production date/press. Status moves through the stages explicitly, not here.</summary>

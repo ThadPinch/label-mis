@@ -39,7 +39,7 @@ public class JobTests
 
     private static Job CreateJob() =>
         Job.CreatePlanned(Guid.NewGuid(), "JOB-2026-00001", Guid.NewGuid(), Guid.NewGuid(),
-            5000, 5250, null, 5, null, UserId, Now);
+            5000, 5250, null, 5, null, null, UserId, Now);
 }
 
 public class RollTests

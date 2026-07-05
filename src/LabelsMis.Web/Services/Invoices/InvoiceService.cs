@@ -242,7 +242,7 @@ public class InvoiceService(
             .SingleAsync(o => o.Id == salesOrderId, cancellationToken);
 
         var invoiceNumber = await documentNumbers.NextInvoiceNumberAsync(cancellationToken);
-        var dueDate = today.AddDays((int)order.Customer.Terms);
+        var dueDate = today.AddDays(order.Customer.Terms.ToDueDays());
         var subtotal = order.Lines.Sum(l => l.Quantity * l.UnitPrice);
         var taxAmount = order.Customer.TaxExempt
             ? 0m
@@ -314,7 +314,7 @@ public class InvoiceService(
         }
 
         var invoiceNumber = await documentNumbers.NextInvoiceNumberAsync(cancellationToken);
-        var dueDate = today.AddDays((int)shipment.SalesOrder.Customer.Terms);
+        var dueDate = today.AddDays(shipment.SalesOrder.Customer.Terms.ToDueDays());
         var subtotal = shipment.Lines.Sum(l => l.QuantityShipped * l.SalesOrderLine.UnitPrice);
         var taxAmount = shipment.SalesOrder.Customer.TaxExempt
             ? 0m

@@ -62,12 +62,7 @@ else
         <div class="estimate-action-bar">
             @if (Model.CanEdit)
             {
-                <form method="post" asp-page-handler="Resend" class="d-flex flex-wrap gap-2 align-items-center">
-                    <input type="hidden" asp-for="Id" />
-                    <input asp-for="EmailTo" type="email" class="form-control estimate-action-email" placeholder="Email address" />
-                    <a id="estimate-add-contact" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" hidden>+ Add a contact</a>
-                    <button type="submit" class="btn btn-success">Resend email</button>
-                </form>
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#emailModal">Resend email</button>
                 <form method="post" asp-page-handler="CreateRevision" class="d-inline">
                     <input type="hidden" asp-for="Id" />
                     <button type="submit" class="btn btn-primary">Create revision</button>
@@ -100,6 +95,44 @@ else
             <partial name="_EstimateForm" model="Model.Input" />
         </div>
         </div>
+
+        @if (Model.CanEdit)
+        {
+            <div class="modal fade" id="emailModal" tabindex="-1" aria-labelledby="emailModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <form method="post" asp-page-handler="Resend" class="modal-content">
+                        <input type="hidden" asp-for="Id" />
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="emailModalLabel">Email estimate to customer</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label asp-for="EmailTo" class="form-label">To</label>
+                                <input asp-for="EmailTo" type="email" class="form-control" placeholder="Email address" />
+                                <a id="estimate-add-contact" class="btn btn-sm btn-outline-primary mt-2" target="_blank" rel="noopener" hidden>+ Add a contact</a>
+                            </div>
+                            <div class="mb-3">
+                                <label asp-for="EmailSubject" class="form-label">Subject</label>
+                                <input asp-for="EmailSubject" class="form-control" />
+                            </div>
+                            <div class="mb-3">
+                                <label asp-for="EmailBody" class="form-label">Message</label>
+                                <textarea asp-for="EmailBody" class="form-control" rows="5"></textarea>
+                            </div>
+                            <div class="form-check">
+                                <input asp-for="IncludePdf" class="form-check-input" />
+                                <label asp-for="IncludePdf" class="form-check-label">Include PDF as attachment</label>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-success">Send email</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        }
     }
     else
     {
@@ -107,16 +140,46 @@ else
         <form method="post" id="estimate-form">
             <div class="estimate-action-bar">
                 <button type="submit" asp-page-handler="SaveDraft" class="btn btn-primary">Save draft</button>
-                <button type="submit" asp-page-handler="Send" class="btn btn-success">Send to customer</button>
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#emailModal">Send to customer</button>
                 <button type="submit" asp-page-handler="PreviewPdf" formtarget="_blank" formnovalidate class="btn btn-outline-secondary">Open PDF</button>
-                <label class="form-check-label ms-2">
-                    <input asp-for="SendEmail" class="form-check-input" /> Email PDF
-                </label>
-                <input asp-for="EmailTo" type="email" class="form-control estimate-action-email" placeholder="Email address" />
-                <a id="estimate-add-contact" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" hidden>+ Add a contact</a>
             </div>
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <partial name="_EstimateForm" for="Input" />
+
+            <div class="modal fade" id="emailModal" tabindex="-1" aria-labelledby="emailModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="emailModalLabel">Email estimate to customer</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted small">Sending marks the estimate as sent. Clear the address to mark it sent without emailing.</p>
+                            <div class="mb-3">
+                                <label asp-for="EmailTo" class="form-label">To</label>
+                                <input asp-for="EmailTo" type="email" class="form-control" placeholder="Email address" />
+                                <a id="estimate-add-contact" class="btn btn-sm btn-outline-primary mt-2" target="_blank" rel="noopener" hidden>+ Add a contact</a>
+                            </div>
+                            <div class="mb-3">
+                                <label asp-for="EmailSubject" class="form-label">Subject</label>
+                                <input asp-for="EmailSubject" class="form-control" />
+                            </div>
+                            <div class="mb-3">
+                                <label asp-for="EmailBody" class="form-label">Message</label>
+                                <textarea asp-for="EmailBody" class="form-control" rows="5"></textarea>
+                            </div>
+                            <div class="form-check">
+                                <input asp-for="IncludePdf" class="form-check-input" />
+                                <label asp-for="IncludePdf" class="form-check-label">Include PDF as attachment</label>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" asp-page-handler="Send" class="btn btn-success">Send to customer</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </form>
         </div>
         <partial name="_EstimateLineTemplate" />

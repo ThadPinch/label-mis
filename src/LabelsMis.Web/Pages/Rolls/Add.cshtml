@@ -1,0 +1,84 @@
+@page "/rolls/add"
+@model LabelsMis.Web.Pages.Rolls.AddModel
+@{
+    ViewData["Title"] = "Add inventory";
+    ViewData["BackNav"] = new BackNavModel("Back to rolls");
+}
+
+<h1 class="h3 mb-3">Add inventory</h1>
+<p class="text-muted">Manually add a roll to inventory without a purchase order. A roll barcode is generated automatically.</p>
+
+<form method="post" class="col-lg-6">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    <div class="mb-3">
+        <label for="stockTypeFilter" class="form-label">Stock type</label>
+        <select id="stockTypeFilter" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.StockType>()">
+            <option value="">All types</option>
+        </select>
+        <div class="form-text">Filters the stock list below by type.</div>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Input.StockId" class="form-label"></label>
+        <select asp-for="Input.StockId" class="form-select">
+            <option value="">Select a stock…</option>
+            @foreach (var option in Model.StockOptions)
+            {
+                <option value="@option.Id" data-stocktype="@option.StockType">@option.Label</option>
+            }
+        </select>
+        <span asp-validation-for="Input.StockId" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Input.SupplierLotNumber" class="form-label"></label>
+        <input asp-for="Input.SupplierLotNumber" class="form-control" />
+        <span asp-validation-for="Input.SupplierLotNumber" class="text-danger"></span>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-6 mb-3">
+            <label asp-for="Input.WidthIn" class="form-label"></label>
+            <input asp-for="Input.WidthIn" class="form-control" type="number" step="0.01" min="0" />
+            <span asp-validation-for="Input.WidthIn" class="text-danger"></span>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="Input.LengthLf" class="form-label"></label>
+            <input asp-for="Input.LengthLf" class="form-control" type="number" step="0.01" min="0" />
+            <span asp-validation-for="Input.LengthLf" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Input.Location" class="form-label"></label>
+        <input asp-for="Input.Location" class="form-control" placeholder="e.g. Rack A-3" />
+        <span asp-validation-for="Input.Location" class="text-danger"></span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Add to inventory</button>
+    <a asp-page="Index" class="btn btn-outline-secondary">Cancel</a>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const typeFilter = document.getElementById('stockTypeFilter');
+            const stockSelect = document.getElementById('Input_StockId');
+            if (!typeFilter || !stockSelect) return;
+
+            typeFilter.addEventListener('change', function () {
+                const selected = typeFilter.value;
+                let currentHidden = false;
+                for (const option of stockSelect.options) {
+                    if (!option.value) continue; // keep the placeholder
+                    const matches = !selected || option.dataset.stocktype === selected;
+                    option.hidden = !matches;
+                    if (!matches && option.selected) currentHidden = true;
+                }
+                if (currentHidden) stockSelect.value = '';
+            });
+        })();
+    </script>
+}

@@ -86,7 +86,7 @@ public class CreateModel(
         // The draft now exists; send it and surface any email failure on the edit page.
         try
         {
-            await estimateService.SendAsync(estimateId, SendEmail, EmailTo, cancellationToken);
+            await estimateService.SendAsync(estimateId, SendEmail ? EmailTo : null, null, null, includePdf: true, cancellationToken);
             TempData["EstimateStatus"] = SendEmail && !string.IsNullOrWhiteSpace(EmailTo)
                 ? $"Estimate created and emailed to {EmailTo}."
                 : "Estimate created and marked sent.";

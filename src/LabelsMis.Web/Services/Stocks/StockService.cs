@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LabelsMis.Web.Services.Stocks;
 
-public record StockListItem(Guid Id, string Code, string Description, string SupplierName, bool IsActive);
+public record StockListItem(Guid Id, string Code, string Description, string SupplierName, bool IsActive, StockType StockType);
 
 public record StockForm(
     string Code,
@@ -25,12 +25,13 @@ public record StockForm(
 public class StockService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
     public async Task<PagedResult<StockListItem>> ListAsync(
-        string? search, string? sort, int page, int pageSize, bool includeInactive, CancellationToken ct = default)
+        string? search, string? sort, int page, int pageSize, bool includeInactive, StockType? stockType = null, CancellationToken ct = default)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 5, 100);
         var query = db.Stocks.AsNoTracking().Include(s => s.Supplier).AsQueryable();
         if (!includeInactive) query = query.Where(s => s.IsActive);
+        if (stockType.HasValue) query = query.Where(s => s.StockType == stockType.Value);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToUpperInvariant();
@@ -39,7 +40,7 @@ public class StockService(LabelsMisDbContext db, ICurrentUserService currentUser
         query = sort == "code" ? query.OrderBy(s => s.Code) : query.OrderBy(s => s.Description);
         var total = await query.CountAsync(ct);
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(s => new StockListItem(s.Id, s.Code, s.Description, s.Supplier.Name, s.IsActive)).ToListAsync(ct);
+            .Select(s => new StockListItem(s.Id, s.Code, s.Description, s.Supplier.Name, s.IsActive, s.StockType)).ToListAsync(ct);
         return new PagedResult<StockListItem>(items, page, pageSize, total);
     }
 

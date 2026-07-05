@@ -2,7 +2,14 @@
 @model LabelsMis.Web.Pages.SalesOrders.EditModel
 @{ ViewData["Title"] = Model.Order?.OrderNumber ?? "Sales order"; ViewData["BackNav"] = new BackNavModel(); }
 <h1 class="h3 mb-1">@Model.Order?.OrderNumber</h1>
-<p class="text-muted">@Model.Order?.Status</p>
+<p class="text-muted mb-1">@Model.Order?.Status</p>
+@if (Model.SourceEstimateId is not null)
+{
+    <p class="mb-3">
+        <span class="text-muted">Estimate:</span>
+        <a asp-page="/Estimates/Edit" asp-route-id="@Model.SourceEstimateId">@(Model.SourceEstimateNumber ?? "View estimate")</a>
+    </p>
+}
 @if (Model.LineJobs.Any(j => j.JobId is not null))
 {
     <div class="card mb-3">

@@ -1,5 +1,6 @@
 using LabelsMis.Domain.Common;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.ValueObjects;
 
 namespace LabelsMis.Domain.Entities;
 
@@ -162,6 +163,16 @@ public class EstimateLine : EntityBase
     }
 
     public void AddQuantityBreak(EstimateQuantityBreak quantityBreak) => _quantityBreaks.Add(quantityBreak);
+
+    /// <summary>Snapshots this line's physical spec. Die and artwork are supplied by the caller
+    /// (they live on the product, not the estimate line).</summary>
+    public LabelSpec ToLabelSpec(Guid? dieId = null, string? artworkFilePath = null) => LabelSpec.Create(
+        LabelAcrossIn, LabelAroundIn, CornerRadiusIn,
+        GutterAcrossIn, GutterAroundIn, BleedIn,
+        SubstrateId, dieId, InkSet,
+        WhiteHits, WhiteCoveragePct, SpotsJson, FinishingOperationsJson,
+        SetupWasteImpressions, RunningWastePct,
+        MaxLabelsAcrossOverride, LabelOrientationOverride, artworkFilePath);
 
     private static void ValidateDimensions(decimal labelAcrossIn, decimal labelAroundIn)
     {

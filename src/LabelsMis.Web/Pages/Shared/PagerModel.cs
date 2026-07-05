@@ -6,4 +6,5 @@ public record PagerModel(
     int TotalCount,
     string? Search = null,
     string? Sort = null,
-    bool IncludeInactive = false);
+    bool IncludeInactive = false,
+    string? StockType = null);

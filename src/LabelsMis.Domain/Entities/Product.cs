@@ -1,5 +1,6 @@
 using LabelsMis.Domain.Common;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.ValueObjects;
 
 namespace LabelsMis.Domain.Entities;
 
@@ -130,6 +131,16 @@ public class Product : MasterDataEntity
         ReplaceCustomerAssignments(distinctCustomerIds, modifiedById, modifiedAt);
         SetModified(modifiedById, modifiedAt);
     }
+
+    /// <summary>Seeds a label spec from this product's template fields. Gutters, bleed, white, spots,
+    /// waste, and layout aren't held on the product, so they start at their defaults.</summary>
+    public LabelSpec ToLabelSpec() => LabelSpec.Create(
+        LabelAcrossIn, LabelAroundIn, CornerRadiusIn,
+        gutterAcrossIn: 0m, gutterAroundIn: 0m, bleedIn: 0m,
+        SubstrateId, DieId, InkSet,
+        whiteHits: 0, whiteCoveragePct: 1m, spotsJson: "[]", FinishingOperationsJson,
+        setupWasteImpressions: 0m, runningWastePct: 0m,
+        maxLabelsAcrossOverride: null, labelOrientationOverride: null, ArtworkFilePath);
 
     public void SetRollSpec(RollSpec rollSpec) => _rollSpec = rollSpec;
 

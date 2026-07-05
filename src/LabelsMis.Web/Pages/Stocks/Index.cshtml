@@ -13,8 +13,13 @@
 </div>
 
 <form method="get" class="row g-2 mb-3">
-    <div class="col-md-4">
+    <div class="col-md-3">
         <input asp-for="Search" class="form-control" placeholder="Search code or description" />
+    </div>
+    <div class="col-md-2">
+        <select asp-for="StockType" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.StockType>()">
+            <option value="">All types</option>
+        </select>
     </div>
     <div class="col-md-3">
         <select asp-for="Sort" class="form-select">
@@ -26,7 +31,7 @@
         <input asp-for="IncludeInactive" class="form-check-input" />
         <label asp-for="IncludeInactive" class="form-check-label">Show inactive</label>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <button type="submit" class="btn btn-outline-secondary">Search</button>
     </div>
 </form>
@@ -36,6 +41,7 @@
         <tr>
             <th>Code</th>
             <th>Description</th>
+            <th>Type</th>
             <th>Supplier</th>
             <th>Active</th>
             <th></th>
@@ -47,6 +53,7 @@
         <tr>
             <td>@item.Code</td>
             <td>@item.Description</td>
+            <td>@item.StockType</td>
             <td>@item.SupplierName</td>
             <td>@(item.IsActive ? "Yes" : "No")</td>
             <td class="text-end text-nowrap">
@@ -67,4 +74,5 @@
     Model.Result.TotalCount,
     Model.Search,
     Model.Sort,
-    Model.IncludeInactive))
+    Model.IncludeInactive,
+    Model.StockType?.ToString()))

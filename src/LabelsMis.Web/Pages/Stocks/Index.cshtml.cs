@@ -23,6 +23,9 @@ public class IndexModel(StockService stockService, ICurrentUserService currentUs
     [BindProperty(SupportsGet = true)]
     public bool IncludeInactive { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public LabelsMis.Domain.Enums.StockType? StockType { get; set; }
+
     public PagedResult<StockListItem> Result { get; private set; } = null!;
     public bool CanEdit => currentUser.CanEditMasterData;
 
@@ -31,6 +34,6 @@ public class IndexModel(StockService stockService, ICurrentUserService currentUs
         ViewData["Search"] = Search;
         ViewData["Sort"] = Sort;
         ViewData["IncludeInactive"] = IncludeInactive;
-        Result = await stockService.ListAsync(Search, Sort, PageNumber, 20, IncludeInactive, cancellationToken);
+        Result = await stockService.ListAsync(Search, Sort, PageNumber, 20, IncludeInactive, StockType, cancellationToken);
     }
 }

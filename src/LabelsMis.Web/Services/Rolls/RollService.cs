@@ -18,6 +18,13 @@ public record RollListItem(
 
 public record RollSplitInput(IReadOnlyList<decimal> ChildWidthsIn, string? Location);
 
+public record ManualRollInput(
+    Guid StockId,
+    string SupplierLotNumber,
+    decimal WidthIn,
+    decimal LengthLf,
+    string? Location);
+
 public record RollDetail(
     Roll Roll,
     string StockDescription,
@@ -34,6 +41,7 @@ public class RollService(
         RollStatus? status,
         string? location,
         string? lotNumber,
+        StockType? stockType,
         string? sort,
         int page,
         int pageSize,
@@ -49,6 +57,11 @@ public class RollService(
         if (stockId.HasValue)
         {
             query = query.Where(r => r.StockId == stockId.Value);
+        }
+
+        if (stockType.HasValue)
+        {
+            query = query.Where(r => r.Stock.StockType == stockType.Value);
         }
 
         if (status.HasValue)
@@ -98,6 +111,43 @@ public class RollService(
             .ToListAsync(cancellationToken);
 
         return new PagedResult<RollListItem>(items, page, pageSize, total);
+    }
+
+    public async Task<Guid> AddManualAsync(ManualRollInput input, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+
+        var barcode = await documentNumbers.NextRollBarcodeAsync(cancellationToken);
+        var roll = Roll.Create(
+            Guid.NewGuid(),
+            barcode,
+            input.StockId,
+            input.SupplierLotNumber,
+            input.WidthIn,
+            input.LengthLf,
+            now,
+            null,
+            input.Location,
+            userId,
+            now);
+
+        var movement = RollMovement.Create(
+            Guid.NewGuid(),
+            roll.Id,
+            RollMovementType.Receive,
+            input.LengthLf,
+            null,
+            now,
+            "Manual inventory add",
+            userId,
+            now);
+        roll.AddMovement(movement);
+        db.RollMovements.Add(movement);
+        db.Rolls.Add(roll);
+
+        await db.SaveChangesAsync(cancellationToken);
+        return roll.Id;
     }
 
     public async Task<RollDetail?> GetDetailAsync(Guid id, CancellationToken cancellationToken = default)

@@ -18,6 +18,8 @@ public class JobConfiguration : IEntityTypeConfiguration<Job>
         builder.Property(j => j.Priority).IsRequired();
         builder.Property(j => j.Notes).HasMaxLength(4000);
 
+        builder.OwnsLabelSpec(j => j.Spec);
+
         builder.HasIndex(j => j.JobNumber).IsUnique();
         builder.HasIndex(j => j.Status);
         builder.HasIndex(j => j.SalesOrderLineId);

@@ -30,10 +30,16 @@ public class EditModel(
     public string? LostReason { get; set; }
 
     [BindProperty]
-    public bool SendEmail { get; set; }
+    public string? EmailTo { get; set; }
 
     [BindProperty]
-    public string? EmailTo { get; set; }
+    public string? EmailSubject { get; set; }
+
+    [BindProperty]
+    public string? EmailBody { get; set; }
+
+    [BindProperty]
+    public bool IncludePdf { get; set; }
 
     public EstimateDetail? Detail { get; private set; }
     public bool CanEdit { get; private set; }
@@ -57,13 +63,15 @@ public class EditModel(
 
         Input = EstimatePageInput.FromEstimate(Detail.Estimate);
 
-        // Pre-fill the email field with a customer contact's address (primary
-        // first) and default the "Email PDF" checkbox to on.
+        // Pre-fill the email composer: recipient (primary contact first),
+        // a default subject/body, and the "include PDF" attachment on.
         EmailTo = Detail.Customer.Contacts
             .OrderByDescending(c => c.IsPrimary)
             .Select(c => c.Email)
             .FirstOrDefault(e => !string.IsNullOrWhiteSpace(e));
-        SendEmail = true;
+        EmailSubject = $"Estimate {Detail.Estimate.EstimateNumber}";
+        EmailBody = $"Please find attached estimate {Detail.Estimate.EstimateNumber}.";
+        IncludePdf = true;
 
         await LoadLookupsAsync(cancellationToken);
         return Page();
@@ -109,7 +117,7 @@ public class EditModel(
 
         try
         {
-            await estimateService.SendAsync(Id, SendEmail, EmailTo, cancellationToken);
+            await estimateService.SendAsync(Id, EmailTo, EmailSubject, EmailBody, IncludePdf, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -153,7 +161,7 @@ public class EditModel(
 
         try
         {
-            await estimateService.ResendAsync(Id, EmailTo, cancellationToken);
+            await estimateService.ResendAsync(Id, EmailTo, EmailSubject, EmailBody, IncludePdf, cancellationToken);
             TempData["EstimateStatus"] = $"Estimate emailed to {EmailTo}.";
         }
         catch (Exception ex)

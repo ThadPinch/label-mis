@@ -1,5 +1,29 @@
 using LabelsMis.Tools.Importers;
 
+var actorId = Guid.Parse("00000000-0000-0000-0000-000000000099");
+
+if (args.Length < 1)
+{
+    Console.WriteLine("Usage: LabelsMis.Tools <importer> <csv-path> [--connection <conn>]");
+    Console.WriteLine("       LabelsMis.Tools backfill-specs [--connection <conn>]");
+    Console.WriteLine("Importers: customers, stocks, products, opening-ar");
+    return 1;
+}
+
+// One-time LabelSpec backfill takes no CSV path — handle it before the importer arg parsing.
+if (args[0].Equals("backfill-specs", StringComparison.OrdinalIgnoreCase))
+{
+    var backfillConnection = args.Length >= 3 && args[1] == "--connection" ? args[2] : null;
+    var backfillResult = await SpecBackfill.RunAsync(actorId, backfillConnection);
+    Console.WriteLine($"Backfilled specs: {backfillResult.SuccessCount}");
+    foreach (var error in backfillResult.Errors)
+    {
+        Console.Error.WriteLine(error);
+    }
+
+    return backfillResult.Errors.Count > 0 ? 1 : 0;
+}
+
 if (args.Length < 2)
 {
     Console.WriteLine("Usage: LabelsMis.Tools <importer> <csv-path> [--connection <conn>]");
@@ -10,7 +34,6 @@ if (args.Length < 2)
 var importer = args[0].ToLowerInvariant();
 var csvPath = args[1];
 var connection = args.Length >= 4 && args[2] == "--connection" ? args[3] : null;
-var actorId = Guid.Parse("00000000-0000-0000-0000-000000000099");
 
 if (!File.Exists(csvPath))
 {

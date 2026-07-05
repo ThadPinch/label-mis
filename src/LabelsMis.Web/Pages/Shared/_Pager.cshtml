@@ -1,10 +1,24 @@
 @model LabelsMis.Web.Pages.Shared.PagerModel
+@functions {
+    // Build a relative query string for the target page. We construct it by hand rather than using
+    // asp-route-page because `page` is a reserved Razor Pages route token — asp-route-page="2" is
+    // interpreted as a page path, not a query value, and silently drops the page number.
+    string PageUrl(int page)
+    {
+        var parts = new List<string> { $"page={page}" };
+        if (!string.IsNullOrWhiteSpace(Model.Search)) parts.Add($"search={Uri.EscapeDataString(Model.Search)}");
+        if (!string.IsNullOrWhiteSpace(Model.Sort)) parts.Add($"sort={Uri.EscapeDataString(Model.Sort)}");
+        if (Model.IncludeInactive) parts.Add("includeInactive=true");
+        if (!string.IsNullOrWhiteSpace(Model.StockType)) parts.Add($"stockType={Uri.EscapeDataString(Model.StockType)}");
+        return "?" + string.Join("&", parts);
+    }
+}
 <nav aria-label="Pagination" class="mt-3">
     <ul class="pagination">
         @if (Model.Page > 1)
         {
             <li class="page-item">
-                <a class="page-link" asp-route-page="@(Model.Page - 1)" asp-route-search="@Model.Search" asp-route-sort="@Model.Sort" asp-route-includeInactive="@Model.IncludeInactive">Previous</a>
+                <a class="page-link" href="@PageUrl(Model.Page - 1)">Previous</a>
             </li>
         }
         <li class="page-item disabled">
@@ -13,7 +27,7 @@
         @if (Model.Page < Model.TotalPages)
         {
             <li class="page-item">
-                <a class="page-link" asp-route-page="@(Model.Page + 1)" asp-route-search="@Model.Search" asp-route-sort="@Model.Sort" asp-route-includeInactive="@Model.IncludeInactive">Next</a>
+                <a class="page-link" href="@PageUrl(Model.Page + 1)">Next</a>
             </li>
         }
     </ul>

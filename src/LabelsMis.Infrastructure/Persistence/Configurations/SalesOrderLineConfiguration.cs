@@ -17,6 +17,8 @@ public class SalesOrderLineConfiguration : IEntityTypeConfiguration<SalesOrderLi
         builder.Property(l => l.LineTotal).HasMoneyPrecision();
         builder.Property(l => l.LineNotes).HasMaxLength(1000);
 
+        builder.OwnsLabelSpec(l => l.Spec);
+
         builder.HasIndex(l => new { l.SalesOrderId, l.LineNumber }).IsUnique();
         builder.HasIndex(l => l.SourceEstimateLineId);
 

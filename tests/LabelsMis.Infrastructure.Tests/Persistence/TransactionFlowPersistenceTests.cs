@@ -108,7 +108,7 @@ public class TransactionFlowPersistenceTests : IAsyncLifetime
             Guid.NewGuid(), "SO-2026-99999", customerId, estimateId, "PO-123", now, null, null,
             null, 0m, ShippingAddress.Empty, TestUserId, now);
         var orderLine = SalesOrderLine.Create(
-            Guid.NewGuid(), order.Id, 1, product.Id, line.Id, 5000, 0.05m, null, TestUserId, now);
+            Guid.NewGuid(), order.Id, 1, product.Id, line.Id, 5000, 0.05m, null, line.ToLabelSpec(), TestUserId, now);
         order.AddLine(orderLine);
         _db.SalesOrders.Add(order);
         _db.SalesOrderLines.Add(orderLine);

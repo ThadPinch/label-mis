@@ -2,17 +2,26 @@
 @model LabelsMis.Web.Pages.Rolls.IndexModel
 @{ ViewData["Title"] = "Rolls"; }
 
-<h1 class="h3 mb-3">Roll inventory</h1>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Roll inventory</h1>
+    @if (Model.CanEdit)
+    {
+        <a asp-page="Add" class="btn btn-primary">Add to inventory</a>
+    }
+</div>
 <form method="get" class="row g-2 mb-3">
     <div class="col-md-3"><input asp-for="Search" class="form-control" placeholder="Barcode or lot" autofocus /></div>
     <div class="col-md-2">
         <select asp-for="StockId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["StockOptions"]!)"><option value="">All stocks</option></select>
     </div>
     <div class="col-md-2">
+        <select asp-for="StockType" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.StockType>()"><option value="">All types</option></select>
+    </div>
+    <div class="col-md-2">
         <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.RollStatus>()"><option value="">All statuses</option></select>
     </div>
     <div class="col-md-2"><input asp-for="Location" class="form-control" placeholder="Location" /></div>
-    <div class="col-md-2"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
+    <div class="col-md-1"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
 </form>
 
 <table class="table table-striped">
