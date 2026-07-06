@@ -119,16 +119,22 @@
         }
         else if (Model.NextStep is { } step)
         {
-            @if (Model.CanAdvanceStage)
-            {
-                <form method="post" asp-page-handler="AdvanceStage">
-                    <button type="submit" class="btn btn-primary">@step.Label</button>
-                </form>
-            }
-            else
-            {
-                <p class="text-muted mb-0">Next: @step.Label</p>
-            }
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                @if (Model.CanAdvanceStage)
+                {
+                    <form method="post" asp-page-handler="AdvanceStage" class="d-inline">
+                        <button type="submit" class="btn btn-primary">@step.Label</button>
+                    </form>
+                }
+                else
+                {
+                    <p class="text-muted mb-0">Next: @step.Label</p>
+                }
+                @if (status == JobStatus.Rewound && Model.CanShip)
+                {
+                    <a asp-page="/Shipments/Record" asp-route-salesOrderId="@Model.Detail!.SalesOrderId" class="btn btn-success">Record shipment</a>
+                }
+            </div>
         }
         else
         {

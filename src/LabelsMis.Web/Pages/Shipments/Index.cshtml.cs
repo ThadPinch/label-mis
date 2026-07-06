@@ -1,6 +1,7 @@
 using LabelsMis.Domain.Enums;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
+using LabelsMis.Web.Services.Models;
 using LabelsMis.Web.Services.Shipments;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,19 +14,32 @@ namespace LabelsMis.Web.Pages.Shipments;
 [Authorize(Policy = TransactionPolicies.ShippingRead)]
 public class IndexModel(ShipmentService shipmentService, LabelsMisDbContext db) : PageModel
 {
+    // Which tab is shown on load; preserved across pager/filter reloads via the `tab` query value.
+    [BindProperty(SupportsGet = true)] public string Tab { get; set; } = "ready";
+
+    // Ready to Ship tab
+    [BindProperty(SupportsGet = true)] public string? ReadySearch { get; set; }
+    [BindProperty(SupportsGet = true, Name = "readyPage")] public int ReadyPage { get; set; } = 1;
+
+    // History tab
     [BindProperty(SupportsGet = true)] public string? Search { get; set; }
     [BindProperty(SupportsGet = true)] public ShipmentStatus? Status { get; set; }
     [BindProperty(SupportsGet = true)] public Guid? CustomerId { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? ShipFrom { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? ShipTo { get; set; }
-    [BindProperty(SupportsGet = true, Name = "page")] public int PageNumber { get; set; } = 1;
+    [BindProperty(SupportsGet = true, Name = "historyPage")] public int HistoryPage { get; set; } = 1;
 
-    public Services.Models.PagedResult<ShipmentListItem> Result { get; private set; } = null!;
-    public bool CanEdit => User.IsInRole("Admin") || User.IsInRole("Shipping");
+    public PagedResult<ReadyToShipOrder> ReadyResult { get; private set; } = null!;
+    public PagedResult<ShipmentListItem> Result { get; private set; } = null!;
+
+    public bool CanShip => User.IsInRole("Admin") || User.IsInRole("Shipping");
+    public bool ReadyActive => !string.Equals(Tab, "history", StringComparison.OrdinalIgnoreCase);
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
-        Result = await shipmentService.ListAsync(Search, Status, CustomerId, ShipFrom, ShipTo, null, PageNumber, 25, cancellationToken);
+        ReadyResult = await shipmentService.GetReadyToShipAsync(ReadySearch, ReadyPage, 25, cancellationToken);
+        Result = await shipmentService.ListAsync(
+            Search, Status, CustomerId, ShipFrom, ShipTo, null, HistoryPage, 25, cancellationToken);
         ViewData["CustomerOptions"] = await db.Customers.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.Name)
             .Select(c => new SelectListItem(c.Name, c.Id.ToString())).ToListAsync(cancellationToken);
     }

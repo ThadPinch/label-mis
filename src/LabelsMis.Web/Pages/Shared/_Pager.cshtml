@@ -1,15 +1,25 @@
 @model LabelsMis.Web.Pages.Shared.PagerModel
 @functions {
-    // Build a relative query string for the target page. We construct it by hand rather than using
-    // asp-route-page because `page` is a reserved Razor Pages route token — asp-route-page="2" is
-    // interpreted as a page path, not a query value, and silently drops the page number.
+    // Build a relative query string for the target page. The parameter is `pageNumber`, not `page`:
+    // `page` is a reserved Razor Pages route token that always sits in RouteData as the page path, and
+    // route values outrank the query string in model binding, so a `?page=N` never reaches the model.
     string PageUrl(int page)
     {
-        var parts = new List<string> { $"page={page}" };
+        var parts = new List<string> { $"{Model.PageParam}={page}" };
         if (!string.IsNullOrWhiteSpace(Model.Search)) parts.Add($"search={Uri.EscapeDataString(Model.Search)}");
         if (!string.IsNullOrWhiteSpace(Model.Sort)) parts.Add($"sort={Uri.EscapeDataString(Model.Sort)}");
         if (Model.IncludeInactive) parts.Add("includeInactive=true");
         if (!string.IsNullOrWhiteSpace(Model.StockType)) parts.Add($"stockType={Uri.EscapeDataString(Model.StockType)}");
+        if (Model.Extra is not null)
+        {
+            foreach (var kv in Model.Extra)
+            {
+                if (!string.IsNullOrWhiteSpace(kv.Value))
+                {
+                    parts.Add($"{kv.Key}={Uri.EscapeDataString(kv.Value)}");
+                }
+            }
+        }
         return "?" + string.Join("&", parts);
     }
 }

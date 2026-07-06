@@ -22,7 +22,7 @@ public class IndexModel(JobService jobService, LabelsMisDbContext db) : PageMode
     [BindProperty(SupportsGet = true)] public DateOnly? DueTo { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? ScheduledDate { get; set; }
     [BindProperty(SupportsGet = true)] public string? Sort { get; set; }
-    [BindProperty(SupportsGet = true, Name = "page")] public int PageNumber { get; set; } = 1;
+    [BindProperty(SupportsGet = true, Name = "pageNumber")] public int PageNumber { get; set; } = 1;
 
     public Services.Models.PagedResult<JobListItem> Result { get; private set; } = null!;
     public bool CanEdit { get; private set; }

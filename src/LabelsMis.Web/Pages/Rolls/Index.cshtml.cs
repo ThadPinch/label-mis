@@ -19,7 +19,7 @@ public class IndexModel(RollService rollService, LabelsMisDbContext db) : PageMo
     [BindProperty(SupportsGet = true)] public StockType? StockType { get; set; }
     [BindProperty(SupportsGet = true)] public string? Location { get; set; }
     [BindProperty(SupportsGet = true)] public string? LotNumber { get; set; }
-    [BindProperty(SupportsGet = true, Name = "page")] public int PageNumber { get; set; } = 1;
+    [BindProperty(SupportsGet = true, Name = "pageNumber")] public int PageNumber { get; set; } = 1;
 
     public Services.Models.PagedResult<RollListItem> Result { get; private set; } = null!;
     public bool CanEdit => User.IsInRole("Admin") || User.IsInRole("Scheduler");

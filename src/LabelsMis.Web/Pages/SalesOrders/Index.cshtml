@@ -84,7 +84,7 @@
 @{
     Dictionary<string, string> PageRoute(int page)
     {
-        var rv = new Dictionary<string, string> { ["page"] = page.ToString() };
+        var rv = new Dictionary<string, string> { ["pageNumber"] = page.ToString() };
         if (!string.IsNullOrWhiteSpace(Model.Search)) rv["Search"] = Model.Search!;
         if (Model.Status.HasValue) rv["Status"] = Model.Status.Value.ToString();
         if (Model.CustomerId.HasValue) rv["CustomerId"] = Model.CustomerId.Value.ToString();

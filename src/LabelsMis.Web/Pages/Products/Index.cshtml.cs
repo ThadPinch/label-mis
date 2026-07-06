@@ -23,7 +23,7 @@ public class IndexModel(ProductService productService, LabelsMisDbContext db) : 
     [BindProperty(SupportsGet = true)]
     public ProductStatus? Status { get; set; }
 
-    [BindProperty(SupportsGet = true, Name = "page")]
+    [BindProperty(SupportsGet = true, Name = "pageNumber")]
     public int PageNumber { get; set; } = 1;
 
     public Services.Models.PagedResult<ProductListItem> Result { get; private set; } = null!;

@@ -49,7 +49,7 @@ else
                         <form method="post" asp-page-handler="Advance" class="d-inline">
                             <input type="hidden" name="jobId" value="@item.Id" />
                             <input type="hidden" name="Search" value="@Model.Search" />
-                            <input type="hidden" name="page" value="@Model.Result.Page" />
+                            <input type="hidden" name="pageNumber" value="@Model.Result.Page" />
                             <button type="submit" class="btn btn-sm btn-primary">@Model.AdvanceLabel</button>
                         </form>
                     }

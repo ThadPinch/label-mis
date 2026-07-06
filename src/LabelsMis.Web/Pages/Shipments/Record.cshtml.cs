@@ -1,4 +1,5 @@
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Services.Shipments;
 using Microsoft.AspNetCore.Authorization;
@@ -20,11 +21,18 @@ public class RecordModel(ShipmentService shipmentService) : PageModel
         Order = await shipmentService.GetOrderForManualShipmentAsync(SalesOrderId, cancellationToken);
         if (Order is null) return NotFound();
 
+        var shipTo = Order.DefaultShipTo;
         Input = new RecordShipmentInput
         {
             ShipDate = DateOnly.FromDateTime(DateTime.UtcNow),
             Carrier = Carrier.Fedex,
-            ShipToAddressId = Order.DefaultShipToAddressId ?? Guid.Empty,
+            ShipToName = shipTo.RecipientName,
+            ShipToStreet1 = shipTo.Street1,
+            ShipToStreet2 = shipTo.Street2,
+            ShipToCity = shipTo.City,
+            ShipToState = shipTo.State,
+            ShipToZip = shipTo.Zip,
+            ShipToCountry = shipTo.Country,
             Lines = Order.Lines.Where(l => l.IsReady).Select(l => new RecordLineInput
             {
                 SalesOrderLineId = l.SalesOrderLineId,
@@ -43,7 +51,9 @@ public class RecordModel(ShipmentService shipmentService) : PageModel
         var input = new ManualShipmentInput(
             Input.ShipDate,
             Input.Carrier,
-            Input.ShipToAddressId,
+            new ShippingAddress(
+                Input.ShipToName, Input.ShipToStreet1, Input.ShipToStreet2,
+                Input.ShipToCity, Input.ShipToState, Input.ShipToZip, Input.ShipToCountry),
             Input.Lines
                 .Where(l => l.Include && l.Quantity > 0)
                 .Select(l => new ManualShipmentLineInput(l.SalesOrderLineId, l.JobId, l.Quantity))
@@ -73,7 +83,13 @@ public class RecordShipmentInput
 {
     public DateOnly ShipDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public Carrier Carrier { get; set; } = Carrier.Fedex;
-    public Guid ShipToAddressId { get; set; }
+    public string? ShipToName { get; set; }
+    public string? ShipToStreet1 { get; set; }
+    public string? ShipToStreet2 { get; set; }
+    public string? ShipToCity { get; set; }
+    public string? ShipToState { get; set; }
+    public string? ShipToZip { get; set; }
+    public string? ShipToCountry { get; set; }
     public List<RecordLineInput> Lines { get; set; } = [];
     public List<RecordPackageInput> Packages { get; set; } = [new()];
 }

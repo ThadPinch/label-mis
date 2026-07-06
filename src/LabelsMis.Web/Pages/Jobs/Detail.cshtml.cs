@@ -33,6 +33,7 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
     public bool CanEdit { get; private set; }
     public bool CanOperate { get; private set; }
     public bool CanChangeStatus { get; private set; }
+    public bool CanShip { get; private set; }
     public string? ErrorMessage { get; private set; }
 
     public IReadOnlyList<FinishingTaskView> FinishingTasks { get; private set; } = [];
@@ -217,6 +218,7 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
         CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler);
         CanOperate = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Operator);
         CanChangeStatus = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler);
+        CanShip = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Shipping);
         Detail = await jobService.GetDetailAsync(Id, cancellationToken);
         if (Detail is null) return;
 

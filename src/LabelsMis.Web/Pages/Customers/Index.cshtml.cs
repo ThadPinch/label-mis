@@ -17,7 +17,7 @@ public class IndexModel(CustomerService customerService, ICurrentUserService cur
     [BindProperty(SupportsGet = true)]
     public string? Sort { get; set; }
 
-    [BindProperty(SupportsGet = true, Name = "page")]
+    [BindProperty(SupportsGet = true, Name = "pageNumber")]
     public int PageNumber { get; set; } = 1;
 
     [BindProperty(SupportsGet = true)]

@@ -23,12 +23,19 @@
             <label asp-for="Input.Carrier" class="form-label">Carrier</label>
             <select asp-for="Input.Carrier" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.Carrier>()"></select>
         </div>
-        <div class="col-md-6">
-            <label asp-for="Input.ShipToAddressId" class="form-label">Ship to</label>
-            <select asp-for="Input.ShipToAddressId" class="form-select"
-                    asp-items="@(new SelectList(order.ShipToAddresses, nameof(LabelsMis.Web.Services.Shipments.ManualShipmentAddress.Id), nameof(LabelsMis.Web.Services.Shipments.ManualShipmentAddress.Label)))"></select>
-        </div>
     </div>
+
+    <fieldset class="border rounded p-3 mb-3">
+        <legend class="float-none w-auto px-2 h6 mb-0">Ship to</legend>
+        <div class="row g-2">
+            <div class="col-md-6"><label asp-for="Input.ShipToName" class="form-label">Recipient / company</label><input asp-for="Input.ShipToName" class="form-control" /></div>
+            <div class="col-md-6"><label asp-for="Input.ShipToStreet1" class="form-label">Street</label><input asp-for="Input.ShipToStreet1" class="form-control" /></div>
+            <div class="col-md-6"><label asp-for="Input.ShipToStreet2" class="form-label">Street 2</label><input asp-for="Input.ShipToStreet2" class="form-control" /></div>
+            <div class="col-md-3"><label asp-for="Input.ShipToCity" class="form-label">City</label><input asp-for="Input.ShipToCity" class="form-control" /></div>
+            <div class="col-md-1"><label asp-for="Input.ShipToState" class="form-label">State</label><input asp-for="Input.ShipToState" class="form-control" /></div>
+            <div class="col-md-2"><label asp-for="Input.ShipToZip" class="form-label">Zip</label><input asp-for="Input.ShipToZip" class="form-control" /></div>
+        </div>
+    </fieldset>
 
     <h2 class="h6">Items ready to ship</h2>
     @if (Model.Input.Lines.Count == 0)

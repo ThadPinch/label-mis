@@ -43,14 +43,18 @@ public record ShipmentDetail(
     string CustomerName,
     string? LatestTrackingStatus);
 
+public record ReadyJobRef(Guid JobId, string JobNumber);
+
 public record ReadyToShipOrder(
     Guid SalesOrderId,
     string OrderNumber,
     string CustomerName,
     string? CustomerPoNumber,
     DateOnly? RequestedShipDate,
+    string? ShippingMethodName,
     int ReadyItemCount,
-    int TotalItemCount);
+    int TotalItemCount,
+    IReadOnlyList<ReadyJobRef> ReadyJobs);
 
 public record ManualShipmentAddress(Guid Id, string Label);
 
@@ -68,8 +72,7 @@ public record ManualShipmentOrderView(
     Guid SalesOrderId,
     string OrderNumber,
     string CustomerName,
-    Guid? DefaultShipToAddressId,
-    IReadOnlyList<ManualShipmentAddress> ShipToAddresses,
+    ShippingAddress DefaultShipTo,
     IReadOnlyList<ManualShipmentLineView> Lines);
 
 public record ManualShipmentLineInput(Guid SalesOrderLineId, Guid? JobId, int QuantityShipped);
@@ -86,7 +89,7 @@ public record ManualPackageInput(
 public record ManualShipmentInput(
     DateOnly ShipDate,
     Carrier Carrier,
-    Guid ShipToAddressId,
+    ShippingAddress ShipTo,
     IReadOnlyList<ManualShipmentLineInput> Lines,
     IReadOnlyList<ManualPackageInput> Packages);
 
@@ -235,8 +238,14 @@ public class ShipmentService(
                 o.Customer.Name,
                 o.CustomerPoNumber,
                 o.RequestedShipDate,
+                o.ShippingMethod != null ? o.ShippingMethod.Name : null,
                 o.Lines.Count(l => db.Jobs.Any(j => j.Status == JobStatus.Rewound && j.SalesOrderLineId == l.Id)),
-                o.Lines.Count))
+                o.Lines.Count,
+                db.Jobs
+                    .Where(j => j.Status == JobStatus.Rewound && j.SalesOrderLine.SalesOrderId == o.Id)
+                    .OrderBy(j => j.JobNumber)
+                    .Select(j => new ReadyJobRef(j.Id, j.JobNumber))
+                    .ToList()))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<ReadyToShipOrder>(items, page, pageSize, total);
@@ -249,6 +258,7 @@ public class ShipmentService(
     {
         var order = await db.SalesOrders.AsNoTracking()
             .Include(o => o.Customer).ThenInclude(c => c.Addresses)
+            .Include(o => o.ShippingMethod)
             .Include(o => o.Lines).ThenInclude(l => l.Product)
             .SingleOrDefaultAsync(o => o.Id == salesOrderId, cancellationToken);
 
@@ -282,17 +292,36 @@ public class ShipmentService(
                 l.Id, l.LineNumber, l.Product.Description, l.Quantity, shippedQty, remaining, job?.Id, ready);
         }).ToList();
 
-        var shippingAddresses = order.Customer.Addresses
-            .Where(a => a.AddressType == AddressType.Shipping)
-            .OrderByDescending(a => a.IsDefault)
-            .ToList();
+        // Default the ship-to address: when the shipping method requires an address, prefer what was
+        // captured on the order (else the customer's default shipping address); otherwise (pickup /
+        // no-ship methods) default to our own company address from general settings. Always editable.
+        var requiresAddress = order.ShippingMethod?.RequiresAddress ?? false;
+        ShippingAddress defaultShipTo;
+        if (requiresAddress && order.ShippingAddress.HasAddress)
+        {
+            defaultShipTo = order.ShippingAddress;
+        }
+        else if (requiresAddress)
+        {
+            var customerAddress = order.Customer.Addresses
+                .Where(a => a.AddressType == AddressType.Shipping)
+                .OrderByDescending(a => a.IsDefault)
+                .FirstOrDefault();
+            defaultShipTo = customerAddress is null
+                ? await GetCompanyShipFromAsync(cancellationToken)
+                : new ShippingAddress(order.Customer.Name, customerAddress.Street1, customerAddress.Street2,
+                    customerAddress.City, customerAddress.State, customerAddress.Zip, customerAddress.Country);
+        }
+        else
+        {
+            defaultShipTo = await GetCompanyShipFromAsync(cancellationToken);
+        }
 
         return new ManualShipmentOrderView(
             order.Id,
             order.OrderNumber,
             order.Customer.Name,
-            shippingAddresses.FirstOrDefault()?.Id,
-            shippingAddresses.Select(a => new ManualShipmentAddress(a.Id, $"{a.Street1}, {a.City}, {a.State} {a.Zip}")).ToList(),
+            defaultShipTo.Normalized(),
             lineViews);
     }
 
@@ -339,7 +368,8 @@ public class ShipmentService(
             null,
             null,
             shipFrom,
-            input.ShipToAddressId,
+            input.ShipTo,
+            shipToAddressId: null,
             declaredValue,
             BillingType.Sender,
             null,
@@ -415,6 +445,10 @@ public class ShipmentService(
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new InvalidOperationException("No ship-from address configured.");
 
+        var shipToAddress = await db.Addresses.AsNoTracking()
+            .SingleOrDefaultAsync(a => a.Id == input.ShipToAddressId, cancellationToken)
+            ?? throw new InvalidOperationException("Ship-to address not found.");
+
         var shipmentNumber = await documentNumbers.NextShipmentNumberAsync(cancellationToken);
         var declaredValue = input.Packages.Sum(p => p.DeclaredValue);
 
@@ -427,6 +461,7 @@ public class ShipmentService(
             input.ServiceLevel,
             shipFrom.Id,
             new ShippingAddress(null, shipFrom.Street1, shipFrom.Street2, shipFrom.City, shipFrom.State, shipFrom.Zip, shipFrom.Country),
+            new ShippingAddress(null, shipToAddress.Street1, shipToAddress.Street2, shipToAddress.City, shipToAddress.State, shipToAddress.Zip, shipToAddress.Country),
             input.ShipToAddressId,
             declaredValue,
             input.BillingType,
@@ -566,11 +601,14 @@ public class ShipmentService(
     private static FedexRateRequest BuildRateRequest(Shipment shipment, ShipmentPackage? package = null)
     {
         package ??= shipment.Packages.OrderBy(p => p.PackageNumber).First();
-        var shipFrom = shipment.ShipFromAddress
-            ?? throw new InvalidOperationException("Carrier rating requires a ship-from address on file.");
+        var shipFrom = shipment.ShipFromSnapshot;
+        if (!shipFrom.HasAddress)
+        {
+            throw new InvalidOperationException("Carrier rating requires a ship-from address on file.");
+        }
         return new FedexRateRequest(
             ToFedexAddress(shipFrom),
-            ToFedexAddress(shipment.ShipToAddress),
+            ToFedexAddress(shipment.ShipToSnapshot),
             package.WeightLb,
             package.LengthIn,
             package.WidthIn,
@@ -578,14 +616,14 @@ public class ShipmentService(
             package.DeclaredValue);
     }
 
-    private static FedexAddress ToFedexAddress(Address address) =>
+    private static FedexAddress ToFedexAddress(ShippingAddress address) =>
         new(
-            address.Street1,
+            address.Street1 ?? string.Empty,
             address.Street2,
-            address.City,
-            address.State,
-            address.Zip,
-            address.Country);
+            address.City ?? string.Empty,
+            address.State ?? string.Empty,
+            address.Zip ?? string.Empty,
+            address.Country ?? "US");
 
     private static string ToFedexServiceCode(FedexServiceLevel level) => level switch
     {

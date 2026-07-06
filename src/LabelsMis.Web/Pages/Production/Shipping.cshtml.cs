@@ -14,7 +14,7 @@ namespace LabelsMis.Web.Pages.Production;
 public class ShippingModel(ShipmentService shipmentService, JobService jobService) : PageModel, IProductionStageNav
 {
     [BindProperty(SupportsGet = true)] public string? Search { get; set; }
-    [BindProperty(SupportsGet = true, Name = "page")] public int PageNumber { get; set; } = 1;
+    [BindProperty(SupportsGet = true, Name = "pageNumber")] public int PageNumber { get; set; } = 1;
 
     public PagedResult<ReadyToShipOrder> Result { get; private set; } = null!;
 

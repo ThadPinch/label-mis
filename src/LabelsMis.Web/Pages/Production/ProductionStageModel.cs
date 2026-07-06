@@ -30,7 +30,7 @@ public abstract class ProductionStageModel(JobService jobService) : PageModel, I
 
     [BindProperty(SupportsGet = true)] public string? Search { get; set; }
 
-    [BindProperty(SupportsGet = true, Name = "page")] public int PageNumber { get; set; } = 1;
+    [BindProperty(SupportsGet = true, Name = "pageNumber")] public int PageNumber { get; set; } = 1;
 
     public PagedResult<JobListItem> Result { get; private set; } = null!;
 

@@ -14,7 +14,7 @@ public class IndexModel(ShippingMethodService shippingMethodService, ICurrentUse
     [BindProperty(SupportsGet = true)]
     public string? Search { get; set; }
 
-    [BindProperty(SupportsGet = true, Name = "page")]
+    [BindProperty(SupportsGet = true, Name = "pageNumber")]
     public int PageNumber { get; set; } = 1;
 
     [BindProperty(SupportsGet = true)]

@@ -18,7 +18,7 @@ public class IndexModel(PurchaseOrderService purchaseOrderService, LabelsMisDbCo
     [BindProperty(SupportsGet = true)] public Guid? SupplierId { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? ExpectedFrom { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? ExpectedTo { get; set; }
-    [BindProperty(SupportsGet = true, Name = "page")] public int PageNumber { get; set; } = 1;
+    [BindProperty(SupportsGet = true, Name = "pageNumber")] public int PageNumber { get; set; } = 1;
 
     public Services.Models.PagedResult<PurchaseOrderListItem> Result { get; private set; } = null!;
     public bool CanEdit => User.IsInRole("Admin") || User.IsInRole("Scheduler");

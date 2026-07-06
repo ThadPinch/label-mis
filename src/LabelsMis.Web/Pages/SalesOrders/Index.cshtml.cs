@@ -19,7 +19,7 @@ public class IndexModel(SalesOrderService salesOrderService, LabelsMisDbContext 
     [BindProperty(SupportsGet = true)] public Guid? CustomerId { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? ShipFrom { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? ShipTo { get; set; }
-    [BindProperty(SupportsGet = true, Name = "page")] public int PageNumber { get; set; } = 1;
+    [BindProperty(SupportsGet = true, Name = "pageNumber")] public int PageNumber { get; set; } = 1;
 
     public Services.Models.PagedResult<SalesOrderListItem> Result { get; private set; } = null!;
     public bool CanEdit { get; private set; }

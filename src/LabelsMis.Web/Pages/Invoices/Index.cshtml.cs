@@ -20,7 +20,7 @@ public class IndexModel(InvoiceService invoiceService, LabelsMisDbContext db) : 
     [BindProperty(SupportsGet = true)] public DateOnly? FromDate { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? ToDate { get; set; }
     [BindProperty(SupportsGet = true)] public string? AgingBucket { get; set; }
-    [BindProperty(SupportsGet = true, Name = "page")] public int PageNumber { get; set; } = 1;
+    [BindProperty(SupportsGet = true, Name = "pageNumber")] public int PageNumber { get; set; } = 1;
 
     public Services.Models.PagedResult<InvoiceListItem> Result { get; private set; } = null!;
     public bool CanEdit => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting);

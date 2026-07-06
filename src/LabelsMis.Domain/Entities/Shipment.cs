@@ -36,8 +36,19 @@ public class Shipment : EntityBase
     public ShippingAddress ShipFromSnapshot => new(
         ShipFromName, ShipFromStreet1, ShipFromStreet2, ShipFromCity, ShipFromState, ShipFromZip, ShipFromCountry);
 
-    public Guid ShipToAddressId { get; private set; }
-    public Address ShipToAddress { get; private set; } = null!;
+    public Guid? ShipToAddressId { get; private set; }
+    public Address? ShipToAddress { get; private set; }
+    public string? ShipToName { get; private set; }
+    public string? ShipToStreet1 { get; private set; }
+    public string? ShipToStreet2 { get; private set; }
+    public string? ShipToCity { get; private set; }
+    public string? ShipToState { get; private set; }
+    public string? ShipToZip { get; private set; }
+    public string? ShipToCountry { get; private set; }
+
+    public ShippingAddress ShipToSnapshot => new(
+        ShipToName, ShipToStreet1, ShipToStreet2, ShipToCity, ShipToState, ShipToZip, ShipToCountry);
+
     public ShipmentStatus Status { get; private set; }
     public decimal TotalDeclaredValue { get; private set; }
     public BillingType BillingType { get; private set; }
@@ -56,7 +67,8 @@ public class Shipment : EntityBase
         FedexServiceLevel? serviceLevel,
         Guid? shipFromAddressId,
         ShippingAddress shipFrom,
-        Guid shipToAddressId,
+        ShippingAddress shipTo,
+        Guid? shipToAddressId,
         decimal totalDeclaredValue,
         BillingType billingType,
         string? billingAccountNumber,
@@ -64,6 +76,7 @@ public class Shipment : EntityBase
         DateTime createdAt)
     {
         var snapshot = (shipFrom ?? ShippingAddress.Empty).Normalized();
+        var toSnapshot = (shipTo ?? ShippingAddress.Empty).Normalized();
         var shipment = new Shipment
         {
             ShipmentNumber = shipmentNumber,
@@ -80,6 +93,13 @@ public class Shipment : EntityBase
             ShipFromZip = snapshot.Zip,
             ShipFromCountry = snapshot.Country,
             ShipToAddressId = shipToAddressId,
+            ShipToName = toSnapshot.RecipientName,
+            ShipToStreet1 = toSnapshot.Street1,
+            ShipToStreet2 = toSnapshot.Street2,
+            ShipToCity = toSnapshot.City,
+            ShipToState = toSnapshot.State,
+            ShipToZip = toSnapshot.Zip,
+            ShipToCountry = toSnapshot.Country,
             Status = ShipmentStatus.Pending,
             TotalDeclaredValue = totalDeclaredValue,
             BillingType = billingType,

@@ -48,8 +48,19 @@
     </div>
     <div class="col-md-6">
         <h2 class="h6">Ship to</h2>
-        <p>@Model.Detail.Shipment.ShipToAddress.Street1<br />
-        @Model.Detail.Shipment.ShipToAddress.City, @Model.Detail.Shipment.ShipToAddress.State @Model.Detail.Shipment.ShipToAddress.Zip</p>
+        @{ var shipTo = Model.Detail.Shipment.ShipToSnapshot; }
+        @if (shipTo.HasAddress)
+        {
+            <p>
+                @if (!string.IsNullOrWhiteSpace(shipTo.RecipientName)) { <text>@shipTo.RecipientName<br /></text> }
+                @shipTo.Street1<br />
+                @shipTo.City, @shipTo.State @shipTo.Zip
+            </p>
+        }
+        else
+        {
+            <p class="text-muted">—</p>
+        }
     </div>
 </div>
 

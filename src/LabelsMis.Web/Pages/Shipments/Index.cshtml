@@ -2,36 +2,124 @@
 @model LabelsMis.Web.Pages.Shipments.IndexModel
 @{ ViewData["Title"] = "Shipments"; }
 
-<div class="d-flex justify-content-between mb-3">
-    <h1 class="h3 mb-0">Shipments</h1>
+<h1 class="h3 mb-3">Shipments</h1>
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link @(Model.ReadyActive ? "active" : "")" data-bs-toggle="tab" data-bs-target="#ready-pane" type="button" role="tab">
+            Ready to Ship
+            @if (Model.ReadyResult.TotalCount > 0)
+            {
+                <span class="badge text-bg-secondary ms-1">@Model.ReadyResult.TotalCount</span>
+            }
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link @(Model.ReadyActive ? "" : "active")" data-bs-toggle="tab" data-bs-target="#history-pane" type="button" role="tab">
+            History
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade @(Model.ReadyActive ? "show active" : "")" id="ready-pane" role="tabpanel">
+        <p class="text-muted">Orders with items finished and ready to ship. Record a shipment to capture packages and tracking.</p>
+
+        <form method="get" class="row g-2 mb-3">
+            <input type="hidden" name="tab" value="ready" />
+            <div class="col-md-4"><input asp-for="ReadySearch" class="form-control" placeholder="Search order or customer" /></div>
+            <div class="col-md-2"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
+        </form>
+
+        @if (Model.ReadyResult.Items.Count == 0)
+        {
+            <div class="alert alert-light border">Nothing is ready to ship right now.</div>
+        }
+        else
+        {
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr><th>Order #</th><th>Customer</th><th>Customer PO</th><th>Requested ship</th><th>Ship method</th><th>Ready</th><th>Jobs</th><th></th></tr>
+                </thead>
+                <tbody>
+                @foreach (var order in Model.ReadyResult.Items)
+                {
+                    <tr>
+                        <td>@order.OrderNumber</td>
+                        <td>@order.CustomerName</td>
+                        <td>@(order.CustomerPoNumber ?? "—")</td>
+                        <td>@(order.RequestedShipDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                        <td>@(order.ShippingMethodName ?? "—")</td>
+                        <td>
+                            <span class="badge @(order.ReadyItemCount == order.TotalItemCount ? "bg-success" : "bg-warning text-dark")">
+                                @order.ReadyItemCount of @order.TotalItemCount items
+                            </span>
+                        </td>
+                        <td>
+                            @foreach (var job in order.ReadyJobs)
+                            {
+                                <a asp-page="/Jobs/Detail" asp-route-id="@job.JobId" class="d-inline-block me-2">@job.JobNumber</a>
+                            }
+                        </td>
+                        <td class="text-end">
+                            @if (Model.CanShip)
+                            {
+                                <a asp-page="/Shipments/Record" asp-route-salesOrderId="@order.SalesOrderId" class="btn btn-sm btn-success">Record shipment</a>
+                            }
+                            <a asp-page="/SalesOrders/Edit" asp-route-id="@order.SalesOrderId" class="btn btn-sm btn-outline-primary">View order</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+
+            @await Html.PartialAsync("Shared/_Pager", new PagerModel(
+                Model.ReadyResult.Page, Model.ReadyResult.TotalPages, Model.ReadyResult.TotalCount)
+            {
+                PageParam = "readyPage",
+                Extra = new Dictionary<string, string?> { ["tab"] = "ready", ["ReadySearch"] = Model.ReadySearch }
+            })
+        }
+    </div>
+
+    <div class="tab-pane fade @(Model.ReadyActive ? "" : "show active")" id="history-pane" role="tabpanel">
+        <form method="get" class="row g-2 mb-3">
+            <input type="hidden" name="tab" value="history" />
+            <div class="col-md-3"><input asp-for="Search" class="form-control" placeholder="Search shipment or tracking" /></div>
+            <div class="col-md-2">
+                <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.ShipmentStatus>()"><option value="">All statuses</option></select>
+            </div>
+            <div class="col-md-3">
+                <select asp-for="CustomerId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["CustomerOptions"]!)"><option value="">All customers</option></select>
+            </div>
+            <div class="col-md-2"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
+        </form>
+
+        <table class="table table-striped">
+            <thead><tr><th>Shipment #</th><th>Customer</th><th>Ship date</th><th>Status</th><th>Carrier</th><th>Tracking</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var item in Model.Result.Items)
+            {
+                <tr>
+                    <td>@item.ShipmentNumber</td><td>@item.CustomerName</td><td>@item.ShipDate.ToString("yyyy-MM-dd")</td>
+                    <td>@item.Status</td><td>@item.Carrier</td><td>@(item.PrimaryTrackingNumber ?? "—")</td>
+                    <td class="text-end"><a asp-page="Detail" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+
+        @await Html.PartialAsync("Shared/_Pager", new PagerModel(
+            Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount)
+        {
+            PageParam = "historyPage",
+            Extra = new Dictionary<string, string?>
+            {
+                ["tab"] = "history",
+                ["Search"] = Model.Search,
+                ["Status"] = Model.Status?.ToString(),
+                ["CustomerId"] = Model.CustomerId?.ToString()
+            }
+        })
+    </div>
 </div>
-
-<form method="get" class="row g-2 mb-3">
-    <div class="col-md-3"><input asp-for="Search" class="form-control" placeholder="Search shipment or tracking" /></div>
-    <div class="col-md-2">
-        <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.ShipmentStatus>()"><option value="">All statuses</option></select>
-    </div>
-    <div class="col-md-3">
-        <select asp-for="CustomerId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["CustomerOptions"]!)"><option value="">All customers</option></select>
-    </div>
-    <div class="col-md-2"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
-</form>
-
-<table class="table table-striped">
-    <thead><tr><th>Shipment #</th><th>Customer</th><th>Ship date</th><th>Status</th><th>Carrier</th><th>Tracking</th><th></th></tr></thead>
-    <tbody>
-    @foreach (var item in Model.Result.Items)
-    {
-        <tr>
-            <td>@item.ShipmentNumber</td><td>@item.CustomerName</td><td>@item.ShipDate.ToString("yyyy-MM-dd")</td>
-            <td>@item.Status</td><td>@item.Carrier</td><td>@(item.PrimaryTrackingNumber ?? "—")</td>
-            <td class="text-end"><a asp-page="Detail" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a></td>
-        </tr>
-    }
-    </tbody>
-</table>
-
-@await Html.PartialAsync("Shared/_Pager", new PagerModel(
-    Model.Result.Page,
-    Model.Result.TotalPages,
-    Model.Result.TotalCount))

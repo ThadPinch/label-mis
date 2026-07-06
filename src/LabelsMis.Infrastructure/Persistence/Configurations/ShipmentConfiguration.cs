@@ -29,6 +29,15 @@ public class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
         builder.Property(s => s.ShipFromCountry).HasMaxLength(2);
         builder.Ignore(s => s.ShipFromSnapshot);
 
+        builder.Property(s => s.ShipToName).HasMaxLength(200);
+        builder.Property(s => s.ShipToStreet1).HasMaxLength(200);
+        builder.Property(s => s.ShipToStreet2).HasMaxLength(200);
+        builder.Property(s => s.ShipToCity).HasMaxLength(100);
+        builder.Property(s => s.ShipToState).HasMaxLength(50);
+        builder.Property(s => s.ShipToZip).HasMaxLength(20);
+        builder.Property(s => s.ShipToCountry).HasMaxLength(2);
+        builder.Ignore(s => s.ShipToSnapshot);
+
         builder.HasIndex(s => s.ShipmentNumber).IsUnique();
         builder.HasIndex(s => s.Status);
         builder.HasIndex(s => s.SalesOrderId);
@@ -46,6 +55,7 @@ public class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
         builder.HasOne(s => s.ShipToAddress)
             .WithMany()
             .HasForeignKey(s => s.ShipToAddressId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(s => s.Packages)
