@@ -120,7 +120,12 @@ public class Product : MasterDataEntity
         SetModified(modifiedById, modifiedAt);
     }
 
-    public void SetCustomers(
+    /// <summary>Diffs the customer assignments to the requested set and reports which rows were
+    /// added and removed so the caller can stage the corresponding inserts/deletes with EF. The
+    /// caller must add <paramref name="added"/> to the DbSet: children reached through a tracked
+    /// parent's navigation carry app-assigned Guid keys, which EF change detection would otherwise
+    /// mistake for existing rows and try to UPDATE (affecting 0 rows). See ProductService.UpdateAsync.</summary>
+    public (IReadOnlyList<ProductCustomer> Added, IReadOnlyList<ProductCustomer> Removed) SetCustomers(
         Guid? primaryCustomerId,
         IEnumerable<Guid> customerIds,
         Guid modifiedById,
@@ -128,8 +133,9 @@ public class Product : MasterDataEntity
     {
         var distinctCustomerIds = NormalizeCustomerIds(primaryCustomerId, customerIds);
         PrimaryCustomerId = primaryCustomerId is { } pc && pc != Guid.Empty ? pc : null;
-        ReplaceCustomerAssignments(distinctCustomerIds, modifiedById, modifiedAt);
+        var (added, removed) = ReplaceCustomerAssignments(distinctCustomerIds, modifiedById, modifiedAt);
         SetModified(modifiedById, modifiedAt);
+        return (added, removed);
     }
 
     /// <summary>Seeds a label spec from this product's template fields. Gutters, bleed, white, spots,
@@ -161,13 +167,31 @@ public class Product : MasterDataEntity
         Reactivate(modifiedById, modifiedAt);
     }
 
-    private void ReplaceCustomerAssignments(IReadOnlyList<Guid> customerIds, Guid userId, DateTime timestamp)
+    private (IReadOnlyList<ProductCustomer> Added, IReadOnlyList<ProductCustomer> Removed) ReplaceCustomerAssignments(
+        IReadOnlyList<Guid> customerIds, Guid userId, DateTime timestamp)
     {
-        _customerAssignments.Clear();
+        // Diff against the current assignments rather than clearing and re-adding.
+        // Recreating rows for customers that are unchanged makes EF delete and
+        // re-insert the same (ProductId, CustomerId), which collides on the unique
+        // index and throws DbUpdateConcurrencyException. Keep existing rows, remove
+        // only those dropped, and add only those newly assigned.
+        var desired = customerIds.ToHashSet();
+        var removed = _customerAssignments.Where(a => !desired.Contains(a.CustomerId)).ToList();
+        _customerAssignments.RemoveAll(a => !desired.Contains(a.CustomerId));
+
+        var existing = _customerAssignments.Select(a => a.CustomerId).ToHashSet();
+        var added = new List<ProductCustomer>();
         foreach (var customerId in customerIds)
         {
-            _customerAssignments.Add(ProductCustomer.Create(Guid.NewGuid(), Id, customerId, userId, timestamp));
+            if (existing.Add(customerId))
+            {
+                var assignment = ProductCustomer.Create(Guid.NewGuid(), Id, customerId, userId, timestamp);
+                _customerAssignments.Add(assignment);
+                added.Add(assignment);
+            }
         }
+
+        return (added, removed);
     }
 
     private static IReadOnlyList<Guid> NormalizeCustomerIds(Guid? primaryCustomerId, IEnumerable<Guid> customerIds)

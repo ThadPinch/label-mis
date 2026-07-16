@@ -403,8 +403,15 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
         Guid userId,
         DateTime now)
     {
-        db.ProductCustomers.RemoveRange(product.CustomerAssignments.ToList());
-        product.SetCustomers(primaryCustomerId, customerIds, userId, now);
+        // Diff the assignments instead of clearing and re-adding: unchanged rows stay
+        // put, only dropped rows are deleted and only new rows are inserted. Clearing and
+        // re-adding would delete and re-insert unchanged (ProductId, CustomerId) pairs,
+        // colliding on the unique index (DbUpdateConcurrencyException). New rows must be
+        // added to the DbSet explicitly — children reached via the tracked product's
+        // navigation carry app-assigned Guid keys that EF would otherwise try to UPDATE.
+        var (addedAssignments, removedAssignments) = product.SetCustomers(primaryCustomerId, customerIds, userId, now);
+        db.ProductCustomers.AddRange(addedAssignments);
+        db.ProductCustomers.RemoveRange(removedAssignments);
     }
 
     private static string FormatCustomerNames(Product product) =>
