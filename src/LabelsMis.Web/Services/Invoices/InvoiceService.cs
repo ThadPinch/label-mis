@@ -18,6 +18,7 @@ public record InvoiceListItem(
     decimal Total,
     decimal BalanceDue,
     DateTime? QbExportedAt,
+    string? ExportedBy,
     int ShippedLines,
     int TotalLines,
     Guid SalesOrderId,
@@ -73,6 +74,7 @@ public class InvoiceService(
         DateOnly? fromDate,
         DateOnly? toDate,
         string? agingBucket,
+        bool? exported,
         string? sort,
         int page,
         int pageSize,
@@ -115,6 +117,13 @@ public class InvoiceService(
                 || i.Customer.Name.ToUpper().Contains(term));
         }
 
+        if (exported.HasValue)
+        {
+            query = exported.Value
+                ? query.Where(i => i.QbExportedAt != null)
+                : query.Where(i => i.QbExportedAt == null);
+        }
+
         if (!string.IsNullOrWhiteSpace(agingBucket))
         {
             var todayDay = today.DayNumber;
@@ -153,10 +162,19 @@ public class InvoiceService(
                 i.Total,
                 i.BalanceDue,
                 i.QbExportedAt,
+                i.QbExportedById,
                 i.SalesOrderId,
                 OrderNumber = i.SalesOrder.OrderNumber
             })
             .ToListAsync(cancellationToken);
+
+        var exporterIds = rows.Where(r => r.QbExportedById.HasValue)
+            .Select(r => r.QbExportedById!.Value).Distinct().ToList();
+        var exporterNames = exporterIds.Count == 0
+            ? []
+            : await db.Users.AsNoTracking()
+                .Where(u => exporterIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.Email ?? u.UserName, cancellationToken);
 
         var orderIds = rows.Select(r => r.SalesOrderId).Distinct().ToList();
         var lineProgress = await db.SalesOrderLines.AsNoTracking()
@@ -190,6 +208,7 @@ public class InvoiceService(
                 r.Total,
                 r.BalanceDue,
                 r.QbExportedAt,
+                r.QbExportedById.HasValue ? exporterNames.GetValueOrDefault(r.QbExportedById.Value) : null,
                 progress.Shipped,
                 progress.Total,
                 r.SalesOrderId,
@@ -273,7 +292,7 @@ public class InvoiceService(
                 lineNumber++,
                 orderLine.Id,
                 null,
-                orderLine.Product.Description,
+                orderLine.Description ?? orderLine.Product.Description,
                 orderLine.Quantity,
                 orderLine.UnitPrice,
                 order.Customer.TaxExempt ? "NON" : "TAX",
@@ -347,7 +366,7 @@ public class InvoiceService(
                 lineNumber++,
                 shipmentLine.SalesOrderLineId,
                 shipmentLine.JobId,
-                shipmentLine.SalesOrderLine.Product.Description,
+                shipmentLine.SalesOrderLine.Description ?? shipmentLine.SalesOrderLine.Product.Description,
                 shipmentLine.QuantityShipped,
                 shipmentLine.SalesOrderLine.UnitPrice,
                 shipment.SalesOrder.Customer.TaxExempt ? "NON" : "TAX",
@@ -387,6 +406,48 @@ public class InvoiceService(
         invoice.RecordPayment(payment);
         db.Payments.Add(payment);
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Marks the given invoices as exported, skipping void or already-exported ones.
+    /// Returns how many were actually marked.</summary>
+    public async Task<int> MarkExportedAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var invoices = await db.Invoices
+            .Where(i => invoiceIds.Contains(i.Id) && i.QbExportedAt == null && i.Status != InvoiceStatus.Void)
+            .ToListAsync(cancellationToken);
+
+        foreach (var invoice in invoices)
+        {
+            invoice.MarkExported(now, userId, now);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return invoices.Count;
+    }
+
+    public async Task UnmarkExportedAsync(Guid invoiceId, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var invoice = await db.Invoices.SingleAsync(i => i.Id == invoiceId, cancellationToken);
+        invoice.UnmarkExported(userId, now);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Global tab counts for the invoices page: non-void invoices not yet / already exported.</summary>
+    public async Task<(int Ready, int Exported)> GetExportCountsAsync(CancellationToken cancellationToken = default)
+    {
+        var counts = await db.Invoices.AsNoTracking()
+            .Where(i => i.Status != InvoiceStatus.Void)
+            .GroupBy(i => i.QbExportedAt != null)
+            .Select(g => new { Exported = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        return (
+            counts.FirstOrDefault(c => !c.Exported)?.Count ?? 0,
+            counts.FirstOrDefault(c => c.Exported)?.Count ?? 0);
     }
 
     public async Task VoidAsync(Guid invoiceId, string reason, CancellationToken cancellationToken = default)
@@ -450,6 +511,48 @@ public class InvoiceService(
         }
 
         var invoices = await query.OrderBy(i => i.InvoiceNumber).ToListAsync(cancellationToken);
+        var content = BuildCsv(invoices);
+
+        foreach (var invoice in invoices)
+        {
+            invoice.MarkExported(now, userId, now);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        var fileName = $"invoices-{from:yyyyMMdd}-{to:yyyyMMdd}.csv";
+        return (content, fileName, invoices.Count);
+    }
+
+    /// <summary>Exports the given invoices to the QuickBooks CSV and marks them exported.
+    /// Void invoices are skipped.</summary>
+    public async Task<(byte[] Content, string FileName, int InvoiceCount)> ExportSelectedCsvAsync(
+        IReadOnlyCollection<Guid> invoiceIds,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+
+        var invoices = await db.Invoices
+            .Include(i => i.Customer)
+            .Include(i => i.Lines)
+            .Where(i => invoiceIds.Contains(i.Id) && i.Status != InvoiceStatus.Void)
+            .OrderBy(i => i.InvoiceNumber)
+            .ToListAsync(cancellationToken);
+
+        var content = BuildCsv(invoices);
+
+        foreach (var invoice in invoices)
+        {
+            invoice.MarkExported(now, userId, now);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        var fileName = $"invoices-{now:yyyyMMdd-HHmmss}.csv";
+        return (content, fileName, invoices.Count);
+    }
+
+    private static byte[] BuildCsv(IReadOnlyList<Invoice> invoices)
+    {
         var sb = new StringBuilder();
         sb.AppendLine("InvoiceNo,Customer,InvoiceDate,DueDate,Item,Description,Qty,Rate,Amount,TaxAmount");
 
@@ -469,13 +572,9 @@ public class InvoiceService(
                     .Append(invoice.TaxAmount.ToString(CultureInfo.InvariantCulture))
                     .AppendLine();
             }
-
-            invoice.MarkExported(now, userId, now);
         }
 
-        await db.SaveChangesAsync(cancellationToken);
-        var fileName = $"invoices-{from:yyyyMMdd}-{to:yyyyMMdd}.csv";
-        return (Encoding.UTF8.GetBytes(sb.ToString()), fileName, invoices.Count);
+        return Encoding.UTF8.GetBytes(sb.ToString());
     }
 
     private static int GetAgeDays(DateOnly invoiceDate, DateOnly asOf) =>

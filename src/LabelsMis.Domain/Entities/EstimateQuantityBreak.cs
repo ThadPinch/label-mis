@@ -15,6 +15,11 @@ public class EstimateQuantityBreak : EntityBase
     public decimal TotalPrice { get; private set; }
     public decimal CalculatedCost { get; private set; }
     public decimal MarginPct { get; private set; }
+
+    /// <summary>Markup override applied to this quantity only; null means the line's
+    /// markup (or the customer default) was used.</summary>
+    public decimal? MarkupPctOverride { get; private set; }
+
     public string CostBreakdownJson { get; private set; } = "[]";
 
     public static EstimateQuantityBreak Create(
@@ -25,6 +30,7 @@ public class EstimateQuantityBreak : EntityBase
         decimal totalPrice,
         decimal calculatedCost,
         decimal marginPct,
+        decimal? markupPctOverride,
         string costBreakdownJson,
         Guid createdById,
         DateTime createdAt)
@@ -42,6 +48,7 @@ public class EstimateQuantityBreak : EntityBase
             TotalPrice = totalPrice,
             CalculatedCost = calculatedCost,
             MarginPct = marginPct,
+            MarkupPctOverride = markupPctOverride,
             CostBreakdownJson = string.IsNullOrWhiteSpace(costBreakdownJson) ? "[]" : costBreakdownJson
         };
         breakRow.SetCreated(id, createdById, createdAt);

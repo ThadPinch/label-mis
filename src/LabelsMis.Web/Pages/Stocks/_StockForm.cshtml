@@ -2,7 +2,7 @@
 @using LabelsMis.Domain.Enums
 
 <div class="row g-3">
-    <div class="col-md-3">
+    <div class="col-6 col-md-3">
         <label asp-for="Code" class="form-label"></label>
         <input asp-for="Code" class="form-control" />
         <span asp-validation-for="Code" class="text-danger"></span>
@@ -12,53 +12,65 @@
         <input asp-for="Description" class="form-control" />
         <span asp-validation-for="Description" class="text-danger"></span>
     </div>
-    <div class="col-md-3">
+    <div class="col-6 col-md-3">
         <label asp-for="StockType" class="form-label"></label>
         <select asp-for="StockType" asp-items="Html.GetEnumSelectList<StockType>()" class="form-select"></select>
         <div class="form-text">Laminate stocks can be consumed by lamination finishing tasks.</div>
     </div>
-    <div class="col-md-4">
-        <label asp-for="FaceMaterial" class="form-label"></label>
-        <input asp-for="FaceMaterial" class="form-control" />
-        <span asp-validation-for="FaceMaterial" class="text-danger"></span>
-    </div>
-    <div class="col-md-4">
-        <label asp-for="Adhesive" class="form-label"></label>
-        <input asp-for="Adhesive" class="form-control" />
-        <span asp-validation-for="Adhesive" class="text-danger"></span>
-    </div>
-    <div class="col-md-4">
-        <label asp-for="Liner" class="form-label"></label>
-        <input asp-for="Liner" class="form-control" />
-        <span asp-validation-for="Liner" class="text-danger"></span>
-    </div>
-    <div class="col-md-3">
-        <label asp-for="TotalCaliperMil" class="form-label"></label>
-        <input asp-for="TotalCaliperMil" class="form-control" />
-        <span asp-validation-for="TotalCaliperMil" class="text-danger"></span>
-    </div>
-    <div class="col-md-3">
-        <label asp-for="WidthIn" class="form-label"></label>
-        <input asp-for="WidthIn" class="form-control" />
-        <span asp-validation-for="WidthIn" class="text-danger"></span>
-    </div>
-    <div class="col-md-6">
-        <label asp-for="SupplierId" class="form-label"></label>
-        <select asp-for="SupplierId" asp-items="@(ViewData["SupplierOptions"] as IEnumerable<SelectListItem>)" class="form-select"></select>
-        <span asp-validation-for="SupplierId" class="text-danger"></span>
-    </div>
-    <div class="col-md-4">
-        <label asp-for="SupplierPartNumber" class="form-label"></label>
-        <input asp-for="SupplierPartNumber" class="form-control" />
-    </div>
-    <div class="col-md-4">
-        <label asp-for="CostPerMsi" class="form-label"></label>
-        <input asp-for="CostPerMsi" class="form-control" />
-        <span asp-validation-for="CostPerMsi" class="text-danger"></span>
-    </div>
-    <div class="col-md-4">
-        <label asp-for="MinOrderQtyLf" class="form-label"></label>
-        <input asp-for="MinOrderQtyLf" class="form-control" />
-        <span asp-validation-for="MinOrderQtyLf" class="text-danger"></span>
-    </div>
 </div>
+
+<fieldset class="border rounded p-3 mt-4">
+    <legend class="float-none w-auto px-2 h6 mb-0">Construction</legend>
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label asp-for="FaceMaterial" class="form-label"></label>
+            <input asp-for="FaceMaterial" class="form-control" />
+            <span asp-validation-for="FaceMaterial" class="text-danger"></span>
+        </div>
+        <div class="col-md-4">
+            <label asp-for="Adhesive" class="form-label"></label>
+            <input asp-for="Adhesive" class="form-control" />
+            <span asp-validation-for="Adhesive" class="text-danger"></span>
+        </div>
+        <div class="col-md-4">
+            <label asp-for="Liner" class="form-label"></label>
+            <input asp-for="Liner" class="form-control" />
+            <span asp-validation-for="Liner" class="text-danger"></span>
+        </div>
+        <div class="col-6 col-md-3">
+            <label asp-for="TotalCaliperMil" class="form-label"></label>
+            <input asp-for="TotalCaliperMil" class="form-control" />
+            <span asp-validation-for="TotalCaliperMil" class="text-danger"></span>
+        </div>
+        <div class="col-6 col-md-3">
+            <label asp-for="WidthIn" class="form-label"></label>
+            <input asp-for="WidthIn" class="form-control" />
+            <span asp-validation-for="WidthIn" class="text-danger"></span>
+        </div>
+    </div>
+</fieldset>
+
+<fieldset class="border rounded p-3 mt-4 mb-3">
+    <legend class="float-none w-auto px-2 h6 mb-0">Sourcing &amp; cost</legend>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label asp-for="SupplierId" class="form-label"></label>
+            <select asp-for="SupplierId" asp-items="@(ViewData["SupplierOptions"] as IEnumerable<SelectListItem>)" class="form-select"></select>
+            <span asp-validation-for="SupplierId" class="text-danger"></span>
+        </div>
+        <div class="col-md-6">
+            <label asp-for="SupplierPartNumber" class="form-label"></label>
+            <input asp-for="SupplierPartNumber" class="form-control" />
+        </div>
+        <div class="col-6 col-md-3">
+            <label asp-for="CostPerMsi" class="form-label"></label>
+            <input asp-for="CostPerMsi" class="form-control" />
+            <span asp-validation-for="CostPerMsi" class="text-danger"></span>
+        </div>
+        <div class="col-6 col-md-3">
+            <label asp-for="MinOrderQtyLf" class="form-label"></label>
+            <input asp-for="MinOrderQtyLf" class="form-control" />
+            <span asp-validation-for="MinOrderQtyLf" class="text-danger"></span>
+        </div>
+    </div>
+</fieldset>

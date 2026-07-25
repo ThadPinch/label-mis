@@ -63,12 +63,13 @@ public class EditModel(
 
         Input = EstimatePageInput.FromEstimate(Detail.Estimate);
 
-        // Pre-fill the email composer: recipient (primary contact first),
-        // a default subject/body, and the "include PDF" attachment on.
-        EmailTo = Detail.Customer.Contacts
-            .OrderByDescending(c => c.IsPrimary)
-            .Select(c => c.Email)
-            .FirstOrDefault(e => !string.IsNullOrWhiteSpace(e));
+        // Pre-fill the email composer: the address the estimate was last sent to wins,
+        // then the customer's primary contact. Editable and re-pickable on every send.
+        EmailTo = Detail.Estimate.ContactEmail
+            ?? Detail.Customer.Contacts
+                .OrderByDescending(c => c.IsPrimary)
+                .Select(c => c.Email)
+                .FirstOrDefault(e => !string.IsNullOrWhiteSpace(e));
         EmailSubject = $"Estimate {Detail.Estimate.EstimateNumber}";
         EmailBody = $"Please find attached estimate {Detail.Estimate.EstimateNumber}.";
         IncludePdf = true;
@@ -253,6 +254,11 @@ public class EditModel(
         ViewData["FinishingOperations"] = await db.FinishingOperations.AsNoTracking()
             .Where(o => o.IsActive)
             .OrderBy(o => o.Code)
+            .ToListAsync(cancellationToken);
+
+        ViewData["FinishingStocks"] = await db.Stocks.AsNoTracking()
+            .Where(s => s.IsActive && s.StockType == StockType.Laminate)
+            .OrderBy(s => s.Code)
             .ToListAsync(cancellationToken);
 
         ViewData["SpotInks"] = await db.Inks.AsNoTracking()

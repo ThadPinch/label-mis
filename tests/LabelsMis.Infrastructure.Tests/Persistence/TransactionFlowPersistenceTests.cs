@@ -88,7 +88,7 @@ public class TransactionFlowPersistenceTests : IAsyncLifetime
         var (estimate, line) = CreateDraftWithLine(estimateId, "EST-2026-99999", customerId, stockId, now, TestUserId,
             DateOnly.FromDateTime(now.AddDays(30)));
         line.AddQuantityBreak(EstimateQuantityBreak.Create(
-            Guid.NewGuid(), line.Id, 5000, 0.05m, 250m, 180m, 0.28m, "[]", TestUserId, now));
+            Guid.NewGuid(), line.Id, 5000, 0.05m, 250m, 180m, 0.28m, null, "[]", TestUserId, now));
         estimate.MarkSent("/tmp/flow.pdf", TestUserId, now);
         estimate.MarkWon(TestUserId, now);
         _db.Estimates.Add(estimate);
@@ -105,10 +105,10 @@ public class TransactionFlowPersistenceTests : IAsyncLifetime
         await _db.SaveChangesAsync();
 
         var order = SalesOrder.CreateOpen(
-            Guid.NewGuid(), "SO-2026-99999", customerId, estimateId, "PO-123", now, null, null,
+            Guid.NewGuid(), "SO-2026-99999", customerId, estimateId, null, "PO-123", now, null, null,
             null, 0m, ShippingAddress.Empty, TestUserId, now);
         var orderLine = SalesOrderLine.Create(
-            Guid.NewGuid(), order.Id, 1, product.Id, line.Id, 5000, 0.05m, null, line.ToLabelSpec(), TestUserId, now);
+            Guid.NewGuid(), order.Id, 1, product.Id, "Flow labels", line.Id, 5000, 0.05m, null, line.ToLabelSpec(), TestUserId, now);
         order.AddLine(orderLine);
         _db.SalesOrders.Add(order);
         _db.SalesOrderLines.Add(orderLine);

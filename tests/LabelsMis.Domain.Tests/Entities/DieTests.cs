@@ -6,7 +6,7 @@ namespace LabelsMis.Domain.Tests.Entities;
 public class DieTests
 {
     [Fact]
-    public void Create_CalculatesLabelsAcrossFromWebWidthAndLabelSize()
+    public void Create_StoresEnteredLabelsAcrossAndDerivesRepeatLength()
     {
         var die = Die.Create(
             Guid.NewGuid(),
@@ -19,6 +19,7 @@ public class DieTests
             cornerRadiusIn: 0.125m,
             gutterAcrossIn: 0.0625m,
             gutterAroundIn: 0.0625m,
+            labelsAcross: 3,
             labelsAround: 1,
             webWidthIn: 13.0m,
             supplierId: null,
@@ -29,7 +30,6 @@ public class DieTests
 
         die.LabelsAcross.Should().Be(3);
         die.RepeatLengthIn.Should().Be(3.0625m);
-        die.ValidateLabelsAcross();
     }
 
     [Theory]
@@ -41,7 +41,7 @@ public class DieTests
     }
 
     [Fact]
-    public void UpdateImposition_RecalculatesLabelsAcrossWhenWebWidthChanges()
+    public void UpdateImposition_StoresEnteredLabelsAcross()
     {
         var die = Die.Create(
             Guid.NewGuid(),
@@ -54,6 +54,7 @@ public class DieTests
             0m,
             0.0625m,
             0.0625m,
+            3,
             1,
             13.0m,
             null,
@@ -64,9 +65,8 @@ public class DieTests
 
         die.LabelsAcross.Should().Be(3);
 
-        die.UpdateImposition(4.0m, 3.0m, 0m, 0.0625m, 0.0625m, 1, 6.0m, Guid.NewGuid(), DateTime.UtcNow);
+        die.UpdateImposition(4.0m, 3.0m, 0m, 0.0625m, 0.0625m, 1, 1, 6.0m, Guid.NewGuid(), DateTime.UtcNow);
 
         die.LabelsAcross.Should().Be(1);
-        die.ValidateLabelsAcross();
     }
 }

@@ -16,6 +16,7 @@ public record SalesOrderLineInput(
     int Quantity,
     decimal UnitPrice,
     string? LineNotes,
+    string? Description = null,
     LabelSpec? Spec = null);
 
 public record SalesOrderFormInput(
@@ -158,6 +159,7 @@ public class SalesOrderService(
             orderNumber,
             input.CustomerId,
             sourceEstimateId: null,
+            salesRepId: null,
             input.CustomerPoNumber,
             now,
             input.RequestedShipDate,
@@ -214,6 +216,7 @@ public class SalesOrderService(
             orderNumber,
             estimate.CustomerId,
             estimate.Id,
+            estimate.SalesRepId,
             input.CustomerPoNumber,
             now,
             input.RequestedShipDate,
@@ -247,6 +250,7 @@ public class SalesOrderService(
                 order.Id,
                 i + 1,
                 product.Id,
+                estimateLine.ProductDescription,
                 estimateLine.Id,
                 lineInput.Quantity,
                 lineInput.UnitPrice,
@@ -400,6 +404,7 @@ public class SalesOrderService(
                     salesOrderId,
                     index + 1,
                     line.ProductId,
+                    line.Description,
                     line.SourceEstimateLineId,
                     line.Quantity,
                     line.UnitPrice,

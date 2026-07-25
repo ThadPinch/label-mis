@@ -58,6 +58,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EmailSettingsService>();
         services.AddScoped<GeneralSettingsService>();
         services.AddScoped<ArtworkService>();
+        services.AddScoped<Dashboard.DashboardService>();
         services.AddHostedService<ShipmentTrackingPoller>();
         return services;
     }

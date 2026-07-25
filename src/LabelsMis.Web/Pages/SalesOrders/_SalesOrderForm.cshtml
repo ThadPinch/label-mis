@@ -93,6 +93,7 @@
     <div class="border rounded p-2 mb-2 order-line">
         <input type="hidden" name="Input.Lines[@i].SourceEstimateLineId" value="@(line.SourceEstimateLineId?.ToString())" />
         <input type="hidden" name="Input.Lines[@i].SpecJson" value="@line.SpecJson" />
+        <input type="hidden" name="Input.Lines[@i].Description" value="@line.Description" />
         <div class="row g-2 align-items-end">
             <div class="col-md-4">
                 <label class="form-label small mb-1">Product</label>

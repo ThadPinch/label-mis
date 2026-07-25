@@ -1,22 +1,15 @@
+using FrontEndSuite.PdfPlatform.Document;
+using FrontEndSuite.PdfPlatform.Fonts;
+using FrontEndSuite.PdfPlatform.Geometry;
+using FrontEndSuite.PdfPlatform.Layout;
 using LabelsMis.Web.Services.Estimates;
 using LabelsMis.Web.Services.Settings;
 using Microsoft.Extensions.Options;
-using QuestPDF.Fluent;
-using QuestPDF.Helpers;
-using QuestPDF.Infrastructure;
 
 namespace LabelsMis.Web.Pdf;
 
 public class EstimatePdfGenerator(IOptions<EstimateOptions> options, GeneralSettingsService generalSettings)
 {
-    private const string Accent = "#005d66";
-    private const string AccentSoft = "#e6eff0";
-
-    static EstimatePdfGenerator()
-    {
-        QuestPDF.Settings.License = LicenseType.Community;
-    }
-
     /// <summary>Generates the PDF for a saved estimate, writes it to disk, and returns the path.</summary>
     public async Task<string> GenerateAsync(EstimateDetail detail, CancellationToken cancellationToken = default)
     {
@@ -24,19 +17,28 @@ public class EstimatePdfGenerator(IOptions<EstimateOptions> options, GeneralSett
         Directory.CreateDirectory(settings.PdfStoragePath);
 
         var model = MapDetail(detail);
-        var document = await BuildDocumentAsync(model, cancellationToken);
+        var bytes = await GenerateBytesAsync(model, cancellationToken);
 
         var fileName = $"{model.EstimateNumber.Replace('/', '-')}_rev{model.RevisionNumber}.pdf";
         var fullPath = Path.Combine(settings.PdfStoragePath, fileName);
-        await Task.Run(() => document.GeneratePdf(fullPath), cancellationToken);
+        await File.WriteAllBytesAsync(fullPath, bytes, cancellationToken);
         return fullPath;
     }
 
     /// <summary>Renders the PDF to a byte array without persisting (used for the in-browser preview).</summary>
     public async Task<byte[]> GenerateBytesAsync(EstimatePdfModel model, CancellationToken cancellationToken = default)
     {
-        var document = await BuildDocumentAsync(model, cancellationToken);
-        return await Task.Run(() => document.GeneratePdf(), cancellationToken);
+        var settings = options.Value;
+        var branding = await generalSettings.GetAsync(cancellationToken);
+        var companyName = !string.IsNullOrWhiteSpace(branding?.CompanyName) ? branding!.CompanyName : settings.ShopName;
+        var termsText = !string.IsNullOrWhiteSpace(branding?.TermsText) ? branding!.TermsText! : settings.TermsText;
+        var logo = branding is { HasLogo: true } ? branding.LogoBytes : null;
+        var contactLines = new[] { branding?.AddressLine1, branding?.AddressLine2, branding?.CityStateZip, branding?.Phone, branding?.Email, branding?.Website }
+            .Where(l => !string.IsNullOrWhiteSpace(l))
+            .Select(l => l!)
+            .ToList();
+
+        return await Task.Run(() => Render(model, companyName, termsText, logo, contactLines), cancellationToken);
     }
 
     /// <summary>Renders a saved estimate to a byte array (inline view of the official PDF).</summary>
@@ -79,184 +81,162 @@ public class EstimatePdfGenerator(IOptions<EstimateOptions> options, GeneralSett
             detail.SalesRepName);
     }
 
-    private async Task<IDocument> BuildDocumentAsync(EstimatePdfModel model, CancellationToken cancellationToken)
+    private static byte[] Render(EstimatePdfModel model, string companyName, string termsText, byte[]? logo, IReadOnlyList<string> contactLines)
     {
-        var settings = options.Value;
-        var branding = await generalSettings.GetAsync(cancellationToken);
-        var companyName = !string.IsNullOrWhiteSpace(branding?.CompanyName) ? branding!.CompanyName : settings.ShopName;
-        var termsText = !string.IsNullOrWhiteSpace(branding?.TermsText) ? branding!.TermsText! : settings.TermsText;
-        var logo = branding is { HasLogo: true } ? branding.LogoBytes : null;
-        var contactLines = new[] { branding?.AddressLine1, branding?.AddressLine2, branding?.CityStateZip, branding?.Phone, branding?.Email, branding?.Website }
-            .Where(l => !string.IsNullOrWhiteSpace(l))
-            .Select(l => l!)
-            .ToList();
-
-        return Document.Create(container =>
+        var metaLines = new List<string> { $"Date: {model.CreatedAt:MMM d, yyyy}" };
+        if (model.ValidUntilDate.HasValue)
         {
-            container.Page(page =>
+            metaLines.Add($"Valid until: {model.ValidUntilDate:MMM d, yyyy}");
+        }
+
+        var chrome = new BrandedPageChrome(
+            companyName, logo, contactLines,
+            "ESTIMATE", 22f,
+            $"{model.EstimateNumber} · Rev {model.RevisionNumber}",
+            metaLines);
+
+        using var pdf = PdfDocument.Create();
+        var document = new FlowDocument(
+            pdf, PdfRect.Letter,
+            BrandedPageChrome.PageMargin + chrome.HeaderHeight + 18f,
+            BrandedPageChrome.PageMargin,
+            BrandedPageChrome.PageMargin + 14f,
+            BrandedPageChrome.PageMargin);
+
+        document.Add(BuildAddressBlock(model));
+
+        foreach (var line in model.Lines)
+        {
+            document.Add(Paragraph($"Line {line.LineNumber}: {line.ProductDescription}", StandardFont.HelveticaBold, 11f, marginTop: 14f));
+            document.Add(Paragraph(
+                $"Size: {line.LabelAcrossIn}\" × {line.LabelAroundIn}\"   •   " +
+                $"Substrate: {line.SubstrateDescription}   •   Ink: {line.InkSet}",
+                size: 9f, color: PdfStyle.GreyDarken1));
+
+            document.Add(BuildBreaksTable(line));
+
+            if (!string.IsNullOrWhiteSpace(line.LineNotes))
             {
-                page.Margin(40);
-                page.Size(PageSizes.Letter);
-                page.DefaultTextStyle(x => x.FontSize(10).FontColor(Colors.Grey.Darken3));
+                document.Add(Paragraph($"Notes: {line.LineNotes}", StandardFont.HelveticaOblique, 9f, marginTop: 2f));
+            }
+        }
 
-                page.Header().Column(header =>
-                {
-                    header.Item().Row(row =>
-                    {
-                        row.RelativeItem().Column(left =>
-                        {
-                            if (logo is not null)
-                            {
-                                left.Item().Height(56).AlignLeft().Image(logo).FitHeight();
-                                if (!string.IsNullOrWhiteSpace(companyName))
-                                {
-                                    left.Item().PaddingTop(6).Text(companyName).SemiBold().FontSize(12);
-                                }
-                            }
-                            else
-                            {
-                                left.Item().Text(companyName).Bold().FontSize(20).FontColor(Accent);
-                            }
+        if (model.HasShipping)
+        {
+            var methodName = model.ShippingMethodName ?? "Shipping";
+            document.Add(Paragraph($"Shipping ({methodName}): {model.ShippingCost:C2}", StandardFont.HelveticaBold, marginTop: 14f));
+            document.Add(Paragraph("Shipping is added to each quantity total above.", StandardFont.HelveticaOblique, 8f, color: PdfStyle.GreyDarken1));
+        }
 
-                            foreach (var contactLine in contactLines)
-                            {
-                                left.Item().Text(contactLine).FontSize(9).FontColor(Colors.Grey.Darken1);
-                            }
-                        });
+        if (!string.IsNullOrWhiteSpace(model.Notes))
+        {
+            document.Add(Paragraph("Notes", StandardFont.HelveticaBold, color: PdfStyle.Accent, marginTop: 12f));
+            document.Add(Paragraph(model.Notes!));
+        }
 
-                        row.ConstantItem(200).Column(right =>
-                        {
-                            right.Item().AlignRight().Text("ESTIMATE").Bold().FontSize(22).FontColor(Accent);
-                            right.Item().AlignRight().Text($"{model.EstimateNumber} · Rev {model.RevisionNumber}")
-                                .SemiBold().FontSize(11);
-                            right.Item().AlignRight().Text($"Date: {model.CreatedAt:MMM d, yyyy}").FontSize(9);
-                            if (model.ValidUntilDate.HasValue)
-                            {
-                                right.Item().AlignRight().Text($"Valid until: {model.ValidUntilDate:MMM d, yyyy}").FontSize(9);
-                            }
-                        });
-                    });
+        document.Add(BuildTermsBox(termsText));
 
-                    header.Item().PaddingTop(10).LineHorizontal(2).LineColor(Accent);
-                });
+        document.Add(Paragraph(
+            model.SalesRepName is { Length: > 0 } rep
+                ? $"Sales representative: {rep}"
+                : "Sales representative: ________________________________",
+            marginTop: 36f));
 
-                page.Content().PaddingVertical(18).Column(col =>
-                {
-                    col.Spacing(6);
-
-                    col.Item().Row(row =>
-                    {
-                        row.RelativeItem().Column(bill =>
-                        {
-                            bill.Item().Text("Bill to").Bold().FontColor(Accent);
-                            bill.Item().Text(model.CustomerName).SemiBold();
-                            if (model.BillingAddress is { } billing)
-                            {
-                                if (!string.IsNullOrWhiteSpace(billing.Street1)) bill.Item().Text(billing.Street1!);
-                                if (!string.IsNullOrWhiteSpace(billing.Street2)) bill.Item().Text(billing.Street2!);
-                                bill.Item().Text($"{billing.City}, {billing.State} {billing.Zip}");
-                            }
-                        });
-
-                        if (model.ShipToAddress is { } shipTo)
-                        {
-                            row.RelativeItem().Column(ship =>
-                            {
-                                ship.Item().Text("Ship to").Bold().FontColor(Accent);
-                                if (!string.IsNullOrWhiteSpace(shipTo.RecipientName)) ship.Item().Text(shipTo.RecipientName!).SemiBold();
-                                if (!string.IsNullOrWhiteSpace(shipTo.Street1)) ship.Item().Text(shipTo.Street1!);
-                                if (!string.IsNullOrWhiteSpace(shipTo.Street2)) ship.Item().Text(shipTo.Street2!);
-                                ship.Item().Text($"{shipTo.City}, {shipTo.State} {shipTo.Zip}");
-                            });
-                        }
-                    });
-
-                    foreach (var line in model.Lines)
-                    {
-                        col.Item().PaddingTop(14).Text($"Line {line.LineNumber}: {line.ProductDescription}")
-                            .Bold().FontSize(11);
-                        col.Item().Text(
-                                $"Size: {line.LabelAcrossIn}\" × {line.LabelAroundIn}\"   •   " +
-                                $"Substrate: {line.SubstrateDescription}   •   Ink: {line.InkSet}")
-                            .FontSize(9).FontColor(Colors.Grey.Darken1);
-
-                        col.Item().PaddingTop(6).Table(table =>
-                        {
-                            table.ColumnsDefinition(columns =>
-                            {
-                                columns.RelativeColumn(2);
-                                columns.RelativeColumn();
-                                columns.RelativeColumn();
-                            });
-
-                            table.Header(headerRow =>
-                            {
-                                headerRow.Cell().Element(HeaderCell).Text("Quantity");
-                                headerRow.Cell().Element(HeaderCell).AlignRight().Text("Unit price");
-                                headerRow.Cell().Element(HeaderCell).AlignRight().Text("Total");
-                            });
-
-                            foreach (var breakRow in line.Breaks)
-                            {
-                                table.Cell().Element(BodyCell).Text(breakRow.Quantity.ToString("N0"));
-                                table.Cell().Element(BodyCell).AlignRight().Text(breakRow.UnitPrice.ToString("C4"));
-                                table.Cell().Element(BodyCell).AlignRight().Text(breakRow.TotalPrice.ToString("C2")).SemiBold();
-                            }
-                        });
-
-                        if (!string.IsNullOrWhiteSpace(line.LineNotes))
-                        {
-                            col.Item().PaddingTop(2).Text($"Notes: {line.LineNotes}").FontSize(9).Italic();
-                        }
-                    }
-
-                    if (model.HasShipping)
-                    {
-                        var methodName = model.ShippingMethodName ?? "Shipping";
-                        col.Item().PaddingTop(14).Text(
-                            $"Shipping ({methodName}): {model.ShippingCost.ToString("C2")}").SemiBold();
-                        col.Item().Text("Shipping is added to each quantity total above.").FontSize(8).Italic()
-                            .FontColor(Colors.Grey.Darken1);
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(model.Notes))
-                    {
-                        col.Item().PaddingTop(12).Text("Notes").Bold().FontColor(Accent);
-                        col.Item().Text(model.Notes);
-                    }
-
-                    col.Item().PaddingTop(18).Background(AccentSoft).Padding(10).Column(terms =>
-                    {
-                        terms.Item().Text("Terms").Bold().FontColor(Accent);
-                        terms.Item().Text(termsText).FontSize(9);
-                    });
-
-                    if (!string.IsNullOrWhiteSpace(model.SalesRepName))
-                    {
-                        col.Item().PaddingTop(36).Text($"Sales representative: {model.SalesRepName}");
-                    }
-                    else
-                    {
-                        col.Item().PaddingTop(36).Text("Sales representative: ________________________________");
-                    }
-                });
-
-                page.Footer().AlignCenter().Text(text =>
-                {
-                    text.DefaultTextStyle(x => x.FontSize(8).FontColor(Colors.Grey.Medium));
-                    text.Span(companyName + "   •   Page ");
-                    text.CurrentPageNumber();
-                    text.Span(" of ");
-                    text.TotalPages();
-                });
-            });
-        });
+        chrome.Stamp(pdf);
+        return pdf.Save();
     }
 
-    private static IContainer HeaderCell(IContainer container) =>
-        container.Background(Accent).PaddingVertical(5).PaddingHorizontal(6)
-            .DefaultTextStyle(x => x.FontColor(Colors.White).SemiBold().FontSize(9));
+    private static FlowTable BuildAddressBlock(EstimatePdfModel model)
+    {
+        var table = new FlowTable(new[] { 1f, 1f });
 
-    private static IContainer BodyCell(IContainer container) =>
-        container.BorderBottom(1).BorderColor(Colors.Grey.Lighten2).PaddingVertical(4).PaddingHorizontal(6);
+        var bill = new FlowCell { NoBorder = true, Padding = 0f };
+        bill.Add(Paragraph("Bill to", StandardFont.HelveticaBold, color: PdfStyle.Accent, marginBottom: 2f));
+        bill.Add(Paragraph(model.CustomerName, StandardFont.HelveticaBold));
+        if (model.BillingAddress is { } billing)
+        {
+            if (!string.IsNullOrWhiteSpace(billing.Street1)) bill.Add(Paragraph(billing.Street1!));
+            if (!string.IsNullOrWhiteSpace(billing.Street2)) bill.Add(Paragraph(billing.Street2!));
+            bill.Add(Paragraph($"{billing.City}, {billing.State} {billing.Zip}"));
+        }
+
+        table.AddCell(bill);
+
+        var ship = new FlowCell { NoBorder = true, Padding = 0f };
+        if (model.ShipToAddress is { } shipTo)
+        {
+            ship.Add(Paragraph("Ship to", StandardFont.HelveticaBold, color: PdfStyle.Accent, marginBottom: 2f));
+            if (!string.IsNullOrWhiteSpace(shipTo.RecipientName)) ship.Add(Paragraph(shipTo.RecipientName!, StandardFont.HelveticaBold));
+            if (!string.IsNullOrWhiteSpace(shipTo.Street1)) ship.Add(Paragraph(shipTo.Street1!));
+            if (!string.IsNullOrWhiteSpace(shipTo.Street2)) ship.Add(Paragraph(shipTo.Street2!));
+            ship.Add(Paragraph($"{shipTo.City}, {shipTo.State} {shipTo.Zip}"));
+        }
+
+        table.AddCell(ship);
+        return table;
+    }
+
+    private static FlowTable BuildBreaksTable(EstimatePdfLine line)
+    {
+        var table = new FlowTable(new[] { 2f, 1f, 1f }) { MarginTop = 6f, MarginBottom = 6f };
+        table.AddHeaderCell(HeaderCell("Quantity"));
+        table.AddHeaderCell(HeaderCell("Unit price", TextHorizontalAlignment.Right));
+        table.AddHeaderCell(HeaderCell("Total", TextHorizontalAlignment.Right));
+
+        foreach (var breakRow in line.Breaks)
+        {
+            table.AddCell(BodyCell(breakRow.Quantity.ToString("N0")));
+            table.AddCell(BodyCell(breakRow.UnitPrice.ToString("C4"), TextHorizontalAlignment.Right));
+            table.AddCell(BodyCell(breakRow.TotalPrice.ToString("C2"), TextHorizontalAlignment.Right, StandardFont.HelveticaBold));
+        }
+
+        return table;
+    }
+
+    private static FlowTable BuildTermsBox(string termsText)
+    {
+        var cell = new FlowCell { NoBorder = true, Background = PdfStyle.AccentSoft, Padding = 10f };
+        cell.Add(Paragraph("Terms", StandardFont.HelveticaBold, color: PdfStyle.Accent, marginBottom: 2f));
+        cell.Add(Paragraph(termsText, size: 9f));
+        return new FlowTable(new[] { 1f }) { MarginTop = 18f }.AddCell(cell);
+    }
+
+    private static FlowCell HeaderCell(string text, TextHorizontalAlignment alignment = TextHorizontalAlignment.Left)
+    {
+        return new FlowCell
+        {
+            NoBorder = true,
+            Background = PdfStyle.Accent,
+            Padding = 5f,
+            TextAlignment = alignment
+        }.Add(Paragraph(text, StandardFont.HelveticaBold, 9f, color: PdfStyle.White));
+    }
+
+    private static FlowCell BodyCell(string text, TextHorizontalAlignment alignment = TextHorizontalAlignment.Left, PdfFont? font = null)
+    {
+        return new FlowCell
+        {
+            Border = (PdfStyle.GreyLighten2, 0.5f),
+            Padding = 5f,
+            TextAlignment = alignment
+        }.Add(Paragraph(text, font, 9.5f));
+    }
+
+    private static FlowParagraph Paragraph(
+        string text,
+        PdfFont? font = null,
+        float size = 10f,
+        (float R, float G, float B)? color = null,
+        float marginTop = 0f,
+        float marginBottom = 0f)
+    {
+        return new FlowParagraph(text)
+        {
+            DefaultFont = font ?? StandardFont.Helvetica,
+            DefaultFontSize = size,
+            DefaultColor = color ?? PdfStyle.GreyDarken3,
+            MarginTop = marginTop,
+            MarginBottom = marginBottom > 0f ? marginBottom : 2f
+        };
+    }
 }

@@ -11,4 +11,5 @@ public record QuantityBreakResult(
     decimal PricePerThousand,
     decimal MarginPct,
     bool BelowMinimumMargin,
+    decimal MarkupPctUsed,
     IReadOnlyList<EstimateLineItem> CostBreakdown);

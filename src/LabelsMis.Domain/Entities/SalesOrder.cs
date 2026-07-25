@@ -17,6 +17,7 @@ public class SalesOrder : EntityBase
     public Customer Customer { get; private set; } = null!;
     public Guid? SourceEstimateId { get; private set; }
     public Estimate? SourceEstimate { get; private set; }
+    public Guid? SalesRepId { get; private set; }
     public string? CustomerPoNumber { get; private set; }
     public DateTime OrderedAt { get; private set; }
     public DateOnly? RequestedShipDate { get; private set; }
@@ -44,6 +45,7 @@ public class SalesOrder : EntityBase
         string orderNumber,
         Guid customerId,
         Guid? sourceEstimateId,
+        Guid? salesRepId,
         string? customerPoNumber,
         DateTime orderedAt,
         DateOnly? requestedShipDate,
@@ -59,6 +61,7 @@ public class SalesOrder : EntityBase
             OrderNumber = orderNumber,
             CustomerId = customerId,
             SourceEstimateId = sourceEstimateId,
+            SalesRepId = salesRepId,
             CustomerPoNumber = string.IsNullOrWhiteSpace(customerPoNumber) ? null : customerPoNumber.Trim(),
             OrderedAt = orderedAt,
             RequestedShipDate = requestedShipDate,

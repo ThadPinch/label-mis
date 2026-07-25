@@ -325,7 +325,7 @@
             const marginSuffix = row.belowMinimumMargin ? ' ⚠' : '';
 
             return `
-                <details class="calc-qty-section">
+                <details class="calc-qty-section" data-qty="${row.quantity}">
                     <summary class="calc-qty-summary">
                         <span class="calc-qty-chevron" aria-hidden="true"></span>
                         <span class="calc-qty-label">
@@ -372,7 +372,7 @@
                             <dl class="calc-dl">
                                 <dt>Total cost</dt>
                                 <dd>${fmtMoney(row.totalCost)}</dd>
-                                <dt>Markup (${fmtPct(markupPct)})</dt>
+                                <dt>Markup (${fmtPct(row.markupPctUsed ?? markupPct)})</dt>
                                 <dd>${fmtMoney(markupAmount)}</dd>
                                 <dt>Total price</dt>
                                 <dd class="fw-semibold">${fmtMoney(row.totalPrice)}</dd>
@@ -394,6 +394,9 @@
         const warningsHtml = (lineResult.warnings || []).length
             ? `<div class="alert alert-warning mb-3">${escapeHtml(lineResult.warnings.join('; '))}</div>`
             : '';
+        // Remember which quantity sections are expanded so a recalculation doesn't collapse them.
+        const openQtys = new Set(
+            [...container.querySelectorAll('.calc-qty-section[open]')].map(d => d.dataset.qty));
         container.innerHTML = `
             <div class="calc-breakdown-card">
                 ${includeTitle ? '<h3 class="calc-breakdown-title">Calculation breakdown</h3>' : ''}
@@ -403,6 +406,9 @@
                     ${qtySections}
                 </div>
             </div>`;
+        container.querySelectorAll('.calc-qty-section').forEach(d => {
+            if (openQtys.has(d.dataset.qty)) d.open = true;
+        });
     };
 
     const updateLineSummary = (lineEl, lineResult) => {
@@ -532,6 +538,35 @@
         });
     };
 
+    // Per-quantity markup overrides live in a hidden JSON field ({"1000":0.5}) so they
+    // round-trip through both the calculate endpoint and the form post.
+    const getQtyMarkupMap = (lineEl) => {
+        const raw = lineEl.querySelector('.qty-markup-json')?.value;
+        if (!raw) return {};
+        try { return JSON.parse(raw) || {}; } catch { return {}; }
+    };
+
+    const setQtyMarkupMap = (lineEl, map) => {
+        const input = lineEl.querySelector('.qty-markup-json');
+        if (!input) return;
+        input.value = Object.keys(map).length ? JSON.stringify(map) : '';
+    };
+
+    const getEffectiveQtyMarkup = (lineEl, qty) => {
+        const value = getQtyMarkupMap(lineEl)[String(qty)];
+        return value !== undefined && value !== null && !Number.isNaN(Number(value))
+            ? Number(value)
+            : getLineMarkup(lineEl);
+    };
+
+    const setQtyMargin = (lineEl, qty, margin) => {
+        const clamped = Math.min(Math.max(margin, MIN_MARGIN), MAX_MARGIN);
+        const map = getQtyMarkupMap(lineEl);
+        map[String(qty)] = Number(marginToMarkup(clamped).toFixed(4));
+        setQtyMarkupMap(lineEl, map);
+        calculate();
+    };
+
     const getLineMarkup = (lineEl) => {
         const input = lineEl.querySelector('.markup-override-input');
         const raw = input?.value?.trim();
@@ -589,6 +624,8 @@
             return;
         }
         setLineMarkup(lineEl, marginToMarkup(margin));
+        // The line control sets every quantity: drop per-quantity overrides.
+        setQtyMarkupMap(lineEl, {});
         calculate();
     };
 
@@ -597,6 +634,7 @@
         const currentMargin = markupToMargin(currentMarkup);
         const newMargin = Math.min(Math.max(currentMargin + delta, MIN_MARGIN), MAX_MARGIN);
         setLineMarkup(lineEl, marginToMarkup(newMargin));
+        setQtyMarkupMap(lineEl, {});
         calculate();
     };
 
@@ -774,6 +812,20 @@
     };
     const finishingById = new Map(FINISHING_OPS.map(o => [String(o.id), o]));
 
+    let FINISHING_STOCKS = [];
+    try {
+        const finishingStocksEl = document.getElementById('finishing-stocks-data');
+        if (finishingStocksEl) FINISHING_STOCKS = JSON.parse(finishingStocksEl.textContent || '[]');
+    } catch { FINISHING_STOCKS = []; }
+
+    // Only these finishing categories consume a material stock.
+    const MATERIAL_FINISHING_CATEGORIES = new Set(['Laminate', 'Foil']);
+
+    const buildFinishingStockOptions = (selectedId) => ['<option value="">Select stock</option>']
+        .concat(FINISHING_STOCKS.map(s =>
+            `<option value="${escapeHtml(s.id)}"${String(s.id) === String(selectedId || '') ? ' selected' : ''}>${escapeHtml(s.code)} — ${escapeHtml(s.description)}</option>`))
+        .join('');
+
     const populateFinishingOperations = (categorySel) => {
         const builder = categorySel.closest('.finishing-builder');
         if (!builder) return;
@@ -812,11 +864,17 @@
         });
     };
 
-    const buildFinishingItem = (lineEl, op, setupOverride, runOverride) => {
+    const buildFinishingItem = (lineEl, op, setupOverride, runOverride, stockId) => {
         const lineIdx = lineEl.dataset.lineIndex;
         const item = document.createElement('div');
         item.className = 'finishing-item border rounded p-2 mb-2';
         item.dataset.opId = op.id;
+        const stockBlock = MATERIAL_FINISHING_CATEGORIES.has(op.category)
+            ? `<div class="finishing-stock-group">
+                    <label class="form-label small mb-0">Material stock</label>
+                    <select name="Input.Lines[${lineIdx}].FinishingOperations[0].StockId" class="form-select form-select-sm finishing-stock-select" style="max-width: 14rem;">${buildFinishingStockOptions(stockId)}</select>
+                </div>`
+            : '';
         item.innerHTML = `
             <div class="d-flex flex-wrap gap-2 align-items-end">
                 <div class="flex-grow-1">
@@ -833,16 +891,17 @@
                     <label class="form-label small mb-0">Run speed fpm override</label>
                     <input name="Input.Lines[${lineIdx}].FinishingOperations[0].RunSpeedFpmOverride" value="${escapeHtml(runOverride || '')}" class="form-control form-control-sm calc-trigger" style="max-width: 8rem;" />
                 </div>
+                ${stockBlock}
                 <button type="button" class="btn btn-sm btn-outline-danger finishing-remove">Remove</button>
             </div>`;
         return item;
     };
 
-    const addFinishingToLine = (lineEl, op, setupOverride, runOverride) => {
+    const addFinishingToLine = (lineEl, op, setupOverride, runOverride, stockId) => {
         const list = lineEl?.querySelector('.finishing-selected');
         if (!list || !op) return false;
         if (list.querySelector(`.finishing-item[data-op-id="${op.id}"]`)) return false;
-        const item = buildFinishingItem(lineEl, op, setupOverride, runOverride);
+        const item = buildFinishingItem(lineEl, op, setupOverride, runOverride, stockId);
         list.appendChild(item);
         renumberFinishing(lineEl);
         wireFinishingRemove(item.querySelector('.finishing-remove'));
@@ -850,6 +909,7 @@
             el.addEventListener('input', scheduleCalculate);
             el.addEventListener('blur', calculate);
         });
+        item.querySelector('.finishing-stock-select')?.addEventListener('change', calculate);
         return true;
     };
 
@@ -886,23 +946,78 @@
                     if (!op) return;
                     const setup = f.SetupMinutesOverride ?? f.setupMinutesOverride;
                     const run = f.RunSpeedFpmOverride ?? f.runSpeedFpmOverride;
-                    addFinishingToLine(lineEl, op, setup == null ? '' : String(setup), run == null ? '' : String(run));
+                    const stock = f.StockId ?? f.stockId;
+                    addFinishingToLine(lineEl, op, setup == null ? '' : String(setup), run == null ? '' : String(run), stock == null ? '' : String(stock));
                 });
             }
         } catch { /* ignore */ }
     };
 
+    const readQuantities = (lineEl) => [...lineEl.querySelectorAll('.quantity-input')]
+        .map(i => parseInt(i.value, 10))
+        .filter(q => !Number.isNaN(q) && q > 0)
+        .sort((a, b) => a - b)
+        .slice(0, 6);
+
     const normalizeQuantityInputs = (lineEl) => {
         const inputs = [...lineEl.querySelectorAll('.quantity-input')];
-        const values = inputs
-            .map(i => parseInt(i.value, 10))
-            .filter(q => !Number.isNaN(q) && q > 0)
-            .sort((a, b) => a - b)
-            .slice(0, 6);
+        const values = readQuantities(lineEl);
         inputs.forEach((input, idx) => {
             input.value = values[idx] !== undefined ? String(values[idx]) : '';
         });
         return values;
+    };
+
+    // Reordering the quantity slots right after an edit yanks values out from under the
+    // user, so it runs on a visible 3-second countdown instead.
+    const reorderTimers = new Map();
+
+    const quantitiesNeedReorder = (lineEl) => {
+        const inputs = [...lineEl.querySelectorAll('.quantity-input')];
+        const target = readQuantities(lineEl);
+        return inputs.some((input, idx) => {
+            const want = target[idx] !== undefined ? String(target[idx]) : '';
+            return input.value.trim() !== want;
+        });
+    };
+
+    const cancelQuantityReorder = (lineEl) => {
+        const timer = reorderTimers.get(lineEl);
+        if (!timer) return;
+        clearInterval(timer.interval);
+        timer.el.remove();
+        reorderTimers.delete(lineEl);
+    };
+
+    const scheduleQuantityReorder = (lineEl) => {
+        if (!lineEl) return;
+        cancelQuantityReorder(lineEl);
+        if (!quantitiesNeedReorder(lineEl)) return;
+
+        const section = lineEl.querySelector('.quantity-inputs');
+        if (!section) return;
+        const el = document.createElement('div');
+        el.className = 'quantity-reorder-timer form-text text-warning mt-1';
+        section.insertAdjacentElement('afterend', el);
+
+        let remaining = 3;
+        el.textContent = `Reordering quantities in ${remaining}…`;
+        const interval = setInterval(() => {
+            // Hold the countdown while a quantity field in this line is still focused.
+            const active = document.activeElement;
+            if (active?.classList?.contains('quantity-input') && lineEl.contains(active)) {
+                return;
+            }
+            remaining -= 1;
+            if (remaining > 0) {
+                el.textContent = `Reordering quantities in ${remaining}…`;
+                return;
+            }
+            cancelQuantityReorder(lineEl);
+            normalizeQuantityInputs(lineEl);
+            calculate();
+        }, 1000);
+        reorderTimers.set(lineEl, { interval, el });
     };
 
     const collectLinePayload = (lineEl) => {
@@ -927,6 +1042,7 @@
                     operationId: opId,
                     setupMinutesOverride: item.querySelector('[name*="SetupMinutesOverride"]')?.value || null,
                     runSpeedFpmOverride: item.querySelector('[name*="RunSpeedFpmOverride"]')?.value || null,
+                    stockId: item.querySelector('.finishing-stock-select')?.value || null,
                     sortOrder: sort++
                 });
             });
@@ -939,6 +1055,7 @@
                     operationId: input.value,
                     setupMinutesOverride: lineEl.querySelector(`[name="${prefix}.SetupMinutesOverride"]`)?.value || null,
                     runSpeedFpmOverride: lineEl.querySelector(`[name="${prefix}.RunSpeedFpmOverride"]`)?.value || null,
+                    stockId: lineEl.querySelector(`[name="${prefix}.StockId"]`)?.value || null,
                     sortOrder: sort++
                 });
             });
@@ -965,7 +1082,7 @@
                 sortOrder: spotSort++
             });
         });
-        const quantities = normalizeQuantityInputs(lineEl);
+        const quantities = readQuantities(lineEl);
 
         return {
             id: val('[name$=".Id"]') || null,
@@ -991,6 +1108,7 @@
                 const parsed = parseFloat(raw);
                 return Number.isNaN(parsed) ? null : parsed;
             })(),
+            quantityMarkupOverridesJson: val('.qty-markup-json') || null,
             maxLabelsAcrossOverride: (() => {
                 const raw = val('.labels-across-select');
                 if (raw === '' || raw === undefined || raw === null) return null;
@@ -1059,6 +1177,34 @@
         }
     };
 
+    const wireRowMarginControls = (lineEl, tbody) => {
+        tbody.querySelectorAll('.row-margin-control').forEach(ctrl => {
+            const qty = parseInt(ctrl.dataset.qty, 10);
+            const input = ctrl.querySelector('.row-margin-input');
+            const currentMargin = () => markupToMargin(getEffectiveQtyMarkup(lineEl, qty));
+            const apply = () => {
+                const margin = parseMarginInput(input.value);
+                if (margin === null) {
+                    input.value = `${(currentMargin() * 100).toFixed(1)}%`;
+                    return;
+                }
+                setQtyMargin(lineEl, qty, margin);
+            };
+            input?.addEventListener('blur', apply);
+            input?.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    apply();
+                    input.blur();
+                }
+            });
+            ctrl.querySelector('.row-margin-decrease')?.addEventListener('click', () =>
+                setQtyMargin(lineEl, qty, currentMargin() - MARGIN_STEP));
+            ctrl.querySelector('.row-margin-increase')?.addEventListener('click', () =>
+                setQtyMargin(lineEl, qty, currentMargin() + MARGIN_STEP));
+        });
+    };
+
     const renderLineResults = (lineEl, lineResult) => {
         const warnings = lineEl.querySelector('.calc-warnings');
         const errors = lineEl.querySelector('.calc-errors');
@@ -1074,15 +1220,25 @@
         }
         if (tbody) {
             tbody.innerHTML = '';
+            const overrides = getQtyMarkupMap(lineEl);
             (lineResult.quantityBreaks || []).forEach(row => {
                 const tr = document.createElement('tr');
                 if (row.belowMinimumMargin) tr.classList.add('table-warning');
+                const markupUsed = Number(row.markupPctUsed ?? lineResult.markupPctUsed ?? 0);
+                const marginValue = `${(markupToMargin(markupUsed) * 100).toFixed(1)}%`;
+                const hasOverride = overrides[String(row.quantity)] !== undefined;
                 tr.innerHTML = `<td>${row.quantity.toLocaleString()}</td>
                     <td>${Number(row.unitPrice).toFixed(4)}</td>
                     <td>${Number(row.totalPrice).toFixed(2)}</td>
-                    <td>${(Number(row.marginPct) * 100).toFixed(1)}%${row.belowMinimumMargin ? ' ⚠' : ''}</td>`;
+                    <td>
+                        <div class="input-group input-group-sm row-margin-control" data-qty="${row.quantity}" style="max-width: 9.5rem;">
+                            <button type="button" class="btn btn-outline-secondary row-margin-decrease" aria-label="Decrease margin for ${row.quantity}">−</button>
+                            <input type="text" class="form-control row-margin-input text-center${hasOverride ? ' fw-semibold' : ''}" inputmode="decimal" value="${marginValue}" aria-label="Margin percent for ${row.quantity}" />
+                            <button type="button" class="btn btn-outline-secondary row-margin-increase" aria-label="Increase margin for ${row.quantity}">+</button>
+                        </div>${row.belowMinimumMargin ? '<span class="text-warning small">below min ⚠</span>' : ''}</td>`;
                 tbody.appendChild(tr);
             });
+            wireRowMarginControls(lineEl, tbody);
         }
         if (lineResult.markupPctUsed !== undefined && lineResult.markupPctUsed !== null) {
             lineEl.dataset.lineIndex = lineEl.dataset.lineIndex ?? '0';
@@ -1103,7 +1259,6 @@
     };
 
     const calculate = async () => {
-        linesContainer.querySelectorAll('.estimate-line').forEach(normalizeQuantityInputs);
         const payload = collectPayload();
         if (!payload.customerId) return;
         const response = await fetch('/estimates/calculate', {
@@ -1135,9 +1290,8 @@
 
     const wireUp = (root) => {
         root.querySelectorAll('.quantity-input').forEach(input => {
-            input.addEventListener('blur', () => {
-                normalizeQuantityInputs(input.closest('.estimate-line'));
-            });
+            input.addEventListener('blur', () => scheduleQuantityReorder(input.closest('.estimate-line')));
+            input.addEventListener('input', () => scheduleQuantityReorder(input.closest('.estimate-line')));
         });
         root.querySelectorAll('.calc-trigger').forEach(el => {
             el.addEventListener('input', scheduleCalculate);
@@ -1174,7 +1328,7 @@
                 const opSel = builder?.querySelector('.finishing-operation-select');
                 const op = finishingById.get(opSel?.value);
                 const lineEl = btn.closest('.estimate-line');
-                if (op && lineEl && addFinishingToLine(lineEl, op, '', '')) {
+                if (op && lineEl && addFinishingToLine(lineEl, op, '', '', '')) {
                     calculate();
                 }
                 if (opSel) opSel.value = '';
@@ -1182,6 +1336,9 @@
             });
         });
         root.querySelectorAll('.finishing-remove').forEach(wireFinishingRemove);
+        root.querySelectorAll('.finishing-stock-select').forEach(sel => {
+            sel.addEventListener('change', calculate);
+        });
         root.querySelectorAll('.spot-ink-select').forEach(sel => {
             sel.addEventListener('change', () => {
                 const addBtn = sel.closest('.spot-builder')?.querySelector('.spot-add');
@@ -1223,6 +1380,7 @@
                 e.stopPropagation();
                 const lineEl = btn.closest('.estimate-line');
                 if (linesContainer.querySelectorAll('.estimate-line').length <= 1) return;
+                cancelQuantityReorder(lineEl);
                 lineMarkupCache.delete(lineEl.dataset.lineIndex);
                 lineResultsCache.delete(String(lineEl.dataset.lineIndex));
                 lineEl.remove();
@@ -1317,10 +1475,14 @@
     const loadContactEmail = async ({ overwrite }) => {
         const emailToInput = document.getElementById('EmailTo');
         const addContactLink = document.getElementById('estimate-add-contact');
+        const contactSelect = document.getElementById('estimate-contact-select');
         if (!emailToInput && !addContactLink) return;
 
         const customerId = customerSelect?.value;
-        const hideLink = () => { if (addContactLink) addContactLink.hidden = true; };
+        const hideLink = () => {
+            if (addContactLink) addContactLink.hidden = true;
+            if (contactSelect) contactSelect.hidden = true;
+        };
         if (!customerId) { hideLink(); return; }
 
         let data;
@@ -1334,6 +1496,18 @@
             emailToInput.value = data.email;
         }
 
+        if (contactSelect) {
+            const contacts = data.contacts || [];
+            contactSelect.innerHTML = '';
+            if (contacts.length === 0) {
+                contactSelect.hidden = true;
+            } else {
+                contactSelect.hidden = false;
+                contactSelect.add(new Option('Use a customer contact…', ''));
+                contacts.forEach(c => contactSelect.add(new Option(`${c.name} — ${c.email}`, c.email)));
+            }
+        }
+
         if (addContactLink) {
             if (data.email) {
                 addContactLink.hidden = true;
@@ -1343,6 +1517,15 @@
             }
         }
     };
+
+    document.getElementById('estimate-contact-select')?.addEventListener('change', (event) => {
+        const select = event.currentTarget;
+        const emailToInput = document.getElementById('EmailTo');
+        if (select.value && emailToInput) {
+            emailToInput.value = select.value;
+        }
+        select.selectedIndex = 0;
+    });
 
     shipToSource?.addEventListener('change', () => {
         if (shipToSource.value === 'custom') return;

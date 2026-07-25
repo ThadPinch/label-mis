@@ -478,6 +478,10 @@ namespace LabelsMis.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -729,6 +733,10 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("MarginPct")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<decimal?>("MarkupPctOverride")
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
 
@@ -1103,6 +1111,9 @@ namespace LabelsMis.Infrastructure.Migrations
 
                     b.Property<DateTime?>("QbExportedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("QbExportedById")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("QbInvoiceId")
                         .HasMaxLength(100)
@@ -2218,6 +2229,9 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<DateOnly?>("RequestedShipDate")
                         .HasColumnType("date");
 
+                    b.Property<Guid?>("SalesRepId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ShipToCity")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -2295,6 +2309,10 @@ namespace LabelsMis.Infrastructure.Migrations
 
                     b.Property<Guid>("CreatedById")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("LineNotes")
                         .HasMaxLength(1000)

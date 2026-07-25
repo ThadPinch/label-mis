@@ -14,6 +14,12 @@ public class SalesOrderLine : EntityBase
     public int LineNumber { get; private set; }
     public Guid ProductId { get; private set; }
     public Product Product { get; private set; } = null!;
+
+    /// <summary>Snapshot of the description as quoted (estimate lines can reword an existing
+    /// product's description). Null on rows created before the snapshot existed — display should
+    /// fall back to Product.Description.</summary>
+    public string? Description { get; private set; }
+
     public Guid? SourceEstimateLineId { get; private set; }
     public EstimateLine? SourceEstimateLine { get; private set; }
     public int Quantity { get; private set; }
@@ -31,6 +37,7 @@ public class SalesOrderLine : EntityBase
         Guid salesOrderId,
         int lineNumber,
         Guid productId,
+        string? description,
         Guid? sourceEstimateLineId,
         int quantity,
         decimal unitPrice,
@@ -59,6 +66,7 @@ public class SalesOrderLine : EntityBase
             SalesOrderId = salesOrderId,
             LineNumber = lineNumber,
             ProductId = productId,
+            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
             SourceEstimateLineId = sourceEstimateLineId,
             Quantity = quantity,
             UnitPrice = unitPrice,

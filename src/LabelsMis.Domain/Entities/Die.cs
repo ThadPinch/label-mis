@@ -46,6 +46,7 @@ public class Die : MasterDataEntity
         decimal cornerRadiusIn,
         decimal gutterAcrossIn,
         decimal gutterAroundIn,
+        int labelsAcross,
         int labelsAround,
         decimal webWidthIn,
         Guid? supplierId,
@@ -64,12 +65,16 @@ public class Die : MasterDataEntity
             throw new ArgumentOutOfRangeException(nameof(labelAcrossIn), "Label dimensions and web width must be greater than zero.");
         }
 
+        if (labelsAcross <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(labelsAcross), "Labels across must be at least one.");
+        }
+
         if (labelsAround <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(labelsAround), "Labels around must be at least one.");
         }
 
-        var labelsAcross = CalculateLabelsAcross(webWidthIn, gutterAcrossIn, labelAcrossIn);
         var repeatLengthIn = labelsAround * (labelAroundIn + gutterAroundIn);
 
         var die = new Die
@@ -101,6 +106,7 @@ public class Die : MasterDataEntity
         decimal cornerRadiusIn,
         decimal gutterAcrossIn,
         decimal gutterAroundIn,
+        int labelsAcross,
         int labelsAround,
         decimal webWidthIn,
         Guid modifiedById,
@@ -109,6 +115,11 @@ public class Die : MasterDataEntity
         if (labelAcrossIn <= 0 || labelAroundIn <= 0 || webWidthIn <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(labelAcrossIn), "Label dimensions and web width must be greater than zero.");
+        }
+
+        if (labelsAcross <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(labelsAcross), "Labels across must be at least one.");
         }
 
         if (labelsAround <= 0)
@@ -121,9 +132,9 @@ public class Die : MasterDataEntity
         CornerRadiusIn = cornerRadiusIn;
         GutterAcrossIn = gutterAcrossIn;
         GutterAroundIn = gutterAroundIn;
+        LabelsAcross = labelsAcross;
         LabelsAround = labelsAround;
         WebWidthIn = webWidthIn;
-        LabelsAcross = CalculateLabelsAcross(webWidthIn, gutterAcrossIn, labelAcrossIn);
         RepeatLengthIn = labelsAround * (labelAroundIn + gutterAroundIn);
         SetModified(modifiedById, modifiedAt);
     }
@@ -154,16 +165,8 @@ public class Die : MasterDataEntity
         SetModified(modifiedById, modifiedAt);
     }
 
-    public void ValidateLabelsAcross()
-    {
-        var expected = CalculateLabelsAcross(WebWidthIn, GutterAcrossIn, LabelAcrossIn);
-        if (LabelsAcross != expected)
-        {
-            throw new InvalidOperationException(
-                $"LabelsAcross must equal floor((WebWidthIn + gutter) / (LabelAcrossIn + gutter)). Expected {expected}, got {LabelsAcross}.");
-        }
-    }
-
+    /// <summary>Geometric best-fit for reference; the die's stored LabelsAcross is user-entered
+    /// (the physical cavity count can differ from the pure width calculation).</summary>
     public static int CalculateLabelsAcross(decimal webWidthIn, decimal gutterAcrossIn, decimal labelAcrossIn)
     {
         if (labelAcrossIn + gutterAcrossIn <= 0)

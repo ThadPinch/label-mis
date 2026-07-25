@@ -12,6 +12,7 @@ public class SalesOrderLineConfiguration : IEntityTypeConfiguration<SalesOrderLi
         builder.ConfigureAuditableEntity();
 
         builder.Property(l => l.LineNumber).IsRequired();
+        builder.Property(l => l.Description).HasMaxLength(500);
         builder.Property(l => l.Quantity).IsRequired();
         builder.Property(l => l.UnitPrice).HasMoneyPrecision();
         builder.Property(l => l.LineTotal).HasMoneyPrecision();

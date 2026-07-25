@@ -3,11 +3,19 @@
 @{ ViewData["Title"] = Model.Order?.OrderNumber ?? "Sales order"; ViewData["BackNav"] = new BackNavModel(); }
 <h1 class="h3 mb-1">@Model.Order?.OrderNumber</h1>
 <p class="text-muted mb-1">@Model.Order?.Status</p>
-@if (Model.SourceEstimateId is not null)
+@if (Model.SourceEstimateId is not null || Model.SalesRepName is not null)
 {
     <p class="mb-3">
-        <span class="text-muted">Estimate:</span>
-        <a asp-page="/Estimates/Edit" asp-route-id="@Model.SourceEstimateId">@(Model.SourceEstimateNumber ?? "View estimate")</a>
+        @if (Model.SourceEstimateId is not null)
+        {
+            <span class="text-muted">Estimate:</span>
+            <a asp-page="/Estimates/Edit" asp-route-id="@Model.SourceEstimateId">@(Model.SourceEstimateNumber ?? "View estimate")</a>
+        }
+        @if (Model.SalesRepName is not null)
+        {
+            <span class="text-muted @(Model.SourceEstimateId is not null ? "ms-3" : null)">Sales rep:</span>
+            <span>@Model.SalesRepName</span>
+        }
     </p>
 }
 @if (Model.LineJobs.Any(j => j.JobId is not null))

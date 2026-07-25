@@ -203,7 +203,8 @@
                         <button type="button" class="btn btn-outline-secondary margin-increase" aria-label="Increase margin">+</button>
                     </div>
                     <input type="hidden" name="Input.Lines[@i].MarkupPctOverride" value="" class="markup-override-input" />
-                    <span class="form-text mb-0">Type a margin (e.g. 25 or 25%) or use ± for 1% steps</span>
+                    <input type="hidden" name="Input.Lines[@i].QuantityMarkupOverridesJson" value="" class="qty-markup-json" />
+                    <span class="form-text mb-0">Sets the margin for every quantity — adjust individual rows below to override one</span>
                 </div>
                 <div class="calc-warnings alert alert-warning d-none"></div>
                 <div class="calc-errors alert alert-danger d-none"></div>

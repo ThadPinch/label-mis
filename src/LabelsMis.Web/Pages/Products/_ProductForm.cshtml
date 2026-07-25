@@ -104,6 +104,7 @@
                                 }
                                 <input type="hidden" name="@(finishingPrefix)FinishingOperations[@j].OperationId" value="@sel.OperationId" class="finishing-op-id" />
                                 <input type="hidden" name="@(finishingPrefix)FinishingOperations[@j].SortOrder" value="@j" class="finishing-sort" />
+                                <input type="hidden" name="@(finishingPrefix)FinishingOperations[@j].StockId" value="@(sel.StockId?.ToString() ?? "")" />
                             </div>
                             <div>
                                 <label class="form-label small mb-0">Setup min override</label>

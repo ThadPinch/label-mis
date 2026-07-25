@@ -79,6 +79,11 @@ public class EstimateLinePageInput
 
     public List<int?> Quantities { get; set; } = [];
 
+    /// <summary>Per-quantity markup overrides as a JSON object keyed by quantity
+    /// (e.g. {"1000":0.5}). Round-tripped through a hidden field so the form and the
+    /// calculate endpoint share one shape.</summary>
+    public string? QuantityMarkupOverridesJson { get; set; }
+
     public EstimateLineFormInput ToForm() => new(
         Id,
         SourceProductId,
@@ -101,7 +106,26 @@ public class EstimateLinePageInput
         Quantities.Where(q => q is > 0).Select(q => q!.Value).Distinct().OrderBy(q => q).ToList(),
         MarkupPctOverride,
         MaxLabelsAcrossOverride,
-        LabelOrientationOverride);
+        LabelOrientationOverride,
+        ParseQuantityMarkupOverrides(QuantityMarkupOverridesJson));
+
+    private static IReadOnlyDictionary<int, decimal>? ParseQuantityMarkupOverrides(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, decimal>>(json);
+            return parsed is { Count: > 0 } ? parsed : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
 
     public static EstimateLinePageInput FromLine(Domain.Entities.EstimateLine line)
     {
@@ -137,8 +161,17 @@ public class EstimateLinePageInput
             LabelOrientationOverride = line.LabelOrientationOverride,
             FinishingOperations = EstimateCalculationMapper
                 .DeserializeFinishingOperations(line.FinishingOperationsJson).ToList(),
-            Quantities = line.QuantityBreaks.OrderBy(q => q.Quantity).Select(q => (int?)q.Quantity).ToList()
+            Quantities = line.QuantityBreaks.OrderBy(q => q.Quantity).Select(q => (int?)q.Quantity).ToList(),
+            QuantityMarkupOverridesJson = SerializeQuantityMarkupOverrides(line)
         };
+    }
+
+    private static string? SerializeQuantityMarkupOverrides(Domain.Entities.EstimateLine line)
+    {
+        var overrides = line.QuantityBreaks
+            .Where(q => q.MarkupPctOverride.HasValue)
+            .ToDictionary(q => q.Quantity, q => q.MarkupPctOverride!.Value);
+        return overrides.Count == 0 ? null : System.Text.Json.JsonSerializer.Serialize(overrides);
     }
 }
 

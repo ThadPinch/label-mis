@@ -340,6 +340,10 @@ public class EstimateService(
         var tracked = await db.Estimates.Include(e => e.Lines).SingleAsync(e => e.Id == id, cancellationToken);
         var pdfPath = await pdfGenerator.GenerateAsync(detail, cancellationToken);
         tracked.MarkSent(pdfPath, userId, now);
+        if (!string.IsNullOrWhiteSpace(emailTo))
+        {
+            tracked.SetContactEmail(emailTo, userId, now);
+        }
         await db.SaveChangesAsync(cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(emailTo))
@@ -361,7 +365,7 @@ public class EstimateService(
         bool includePdf,
         CancellationToken cancellationToken = default)
     {
-        RequireUserId();
+        var userId = RequireUserId();
         if (string.IsNullOrWhiteSpace(emailTo))
         {
             throw new InvalidOperationException("An email address is required to resend the estimate.");
@@ -387,6 +391,9 @@ public class EstimateService(
             DefaultIfBlank(body, $"Please find attached estimate {tracked.EstimateNumber}."),
             attachments,
             cancellationToken);
+
+        tracked.SetContactEmail(emailTo, userId, DateTime.UtcNow);
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     private static string DefaultIfBlank(string? value, string fallback) =>
@@ -533,7 +540,8 @@ public class EstimateService(
                     q.UnitPrice,
                     q.TotalPrice,
                     q.CalculatedCost,
-                    q.MarginPct
+                    q.MarginPct,
+                    q.MarkupPctOverride
                 })
             })
         });
@@ -629,6 +637,10 @@ public class EstimateService(
                         b.TotalPrice,
                         b.TotalCost,
                         b.MarginPct,
+                        input.QuantityMarkupOverrides is not null
+                            && input.QuantityMarkupOverrides.TryGetValue(b.Quantity, out var markupOverride)
+                            ? markupOverride
+                            : null,
                         EstimateCalculationMapper.SerializeCostBreakdown(b.CostBreakdown),
                         userId,
                         now)).ToList();

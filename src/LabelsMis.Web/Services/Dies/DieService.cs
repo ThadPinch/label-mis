@@ -18,6 +18,7 @@ public record DieForm(
     decimal CornerRadiusIn,
     decimal GutterAcrossIn,
     decimal GutterAroundIn,
+    int LabelsAcross,
     int LabelsAround,
     decimal WebWidthIn,
     Guid? SupplierId,
@@ -55,8 +56,7 @@ public class DieService(LabelsMisDbContext db, ICurrentUserService currentUser)
         var now = DateTime.UtcNow;
         var die = Die.Create(Guid.NewGuid(), form.Description, form.CustomerId, form.DieType, form.Shape,
             form.LabelAcrossIn, form.LabelAroundIn, form.CornerRadiusIn, form.GutterAcrossIn, form.GutterAroundIn,
-            form.LabelsAround, form.WebWidthIn, form.SupplierId, form.SupplierPartNumber, form.Location, userId, now);
-        die.ValidateLabelsAcross();
+            form.LabelsAcross, form.LabelsAround, form.WebWidthIn, form.SupplierId, form.SupplierPartNumber, form.Location, userId, now);
         db.Dies.Add(die);
         await db.SaveChangesAsync(ct);
         return die;
@@ -71,8 +71,7 @@ public class DieService(LabelsMisDbContext db, ICurrentUserService currentUser)
         die.UpdateDetails(form.Description, form.CustomerId, form.DieType, form.Shape,
             form.SupplierId, form.SupplierPartNumber, form.Location, userId, now);
         die.UpdateImposition(form.LabelAcrossIn, form.LabelAroundIn, form.CornerRadiusIn,
-            form.GutterAcrossIn, form.GutterAroundIn, form.LabelsAround, form.WebWidthIn, userId, now);
-        die.ValidateLabelsAcross();
+            form.GutterAcrossIn, form.GutterAroundIn, form.LabelsAcross, form.LabelsAround, form.WebWidthIn, userId, now);
         await db.SaveChangesAsync(ct);
     }
 

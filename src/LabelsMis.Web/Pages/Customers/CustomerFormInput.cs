@@ -87,6 +87,8 @@ public class CustomerFormInput
 public class AddressFormInput
 {
     public Guid? Id { get; set; }
+
+    [Display(Name = "Type")]
     public AddressType AddressType { get; set; } = AddressType.Billing;
 
     public bool IsEmpty() =>
@@ -97,8 +99,10 @@ public class AddressFormInput
         && string.IsNullOrWhiteSpace(Zip);
 
     [Required]
+    [Display(Name = "Street")]
     public string Street1 { get; set; } = string.Empty;
 
+    [Display(Name = "Street 2")]
     public string? Street2 { get; set; }
 
     [Required]
@@ -111,6 +115,8 @@ public class AddressFormInput
     public string Zip { get; set; } = string.Empty;
 
     public string Country { get; set; } = "US";
+
+    [Display(Name = "Default")]
     public bool IsDefault { get; set; } = true;
 }
 
@@ -126,9 +132,11 @@ public class ContactFormInput
         && string.IsNullOrWhiteSpace(Role);
 
     [Required]
+    [Display(Name = "First name")]
     public string FirstName { get; set; } = string.Empty;
 
     [Required]
+    [Display(Name = "Last name")]
     public string LastName { get; set; } = string.Empty;
 
     [EmailAddress]
@@ -136,5 +144,7 @@ public class ContactFormInput
 
     public string? Phone { get; set; }
     public string? Role { get; set; }
+
+    [Display(Name = "Primary contact")]
     public bool IsPrimary { get; set; } = true;
 }

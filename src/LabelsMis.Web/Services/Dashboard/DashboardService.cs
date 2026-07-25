@@ -1,0 +1,382 @@
+using LabelsMis.Domain.Enums;
+using LabelsMis.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
+namespace LabelsMis.Web.Services.Dashboard;
+
+public record TimePoint(string Label, decimal Value);
+
+public record CategoryValue(string Label, decimal Value, int Count);
+
+public record RecentOrderItem(
+    Guid Id,
+    string OrderNumber,
+    string CustomerName,
+    SalesOrderStatus Status,
+    DateTime OrderedAt,
+    decimal Value);
+
+public record JobDueItem(
+    Guid Id,
+    string JobNumber,
+    string ProductDescription,
+    string CustomerName,
+    JobStatus Status,
+    DateOnly DueDate,
+    bool Overdue);
+
+public record StockLevelRow(
+    string Code,
+    string Description,
+    int RollCount,
+    decimal RemainingLf,
+    decimal MinOrderQtyLf,
+    bool Low);
+
+public record SalesSection(
+    int OpenOrderCount,
+    decimal OpenOrderValue,
+    int InProductionCount,
+    IReadOnlyList<TimePoint> OrderIntake,
+    IReadOnlyList<RecentOrderItem> RecentOrders);
+
+public record JobsSection(
+    int WipCount,
+    int OverdueCount,
+    IReadOnlyList<CategoryValue> Pipeline,
+    IReadOnlyList<JobDueItem> DueSoon);
+
+public record EstimatesSection(
+    int OpenCount,
+    int WonCount,
+    int LostCount,
+    decimal? WinRatePct,
+    IReadOnlyList<CategoryValue> Funnel);
+
+public record FinanceSection(
+    decimal RevenueMtd,
+    decimal RevenueLastMonth,
+    decimal ArOutstanding,
+    int ArOpenInvoiceCount,
+    IReadOnlyList<TimePoint> RevenueTrend,
+    IReadOnlyList<CategoryValue> ArAging,
+    IReadOnlyList<CategoryValue> TopCustomers);
+
+public record InventorySection(
+    int AvailableRollCount,
+    decimal TotalRemainingLf,
+    int LowStockCount,
+    int OpenPoCount,
+    decimal OpenPoValue,
+    IReadOnlyList<StockLevelRow> StockLevels);
+
+public record ShippingSection(
+    int PendingCount,
+    int InTransitCount,
+    int ShippedLast7Days);
+
+public record DashboardData(
+    DateOnly Today,
+    int RangeDays,
+    SalesSection? Sales,
+    JobsSection? Jobs,
+    EstimatesSection? Estimates,
+    FinanceSection? Finance,
+    InventorySection? Inventory,
+    ShippingSection? Shipping);
+
+public class DashboardService(LabelsMisDbContext db)
+{
+    private static readonly JobStatus[] WipStatuses =
+        [JobStatus.PrePress, JobStatus.Queued, JobStatus.Printed, JobStatus.Finished, JobStatus.Rewound];
+
+    public async Task<DashboardData> GetAsync(
+        int rangeDays,
+        bool includeSales,
+        bool includeJobs,
+        bool includeEstimates,
+        bool includeFinance,
+        bool includeInventory,
+        bool includeShipping,
+        CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var fromDate = today.AddDays(-rangeDays);
+        var fromDateTime = DateTime.UtcNow.AddDays(-rangeDays);
+
+        var sales = includeSales ? await LoadSalesAsync(fromDateTime, rangeDays, today, cancellationToken) : null;
+        var jobs = includeJobs ? await LoadJobsAsync(today, cancellationToken) : null;
+        var estimates = includeEstimates ? await LoadEstimatesAsync(fromDateTime, cancellationToken) : null;
+        var finance = includeFinance ? await LoadFinanceAsync(fromDate, rangeDays, today, cancellationToken) : null;
+        var inventory = includeInventory ? await LoadInventoryAsync(cancellationToken) : null;
+        var shipping = includeShipping ? await LoadShippingAsync(today, cancellationToken) : null;
+
+        return new DashboardData(today, rangeDays, sales, jobs, estimates, finance, inventory, shipping);
+    }
+
+    private async Task<SalesSection> LoadSalesAsync(
+        DateTime fromDateTime, int rangeDays, DateOnly today, CancellationToken ct)
+    {
+        var openStatuses = new[] { SalesOrderStatus.Open, SalesOrderStatus.InProduction };
+        var openOrders = await db.SalesOrders
+            .Where(o => openStatuses.Contains(o.Status))
+            .Select(o => new { o.Status, Value = o.Lines.Sum(l => (decimal?)l.LineTotal) ?? 0 })
+            .ToListAsync(ct);
+
+        var intakeRaw = await db.SalesOrders
+            .Where(o => o.Status != SalesOrderStatus.Cancelled && o.OrderedAt >= fromDateTime)
+            .Select(o => new { o.OrderedAt, Value = o.Lines.Sum(l => (decimal?)l.LineTotal) ?? 0 })
+            .ToListAsync(ct);
+
+        var recent = await db.SalesOrders
+            .OrderByDescending(o => o.OrderedAt)
+            .Take(8)
+            .Select(o => new RecentOrderItem(
+                o.Id,
+                o.OrderNumber,
+                o.Customer.Name,
+                o.Status,
+                o.OrderedAt,
+                o.Lines.Sum(l => (decimal?)l.LineTotal) ?? 0))
+            .ToListAsync(ct);
+
+        return new SalesSection(
+            openOrders.Count(o => o.Status == SalesOrderStatus.Open),
+            openOrders.Sum(o => o.Value),
+            openOrders.Count(o => o.Status == SalesOrderStatus.InProduction),
+            BucketByTime(intakeRaw.Select(x => (DateOnly.FromDateTime(x.OrderedAt), x.Value)), rangeDays, today),
+            recent);
+    }
+
+    private async Task<JobsSection> LoadJobsAsync(DateOnly today, CancellationToken ct)
+    {
+        var pipelineRaw = await db.Jobs
+            .Where(j => WipStatuses.Contains(j.Status))
+            .GroupBy(j => j.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+
+        var pipeline = WipStatuses
+            .Select(s => new CategoryValue(
+                JobStatusLabel(s),
+                pipelineRaw.FirstOrDefault(p => p.Status == s)?.Count ?? 0,
+                pipelineRaw.FirstOrDefault(p => p.Status == s)?.Count ?? 0))
+            .ToList();
+
+        var overdueCount = await db.Jobs
+            .CountAsync(j => WipStatuses.Contains(j.Status) && j.DueDate != null && j.DueDate < today, ct);
+
+        var dueSoon = await db.Jobs
+            .Where(j => WipStatuses.Contains(j.Status) && j.DueDate != null)
+            .OrderBy(j => j.DueDate)
+            .ThenBy(j => j.Priority)
+            .Take(8)
+            .Select(j => new JobDueItem(
+                j.Id,
+                j.JobNumber,
+                j.Product.Description,
+                j.SalesOrderLine.SalesOrder.Customer.Name,
+                j.Status,
+                j.DueDate!.Value,
+                j.DueDate < today))
+            .ToListAsync(ct);
+
+        return new JobsSection(pipeline.Sum(p => p.Count), overdueCount, pipeline, dueSoon);
+    }
+
+    private async Task<EstimatesSection> LoadEstimatesAsync(DateTime fromDateTime, CancellationToken ct)
+    {
+        var funnelRaw = await db.Estimates
+            .Where(e => e.CreatedAt >= fromDateTime)
+            .GroupBy(e => e.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+
+        var openCount = await db.Estimates
+            .CountAsync(e => e.Status == EstimateStatus.Draft || e.Status == EstimateStatus.Sent, ct);
+
+        EstimateStatus[] order =
+            [EstimateStatus.Draft, EstimateStatus.Sent, EstimateStatus.Won, EstimateStatus.Lost, EstimateStatus.Expired];
+        var funnel = order
+            .Select(s =>
+            {
+                var count = funnelRaw.FirstOrDefault(f => f.Status == s)?.Count ?? 0;
+                return new CategoryValue(s.ToString(), count, count);
+            })
+            .ToList();
+
+        var won = funnelRaw.FirstOrDefault(f => f.Status == EstimateStatus.Won)?.Count ?? 0;
+        var lost = funnelRaw.FirstOrDefault(f => f.Status == EstimateStatus.Lost)?.Count ?? 0;
+        decimal? winRate = won + lost > 0 ? Math.Round(100m * won / (won + lost), 1) : null;
+
+        return new EstimatesSection(openCount, won, lost, winRate, funnel);
+    }
+
+    private async Task<FinanceSection> LoadFinanceAsync(
+        DateOnly fromDate, int rangeDays, DateOnly today, CancellationToken ct)
+    {
+        var monthStart = new DateOnly(today.Year, today.Month, 1);
+        var lastMonthStart = monthStart.AddMonths(-1);
+
+        var revenueMtd = await db.Invoices
+            .Where(i => i.Status != InvoiceStatus.Void && i.InvoiceDate >= monthStart)
+            .SumAsync(i => (decimal?)i.Total, ct) ?? 0;
+
+        var revenueLastMonth = await db.Invoices
+            .Where(i => i.Status != InvoiceStatus.Void && i.InvoiceDate >= lastMonthStart && i.InvoiceDate < monthStart)
+            .SumAsync(i => (decimal?)i.Total, ct) ?? 0;
+
+        var openArStatuses = new[] { InvoiceStatus.Sent, InvoiceStatus.PartiallyPaid };
+        var openInvoices = await db.Invoices
+            .Where(i => openArStatuses.Contains(i.Status) && i.BalanceDue > 0)
+            .Select(i => new { i.DueDate, i.BalanceDue })
+            .ToListAsync(ct);
+
+        var aging = new[]
+        {
+            new CategoryValue("Current", openInvoices.Where(i => i.DueDate >= today).Sum(i => i.BalanceDue),
+                openInvoices.Count(i => i.DueDate >= today)),
+            AgingBucket(openInvoices.Select(i => (i.DueDate, i.BalanceDue)), today, 1, 30, "1–30 days"),
+            AgingBucket(openInvoices.Select(i => (i.DueDate, i.BalanceDue)), today, 31, 60, "31–60 days"),
+            AgingBucket(openInvoices.Select(i => (i.DueDate, i.BalanceDue)), today, 61, 90, "61–90 days"),
+            AgingBucket(openInvoices.Select(i => (i.DueDate, i.BalanceDue)), today, 91, int.MaxValue, "90+ days"),
+        };
+
+        var trendRaw = await db.Invoices
+            .Where(i => i.Status != InvoiceStatus.Void && i.InvoiceDate >= fromDate)
+            .Select(i => new { i.InvoiceDate, i.Total })
+            .ToListAsync(ct);
+
+        var topCustomers = (await db.Invoices
+                .Where(i => i.Status != InvoiceStatus.Void && i.InvoiceDate >= fromDate)
+                .GroupBy(i => i.Customer.Name)
+                .Select(g => new { Name = g.Key, Value = g.Sum(i => i.Total), Count = g.Count() })
+                .OrderByDescending(g => g.Value)
+                .Take(8)
+                .ToListAsync(ct))
+            .Select(g => new CategoryValue(g.Name, g.Value, g.Count))
+            .ToList();
+
+        return new FinanceSection(
+            revenueMtd,
+            revenueLastMonth,
+            openInvoices.Sum(i => i.BalanceDue),
+            openInvoices.Count,
+            BucketByTime(trendRaw.Select(x => (x.InvoiceDate, x.Total)), rangeDays, today),
+            aging,
+            topCustomers);
+    }
+
+    private async Task<InventorySection> LoadInventoryAsync(CancellationToken ct)
+    {
+        var rollStatuses = new[] { RollStatus.Available, RollStatus.Staged };
+        var stockLevelsRaw = await db.Rolls
+            .Where(r => rollStatuses.Contains(r.Status) && r.RemainingLengthLf > 0)
+            .GroupBy(r => new { r.Stock.Code, r.Stock.Description, r.Stock.MinOrderQtyLf })
+            .Select(g => new
+            {
+                g.Key.Code,
+                g.Key.Description,
+                g.Key.MinOrderQtyLf,
+                RollCount = g.Count(),
+                RemainingLf = g.Sum(r => r.RemainingLengthLf)
+            })
+            .ToListAsync(ct);
+
+        var stockLevels = stockLevelsRaw
+            .Select(s => new StockLevelRow(
+                s.Code,
+                s.Description,
+                s.RollCount,
+                Math.Round(s.RemainingLf, 0),
+                s.MinOrderQtyLf,
+                s.MinOrderQtyLf > 0 && s.RemainingLf < s.MinOrderQtyLf))
+            .OrderByDescending(s => s.RemainingLf)
+            .ToList();
+
+        var openPoStatuses = new[] { PurchaseOrderStatus.Sent, PurchaseOrderStatus.PartiallyReceived };
+        var openPos = await db.PurchaseOrders
+            .Where(p => openPoStatuses.Contains(p.Status))
+            .Select(p => new { Value = p.Lines.Sum(l => (decimal?)l.LineTotal) ?? 0 })
+            .ToListAsync(ct);
+
+        return new InventorySection(
+            stockLevelsRaw.Sum(s => s.RollCount),
+            Math.Round(stockLevelsRaw.Sum(s => s.RemainingLf), 0),
+            stockLevels.Count(s => s.Low),
+            openPos.Count,
+            openPos.Sum(p => p.Value),
+            stockLevels.Take(12).ToList());
+    }
+
+    private async Task<ShippingSection> LoadShippingAsync(DateOnly today, CancellationToken ct)
+    {
+        var weekAgo = today.AddDays(-7);
+        var pending = await db.Shipments.CountAsync(s => s.Status == ShipmentStatus.Pending, ct);
+        var inTransit = await db.Shipments.CountAsync(s => s.Status == ShipmentStatus.InTransit, ct);
+        var shippedLast7 = await db.Shipments
+            .CountAsync(s => s.Status != ShipmentStatus.Pending && s.ShipDate >= weekAgo, ct);
+        return new ShippingSection(pending, inTransit, shippedLast7);
+    }
+
+    private static CategoryValue AgingBucket(
+        IEnumerable<(DateOnly DueDate, decimal BalanceDue)> invoices,
+        DateOnly today, int fromDays, int toDays, string label)
+    {
+        var inBucket = invoices
+            .Where(i =>
+            {
+                var overdue = today.DayNumber - i.DueDate.DayNumber;
+                return overdue >= fromDays && overdue <= toDays;
+            })
+            .ToList();
+        return new CategoryValue(label, inBucket.Sum(i => i.BalanceDue), inBucket.Count);
+    }
+
+    /// <summary>Buckets values weekly for ranges up to ~3 months, monthly beyond, padding empty buckets.</summary>
+    private static List<TimePoint> BucketByTime(
+        IEnumerable<(DateOnly Date, decimal Value)> values, int rangeDays, DateOnly today)
+    {
+        var items = values.ToList();
+        var result = new List<TimePoint>();
+
+        if (rangeDays <= 95)
+        {
+            var weekCount = (int)Math.Ceiling(rangeDays / 7.0);
+            var start = today.AddDays(-7 * (weekCount - 1));
+            // Align to the Monday of the starting week.
+            start = start.AddDays(-(((int)start.DayOfWeek + 6) % 7));
+            for (var ws = start; ws <= today; ws = ws.AddDays(7))
+            {
+                var we = ws.AddDays(7);
+                result.Add(new TimePoint(
+                    ws.ToString("MMM d"),
+                    items.Where(i => i.Date >= ws && i.Date < we).Sum(i => i.Value)));
+            }
+        }
+        else
+        {
+            var monthCount = (int)Math.Round(rangeDays / 30.4);
+            var start = new DateOnly(today.Year, today.Month, 1).AddMonths(-(monthCount - 1));
+            for (var ms = start; ms <= today; ms = ms.AddMonths(1))
+            {
+                var me = ms.AddMonths(1);
+                result.Add(new TimePoint(
+                    ms.ToString("MMM yy"),
+                    items.Where(i => i.Date >= ms && i.Date < me).Sum(i => i.Value)));
+            }
+        }
+
+        return result;
+    }
+
+    private static string JobStatusLabel(JobStatus status) => status switch
+    {
+        JobStatus.PrePress => "Pre-press",
+        JobStatus.Queued => "Queued",
+        JobStatus.Printed => "Printed",
+        JobStatus.Finished => "Finished",
+        JobStatus.Rewound => "Rewound",
+        _ => status.ToString()
+    };
+}

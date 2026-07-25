@@ -10,35 +10,43 @@
         <input asp-for="Name" class="form-control" />
         <span asp-validation-for="Name" class="text-danger"></span>
     </div>
-    <div class="col-md-3">
+    <div class="col-6 col-md-3">
         <label asp-for="Code" class="form-label"></label>
         <input asp-for="Code" class="form-control" />
         <span asp-validation-for="Code" class="text-danger"></span>
     </div>
-    <div class="col-md-3">
+    <div class="col-6 col-md-3">
         <label asp-for="Status" class="form-label"></label>
         <select asp-for="Status" asp-items="Html.GetEnumSelectList<CustomerStatus>()" class="form-select"></select>
     </div>
-    <div class="col-md-4">
-        <label asp-for="Terms" class="form-label"></label>
-        <select asp-for="Terms" asp-items="Html.GetEnumSelectList<PaymentTerms>()" class="form-select"></select>
-    </div>
-    <div class="col-md-4">
-        <label asp-for="DefaultMarkupPct" class="form-label"></label>
-        <input asp-for="DefaultMarkupPct" class="form-control" />
-        <span asp-validation-for="DefaultMarkupPct" class="text-danger"></span>
-    </div>
-    <div class="col-md-4 form-check align-self-end">
-        <input asp-for="TaxExempt" class="form-check-input" />
-        <label asp-for="TaxExempt" class="form-check-label"></label>
-    </div>
-    <div class="col-md-6">
-        <label asp-for="SalesRepId" class="form-label">Sales rep</label>
-        <select asp-for="SalesRepId" asp-items="@(ViewData["SalesRepOptions"] as IEnumerable<SelectListItem>)" class="form-select">
-            <option value="">(None)</option>
-        </select>
-    </div>
 </div>
+
+<fieldset class="border rounded p-3 mt-4">
+    <legend class="float-none w-auto px-2 h6 mb-0">Billing &amp; pricing</legend>
+    <div class="row g-3">
+        <div class="col-6 col-md-3">
+            <label asp-for="Terms" class="form-label"></label>
+            <select asp-for="Terms" asp-items="Html.GetEnumSelectList<PaymentTerms>()" class="form-select"></select>
+        </div>
+        <div class="col-6 col-md-3">
+            <label asp-for="DefaultMarkupPct" class="form-label"></label>
+            <input asp-for="DefaultMarkupPct" class="form-control" />
+            <span asp-validation-for="DefaultMarkupPct" class="text-danger"></span>
+        </div>
+        <div class="col-6 col-md-4">
+            <label asp-for="SalesRepId" class="form-label">Sales rep</label>
+            <select asp-for="SalesRepId" asp-items="@(ViewData["SalesRepOptions"] as IEnumerable<SelectListItem>)" class="form-select">
+                <option value="">(None)</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2 align-self-end">
+            <div class="form-check mb-2">
+                <input asp-for="TaxExempt" class="form-check-input" />
+                <label asp-for="TaxExempt" class="form-check-label"></label>
+            </div>
+        </div>
+    </div>
+</fieldset>
 
 <div class="d-flex align-items-center justify-content-between mt-4 mb-2">
     <h2 class="h5 mb-0">Addresses</h2>
@@ -50,47 +58,47 @@
 <div id="address-list" data-collection="Addresses">
     @for (var i = 0; i < Model.Addresses.Count; i++)
     {
-        <div class="border rounded p-3 mb-3 collection-item" data-collection-item>
+        <div class="border rounded p-2 pe-5 mb-2 collection-item position-relative" data-collection-item>
             @if (canEdit)
             {
-                <div class="d-flex justify-content-end mb-2">
-                    <button type="button" class="btn btn-sm btn-outline-danger remove-item">Remove</button>
-                </div>
+                <button type="button" class="btn-close remove-item position-absolute top-0 end-0 m-2" aria-label="Remove address"></button>
             }
             <input type="hidden" asp-for="Addresses[i].Id" />
             <div class="row g-2">
-                <div class="col-md-3">
-                    <label asp-for="Addresses[i].AddressType" class="form-label"></label>
-                    <select asp-for="Addresses[i].AddressType" asp-items="Html.GetEnumSelectList<AddressType>()" class="form-select"></select>
+                <div class="col-6 col-md-2">
+                    <label asp-for="Addresses[i].AddressType" class="form-label small mb-1"></label>
+                    <select asp-for="Addresses[i].AddressType" asp-items="Html.GetEnumSelectList<AddressType>()" class="form-select form-select-sm"></select>
                 </div>
-                <div class="col-md-9">
-                    <label asp-for="Addresses[i].Street1" class="form-label"></label>
-                    <input asp-for="Addresses[i].Street1" class="form-control" />
+                <div class="col-md-6">
+                    <label asp-for="Addresses[i].Street1" class="form-label small mb-1"></label>
+                    <input asp-for="Addresses[i].Street1" class="form-control form-control-sm" />
                     <span asp-validation-for="Addresses[i].Street1" class="text-danger"></span>
                 </div>
-                <div class="col-md-12">
-                    <label asp-for="Addresses[i].Street2" class="form-label"></label>
-                    <input asp-for="Addresses[i].Street2" class="form-control" />
-                </div>
                 <div class="col-md-4">
-                    <label asp-for="Addresses[i].City" class="form-label"></label>
-                    <input asp-for="Addresses[i].City" class="form-control" />
+                    <label asp-for="Addresses[i].Street2" class="form-label small mb-1"></label>
+                    <input asp-for="Addresses[i].Street2" class="form-control form-control-sm" />
                 </div>
-                <div class="col-md-2">
-                    <label asp-for="Addresses[i].State" class="form-label"></label>
-                    <input asp-for="Addresses[i].State" class="form-control" />
+                <div class="col-6 col-md-4">
+                    <label asp-for="Addresses[i].City" class="form-label small mb-1"></label>
+                    <input asp-for="Addresses[i].City" class="form-control form-control-sm" />
                 </div>
-                <div class="col-md-2">
-                    <label asp-for="Addresses[i].Zip" class="form-label"></label>
-                    <input asp-for="Addresses[i].Zip" class="form-control" />
+                <div class="col-4 col-md-2">
+                    <label asp-for="Addresses[i].State" class="form-label small mb-1"></label>
+                    <input asp-for="Addresses[i].State" class="form-control form-control-sm" />
                 </div>
-                <div class="col-md-2">
-                    <label asp-for="Addresses[i].Country" class="form-label"></label>
-                    <input asp-for="Addresses[i].Country" class="form-control" />
+                <div class="col-4 col-md-2">
+                    <label asp-for="Addresses[i].Zip" class="form-label small mb-1"></label>
+                    <input asp-for="Addresses[i].Zip" class="form-control form-control-sm" />
                 </div>
-                <div class="col-md-2 form-check align-self-end">
-                    <input asp-for="Addresses[i].IsDefault" class="form-check-input" />
-                    <label asp-for="Addresses[i].IsDefault" class="form-check-label"></label>
+                <div class="col-4 col-md-2">
+                    <label asp-for="Addresses[i].Country" class="form-label small mb-1"></label>
+                    <input asp-for="Addresses[i].Country" class="form-control form-control-sm" />
+                </div>
+                <div class="col-6 col-md-2 align-self-end">
+                    <div class="form-check mb-1">
+                        <input asp-for="Addresses[i].IsDefault" class="form-check-input" />
+                        <label asp-for="Addresses[i].IsDefault" class="form-check-label small"></label>
+                    </div>
                 </div>
             </div>
         </div>
@@ -111,38 +119,38 @@
 <div id="contact-list" data-collection="Contacts">
     @for (var i = 0; i < Model.Contacts.Count; i++)
     {
-        <div class="border rounded p-3 mb-3 collection-item" data-collection-item>
+        <div class="border rounded p-2 pe-5 mb-2 collection-item position-relative" data-collection-item>
             @if (canEdit)
             {
-                <div class="d-flex justify-content-end mb-2">
-                    <button type="button" class="btn btn-sm btn-outline-danger remove-item">Remove</button>
-                </div>
+                <button type="button" class="btn-close remove-item position-absolute top-0 end-0 m-2" aria-label="Remove contact"></button>
             }
             <input type="hidden" asp-for="Contacts[i].Id" />
             <div class="row g-2">
-                <div class="col-md-3">
-                    <label asp-for="Contacts[i].FirstName" class="form-label"></label>
-                    <input asp-for="Contacts[i].FirstName" class="form-control" />
+                <div class="col-6 col-md-2">
+                    <label asp-for="Contacts[i].FirstName" class="form-label small mb-1"></label>
+                    <input asp-for="Contacts[i].FirstName" class="form-control form-control-sm" />
+                </div>
+                <div class="col-6 col-md-2">
+                    <label asp-for="Contacts[i].LastName" class="form-label small mb-1"></label>
+                    <input asp-for="Contacts[i].LastName" class="form-control form-control-sm" />
                 </div>
                 <div class="col-md-3">
-                    <label asp-for="Contacts[i].LastName" class="form-label"></label>
-                    <input asp-for="Contacts[i].LastName" class="form-control" />
+                    <label asp-for="Contacts[i].Email" class="form-label small mb-1"></label>
+                    <input asp-for="Contacts[i].Email" class="form-control form-control-sm" />
                 </div>
-                <div class="col-md-3">
-                    <label asp-for="Contacts[i].Email" class="form-label"></label>
-                    <input asp-for="Contacts[i].Email" class="form-control" />
+                <div class="col-6 col-md-2">
+                    <label asp-for="Contacts[i].Phone" class="form-label small mb-1"></label>
+                    <input asp-for="Contacts[i].Phone" class="form-control form-control-sm" />
                 </div>
-                <div class="col-md-3">
-                    <label asp-for="Contacts[i].Phone" class="form-label"></label>
-                    <input asp-for="Contacts[i].Phone" class="form-control" />
+                <div class="col-6 col-md-2">
+                    <label asp-for="Contacts[i].Role" class="form-label small mb-1"></label>
+                    <input asp-for="Contacts[i].Role" class="form-control form-control-sm" />
                 </div>
-                <div class="col-md-6">
-                    <label asp-for="Contacts[i].Role" class="form-label"></label>
-                    <input asp-for="Contacts[i].Role" class="form-control" />
-                </div>
-                <div class="col-md-3 form-check align-self-end">
-                    <input asp-for="Contacts[i].IsPrimary" class="form-check-input" />
-                    <label asp-for="Contacts[i].IsPrimary" class="form-check-label"></label>
+                <div class="col-12 col-md-1 align-self-end">
+                    <div class="form-check mb-1">
+                        <input asp-for="Contacts[i].IsPrimary" class="form-check-input" />
+                        <label asp-for="Contacts[i].IsPrimary" class="form-check-label small"></label>
+                    </div>
                 </div>
             </div>
         </div>
@@ -154,83 +162,83 @@
 }
 
 <template id="address-row-template">
-    <div class="border rounded p-3 mb-3 collection-item" data-collection-item>
-        <div class="d-flex justify-content-end mb-2">
-            <button type="button" class="btn btn-sm btn-outline-danger remove-item">Remove</button>
-        </div>
+    <div class="border rounded p-2 pe-5 mb-2 collection-item position-relative" data-collection-item>
+        <button type="button" class="btn-close remove-item position-absolute top-0 end-0 m-2" aria-label="Remove address"></button>
         <input type="hidden" name="Input.Addresses[__INDEX__].Id" value="" />
         <div class="row g-2">
-            <div class="col-md-3">
-                <label class="form-label" for="Input_Addresses___INDEX___AddressType">Address type</label>
-                <select name="Input.Addresses[__INDEX__].AddressType" id="Input_Addresses___INDEX___AddressType" class="form-select">
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="Input_Addresses___INDEX___AddressType">Type</label>
+                <select name="Input.Addresses[__INDEX__].AddressType" id="Input_Addresses___INDEX___AddressType" class="form-select form-select-sm">
                     <option value="0">Billing</option>
                     <option value="1">Shipping</option>
                 </select>
             </div>
-            <div class="col-md-9">
-                <label class="form-label" for="Input_Addresses___INDEX___Street1">Street1</label>
-                <input name="Input.Addresses[__INDEX__].Street1" id="Input_Addresses___INDEX___Street1" class="form-control" />
-            </div>
-            <div class="col-md-12">
-                <label class="form-label" for="Input_Addresses___INDEX___Street2">Street2</label>
-                <input name="Input.Addresses[__INDEX__].Street2" id="Input_Addresses___INDEX___Street2" class="form-control" />
+            <div class="col-md-6">
+                <label class="form-label small mb-1" for="Input_Addresses___INDEX___Street1">Street</label>
+                <input name="Input.Addresses[__INDEX__].Street1" id="Input_Addresses___INDEX___Street1" class="form-control form-control-sm" />
             </div>
             <div class="col-md-4">
-                <label class="form-label" for="Input_Addresses___INDEX___City">City</label>
-                <input name="Input.Addresses[__INDEX__].City" id="Input_Addresses___INDEX___City" class="form-control" />
+                <label class="form-label small mb-1" for="Input_Addresses___INDEX___Street2">Street 2</label>
+                <input name="Input.Addresses[__INDEX__].Street2" id="Input_Addresses___INDEX___Street2" class="form-control form-control-sm" />
             </div>
-            <div class="col-md-2">
-                <label class="form-label" for="Input_Addresses___INDEX___State">State</label>
-                <input name="Input.Addresses[__INDEX__].State" id="Input_Addresses___INDEX___State" class="form-control" />
+            <div class="col-6 col-md-4">
+                <label class="form-label small mb-1" for="Input_Addresses___INDEX___City">City</label>
+                <input name="Input.Addresses[__INDEX__].City" id="Input_Addresses___INDEX___City" class="form-control form-control-sm" />
             </div>
-            <div class="col-md-2">
-                <label class="form-label" for="Input_Addresses___INDEX___Zip">Zip</label>
-                <input name="Input.Addresses[__INDEX__].Zip" id="Input_Addresses___INDEX___Zip" class="form-control" />
+            <div class="col-4 col-md-2">
+                <label class="form-label small mb-1" for="Input_Addresses___INDEX___State">State</label>
+                <input name="Input.Addresses[__INDEX__].State" id="Input_Addresses___INDEX___State" class="form-control form-control-sm" />
             </div>
-            <div class="col-md-2">
-                <label class="form-label" for="Input_Addresses___INDEX___Country">Country</label>
-                <input name="Input.Addresses[__INDEX__].Country" id="Input_Addresses___INDEX___Country" class="form-control" value="US" />
+            <div class="col-4 col-md-2">
+                <label class="form-label small mb-1" for="Input_Addresses___INDEX___Zip">Zip</label>
+                <input name="Input.Addresses[__INDEX__].Zip" id="Input_Addresses___INDEX___Zip" class="form-control form-control-sm" />
             </div>
-            <div class="col-md-2 form-check align-self-end">
-                <input type="hidden" name="Input.Addresses[__INDEX__].IsDefault" value="false" />
-                <input name="Input.Addresses[__INDEX__].IsDefault" id="Input_Addresses___INDEX___IsDefault" class="form-check-input" type="checkbox" value="true" />
-                <label class="form-check-label" for="Input_Addresses___INDEX___IsDefault">Is default</label>
+            <div class="col-4 col-md-2">
+                <label class="form-label small mb-1" for="Input_Addresses___INDEX___Country">Country</label>
+                <input name="Input.Addresses[__INDEX__].Country" id="Input_Addresses___INDEX___Country" class="form-control form-control-sm" value="US" />
+            </div>
+            <div class="col-6 col-md-2 align-self-end">
+                <div class="form-check mb-1">
+                    <input type="hidden" name="Input.Addresses[__INDEX__].IsDefault" value="false" />
+                    <input name="Input.Addresses[__INDEX__].IsDefault" id="Input_Addresses___INDEX___IsDefault" class="form-check-input" type="checkbox" value="true" />
+                    <label class="form-check-label small" for="Input_Addresses___INDEX___IsDefault">Default</label>
+                </div>
             </div>
         </div>
     </div>
 </template>
 
 <template id="contact-row-template">
-    <div class="border rounded p-3 mb-3 collection-item" data-collection-item>
-        <div class="d-flex justify-content-end mb-2">
-            <button type="button" class="btn btn-sm btn-outline-danger remove-item">Remove</button>
-        </div>
+    <div class="border rounded p-2 pe-5 mb-2 collection-item position-relative" data-collection-item>
+        <button type="button" class="btn-close remove-item position-absolute top-0 end-0 m-2" aria-label="Remove contact"></button>
         <input type="hidden" name="Input.Contacts[__INDEX__].Id" value="" />
         <div class="row g-2">
-            <div class="col-md-3">
-                <label class="form-label" for="Input_Contacts___INDEX___FirstName">First name</label>
-                <input name="Input.Contacts[__INDEX__].FirstName" id="Input_Contacts___INDEX___FirstName" class="form-control" />
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="Input_Contacts___INDEX___FirstName">First name</label>
+                <input name="Input.Contacts[__INDEX__].FirstName" id="Input_Contacts___INDEX___FirstName" class="form-control form-control-sm" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="Input_Contacts___INDEX___LastName">Last name</label>
+                <input name="Input.Contacts[__INDEX__].LastName" id="Input_Contacts___INDEX___LastName" class="form-control form-control-sm" />
             </div>
             <div class="col-md-3">
-                <label class="form-label" for="Input_Contacts___INDEX___LastName">Last name</label>
-                <input name="Input.Contacts[__INDEX__].LastName" id="Input_Contacts___INDEX___LastName" class="form-control" />
+                <label class="form-label small mb-1" for="Input_Contacts___INDEX___Email">Email</label>
+                <input name="Input.Contacts[__INDEX__].Email" id="Input_Contacts___INDEX___Email" class="form-control form-control-sm" />
             </div>
-            <div class="col-md-3">
-                <label class="form-label" for="Input_Contacts___INDEX___Email">Email</label>
-                <input name="Input.Contacts[__INDEX__].Email" id="Input_Contacts___INDEX___Email" class="form-control" />
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="Input_Contacts___INDEX___Phone">Phone</label>
+                <input name="Input.Contacts[__INDEX__].Phone" id="Input_Contacts___INDEX___Phone" class="form-control form-control-sm" />
             </div>
-            <div class="col-md-3">
-                <label class="form-label" for="Input_Contacts___INDEX___Phone">Phone</label>
-                <input name="Input.Contacts[__INDEX__].Phone" id="Input_Contacts___INDEX___Phone" class="form-control" />
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="Input_Contacts___INDEX___Role">Role</label>
+                <input name="Input.Contacts[__INDEX__].Role" id="Input_Contacts___INDEX___Role" class="form-control form-control-sm" />
             </div>
-            <div class="col-md-6">
-                <label class="form-label" for="Input_Contacts___INDEX___Role">Role</label>
-                <input name="Input.Contacts[__INDEX__].Role" id="Input_Contacts___INDEX___Role" class="form-control" />
-            </div>
-            <div class="col-md-3 form-check align-self-end">
-                <input type="hidden" name="Input.Contacts[__INDEX__].IsPrimary" value="false" />
-                <input name="Input.Contacts[__INDEX__].IsPrimary" id="Input_Contacts___INDEX___IsPrimary" class="form-check-input" type="checkbox" value="true" />
-                <label class="form-check-label" for="Input_Contacts___INDEX___IsPrimary">Is primary</label>
+            <div class="col-12 col-md-1 align-self-end">
+                <div class="form-check mb-1">
+                    <input type="hidden" name="Input.Contacts[__INDEX__].IsPrimary" value="false" />
+                    <input name="Input.Contacts[__INDEX__].IsPrimary" id="Input_Contacts___INDEX___IsPrimary" class="form-check-input" type="checkbox" value="true" />
+                    <label class="form-check-label small" for="Input_Contacts___INDEX___IsPrimary">Primary</label>
+                </div>
             </div>
         </div>
     </div>

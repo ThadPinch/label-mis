@@ -17,6 +17,7 @@ public class EstimateConfiguration : IEntityTypeConfiguration<Estimate>
         builder.Property(e => e.Notes).HasMaxLength(4000);
         builder.Property(e => e.LostReason).HasMaxLength(500);
         builder.Property(e => e.PdfFilePath).HasMaxLength(500);
+        builder.Property(e => e.ContactEmail).HasMaxLength(256);
 
         builder.Property(e => e.ShippingCost).HasMoneyPrecision();
         builder.Property(e => e.ShipToName).HasMaxLength(200);

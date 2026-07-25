@@ -118,6 +118,11 @@ public class CreateModel(
             .OrderBy(o => o.Code)
             .ToListAsync(cancellationToken);
 
+        ViewData["FinishingStocks"] = await db.Stocks.AsNoTracking()
+            .Where(s => s.IsActive && s.StockType == StockType.Laminate)
+            .OrderBy(s => s.Code)
+            .ToListAsync(cancellationToken);
+
         ViewData["SpotInks"] = await db.Inks.AsNoTracking()
             .Where(i => i.IsActive && i.IsSpot && i.SpotColor != SpotColor.White)
             .OrderBy(i => i.Code)

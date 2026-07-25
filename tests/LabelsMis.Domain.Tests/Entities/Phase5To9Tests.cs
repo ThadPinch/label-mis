@@ -121,6 +121,40 @@ public class InvoiceTests
     }
 
     [Fact]
+    public void MarkExported_RecordsTimestampAndUser_AndUnmarkClearsBoth()
+    {
+        var invoice = Invoice.CreateDraft(
+            Guid.NewGuid(), "INV-2026-00003", Guid.NewGuid(), Guid.NewGuid(), null,
+            DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now.AddDays(30)),
+            100m, 0m, 0m, null, UserId, Now);
+
+        invoice.MarkExported(Now, UserId, Now);
+
+        invoice.QbExportedAt.Should().Be(Now);
+        invoice.QbExportedById.Should().Be(UserId);
+
+        invoice.UnmarkExported(UserId, Now);
+
+        invoice.QbExportedAt.Should().BeNull();
+        invoice.QbExportedById.Should().BeNull();
+    }
+
+    [Fact]
+    public void MarkExported_WhenVoid_Throws()
+    {
+        var invoice = Invoice.CreateDraft(
+            Guid.NewGuid(), "INV-2026-00004", Guid.NewGuid(), Guid.NewGuid(), null,
+            DateOnly.FromDateTime(Now), DateOnly.FromDateTime(Now.AddDays(30)),
+            100m, 0m, 0m, null, UserId, Now);
+        invoice.Void("duplicate", UserId, Now);
+
+        var act = () => invoice.MarkExported(Now, UserId, Now);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*Void*");
+    }
+
+    [Fact]
     public void RecordPayment_ExceedingBalance_Throws()
     {
         var invoice = Invoice.CreateDraft(

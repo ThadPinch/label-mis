@@ -1,17 +1,43 @@
 @page "/invoices"
 @model LabelsMis.Web.Pages.Invoices.IndexModel
-@{ ViewData["Title"] = "Invoices"; }
+@{
+    ViewData["Title"] = "Invoices";
+    var showCheckboxes = !Model.OnExportedTab && Model.CanEdit;
+}
 
 <div class="d-flex justify-content-between mb-3">
     <h1 class="h3 mb-0">Invoices</h1>
     @if (Model.CanEdit)
     {
-        <a asp-page="Export" class="btn btn-outline-secondary">Export to QuickBooks</a>
         <a asp-page="/Reports/ArAging" class="btn btn-outline-primary">AR aging</a>
     }
 </div>
 
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link @(Model.OnExportedTab ? "" : "active")"
+           asp-page="Index" asp-all-route-data="@Model.FilterRouteValues(IndexModel.ReadyTab)">
+            Ready to export <span class="badge rounded-pill text-bg-secondary">@Model.ReadyCount</span>
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(Model.OnExportedTab ? "active" : "")"
+           asp-page="Index" asp-all-route-data="@Model.FilterRouteValues(IndexModel.ExportedTab)">
+            Exported <span class="badge rounded-pill text-bg-secondary">@Model.ExportedCount</span>
+        </a>
+    </li>
+</ul>
+
+@if (TempData["ExportMessage"] is string exportMessage)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @exportMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
 <form method="get" class="row g-2 mb-3">
+    <input type="hidden" asp-for="Tab" />
     <div class="col-md-2"><input asp-for="Search" class="form-control" placeholder="Search" /></div>
     <div class="col-md-2">
         <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.InvoiceStatus>()"><option value="">All statuses</option></select>
@@ -32,12 +58,47 @@
     <div class="col-md-1"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
 </form>
 
+@if (showCheckboxes)
+{
+    @* Row checkboxes live outside this form in the table below and join it via form="bulk-export-form". *@
+    <form method="post" id="bulk-export-form" asp-page-handler="MarkSelectedExported"
+          asp-all-route-data="@Model.FilterRouteValues()" class="mb-2 d-flex gap-2">
+        <button type="submit" id="bulk-qb-button" class="btn btn-sm btn-primary" disabled
+                asp-page-handler="ExportSelected" asp-all-route-data="@Model.FilterRouteValues()">
+            Export to QuickBooks
+        </button>
+        <button type="submit" id="bulk-mark-button" class="btn btn-sm btn-outline-success" disabled>
+            Mark selected as exported
+        </button>
+    </form>
+}
+
 <table class="table table-striped">
-    <thead><tr><th>Invoice #</th><th>Customer</th><th>Order</th><th>Date</th><th>Due</th><th>Status</th><th>Order status</th><th>Total</th><th>Balance</th><th></th></tr></thead>
+    <thead>
+    <tr>
+        @if (showCheckboxes)
+        {
+            <th style="width: 2rem"><input type="checkbox" id="select-all-invoices" class="form-check-input" aria-label="Select all invoices on this page" /></th>
+        }
+        <th>Invoice #</th><th>Customer</th><th>Order</th><th>Date</th><th>Due</th><th>Status</th><th>Order status</th><th>Total</th><th>Balance</th>
+        @if (Model.OnExportedTab)
+        {
+            <th>Exported</th>
+        }
+        <th></th>
+    </tr>
+    </thead>
     <tbody>
     @foreach (var item in Model.Result.Items)
     {
         <tr>
+            @if (showCheckboxes)
+            {
+                <td>
+                    <input type="checkbox" name="selectedIds" value="@item.Id" form="bulk-export-form"
+                           class="form-check-input invoice-select" aria-label="Select @item.InvoiceNumber" />
+                </td>
+            }
             <td>@item.InvoiceNumber</td><td>@item.CustomerName</td>
             <td><a asp-page="/SalesOrders/Edit" asp-route-id="@item.SalesOrderId">@item.OrderNumber</a></td>
             <td>@item.InvoiceDate.ToString("yyyy-MM-dd")</td><td>@item.DueDate.ToString("yyyy-MM-dd")</td>
@@ -53,13 +114,79 @@
                 }
             </td>
             <td>@item.Total.ToString("C2")</td><td>@item.BalanceDue.ToString("C2")</td>
-            <td class="text-end"><a asp-page="Detail" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a></td>
+            @if (Model.OnExportedTab)
+            {
+                <td>
+                    @item.QbExportedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                    @if (!string.IsNullOrEmpty(item.ExportedBy))
+                    {
+                        <div class="text-muted small">by @item.ExportedBy</div>
+                    }
+                </td>
+            }
+            <td class="text-end text-nowrap">
+                @if (Model.OnExportedTab && Model.CanEdit)
+                {
+                    <form method="post" asp-page-handler="UnmarkExported"
+                          asp-all-route-data="@Model.FilterRouteValues()" class="d-inline">
+                        <input type="hidden" name="id" value="@item.Id" />
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">Unmark exported</button>
+                    </form>
+                }
+                <a asp-page="Detail" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a>
+            </td>
         </tr>
     }
     </tbody>
 </table>
 
+@if (!Model.Result.Items.Any())
+{
+    <p class="text-muted">
+        @(Model.OnExportedTab ? "No exported invoices match the current filters." : "No invoices are waiting to be exported.")
+    </p>
+}
+
 @await Html.PartialAsync("Shared/_Pager", new PagerModel(
     Model.Result.Page,
     Model.Result.TotalPages,
     Model.Result.TotalCount))
+
+@if (showCheckboxes)
+{
+    <script>
+        (function () {
+            const selectAll = document.getElementById('select-all-invoices');
+            const boxes = Array.from(document.querySelectorAll('.invoice-select'));
+            const qbButton = document.getElementById('bulk-qb-button');
+            const markButton = document.getElementById('bulk-mark-button');
+
+            function refresh() {
+                const checked = boxes.filter(b => b.checked).length;
+                qbButton.disabled = checked === 0;
+                markButton.disabled = checked === 0;
+                qbButton.textContent = checked === 0
+                    ? 'Export to QuickBooks'
+                    : `Export ${checked} to QuickBooks`;
+                markButton.textContent = checked === 0
+                    ? 'Mark selected as exported'
+                    : `Mark ${checked} selected as exported`;
+                selectAll.checked = boxes.length > 0 && checked === boxes.length;
+                selectAll.indeterminate = checked > 0 && checked < boxes.length;
+            }
+
+            selectAll.addEventListener('change', () => {
+                boxes.forEach(b => { b.checked = selectAll.checked; });
+                refresh();
+            });
+            boxes.forEach(b => b.addEventListener('change', refresh));
+            refresh();
+
+            // The QuickBooks export responds with a file download, which doesn't reload the
+            // page, so refresh shortly after to move the exported rows off the Ready tab.
+            qbButton.addEventListener('click', () => {
+                setTimeout(() => window.location.reload(), 1500);
+            });
+        })();
+    </script>
+}

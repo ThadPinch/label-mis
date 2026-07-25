@@ -1,21 +1,421 @@
-﻿@page
+@page
+@using LabelsMis.Domain.Enums
 @model LabelsMis.Web.Pages.IndexModel
 @{
     ViewData["Title"] = "Dashboard";
 }
 
-<div class="text-center">
-    <h1 class="display-4">LabelShop</h1>
-    <p class="lead">Welcome, @Model.DisplayName.</p>
-    @if (Model.Roles.Count > 0)
+@functions {
+    private static string Money(decimal v)
     {
-        <p>
-            <strong>Roles:</strong>
-            @string.Join(", ", Model.Roles)
-        </p>
+        var abs = Math.Abs(v);
+        return abs switch
+        {
+            >= 1_000_000 => $"${v / 1_000_000m:0.#}M",
+            >= 10_000 => $"${v / 1_000m:0.#}K",
+            _ => v.ToString("C0")
+        };
     }
-    else
+
+    private static string Num(decimal v) => v >= 10_000 ? $"{v / 1_000m:0.#}K" : v.ToString("N0");
+
+    private static string OrderStatusLabel(SalesOrderStatus s) => s switch
     {
-        <p><strong>Roles:</strong> none assigned</p>
-    }
+        SalesOrderStatus.InProduction => "In production",
+        _ => s.ToString()
+    };
+
+    private static string JobStatusLabel(JobStatus s) => s switch
+    {
+        JobStatus.PrePress => "Pre-press",
+        _ => s.ToString()
+    };
+}
+
+<div class="dash" id="dashRoot" data-user="@(User.Identity?.Name ?? "anon")">
+
+    <div class="dash-toolbar">
+        <div class="dash-toolbar-title">
+            <h1>Shop dashboard</h1>
+            <span class="dash-asof">as of @Model.Data.Today.ToString("MMMM d, yyyy")</span>
+        </div>
+        <div class="dash-toolbar-actions">
+            <nav class="dash-range" aria-label="Date range">
+                @foreach (var (days, label) in new[] { (30, "30 days"), (90, "3 mo"), (180, "6 mo"), (365, "12 mo") })
+                {
+                    <a class="dash-range-btn @(Model.Range == days ? "active" : "")"
+                       aria-current="@(Model.Range == days ? "true" : "false")"
+                       href="?range=@days">@label</a>
+                }
+            </nav>
+            <button type="button" class="btn btn-outline-secondary btn-sm dash-customize-btn" id="dashCustomizeBtn"
+                    aria-pressed="false">Customize</button>
+        </div>
+    </div>
+
+    <div class="dash-tiles" id="dashTiles" data-dash-zone="tiles">
+        @if (Model.Data.Sales is { } sales)
+        {
+            <a class="dash-tile" data-widget="tile-orders" data-title="Open orders" href="/sales-orders">
+                <span class="dash-tile-label">Open orders</span>
+                <span class="dash-tile-value">@sales.OpenOrderCount</span>
+                <span class="dash-tile-sub">@Money(sales.OpenOrderValue) open value · @sales.InProductionCount in production</span>
+            </a>
+        }
+        @if (Model.Data.Jobs is { } jobsTile)
+        {
+            <a class="dash-tile" data-widget="tile-jobs" data-title="Jobs in progress" href="/jobs">
+                <span class="dash-tile-label">Jobs in progress</span>
+                <span class="dash-tile-value">@jobsTile.WipCount</span>
+                <span class="dash-tile-sub">
+                    @if (jobsTile.OverdueCount > 0)
+                    {
+                        <span class="dash-flag dash-flag-critical" role="img" aria-label="Warning">▲</span>
+                        @($" {jobsTile.OverdueCount} past due")
+                    }
+                    else
+                    {
+                        @("none past due")
+                    }
+                </span>
+            </a>
+        }
+        @if (Model.Data.Estimates is { } est)
+        {
+            <a class="dash-tile" data-widget="tile-estimates" data-title="Open estimates" href="/estimates">
+                <span class="dash-tile-label">Open estimates</span>
+                <span class="dash-tile-value">@est.OpenCount</span>
+                <span class="dash-tile-sub">
+                    @(est.WinRatePct is { } wr ? $"{wr:0.#}% win rate, {Model.RangeLabel}" : "no closed quotes yet")
+                </span>
+            </a>
+        }
+        @if (Model.Data.Finance is { } fin)
+        {
+            <a class="dash-tile" data-widget="tile-revenue" data-title="Revenue this month" href="/Invoices">
+                <span class="dash-tile-label">Revenue this month</span>
+                <span class="dash-tile-value">@Money(fin.RevenueMtd)</span>
+                <span class="dash-tile-sub">@Money(fin.RevenueLastMonth) last month</span>
+            </a>
+            <a class="dash-tile" data-widget="tile-ar" data-title="Receivables" href="/Reports/ArAging">
+                <span class="dash-tile-label">Receivables</span>
+                <span class="dash-tile-value">@Money(fin.ArOutstanding)</span>
+                <span class="dash-tile-sub">@fin.ArOpenInvoiceCount open invoice@(fin.ArOpenInvoiceCount == 1 ? "" : "s")</span>
+            </a>
+        }
+        @if (Model.Data.Inventory is { } inv)
+        {
+            <a class="dash-tile" data-widget="tile-material" data-title="Material on hand" href="/Rolls">
+                <span class="dash-tile-label">Material on hand</span>
+                <span class="dash-tile-value">@Num(inv.TotalRemainingLf)<span class="dash-tile-unit"> LF</span></span>
+                <span class="dash-tile-sub">
+                    @inv.AvailableRollCount rolls
+                    @if (inv.LowStockCount > 0)
+                    {
+                        <span class="dash-flag dash-flag-serious" role="img" aria-label="Warning">▲</span>
+                        @($" {inv.LowStockCount} stocks low")
+                    }
+                </span>
+            </a>
+        }
+        @if (Model.Data.Shipping is { } ship)
+        {
+            <a class="dash-tile" data-widget="tile-shipping" data-title="Shipments" href="/Shipments">
+                <span class="dash-tile-label">Shipments</span>
+                <span class="dash-tile-value">@(ship.PendingCount + ship.InTransitCount)</span>
+                <span class="dash-tile-sub">@ship.PendingCount pending · @ship.ShippedLast7Days shipped this week</span>
+            </a>
+        }
+    </div>
+
+    <div class="dash-grid" id="dashGrid" data-dash-zone="cards">
+
+        @if (Model.Data.Finance is not null)
+        {
+            <section class="dash-card dash-span-8" data-widget="revenue" data-title="Invoiced revenue">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">Invoiced revenue</h2>
+                        <p class="dash-card-sub">@Model.RangeLabel, excludes voided invoices</p>
+                    </div>
+                    <div class="dash-card-actions">
+                        <button type="button" class="dash-iconbtn dash-table-toggle" aria-pressed="false"
+                                title="Toggle table view" aria-label="Toggle table view"></button>
+                    </div>
+                </header>
+                <div class="dash-chart" data-chart="line" data-series="revenueTrend"
+                     data-format="currency" data-name="Invoiced" data-col="Period"></div>
+            </section>
+
+            <section class="dash-card dash-span-4" data-widget="aging" data-title="AR aging">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">AR aging</h2>
+                        <p class="dash-card-sub">open balances by days past due</p>
+                    </div>
+                    <div class="dash-card-actions">
+                        <button type="button" class="dash-iconbtn dash-table-toggle" aria-pressed="false"
+                                title="Toggle table view" aria-label="Toggle table view"></button>
+                    </div>
+                </header>
+                <div class="dash-chart" data-chart="bars" data-series="arAging" data-format="currency"
+                     data-name="Balance" data-col="Bucket" data-ramp="ordinal"></div>
+            </section>
+        }
+
+        @if (Model.Data.Sales is not null)
+        {
+            <section class="dash-card dash-span-8" data-widget="intake" data-title="Order intake">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">Order intake</h2>
+                        <p class="dash-card-sub">booked order value, @Model.RangeLabel</p>
+                    </div>
+                    <div class="dash-card-actions">
+                        <button type="button" class="dash-iconbtn dash-table-toggle" aria-pressed="false"
+                                title="Toggle table view" aria-label="Toggle table view"></button>
+                    </div>
+                </header>
+                <div class="dash-chart" data-chart="columns" data-series="orderIntake"
+                     data-format="currency" data-name="Booked" data-col="Period"></div>
+            </section>
+        }
+
+        @if (Model.Data.Jobs is not null)
+        {
+            <section class="dash-card dash-span-4" data-widget="pipeline" data-title="Production pipeline">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">Production pipeline</h2>
+                        <p class="dash-card-sub">active jobs by stage</p>
+                    </div>
+                    <div class="dash-card-actions">
+                        <button type="button" class="dash-iconbtn dash-table-toggle" aria-pressed="false"
+                                title="Toggle table view" aria-label="Toggle table view"></button>
+                    </div>
+                </header>
+                <div class="dash-chart" data-chart="bars" data-series="jobPipeline"
+                     data-format="number" data-name="Jobs" data-col="Stage"></div>
+            </section>
+        }
+
+        @if (Model.Data.Estimates is { } estCard)
+        {
+            <section class="dash-card dash-span-4" data-widget="funnel" data-title="Estimate funnel">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">Estimate funnel</h2>
+                        <p class="dash-card-sub">quotes created @Model.RangeLabel</p>
+                    </div>
+                    <div class="dash-card-actions">
+                        <button type="button" class="dash-iconbtn dash-table-toggle" aria-pressed="false"
+                                title="Toggle table view" aria-label="Toggle table view"></button>
+                    </div>
+                </header>
+                <div class="dash-chart" data-chart="bars" data-series="estimateFunnel"
+                     data-format="number" data-name="Estimates" data-col="Status"></div>
+                @if (estCard.WinRatePct is { } winRate)
+                {
+                    <footer class="dash-card-foot">Win rate @winRate.ToString("0.#")% (@estCard.WonCount won, @estCard.LostCount lost)</footer>
+                }
+            </section>
+        }
+
+        @if (Model.Data.Finance is not null)
+        {
+            <section class="dash-card dash-span-4" data-widget="customers" data-title="Top customers">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">Top customers</h2>
+                        <p class="dash-card-sub">invoiced revenue, @Model.RangeLabel</p>
+                    </div>
+                    <div class="dash-card-actions">
+                        <button type="button" class="dash-iconbtn dash-table-toggle" aria-pressed="false"
+                                title="Toggle table view" aria-label="Toggle table view"></button>
+                    </div>
+                </header>
+                <div class="dash-chart" data-chart="bars" data-series="topCustomers"
+                     data-format="currency" data-name="Invoiced" data-col="Customer"></div>
+            </section>
+        }
+
+        @if (Model.Data.Inventory is { } invCard)
+        {
+            <section class="dash-card dash-span-6" data-widget="inventory" data-title="Inventory levels">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">Inventory levels</h2>
+                        <p class="dash-card-sub">
+                            available + staged rolls by stock
+                            @if (invCard.OpenPoCount > 0)
+                            {
+                                @($" · {invCard.OpenPoCount} open POs ({Money(invCard.OpenPoValue)}) inbound")
+                            }
+                        </p>
+                    </div>
+                </header>
+                @if (invCard.StockLevels.Count == 0)
+                {
+                    <div class="dash-empty">No rolls on hand.</div>
+                }
+                else
+                {
+                    var maxLf = Math.Max(invCard.StockLevels.Max(s => s.RemainingLf), 1);
+                    <div class="dash-table-wrap">
+                        <table class="dash-table dash-inv-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Stock</th>
+                                    <th scope="col" class="num">Rolls</th>
+                                    <th scope="col" class="num">On hand (LF)</th>
+                                    <th scope="col" class="dash-inv-meter-col"><span class="visually-hidden">Level</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var s in invCard.StockLevels)
+                                {
+                                    <tr>
+                                        <td>
+                                            <a href="/Stocks" class="dash-strong" title="@s.Description">@s.Code</a>
+                                            <span class="dash-muted d-none d-lg-inline"> @(s.Description.Length > 34 ? s.Description[..34] + "…" : s.Description)</span>
+                                        </td>
+                                        <td class="num">@s.RollCount</td>
+                                        <td class="num">
+                                            @s.RemainingLf.ToString("N0")
+                                            @if (s.Low)
+                                            {
+                                                <span class="dash-badge dash-badge-serious" title="Below minimum order quantity (@s.MinOrderQtyLf.ToString("N0") LF)">
+                                                    <span aria-hidden="true">▲</span> Low
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="dash-inv-meter-col">
+                                            <div class="dash-meter" role="img"
+                                                 aria-label="@s.RemainingLf.ToString("N0") linear feet on hand">
+                                                <div class="dash-meter-fill @(s.Low ? "low" : "")"
+                                                     style="width:@Math.Max(Math.Round(100 * s.RemainingLf / maxLf), 2)%"></div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        }
+
+        @if (Model.Data.Jobs is { } jobsCard)
+        {
+            <section class="dash-card dash-span-6" data-widget="due" data-title="Jobs due soon">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">Jobs due soon</h2>
+                        <p class="dash-card-sub">active jobs by due date</p>
+                    </div>
+                </header>
+                @if (jobsCard.DueSoon.Count == 0)
+                {
+                    <div class="dash-empty">No active jobs with due dates.</div>
+                }
+                else
+                {
+                    <div class="dash-table-wrap">
+                        <table class="dash-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Job</th>
+                                    <th scope="col">Customer</th>
+                                    <th scope="col">Stage</th>
+                                    <th scope="col" class="num">Due</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var j in jobsCard.DueSoon)
+                                {
+                                    <tr>
+                                        <td>
+                                            <a class="dash-strong" href="/jobs/@j.Id">@j.JobNumber</a>
+                                            <span class="dash-muted d-none d-lg-inline"> @(j.ProductDescription.Length > 26 ? j.ProductDescription[..26] + "…" : j.ProductDescription)</span>
+                                        </td>
+                                        <td>@j.CustomerName</td>
+                                        <td><span class="dash-badge">@JobStatusLabel(j.Status)</span></td>
+                                        <td class="num">
+                                            @if (j.Overdue)
+                                            {
+                                                <span class="dash-badge dash-badge-critical"><span aria-hidden="true">▲</span> @j.DueDate.ToString("MMM d")</span>
+                                            }
+                                            else
+                                            {
+                                                @j.DueDate.ToString("MMM d")
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        }
+
+        @if (Model.Data.Sales is { } salesCard)
+        {
+            <section class="dash-card dash-span-6" data-widget="orders" data-title="Recent orders">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">Recent orders</h2>
+                        <p class="dash-card-sub">latest sales orders</p>
+                    </div>
+                </header>
+                @if (salesCard.RecentOrders.Count == 0)
+                {
+                    <div class="dash-empty">No sales orders yet.</div>
+                }
+                else
+                {
+                    <div class="dash-table-wrap">
+                        <table class="dash-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Order</th>
+                                    <th scope="col">Customer</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col" class="num">Value</th>
+                                    <th scope="col" class="num">Ordered</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var o in salesCard.RecentOrders)
+                                {
+                                    <tr>
+                                        <td><a class="dash-strong" href="/sales-orders/@o.Id/edit">@o.OrderNumber</a></td>
+                                        <td>@o.CustomerName</td>
+                                        <td><span class="dash-badge">@OrderStatusLabel(o.Status)</span></td>
+                                        <td class="num">@o.Value.ToString("C0")</td>
+                                        <td class="num">@o.OrderedAt.ToLocalTime().ToString("MMM d")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        }
+    </div>
+
+    <div class="dash-tray" id="dashTray" hidden>
+        <span class="dash-tray-label">Hidden widgets — click to restore:</span>
+        <span class="dash-tray-items" id="dashTrayItems"></span>
+        <button type="button" class="btn btn-link btn-sm dash-tray-reset" id="dashResetBtn">Reset layout</button>
+    </div>
 </div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script>window.DASHBOARD_DATA = @Html.Raw(Model.ChartJson);</script>
+    <script src="~/js/dashboard.js" asp-append-version="true"></script>
+}

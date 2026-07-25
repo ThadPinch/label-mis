@@ -112,7 +112,7 @@ public class MasterDataPersistenceTests : IAsyncLifetime
     {
         var id = Guid.NewGuid();
         var die = Die.Create(id, "Shop die 4x3", null, DieType.Flexible, "Rectangle",
-            4.0m, 3.0m, 0.125m, 0.0625m, 0.0625m, 1, 13.0m, null, null, "Shelf A",
+            4.0m, 3.0m, 0.125m, 0.0625m, 0.0625m, 3, 1, 13.0m, null, null, "Shelf A",
             TestUserId, DateTime.UtcNow);
         _db.Dies.Add(die);
         await _db.SaveChangesAsync();

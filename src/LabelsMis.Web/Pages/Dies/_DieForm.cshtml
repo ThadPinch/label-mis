@@ -2,68 +2,91 @@
 @using LabelsMis.Domain.Enums
 
 <div class="row g-3">
-    <div class="col-md-8">
+    <div class="col-md-6">
         <label asp-for="Description" class="form-label"></label>
         <input asp-for="Description" class="form-control" />
         <span asp-validation-for="Description" class="text-danger"></span>
     </div>
-    <div class="col-md-4">
+    <div class="col-6 col-md-3">
         <label asp-for="DieType" class="form-label"></label>
         <select asp-for="DieType" asp-items="Html.GetEnumSelectList<DieType>()" class="form-select"></select>
+    </div>
+    <div class="col-6 col-md-3">
+        <label asp-for="Shape" class="form-label"></label>
+        <input asp-for="Shape" class="form-control" placeholder="e.g. Rectangle" />
     </div>
     <div class="col-md-6">
         <label asp-for="CustomerId" class="form-label"></label>
         <select asp-for="CustomerId" asp-items="@(ViewData["CustomerOptions"] as IEnumerable<SelectListItem>)" class="form-select">
-            <option value="">(None)</option>
+            <option value="">(None — shop-owned)</option>
         </select>
-    </div>
-    <div class="col-md-6">
-        <label asp-for="SupplierId" class="form-label"></label>
-        <select asp-for="SupplierId" asp-items="@(ViewData["SupplierOptions"] as IEnumerable<SelectListItem>)" class="form-select">
-            <option value="">(None)</option>
-        </select>
-    </div>
-    <div class="col-md-4">
-        <label asp-for="Shape" class="form-label"></label>
-        <input asp-for="Shape" class="form-control" />
-    </div>
-    <div class="col-md-4">
-        <label asp-for="SupplierPartNumber" class="form-label"></label>
-        <input asp-for="SupplierPartNumber" class="form-control" />
-    </div>
-    <div class="col-md-4">
-        <label asp-for="Location" class="form-label"></label>
-        <input asp-for="Location" class="form-control" />
-    </div>
-    <div class="col-md-3">
-        <label asp-for="LabelAcrossIn" class="form-label"></label>
-        <input asp-for="LabelAcrossIn" class="form-control" />
-        <span asp-validation-for="LabelAcrossIn" class="text-danger"></span>
-    </div>
-    <div class="col-md-3">
-        <label asp-for="LabelAroundIn" class="form-label"></label>
-        <input asp-for="LabelAroundIn" class="form-control" />
-        <span asp-validation-for="LabelAroundIn" class="text-danger"></span>
-    </div>
-    <div class="col-md-3">
-        <label asp-for="CornerRadiusIn" class="form-label"></label>
-        <input asp-for="CornerRadiusIn" class="form-control" />
-    </div>
-    <div class="col-md-3">
-        <label asp-for="LabelsAround" class="form-label"></label>
-        <input asp-for="LabelsAround" class="form-control" />
-    </div>
-    <div class="col-md-3">
-        <label asp-for="GutterAcrossIn" class="form-label"></label>
-        <input asp-for="GutterAcrossIn" class="form-control" />
-    </div>
-    <div class="col-md-3">
-        <label asp-for="GutterAroundIn" class="form-label"></label>
-        <input asp-for="GutterAroundIn" class="form-control" />
-    </div>
-    <div class="col-md-3">
-        <label asp-for="WebWidthIn" class="form-label"></label>
-        <input asp-for="WebWidthIn" class="form-control" />
-        <span asp-validation-for="WebWidthIn" class="text-danger"></span>
     </div>
 </div>
+
+<fieldset class="border rounded p-3 mt-4">
+    <legend class="float-none w-auto px-2 h6 mb-0">Label size</legend>
+    <div class="row g-3">
+        <div class="col-6 col-md-4">
+            <label asp-for="LabelAcrossIn" class="form-label"></label>
+            <input asp-for="LabelAcrossIn" asp-format="{0:0.0000}" class="form-control" />
+            <span asp-validation-for="LabelAcrossIn" class="text-danger"></span>
+        </div>
+        <div class="col-6 col-md-4">
+            <label asp-for="LabelAroundIn" class="form-label"></label>
+            <input asp-for="LabelAroundIn" asp-format="{0:0.0000}" class="form-control" />
+            <span asp-validation-for="LabelAroundIn" class="text-danger"></span>
+        </div>
+        <div class="col-6 col-md-4">
+            <label asp-for="CornerRadiusIn" class="form-label"></label>
+            <input asp-for="CornerRadiusIn" asp-format="{0:0.0000}" class="form-control" />
+        </div>
+    </div>
+</fieldset>
+
+<fieldset class="border rounded p-3 mt-4">
+    <legend class="float-none w-auto px-2 h6 mb-0">Imposition</legend>
+    <div class="row g-3">
+        <div class="col-6 col-md-3">
+            <label asp-for="LabelsAcross" class="form-label"></label>
+            <input asp-for="LabelsAcross" class="form-control" />
+            <span asp-validation-for="LabelsAcross" class="text-danger"></span>
+        </div>
+        <div class="col-6 col-md-3">
+            <label asp-for="LabelsAround" class="form-label"></label>
+            <input asp-for="LabelsAround" class="form-control" />
+        </div>
+        <div class="col-6 col-md-3">
+            <label asp-for="GutterAcrossIn" class="form-label"></label>
+            <input asp-for="GutterAcrossIn" asp-format="{0:0.0000}" class="form-control" />
+        </div>
+        <div class="col-6 col-md-3">
+            <label asp-for="GutterAroundIn" class="form-label"></label>
+            <input asp-for="GutterAroundIn" asp-format="{0:0.0000}" class="form-control" />
+        </div>
+        <div class="col-6 col-md-3">
+            <label asp-for="WebWidthIn" class="form-label"></label>
+            <input asp-for="WebWidthIn" asp-format="{0:0.0000}" class="form-control" />
+            <span asp-validation-for="WebWidthIn" class="text-danger"></span>
+        </div>
+    </div>
+</fieldset>
+
+<fieldset class="border rounded p-3 mt-4 mb-3">
+    <legend class="float-none w-auto px-2 h6 mb-0">Sourcing &amp; storage</legend>
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label asp-for="SupplierId" class="form-label"></label>
+            <select asp-for="SupplierId" asp-items="@(ViewData["SupplierOptions"] as IEnumerable<SelectListItem>)" class="form-select">
+                <option value="">(None)</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-4">
+            <label asp-for="SupplierPartNumber" class="form-label"></label>
+            <input asp-for="SupplierPartNumber" class="form-control" />
+        </div>
+        <div class="col-6 col-md-4">
+            <label asp-for="Location" class="form-label"></label>
+            <input asp-for="Location" class="form-control" placeholder="e.g. Shelf A3" />
+        </div>
+    </div>
+</fieldset>

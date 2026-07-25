@@ -51,6 +51,7 @@ public class EditModel(
     public IReadOnlyList<SalesOrderLineDetail> LineDetails { get; private set; } = [];
     public Guid? SourceEstimateId { get; private set; }
     public string? SourceEstimateNumber { get; private set; }
+    public string? SalesRepName { get; private set; }
 
     public record LineJobInfo(
         int LineNumber,
@@ -93,6 +94,13 @@ public class EditModel(
                 .Select(e => e.EstimateNumber)
                 .FirstOrDefaultAsync(cancellationToken);
         }
+        if (Order.SalesRepId is Guid salesRepId)
+        {
+            SalesRepName = await db.Users.AsNoTracking()
+                .Where(u => u.Id == salesRepId)
+                .Select(u => u.Email ?? u.UserName)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
         await LoadLineJobsAsync(cancellationToken);
         await LoadLineDetailsAsync(cancellationToken);
         await LoadRelatedDocumentsAsync(cancellationToken);
@@ -132,6 +140,8 @@ public class EditModel(
             .ToDictionaryAsync(d => d.Id, d => d.Description, cancellationToken);
         var operationNames = await db.FinishingOperations.AsNoTracking()
             .ToDictionaryAsync(o => o.Id, o => $"{o.Code} — {o.Description}", cancellationToken);
+        var stockCodes = await db.Stocks.AsNoTracking()
+            .ToDictionaryAsync(s => s.Id, s => s.Code, cancellationToken);
 
         var details = new List<SalesOrderLineDetail>();
         for (var i = 0; i < orderedLines.Count; i++)
@@ -143,19 +153,25 @@ public class EditModel(
             if (spec is null)
             {
                 details.Add(new SalesOrderLineDetail(
-                    product?.InternalSku ?? "—", product?.Description ?? "—",
+                    product?.InternalSku ?? "—", line.Description ?? product?.Description ?? "—",
                     0m, 0m, 0m, "—", default, null, []));
                 continue;
             }
 
             var finishing = EstimateCalculationMapper.DeserializeFinishingOperations(spec.FinishingOperationsJson)
                 .OrderBy(f => f.SortOrder)
-                .Select(f => operationNames.TryGetValue(f.OperationId, out var name) ? name : "Unknown operation")
+                .Select(f =>
+                {
+                    var name = operationNames.TryGetValue(f.OperationId, out var n) ? n : "Unknown operation";
+                    return f.StockId is { } stockId && stockCodes.TryGetValue(stockId, out var code)
+                        ? $"{name} · {code}"
+                        : name;
+                })
                 .ToList();
 
             details.Add(new SalesOrderLineDetail(
                 product?.InternalSku ?? "—",
-                product?.Description ?? "—",
+                line.Description ?? product?.Description ?? "—",
                 spec.LabelAcrossIn,
                 spec.LabelAroundIn,
                 spec.CornerRadiusIn,
@@ -201,7 +217,7 @@ public class EditModel(
             var job = jobs.FirstOrDefault(j => j.SalesOrderLineId == l.Id);
             return new LineJobInfo(
                 l.LineNumber,
-                $"{l.Product.InternalSku} — {l.Product.Description}",
+                $"{l.Product.InternalSku} — {l.Description ?? l.Product.Description}",
                 job?.Id,
                 job?.JobNumber,
                 job?.Status);
@@ -254,6 +270,7 @@ public class EditModel(
             Quantity = l.Quantity,
             UnitPrice = l.UnitPrice,
             LineNotes = l.LineNotes,
+            Description = l.Description,
             HasArtwork = !string.IsNullOrWhiteSpace(l.Product.ArtworkFilePath),
             SpecJson = l.Spec is null ? null : System.Text.Json.JsonSerializer.Serialize(l.Spec)
         }).ToList()

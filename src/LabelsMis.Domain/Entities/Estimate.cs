@@ -26,6 +26,9 @@ public class Estimate : EntityBase
     public string? LostReason { get; private set; }
     public string? PdfFilePath { get; private set; }
 
+    /// <summary>The email address the estimate was last sent to. Editable on every send.</summary>
+    public string? ContactEmail { get; private set; }
+
     public Guid? ShippingMethodId { get; private set; }
     public ShippingMethod? ShippingMethod { get; private set; }
     public decimal ShippingCost { get; private set; }
@@ -111,6 +114,14 @@ public class Estimate : EntityBase
     }
 
     public void AddLine(EstimateLine line) => _lines.Add(line);
+
+    /// <summary>Records the recipient address used for the latest send. Allowed in any status
+    /// so resends can update it.</summary>
+    public void SetContactEmail(string? contactEmail, Guid modifiedById, DateTime modifiedAt)
+    {
+        ContactEmail = string.IsNullOrWhiteSpace(contactEmail) ? null : contactEmail.Trim();
+        SetModified(modifiedById, modifiedAt);
+    }
 
     public void MarkSent(string? pdfFilePath, Guid modifiedById, DateTime modifiedAt)
     {

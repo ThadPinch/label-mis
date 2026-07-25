@@ -18,7 +18,8 @@ public record FinishingOperationSelectionInput(
     Guid OperationId,
     decimal? SetupMinutesOverride,
     decimal? RunSpeedFpmOverride,
-    int SortOrder);
+    int SortOrder,
+    Guid? StockId = null);
 
 public record SpotSelectionInput(
     Guid InkId,
@@ -48,7 +49,8 @@ public record EstimateLineFormInput(
     IReadOnlyList<int> Quantities,
     decimal? MarkupPctOverride,
     int? MaxLabelsAcrossOverride,
-    LabelOrientation? LabelOrientationOverride);
+    LabelOrientation? LabelOrientationOverride,
+    IReadOnlyDictionary<int, decimal>? QuantityMarkupOverrides = null);
 
 public record EstimateFormInput(
     Guid CustomerId,
@@ -117,17 +119,39 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             .Where(o => operationIds.Contains(o.Id))
             .ToDictionaryAsync(o => o.Id, cancellationToken);
 
+        var finishingStockIds = line.FinishingOperations
+            .Where(o => o.StockId is { } sid && sid != Guid.Empty)
+            .Select(o => o.StockId!.Value)
+            .Distinct()
+            .ToList();
+        var finishingStocks = await db.Stocks.AsNoTracking()
+            .Where(s => finishingStockIds.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, cancellationToken);
+
         var finishingRequests = line.FinishingOperations
             .OrderBy(o => o.SortOrder)
             .Select(selection =>
             {
                 var op = operations[selection.OperationId];
+
+                // Only lamination and foil consume an assigned stock.
+                Stock? material = null;
+                if (op.OperationType is FinishingOperationType.Laminate or FinishingOperationType.Foil
+                    && selection.StockId is { } stockId)
+                {
+                    finishingStocks.TryGetValue(stockId, out material);
+                }
+
                 return new FinishingOperationRequest(
                     op.Id,
                     selection.SetupMinutesOverride ?? op.DefaultSetupMinutes,
                     selection.RunSpeedFpmOverride ?? op.DefaultRunSpeedFpm,
                     op.CostPerHour,
-                    op.Description);
+                    op.Description,
+                    material?.Id,
+                    material?.WidthIn,
+                    material?.CostPerMsi,
+                    material?.Code);
             })
             .ToList();
 
@@ -161,20 +185,37 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             line.MarkupPctOverride ?? customer.DefaultMarkupPct,
             MinimumMarginPct,
             line.MaxLabelsAcrossOverride,
-            line.LabelOrientationOverride);
+            line.LabelOrientationOverride,
+            line.QuantityMarkupOverrides);
     }
 
     private async Task<decimal> GetClickRateAsync(
         InkSet inkSet,
         CancellationToken cancellationToken)
     {
-        var ink = await db.Inks.AsNoTracking()
+        var rate = await LookupProcessClickRateAsync(inkSet, cancellationToken);
+
+        // The process separations are the same four physical CMYK inks whichever CMYK-family
+        // set the job runs (white/spots are charged separately as special inks), so a set
+        // without its own non-spot ink row — e.g. CMYKW where only the spot White is
+        // configured — falls back to the plain CMYK rate instead of charging $0. EPM is
+        // excluded: it has a genuinely different (lower) click rate.
+        if (rate is null or 0m && inkSet is InkSet.CMYK_PlusSpot or InkSet.CMYKW or InkSet.CMYKW_PlusSpot)
+        {
+            rate = await LookupProcessClickRateAsync(InkSet.CMYK, cancellationToken);
+        }
+
+        return rate ?? 0m;
+    }
+
+    private async Task<decimal?> LookupProcessClickRateAsync(
+        InkSet inkSet,
+        CancellationToken cancellationToken) =>
+        await db.Inks.AsNoTracking()
             .Where(i => i.IsActive && i.InkSet == inkSet && !i.IsSpot)
             .OrderBy(i => i.Code)
+            .Select(i => (decimal?)i.ClickRatePer1000)
             .FirstOrDefaultAsync(cancellationToken);
-
-        return ink?.ClickRatePer1000 ?? 0m;
-    }
 
     // White (driven by the W in the ink set) and each selected spot are all priced
     // uniformly as hit-based special inks.

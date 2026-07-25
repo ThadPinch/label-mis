@@ -32,4 +32,5 @@ public record EstimateRequest(
     decimal CustomerMarkupPct,
     decimal MinimumMarginPct,
     int? MaxLabelsAcrossOverride = null,
-    LabelOrientation? LabelOrientationOverride = null);
+    LabelOrientation? LabelOrientationOverride = null,
+    IReadOnlyDictionary<int, decimal>? QuantityMarkupOverrides = null);

@@ -37,15 +37,29 @@ public record JobDetail(
     string OrderNumber,
     string? OrderNotes);
 
+public record JobTicketRouteStep(
+    int Sequence,
+    JobOperationType Type,
+    string Description,
+    decimal PlannedMinutes);
+
 public record JobTicketDetail(
     Job Job,
     string CustomerName,
     string ProductDescription,
+    string ProductSku,
+    string OrderNumber,
+    string? CustomerPoNumber,
+    DateOnly? RequestedShipDate,
     decimal LabelAcrossIn,
     decimal LabelAroundIn,
     string SubstrateDescription,
     InkSet InkSet,
-    IReadOnlyList<(int Sequence, JobOperationType Type, string Description)> Route);
+    string? SpecialInksSummary,
+    string? DieDescription,
+    string? ScheduledPressName,
+    RollSpec? RollSpec,
+    IReadOnlyList<JobTicketRouteStep> Route);
 
 public record OperatorJobView(
     Job Job,
@@ -145,6 +159,7 @@ public class JobService(
             query = query.Where(j =>
                 j.JobNumber.ToUpper().Contains(term)
                 || j.Product.Description.ToUpper().Contains(term)
+                || (j.SalesOrderLine.Description != null && j.SalesOrderLine.Description.ToUpper().Contains(term))
                 || (j.Product.PrimaryCustomer != null && j.Product.PrimaryCustomer.Name.ToUpper().Contains(term)));
         }
 
@@ -165,7 +180,7 @@ public class JobService(
                 j.Id,
                 j.JobNumber,
                 j.Product.PrimaryCustomer != null ? j.Product.PrimaryCustomer.Name : "",
-                j.Product.Description,
+                j.SalesOrderLine.Description ?? j.Product.Description,
                 j.Status,
                 j.DueDate,
                 j.ScheduledForDate,
@@ -207,7 +222,7 @@ public class JobService(
         return new JobDetail(
             job,
             job.Product.PrimaryCustomer != null ? job.Product.PrimaryCustomer.Name : "",
-            job.Product.Description,
+            job.SalesOrderLine.Description ?? job.Product.Description,
             job.Product.ArtworkFilePath,
             job.Product.Substrate,
             new JobCostSummary(estimatedCost, actualCost),
@@ -234,6 +249,8 @@ public class JobService(
         var job = await db.Jobs.AsNoTracking()
             .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
             .Include(j => j.Product).ThenInclude(p => p.Substrate)
+            .Include(j => j.Product).ThenInclude(p => p.RollSpec)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder)
             .Include(j => j.Operations)
             .SingleOrDefaultAsync(j => j.Id == id, cancellationToken);
 
@@ -244,6 +261,17 @@ public class JobService(
 
         var finishing = await db.FinishingOperations.AsNoTracking()
             .ToDictionaryAsync(f => f.Id, cancellationToken);
+
+        // Material stock assigned per finishing operation (lamination/foil), snapshotted on the job spec.
+        var materialStockByOperation = EstimateCalculationMapper
+            .DeserializeFinishingOperations(job.Spec?.FinishingOperationsJson ?? "[]")
+            .Where(f => f.StockId is { } sid && sid != Guid.Empty)
+            .GroupBy(f => f.OperationId)
+            .ToDictionary(g => g.Key, g => g.First().StockId!.Value);
+        var materialStockIds = materialStockByOperation.Values.Distinct().ToList();
+        var materialStockLabels = await db.Stocks.AsNoTracking()
+            .Where(s => materialStockIds.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, s => $"{s.Code} — {s.Description}", cancellationToken);
 
         var route = job.Operations.OrderBy(o => o.Sequence).Select(o =>
         {
@@ -257,17 +285,77 @@ public class JobService(
                 JobOperationType.Ship => "Ship",
                 _ => o.OperationType.ToString()
             };
-            return (o.Sequence, o.OperationType, description);
+            if (o.OperationType == JobOperationType.Finishing
+                && o.EquipmentId is { } equipmentId
+                && materialStockByOperation.TryGetValue(equipmentId, out var materialId)
+                && materialStockLabels.TryGetValue(materialId, out var materialLabel))
+            {
+                description += $" — material: {materialLabel}";
+            }
+            return new JobTicketRouteStep(o.Sequence, o.OperationType, description, o.PlannedMinutes);
         }).ToList();
 
+        // The job spec is the ordered snapshot; fall back to the product template for
+        // pre-refactor jobs whose spec hasn't been backfilled.
+        var spec = job.Spec ?? job.Product.ToLabelSpec();
+
+        var substrateDescription = await db.Stocks.AsNoTracking()
+            .Where(s => s.Id == spec.SubstrateId)
+            .Select(s => $"{s.Code} — {s.Description}")
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? job.Product.Substrate.Description;
+
+        string? dieDescription = null;
+        if (spec.DieId is { } dieId)
+        {
+            dieDescription = await db.Dies.AsNoTracking()
+                .Where(d => d.Id == dieId)
+                .Select(d => d.Description)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        var inkParts = new List<string>();
+        if (spec.WhiteHits > 0)
+        {
+            inkParts.Add($"White ×{spec.WhiteHits} ({spec.WhiteCoveragePct * 100:0}%)");
+        }
+        var spots = EstimateCalculationMapper.DeserializeSpots(spec.SpotsJson);
+        if (spots.Count > 0)
+        {
+            var spotInkIds = spots.Select(s => s.InkId).ToList();
+            var spotCodes = await db.Inks.AsNoTracking()
+                .Where(i => spotInkIds.Contains(i.Id))
+                .ToDictionaryAsync(i => i.Id, i => i.Code, cancellationToken);
+            inkParts.AddRange(spots.OrderBy(s => s.SortOrder).Select(s =>
+                $"{spotCodes.GetValueOrDefault(s.InkId, "Spot")} ×{s.Hits} ({s.CoveragePct * 100:0}%)"));
+        }
+
+        string? scheduledPressName = null;
+        if (job.ScheduledPressId is { } pressId)
+        {
+            scheduledPressName = await db.Presses.AsNoTracking()
+                .Where(p => p.Id == pressId)
+                .Select(p => p.Name)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        var order = job.SalesOrderLine.SalesOrder;
         return new JobTicketDetail(
             job,
             job.Product.PrimaryCustomer != null ? job.Product.PrimaryCustomer.Name : "",
-            job.Product.Description,
-            job.Product.LabelAcrossIn,
-            job.Product.LabelAroundIn,
-            job.Product.Substrate.Description,
-            job.Product.InkSet,
+            job.SalesOrderLine.Description ?? job.Product.Description,
+            job.Product.InternalSku,
+            order.OrderNumber,
+            order.CustomerPoNumber,
+            order.RequestedShipDate,
+            spec.LabelAcrossIn,
+            spec.LabelAroundIn,
+            substrateDescription,
+            spec.InkSet,
+            inkParts.Count > 0 ? string.Join(", ", inkParts) : null,
+            dieDescription,
+            scheduledPressName,
+            job.Product.RollSpec,
             route);
     }
 
@@ -277,6 +365,7 @@ public class JobService(
     {
         var job = await db.Jobs
             .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
+            .Include(j => j.SalesOrderLine)
             .Include(j => j.Operations).ThenInclude(o => o.TimeEntries)
             .SingleOrDefaultAsync(j => j.Id == jobId, cancellationToken);
 
@@ -290,6 +379,7 @@ public class JobService(
         var normalized = jobNumber.Trim().ToUpperInvariant();
         var job = await db.Jobs
             .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
+            .Include(j => j.SalesOrderLine)
             .Include(j => j.Operations).ThenInclude(o => o.TimeEntries)
             .SingleOrDefaultAsync(j => j.JobNumber.ToUpper() == normalized, cancellationToken);
 
@@ -316,7 +406,7 @@ public class JobService(
         return new OperatorJobView(
             job,
             job.Product.PrimaryCustomer != null ? job.Product.PrimaryCustomer.Name : "",
-            job.Product.Description,
+            job.SalesOrderLine.Description ?? job.Product.Description,
             current,
             isClockedOn,
             current?.ScannedRollId,
@@ -587,6 +677,7 @@ public class JobService(
     {
         var query = db.Jobs.AsNoTracking()
             .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
+            .Include(j => j.SalesOrderLine)
             .Include(j => j.Operations)
             .Where(j => j.Status == JobStatus.Printed);
 
@@ -596,6 +687,7 @@ public class JobService(
             query = query.Where(j =>
                 j.JobNumber.ToUpper().Contains(term)
                 || j.Product.Description.ToUpper().Contains(term)
+                || (j.SalesOrderLine.Description != null && j.SalesOrderLine.Description.ToUpper().Contains(term))
                 || (j.Product.PrimaryCustomer != null && j.Product.PrimaryCustomer.Name.ToUpper().Contains(term)));
         }
 
@@ -606,7 +698,7 @@ public class JobService(
             j.Id,
             j.JobNumber,
             j.Product.PrimaryCustomer?.Name ?? "",
-            j.Product.Description,
+            j.SalesOrderLine.Description ?? j.Product.Description,
             j.DueDate,
             j.QuantityOrdered,
             j.Operations

@@ -35,7 +35,7 @@ public class SalesOrderPageInput
 
     public SalesOrderFormInput ToForm() => new(
         CustomerId, CustomerPoNumber, RequestedShipDate, Notes,
-        Lines.Select(l => new SalesOrderLineInput(null, l.ProductId, l.SourceEstimateLineId, l.Quantity, l.UnitPrice, l.LineNotes, l.DeserializeSpec())).ToList(),
+        Lines.Select(l => new SalesOrderLineInput(null, l.ProductId, l.SourceEstimateLineId, l.Quantity, l.UnitPrice, l.LineNotes, l.Description, l.DeserializeSpec())).ToList(),
         ShippingMethodId,
         ShippingCost,
         new ShippingAddress(ShipToName, ShipToStreet1, ShipToStreet2, ShipToCity, ShipToState, ShipToZip, ShipToCountry));
@@ -50,6 +50,10 @@ public class SalesOrderLinePageInput
     public string? LineNotes { get; set; }
     public bool HasArtwork { get; set; }
     public IFormFile? ArtworkFile { get; set; }
+
+    /// <summary>The quoted description snapshot, round-tripped through the form as a hidden field
+    /// so a save preserves it (mirrors SpecJson).</summary>
+    public string? Description { get; set; }
 
     /// <summary>The line's ordered spec, round-tripped through the form as JSON so a save preserves
     /// it (until the editable spec UI lands). Rendered as a hidden field.</summary>

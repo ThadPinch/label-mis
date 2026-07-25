@@ -39,6 +39,10 @@ public class DieFormInput
     public decimal GutterAroundIn { get; set; }
 
     [Range(1, 1000)]
+    [Display(Name = "Labels across")]
+    public int LabelsAcross { get; set; } = 1;
+
+    [Range(1, 1000)]
     [Display(Name = "Labels around")]
     public int LabelsAround { get; set; } = 1;
 
@@ -64,6 +68,7 @@ public class DieFormInput
         CornerRadiusIn,
         GutterAcrossIn,
         GutterAroundIn,
+        LabelsAcross,
         LabelsAround,
         WebWidthIn,
         SupplierId,
@@ -81,6 +86,7 @@ public class DieFormInput
         CornerRadiusIn = die.CornerRadiusIn,
         GutterAcrossIn = die.GutterAcrossIn,
         GutterAroundIn = die.GutterAroundIn,
+        LabelsAcross = die.LabelsAcross,
         LabelsAround = die.LabelsAround,
         WebWidthIn = die.WebWidthIn,
         SupplierId = die.SupplierId,

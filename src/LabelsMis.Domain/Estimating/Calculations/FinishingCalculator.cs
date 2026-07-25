@@ -33,6 +33,25 @@ internal static class FinishingCalculator
                 operationCost));
 
             totalCost += operationCost;
+
+            // Material-bearing operations (lamination, foil) also consume their assigned stock
+            // across the full web length.
+            if (operation.StockWidthIn is > 0 && operation.StockCostPerMsi is { } costPerMsi)
+            {
+                var materialMsi = EstimatingMath.RoundUpOneDecimal(
+                    (totalWebLengthFt * 12m * operation.StockWidthIn.Value) / 1000m);
+                var materialCost = EstimatingMath.RoundCurrency(materialMsi * costPerMsi);
+
+                lineItems.Add(new EstimateLineItem(
+                    "Finishing",
+                    $"{operation.Description} — material{(string.IsNullOrWhiteSpace(operation.StockLabel) ? "" : $" ({operation.StockLabel})")}",
+                    materialMsi,
+                    "MSI",
+                    EstimatingMath.RoundMoney(costPerMsi),
+                    materialCost));
+
+                totalCost += materialCost;
+            }
         }
 
         return new FinishingCostResult(totalCost, lineItems);

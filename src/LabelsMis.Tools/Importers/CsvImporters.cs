@@ -306,7 +306,7 @@ public sealed class OpeningBalanceImporter : CsvImporterBase
                 }
 
                 var order = SalesOrder.CreateOpen(
-                    Guid.NewGuid(), $"OB-{row.InvoiceNumber}", customer.Id, null, "OPENING-BALANCE",
+                    Guid.NewGuid(), $"OB-{row.InvoiceNumber}", customer.Id, null, null, "OPENING-BALANCE",
                     now, null, "Opening balance import", null, 0m, ShippingAddress.Empty, actorId, now);
                 db.SalesOrders.Add(order);
 

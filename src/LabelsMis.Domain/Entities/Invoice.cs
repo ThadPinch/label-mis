@@ -28,6 +28,7 @@ public class Invoice : EntityBase
     public decimal Total { get; private set; }
     public decimal BalanceDue { get; private set; }
     public DateTime? QbExportedAt { get; private set; }
+    public Guid? QbExportedById { get; private set; }
     public string? QbInvoiceId { get; private set; }
     public string? Notes { get; private set; }
     public string? PdfFilePath { get; private set; }
@@ -120,7 +121,20 @@ public class Invoice : EntityBase
 
     public void MarkExported(DateTime exportedAt, Guid modifiedById, DateTime modifiedAt)
     {
+        if (Status is InvoiceStatus.Void)
+        {
+            throw new InvalidOperationException("Void invoices cannot be marked exported.");
+        }
+
         QbExportedAt = exportedAt;
+        QbExportedById = modifiedById;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    public void UnmarkExported(Guid modifiedById, DateTime modifiedAt)
+    {
+        QbExportedAt = null;
+        QbExportedById = null;
         SetModified(modifiedById, modifiedAt);
     }
 

@@ -7,7 +7,7 @@ namespace LabelsMis.Web.Services.Settings;
 public class GeneralSettingsService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
     /// <summary>Read-only fetch that never writes — safe to call from PDF generation.</summary>
-    public Task<GeneralSettings?> GetAsync(CancellationToken cancellationToken = default) =>
+    public virtual Task<GeneralSettings?> GetAsync(CancellationToken cancellationToken = default) =>
         db.GeneralSettings.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
 
     public async Task<GeneralSettings> GetOrCreateAsync(CancellationToken cancellationToken = default)

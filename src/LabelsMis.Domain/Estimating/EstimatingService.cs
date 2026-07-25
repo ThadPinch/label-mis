@@ -77,10 +77,15 @@ public class EstimatingService
             + pressLaborResult.TotalLaborCost
             + finishingResult.TotalFinishingCost);
 
+        var markupPct = request.QuantityMarkupOverrides is not null
+            && request.QuantityMarkupOverrides.TryGetValue(quantity, out var quantityMarkup)
+            ? quantityMarkup
+            : request.CustomerMarkupPct;
+
         var pricing = MarkupRules.Calculate(
             totalCost,
             quantity,
-            request.CustomerMarkupPct,
+            markupPct,
             request.MinimumMarginPct);
 
         return new QuantityBreakResult(
@@ -94,6 +99,7 @@ public class EstimatingService
             pricing.PricePerThousand,
             pricing.MarginPct,
             pricing.BelowMinimumMargin,
+            markupPct,
             costBreakdown);
     }
 }

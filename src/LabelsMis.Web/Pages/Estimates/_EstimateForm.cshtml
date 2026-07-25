@@ -5,6 +5,7 @@
 @{
     var isReadOnly = (bool)(ViewData["IsReadOnly"] ?? false);
     var finishingOps = (IReadOnlyList<FinishingOperation>?)ViewData["FinishingOperations"] ?? Array.Empty<FinishingOperation>();
+    var finishingStocks = (IReadOnlyList<Stock>?)ViewData["FinishingStocks"] ?? Array.Empty<Stock>();
     var substrates = (IEnumerable<SelectListItem>?)ViewData["Substrates"] ?? Enumerable.Empty<SelectListItem>();
     var spotInks = (IReadOnlyList<Ink>?)ViewData["SpotInks"] ?? Array.Empty<Ink>();
     var shippingMethods = (IReadOnlyList<ShippingMethodListItem>?)ViewData["ShippingMethods"] ?? Array.Empty<ShippingMethodListItem>();
@@ -18,6 +19,7 @@
 {
     <script type="application/json" id="finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString() })))</script>
     <script type="application/json" id="spot-inks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(spotInks.Select(s => new { id = s.Id, code = s.Code, description = s.Description })))</script>
+    <script type="application/json" id="finishing-stocks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingStocks.Select(s => new { id = s.Id, code = s.Code, description = s.Description })))</script>
 }
 <div class="estimate-workspace">
     <div class="estimate-workspace-main">
@@ -377,6 +379,16 @@
                                                 <label class="form-label small mb-0">Run speed fpm override</label>
                                                 <input name="Input.Lines[@i].FinishingOperations[@j].RunSpeedFpmOverride" value="@(sel.RunSpeedFpmOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" class="form-control form-control-sm calc-trigger" style="max-width: 8rem;" />
                                             </div>
+                                            <div class="finishing-stock-group @(op?.OperationType is FinishingOperationType.Laminate or FinishingOperationType.Foil ? "" : "d-none")">
+                                                <label class="form-label small mb-0">Material stock</label>
+                                                <select name="Input.Lines[@i].FinishingOperations[@j].StockId" class="form-select form-select-sm finishing-stock-select" style="max-width: 14rem;">
+                                                    <option value="">Select stock</option>
+                                                    @foreach (var fs in finishingStocks)
+                                                    {
+                                                        <option value="@fs.Id" selected="@(fs.Id == sel.StockId)">@fs.Code — @fs.Description</option>
+                                                    }
+                                                </select>
+                                            </div>
                                             <button type="button" class="btn btn-sm btn-outline-danger finishing-remove">Remove</button>
                                         </div>
                                     </div>
@@ -427,7 +439,8 @@
                                 <button type="button" class="btn btn-outline-secondary margin-increase" aria-label="Increase margin">+</button>
                             </div>
                             <input type="hidden" name="Input.Lines[@i].MarkupPctOverride" value="@(line.MarkupPctOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")" class="markup-override-input" />
-                            <span class="form-text mb-0">Type a margin (e.g. 25 or 25%) or use ± for 1% steps</span>
+                            <input type="hidden" name="Input.Lines[@i].QuantityMarkupOverridesJson" value="@line.QuantityMarkupOverridesJson" class="qty-markup-json" />
+                            <span class="form-text mb-0">Sets the margin for every quantity — adjust individual rows below to override one</span>
                         </div>
                         <div class="calc-warnings alert alert-warning d-none"></div>
                         <div class="calc-errors alert alert-danger d-none"></div>
@@ -443,6 +456,7 @@
                 {
                     <div class="mt-3">
                         <input type="hidden" name="Input.Lines[@i].MarkupPctOverride" value="@(line.MarkupPctOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")" class="markup-override-input" />
+                        <input type="hidden" name="Input.Lines[@i].QuantityMarkupOverridesJson" value="@line.QuantityMarkupOverridesJson" class="qty-markup-json" />
                         @for (var j = 0; j < line.FinishingOperations.Count; j++)
                         {
                             var sel = line.FinishingOperations[j];
@@ -450,6 +464,7 @@
                             <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].SortOrder" value="@j" />
                             <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].SetupMinutesOverride" value="@(sel.SetupMinutesOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")" />
                             <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].RunSpeedFpmOverride" value="@(sel.RunSpeedFpmOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")" />
+                            <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].StockId" value="@(sel.StockId?.ToString() ?? "")" />
                         }
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <label class="form-label mb-0 me-1">Margin</label>
