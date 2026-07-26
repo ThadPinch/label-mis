@@ -43,3 +43,14 @@
     }
     </tbody>
 </table>
+
+@await Html.PartialAsync("Shared/_Pager", new PagerModel(
+    Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount)
+{
+    Extra = new Dictionary<string, string?>
+    {
+        ["Search"] = Model.Search,
+        ["CustomerId"] = Model.CustomerId?.ToString(),
+        ["Status"] = Model.Status?.ToString()
+    }
+})

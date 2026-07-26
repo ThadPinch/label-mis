@@ -75,6 +75,8 @@ public class EstimateLinePageInput
 
     public LabelOrientation? LabelOrientationOverride { get; set; }
 
+    public UnwindDirection? Unwind { get; set; }
+
     public List<FinishingOperationSelectionInput> FinishingOperations { get; set; } = [];
 
     public List<int?> Quantities { get; set; } = [];
@@ -107,7 +109,8 @@ public class EstimateLinePageInput
         MarkupPctOverride,
         MaxLabelsAcrossOverride,
         LabelOrientationOverride,
-        ParseQuantityMarkupOverrides(QuantityMarkupOverridesJson));
+        ParseQuantityMarkupOverrides(QuantityMarkupOverridesJson),
+        Unwind);
 
     private static IReadOnlyDictionary<int, decimal>? ParseQuantityMarkupOverrides(string? json)
     {
@@ -159,6 +162,7 @@ public class EstimateLinePageInput
             MarkupPctOverride = line.MarkupPctOverride,
             MaxLabelsAcrossOverride = line.MaxLabelsAcrossOverride,
             LabelOrientationOverride = line.LabelOrientationOverride,
+            Unwind = line.Unwind,
             FinishingOperations = EstimateCalculationMapper
                 .DeserializeFinishingOperations(line.FinishingOperationsJson).ToList(),
             Quantities = line.QuantityBreaks.OrderBy(q => q.Quantity).Select(q => (int?)q.Quantity).ToList(),

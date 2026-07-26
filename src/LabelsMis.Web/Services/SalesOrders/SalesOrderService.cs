@@ -130,7 +130,7 @@ public class SalesOrderService(
                 o.OrderedAt))
             .ToListAsync(cancellationToken);
 
-        return new PagedResult<SalesOrderListItem>(items, total, page, pageSize);
+        return new PagedResult<SalesOrderListItem>(items, page, pageSize, total);
     }
 
     public async Task<SalesOrder?> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
@@ -304,6 +304,120 @@ public class SalesOrderService(
         foreach (var line in lines)
         {
             db.SalesOrderLines.Add(line);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// The explicit "unlocked" edit path for orders already in production. Lines are updated
+    /// in place (matched by id) so job references stay intact, and line changes are propagated
+    /// to the linked jobs: spec edits via <see cref="Job.SetSpec"/>, quantity changes via
+    /// <see cref="Job.UpdateOrderedQuantity"/>. Lines can be added; a line can only be removed
+    /// while no job references it. Products on job-linked lines cannot change.
+    /// </summary>
+    public async Task UpdateInProductionAsync(
+        Guid id,
+        SalesOrderFormInput input,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        ValidateLines(input.Lines);
+
+        var order = await db.SalesOrders
+            .Include(o => o.Lines)
+            .SingleAsync(o => o.Id == id, cancellationToken);
+
+        if (order.Status is SalesOrderStatus.Cancelled or SalesOrderStatus.Closed)
+        {
+            throw new InvalidOperationException("Cancelled or closed orders cannot be edited.");
+        }
+
+        await ValidateShippingMethodAsync(input.ShippingMethodId, cancellationToken);
+        order.UpdateDetails(
+            input.CustomerPoNumber,
+            input.RequestedShipDate,
+            input.Notes,
+            input.ShippingMethodId,
+            input.ShippingCost,
+            input.ShippingAddress,
+            userId,
+            now);
+
+        var existingLines = order.Lines.ToDictionary(l => l.Id);
+        var lineIds = order.Lines.Select(l => l.Id).ToList();
+        var jobsByLine = (await db.Jobs
+                .Where(j => lineIds.Contains(j.SalesOrderLineId) && j.Status != JobStatus.Closed)
+                .ToListAsync(cancellationToken))
+            .ToLookup(j => j.SalesOrderLineId);
+
+        var keptIds = new HashSet<Guid>();
+        var seedSpecs = await LoadProductSeedSpecsAsync(input.Lines, cancellationToken);
+
+        foreach (var lineInput in input.Lines)
+        {
+            if (lineInput.Id is { } lineId && existingLines.TryGetValue(lineId, out var line))
+            {
+                keptIds.Add(lineId);
+                var lineJobs = jobsByLine[lineId].ToList();
+                if (lineJobs.Count > 0 && lineInput.ProductId != line.ProductId)
+                {
+                    throw new InvalidOperationException(
+                        $"Line {line.LineNumber} already has a job — its product cannot change. Remove the job first or add a new line.");
+                }
+
+                var quantityChanged = line.Quantity != lineInput.Quantity;
+                line.Update(lineInput.Quantity, lineInput.UnitPrice, lineInput.LineNotes, userId, now);
+                line.UpdateDescription(lineInput.Description, userId, now);
+                if (lineInput.Spec is { } spec)
+                {
+                    line.SetSpec(spec, userId, now);
+                }
+
+                foreach (var job in lineJobs)
+                {
+                    if (lineInput.Spec is { } jobSpec)
+                    {
+                        job.SetSpec(jobSpec, userId, now);
+                    }
+
+                    if (quantityChanged)
+                    {
+                        job.UpdateOrderedQuantity(lineInput.Quantity, userId, now);
+                    }
+                }
+            }
+            else
+            {
+                var newLine = SalesOrderLine.Create(
+                    Guid.NewGuid(),
+                    order.Id,
+                    order.Lines.Count + 1,
+                    lineInput.ProductId,
+                    lineInput.Description,
+                    lineInput.SourceEstimateLineId,
+                    lineInput.Quantity,
+                    lineInput.UnitPrice,
+                    lineInput.LineNotes,
+                    lineInput.Spec ?? seedSpecs.GetValueOrDefault(lineInput.ProductId),
+                    userId,
+                    now);
+                order.AddLine(newLine);
+                db.SalesOrderLines.Add(newLine);
+                keptIds.Add(newLine.Id);
+            }
+        }
+
+        foreach (var removed in existingLines.Values.Where(l => !keptIds.Contains(l.Id)).ToList())
+        {
+            if (jobsByLine[removed.Id].Any())
+            {
+                throw new InvalidOperationException(
+                    $"Line {removed.LineNumber} has a job in production and cannot be removed.");
+            }
+
+            db.SalesOrderLines.Remove(removed);
         }
 
         await db.SaveChangesAsync(cancellationToken);

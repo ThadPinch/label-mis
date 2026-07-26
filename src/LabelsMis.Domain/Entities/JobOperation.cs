@@ -116,6 +116,32 @@ public class JobOperation : EntityBase
         SetModified(modifiedById, modifiedAt);
     }
 
+    /// <summary>
+    /// Sets the recorded production counts to absolute values — the job-page "record / adjust
+    /// counts" action. Unlike <see cref="ClockOff"/> (which accumulates per shift), this replaces
+    /// the totals, so operators can record a fresh round or correct earlier numbers whenever the
+    /// job passes through this step again.
+    /// </summary>
+    public void SetCounts(
+        int goodCount,
+        int wasteCount,
+        decimal downtimeMinutes,
+        DowntimeReasonCode? downtimeReason,
+        Guid modifiedById,
+        DateTime modifiedAt)
+    {
+        if (goodCount < 0 || wasteCount < 0 || downtimeMinutes < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(goodCount), "Counts cannot be negative.");
+        }
+
+        GoodCount = goodCount;
+        WasteCount = wasteCount;
+        DowntimeMinutes = downtimeMinutes;
+        DowntimeReasonCode = downtimeMinutes > 0 ? downtimeReason : null;
+        SetModified(modifiedById, modifiedAt);
+    }
+
     public void Complete(Guid modifiedById, DateTime modifiedAt)
     {
         if (_timeEntries.Any(t => t.ClockedOutAt is null))

@@ -106,6 +106,27 @@ public class SalesOrder : EntityBase
         ShipToCountry = address.Country;
     }
 
+    /// <summary>
+    /// Updates the order's header details regardless of status — the explicit "unlock" edit path
+    /// for orders already in production. The customer and lines are handled separately.
+    /// </summary>
+    public void UpdateDetails(
+        string? customerPoNumber,
+        DateOnly? requestedShipDate,
+        string? notes,
+        Guid? shippingMethodId,
+        decimal shippingCost,
+        ShippingAddress shippingAddress,
+        Guid modifiedById,
+        DateTime modifiedAt)
+    {
+        CustomerPoNumber = string.IsNullOrWhiteSpace(customerPoNumber) ? null : customerPoNumber.Trim();
+        RequestedShipDate = requestedShipDate;
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        SetShipping(shippingMethodId, shippingCost, shippingAddress);
+        SetModified(modifiedById, modifiedAt);
+    }
+
     /// <summary>Updates the order's header notes. Allowed in any status (e.g. edited from a job in production).</summary>
     public void UpdateNotes(string? notes, Guid modifiedById, DateTime modifiedAt)
     {

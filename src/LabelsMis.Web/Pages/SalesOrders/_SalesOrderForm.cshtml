@@ -1,3 +1,4 @@
+@using LabelsMis.Domain.Enums
 @using LabelsMis.Web.Services.Shipping
 @using LabelsMis.Web.Pages.SalesOrders
 @model LabelsMis.Web.Pages.SalesOrders.SalesOrderPageInput
@@ -5,159 +6,437 @@
     var isLocked = ViewData["IsLocked"] as bool? ?? false;
     var products = (IEnumerable<SelectListItem>?)ViewData["Products"] ?? Enumerable.Empty<SelectListItem>();
     var shippingMethods = (IReadOnlyList<ShippingMethodListItem>?)ViewData["ShippingMethods"] ?? Array.Empty<ShippingMethodListItem>();
-    var lineDetails = ViewData["LineDetails"] as IReadOnlyList<SalesOrderLineDetail>;
+    var substrates = (IEnumerable<SelectListItem>?)ViewData["Substrates"] ?? Enumerable.Empty<SelectListItem>();
+    var dies = (IEnumerable<SelectListItem>?)ViewData["Dies"] ?? Enumerable.Empty<SelectListItem>();
+    var spotInks = ((IEnumerable<SelectListItem>?)ViewData["SpotInks"] ?? Enumerable.Empty<SelectListItem>()).ToList();
+    var finishingOps = ((IEnumerable<SelectListItem>?)ViewData["FinishingOperations"] ?? Enumerable.Empty<SelectListItem>()).ToList();
+    var finishingStocks = ((IEnumerable<SelectListItem>?)ViewData["FinishingStocks"] ?? Enumerable.Empty<SelectListItem>()).ToList();
 }
-<div class="row g-4">
+
+<div class="row g-2">
     <div class="col-lg-6">
-        <div class="row g-3">
-            <div class="col-12">
-                <label class="form-label">Customer</label>
-                <select asp-for="CustomerId" id="customer-select" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)" disabled="@isLocked">
-                    <option value="">Select customer</option>
-                </select>
+        <div class="card h-100">
+            <div class="card-header py-1 small fw-semibold">Order</div>
+            <div class="card-body py-2">
+                <div class="row g-2">
+                    <div class="col-12">
+                        <label class="form-label small mb-0">Customer</label>
+                        <select asp-for="CustomerId" id="customer-select" class="form-select form-select-sm" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)" disabled="@isLocked">
+                            <option value="">Select customer</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="CustomerPoNumber" class="form-label small mb-0">Customer PO #</label>
+                        <input asp-for="CustomerPoNumber" class="form-control form-control-sm" readonly="@isLocked" />
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="RequestedShipDate" class="form-label small mb-0">Requested ship date</label>
+                        <input asp-for="RequestedShipDate" type="date" class="form-control form-control-sm" readonly="@isLocked" />
+                    </div>
+                    <div class="col-12">
+                        <label asp-for="Notes" class="form-label small mb-0">Notes</label>
+                        <textarea asp-for="Notes" class="form-control form-control-sm" rows="3" readonly="@isLocked"></textarea>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-6"><label asp-for="CustomerPoNumber" class="form-label">Customer PO #</label><input asp-for="CustomerPoNumber" class="form-control" readonly="@isLocked" /></div>
-            <div class="col-md-6"><label asp-for="RequestedShipDate" class="form-label">Requested ship date</label><input asp-for="RequestedShipDate" type="date" class="form-control" readonly="@isLocked" /></div>
-            <div class="col-12"><label asp-for="Notes" class="form-label">Notes</label><textarea asp-for="Notes" class="form-control" rows="3" readonly="@isLocked"></textarea></div>
         </div>
     </div>
     <div class="col-lg-6">
-        <fieldset class="border rounded p-3 order-shipping h-100" id="order-shipping">
-            <legend class="float-none w-auto px-2 h6 mb-0">Shipping</legend>
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label asp-for="ShippingMethodId" class="form-label">Method</label>
-                    <select asp-for="ShippingMethodId" id="shipping-method-select" class="form-select" disabled="@isLocked">
-                        <option value="" data-price="0" data-requires-address="true">No shipping</option>
-                        @foreach (var m in shippingMethods)
-                        {
-                            <option value="@m.Id" data-price="@m.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                                    data-requires-address="@m.RequiresAddress.ToString().ToLowerInvariant()"
-                                    selected="@(m.Id == Model.ShippingMethodId)">
-                                @m.Name — @m.Price.ToString("C2")@(m.IsActive ? "" : " (inactive)")
-                            </option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label asp-for="ShippingCost" class="form-label">Price</label>
-                    <div class="input-group">
-                        <span class="input-group-text">$</span>
-                        <input asp-for="ShippingCost" id="shipping-cost-input" class="form-control" readonly="@isLocked" />
-                    </div>
-                    <span asp-validation-for="ShippingCost" class="text-danger"></span>
-                </div>
-                @if (!isLocked)
-                {
-                    <div class="col-12 shipto-group">
-                        <label for="shipto-source" class="form-label">Ship-to address</label>
-                        <select id="shipto-source" class="form-select">
-                            <option value="custom">Enter manually</option>
+        <div class="card h-100" id="order-shipping">
+            <div class="card-header py-1 small fw-semibold">Shipping</div>
+            <div class="card-body py-2">
+                <div class="row g-2">
+                    <div class="col-md-7">
+                        <label asp-for="ShippingMethodId" class="form-label small mb-0">Method</label>
+                        <select asp-for="ShippingMethodId" id="shipping-method-select" class="form-select form-select-sm" disabled="@isLocked">
+                            <option value="" data-price="0" data-requires-address="true">No shipping</option>
+                            @foreach (var m in shippingMethods)
+                            {
+                                <option value="@m.Id" data-price="@m.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                        data-requires-address="@m.RequiresAddress.ToString().ToLowerInvariant()"
+                                        selected="@(m.Id == Model.ShippingMethodId)">
+                                    @m.Name — @m.Price.ToString("C2")@(m.IsActive ? "" : " (inactive)")
+                                </option>
+                            }
                         </select>
-                        <div class="form-text">Pull a billing or shipping address from the customer, or enter one below.</div>
                     </div>
-                }
-                <div class="col-12 shipto-group"><label asp-for="ShipToName" class="form-label">Recipient / company</label><input asp-for="ShipToName" class="form-control shipto-field" readonly="@isLocked" /></div>
-                <div class="col-12 shipto-group"><label asp-for="ShipToStreet1" class="form-label">Street</label><input asp-for="ShipToStreet1" class="form-control shipto-field" readonly="@isLocked" /></div>
-                <div class="col-12 shipto-group"><label asp-for="ShipToStreet2" class="form-label">Street 2</label><input asp-for="ShipToStreet2" class="form-control shipto-field" readonly="@isLocked" /></div>
-                <div class="col-md-6 shipto-group"><label asp-for="ShipToCity" class="form-label">City</label><input asp-for="ShipToCity" class="form-control shipto-field" readonly="@isLocked" /></div>
-                <div class="col-md-3 shipto-group"><label asp-for="ShipToState" class="form-label">State</label><input asp-for="ShipToState" class="form-control shipto-field" readonly="@isLocked" /></div>
-                <div class="col-md-3 shipto-group"><label asp-for="ShipToZip" class="form-label">Zip</label><input asp-for="ShipToZip" class="form-control shipto-field" readonly="@isLocked" /></div>
+                    <div class="col-md-5">
+                        <label asp-for="ShippingCost" class="form-label small mb-0">Price</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">$</span>
+                            <input asp-for="ShippingCost" id="shipping-cost-input" class="form-control" readonly="@isLocked" />
+                        </div>
+                        <span asp-validation-for="ShippingCost" class="text-danger small"></span>
+                    </div>
+                    @if (!isLocked)
+                    {
+                        <div class="col-12 shipto-group">
+                            <label for="shipto-source" class="form-label small mb-0">Ship-to address</label>
+                            <select id="shipto-source" class="form-select form-select-sm">
+                                <option value="custom">Enter manually</option>
+                            </select>
+                        </div>
+                    }
+                    <div class="col-md-6 shipto-group">
+                        <label asp-for="ShipToName" class="form-label small mb-0">Recipient / company</label>
+                        <input asp-for="ShipToName" class="form-control form-control-sm shipto-field" readonly="@isLocked" />
+                    </div>
+                    <div class="col-md-6 shipto-group">
+                        <label asp-for="ShipToStreet1" class="form-label small mb-0">Street</label>
+                        <input asp-for="ShipToStreet1" class="form-control form-control-sm shipto-field" readonly="@isLocked" />
+                    </div>
+                    <div class="col-md-4 shipto-group">
+                        <label asp-for="ShipToStreet2" class="form-label small mb-0">Street 2</label>
+                        <input asp-for="ShipToStreet2" class="form-control form-control-sm shipto-field" readonly="@isLocked" />
+                    </div>
+                    <div class="col-md-4 shipto-group">
+                        <label asp-for="ShipToCity" class="form-label small mb-0">City</label>
+                        <input asp-for="ShipToCity" class="form-control form-control-sm shipto-field" readonly="@isLocked" />
+                    </div>
+                    <div class="col-md-2 shipto-group">
+                        <label asp-for="ShipToState" class="form-label small mb-0">State</label>
+                        <input asp-for="ShipToState" class="form-control form-control-sm shipto-field" readonly="@isLocked" />
+                    </div>
+                    <div class="col-md-2 shipto-group">
+                        <label asp-for="ShipToZip" class="form-label small mb-0">Zip</label>
+                        <input asp-for="ShipToZip" class="form-control form-control-sm shipto-field" readonly="@isLocked" />
+                    </div>
+                </div>
             </div>
-        </fieldset>
+        </div>
     </div>
 </div>
 
-<h2 class="h5 mt-4">Line items</h2>
+<h2 class="h6 mt-3 mb-1">Line items</h2>
 @if (ViewData["ShowProductFilter"] as bool? == true)
 {
-    <div class="row g-3 mb-3">
-        <div class="col-md-6">
-            <label for="product-filter-customer" class="form-label">Pull from existing product — customer</label>
-            <select id="product-filter-customer" class="form-select">
-                <option value="">All products</option>
+    <div class="row g-2 mb-2">
+        <div class="col-md-5">
+            <select id="product-filter-customer" class="form-select form-select-sm">
+                <option value="">Pull products from: all customers</option>
                 @foreach (var customer in (IEnumerable<SelectListItem>)ViewData["Customers"]!)
                 {
-                    <option value="@customer.Value">@customer.Text</option>
+                    <option value="@customer.Value">Pull products from: @customer.Text</option>
                 }
             </select>
-            <div class="form-text">Filter product choices on each line. Defaults to the order customer when selected.</div>
         </div>
     </div>
 }
 @for (var i = 0; i < Model.Lines.Count; i++)
 {
     var line = Model.Lines[i];
-    var detail = lineDetails is not null && i < lineDetails.Count ? lineDetails[i] : null;
-    var collapseId = $"order-line-details-{i}";
-    <div class="border rounded p-2 mb-2 order-line">
-        <input type="hidden" name="Input.Lines[@i].SourceEstimateLineId" value="@(line.SourceEstimateLineId?.ToString())" />
-        <input type="hidden" name="Input.Lines[@i].SpecJson" value="@line.SpecJson" />
-        <input type="hidden" name="Input.Lines[@i].Description" value="@line.Description" />
-        <div class="row g-2 align-items-end">
-            <div class="col-md-4">
-                <label class="form-label small mb-1">Product</label>
-                <select asp-for="Lines[@i].ProductId" class="form-select product-select" asp-items="products" disabled="@isLocked"><option value="">Select product</option></select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Qty</label>
-                <input name="Input.Lines[@i].Quantity" value="@line.Quantity" class="form-control line-qty" readonly="@isLocked" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Unit price</label>
-                <input name="Input.Lines[@i].UnitPrice" value="@line.UnitPrice" class="form-control line-price" readonly="@isLocked" />
-            </div>
-            <div class="col-md-2 artwork-upload-cell">
-                <label class="form-label small mb-1">Artwork</label>
-                @if (line.HasArtwork && line.ProductId != Guid.Empty)
-                {
-                    <a asp-page="/Artwork/Download" asp-route-productId="@line.ProductId" target="_blank" class="small d-block mb-1 artwork-download-link">Download</a>
-                }
-                @if (!isLocked)
-                {
-                    <input type="file" name="Input.Lines[@i].ArtworkFile" class="form-control form-control-sm artwork-file-input" accept=".pdf,.ai,.eps,.png,.jpg,.jpeg,.tif,.tiff" />
-                    <div class="artwork-upload-status d-none">
-                        <div class="progress mt-1" style="height: 6px;">
-                            <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
-                        </div>
-                        <div class="small artwork-upload-message mt-1 text-muted"></div>
-                    </div>
-                }
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Line notes</label>
-                <input name="Input.Lines[@i].LineNotes" value="@line.LineNotes" class="form-control" placeholder="Notes" readonly="@isLocked" />
-            </div>
+    var collapseId = $"order-line-spec-{i}";
+    var hasSpec = !string.IsNullOrWhiteSpace(line.SpecJson);
+    var productLocked = isLocked || line.HasJob;
+    var lineTotal = line.Quantity * line.UnitPrice;
+    <div class="card mb-2 order-line" data-line-index="@i">
+        <div class="card-header py-1 px-2 d-flex align-items-center gap-2">
+            <span class="fw-semibold small">Line @(i + 1)</span>
+            @if (line.HasJob)
+            {
+                <span class="badge text-bg-secondary" title="This line has a production job — the product is pinned.">@(line.JobNumber ?? "In production")</span>
+            }
+            <span class="ms-auto small text-muted">@line.Quantity.ToString("N0") × @line.UnitPrice.ToString("C4")</span>
+            <span class="small fw-semibold">@lineTotal.ToString("C2")</span>
         </div>
-        @if (detail is not null)
-        {
-            <div class="mt-2">
-                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none order-line-toggle" data-bs-toggle="collapse" data-bs-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId">
-                    Product &amp; finishing details
-                </button>
+        <div class="card-body py-2">
+            <input type="hidden" name="Input.Lines[@i].Id" value="@(line.Id?.ToString())" />
+            <input type="hidden" name="Input.Lines[@i].SourceEstimateLineId" value="@(line.SourceEstimateLineId?.ToString())" />
+            <input type="hidden" name="Input.Lines[@i].SpecJson" value="@line.SpecJson" />
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">Product</label>
+                    <select asp-for="Lines[@i].ProductId" class="form-select form-select-sm product-select" asp-items="products" disabled="@productLocked"><option value="">Select product</option></select>
+                    @if (line.HasJob)
+                    {
+                        <input type="hidden" name="Input.Lines[@i].ProductId" value="@line.ProductId" />
+                    }
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">Description</label>
+                    <input name="Input.Lines[@i].Description" value="@line.Description" class="form-control form-control-sm" placeholder="As quoted" readonly="@isLocked" />
+                </div>
+                <div class="col-6 col-md-1">
+                    <label class="form-label small mb-0">Qty</label>
+                    <input name="Input.Lines[@i].Quantity" value="@line.Quantity" class="form-control form-control-sm line-qty" readonly="@isLocked" />
+                </div>
+                <div class="col-6 col-md-1">
+                    <label class="form-label small mb-0">Unit price</label>
+                    <input name="Input.Lines[@i].UnitPrice" value="@line.UnitPrice" class="form-control form-control-sm line-price" readonly="@isLocked" />
+                </div>
+                <div class="col-md-2 artwork-upload-cell">
+                    <label class="form-label small mb-0">Artwork</label>
+                    @if (line.HasArtwork && line.ProductId != Guid.Empty)
+                    {
+                        <a asp-page="/Artwork/Download" asp-route-productId="@line.ProductId" target="_blank" class="small d-block text-truncate artwork-download-link"
+                           title="@line.ArtworkFileName">@(line.ArtworkFileName ?? "Download")</a>
+                    }
+                    @if (!isLocked)
+                    {
+                        <input type="file" name="Input.Lines[@i].ArtworkFile" class="form-control form-control-sm artwork-file-input" accept=".pdf,.ai,.eps,.png,.jpg,.jpeg,.tif,.tiff" />
+                        <div class="artwork-upload-status d-none">
+                            <div class="progress mt-1" style="height: 6px;">
+                                <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <div class="small artwork-upload-message mt-1 text-muted"></div>
+                        </div>
+                    }
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">Line notes</label>
+                    <input name="Input.Lines[@i].LineNotes" value="@line.LineNotes" class="form-control form-control-sm" placeholder="Notes" readonly="@isLocked" />
+                </div>
             </div>
-            <div class="collapse mt-2 order-line-details" id="@collapseId">
-                <div class="border-top pt-2">
-                    <div class="row g-2 small">
-                        <div class="col-md-4"><span class="text-muted d-block">Product</span>@detail.ProductSku — @detail.ProductDescription</div>
-                        <div class="col-md-3"><span class="text-muted d-block">Label size</span>@detail.LabelAcrossIn.ToString("0.###")" × @detail.LabelAroundIn.ToString("0.###")"</div>
-                        <div class="col-md-2"><span class="text-muted d-block">Corner radius</span>@detail.CornerRadiusIn.ToString("0.###")"</div>
-                        <div class="col-md-3"><span class="text-muted d-block">Ink set</span>@detail.InkSet</div>
-                        <div class="col-md-6"><span class="text-muted d-block">Substrate</span>@detail.SubstrateLabel</div>
-                        <div class="col-md-6"><span class="text-muted d-block">Die</span>@(string.IsNullOrWhiteSpace(detail.DieLabel) ? "—" : detail.DieLabel)</div>
-                        <div class="col-12">
-                            <span class="text-muted d-block">Finishing operations</span>
-                            @if (detail.FinishingOperations.Count == 0)
-                            {
-                                <span>None</span>
-                            }
-                            else
-                            {
-                                @foreach (var op in detail.FinishingOperations)
+
+            @if (!hasSpec && !isLocked)
+            {
+                <div class="form-text mt-1">Spec is seeded from the product when the order is saved; reopen the order to edit it.</div>
+            }
+        </div>
+        @if (hasSpec)
+        {
+            var chips = new List<string>();
+            if (line.LabelAcrossIn is { } sizeAcross && line.LabelAroundIn is { } sizeAround)
+            {
+                chips.Add($"{sizeAcross:0.###}″ × {sizeAround:0.###}″");
+            }
+            var substrateText = substrates.FirstOrDefault(s => s.Value == line.SubstrateId?.ToString())?.Text;
+            if (substrateText is not null)
+            {
+                chips.Add(substrateText.Split(" — ")[0]);
+            }
+            if (line.InkSet is { } inkSet)
+            {
+                chips.Add(inkSet + (line.Spots.Count > 0 ? $" +{line.Spots.Count} spot{(line.Spots.Count == 1 ? "" : "s")}" : ""));
+            }
+            if (line.Unwind is { } unwindChip)
+            {
+                chips.Add($"Unwind #{(int)unwindChip}");
+            }
+            chips.Add(line.Finishing.Count == 0
+                ? "No finishing"
+                : $"{line.Finishing.Count} finishing op{(line.Finishing.Count == 1 ? "" : "s")}");
+
+            <input type="hidden" name="Input.Lines[@i].SpecEdited" value="true" />
+            <button type="button" class="spec-toggle collapsed" data-bs-toggle="collapse" data-bs-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId">
+                <svg class="spec-chevron" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 3.5 10 8l-4.5 4.5V3.5z"/></svg>
+                <span class="fw-semibold">Spec &amp; finishing</span>
+                <span class="spec-chips">
+                    @foreach (var chip in chips)
+                    {
+                        <span class="spec-chip">@chip</span>
+                    }
+                </span>
+            </button>
+            <div class="collapse" id="@collapseId">
+                <div class="spec-body">
+                    <div class="spec-section">
+                        <div class="spec-section-title">Dimensions</div>
+                        <div class="row g-2">
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-0">Across (in)</label>
+                                <input name="Input.Lines[@i].LabelAcrossIn" value="@(line.LabelAcrossIn?.ToString("0.####"))" class="form-control form-control-sm" readonly="@isLocked" />
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-0">Around (in)</label>
+                                <input name="Input.Lines[@i].LabelAroundIn" value="@(line.LabelAroundIn?.ToString("0.####"))" class="form-control form-control-sm" readonly="@isLocked" />
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-0">Corner radius</label>
+                                <input name="Input.Lines[@i].CornerRadiusIn" value="@(line.CornerRadiusIn?.ToString("0.####"))" class="form-control form-control-sm" readonly="@isLocked" />
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-0">Gutter across</label>
+                                <input name="Input.Lines[@i].GutterAcrossIn" value="@(line.GutterAcrossIn?.ToString("0.####"))" class="form-control form-control-sm" readonly="@isLocked" />
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-0">Gutter around</label>
+                                <input name="Input.Lines[@i].GutterAroundIn" value="@(line.GutterAroundIn?.ToString("0.####"))" class="form-control form-control-sm" readonly="@isLocked" />
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-0">Bleed</label>
+                                <input name="Input.Lines[@i].BleedIn" value="@(line.BleedIn?.ToString("0.####"))" class="form-control form-control-sm" readonly="@isLocked" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="spec-section">
+                        <div class="spec-section-title">Material &amp; tooling</div>
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <label class="form-label small mb-0">Substrate</label>
+                                <select name="Input.Lines[@i].SubstrateId" class="form-select form-select-sm" disabled="@isLocked">
+                                    <option value="">Select substrate</option>
+                                    @foreach (var s in substrates)
+                                    {
+                                        <option value="@s.Value" selected="@(s.Value == line.SubstrateId?.ToString())">@s.Text</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-0">Die</label>
+                                <select name="Input.Lines[@i].DieId" class="form-select form-select-sm" disabled="@isLocked">
+                                    <option value="">No die assigned</option>
+                                    @foreach (var d in dies)
+                                    {
+                                        <option value="@d.Value" selected="@(d.Value == line.DieId?.ToString())">@d.Text</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="spec-section">
+                        <div class="spec-section-title">Inks</div>
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <label class="form-label small mb-0">Ink set</label>
+                                <select name="Input.Lines[@i].InkSet" class="form-select form-select-sm inkset-select" disabled="@isLocked">
+                                    @foreach (var v in Enum.GetValues<InkSet>())
+                                    {
+                                        <option value="@((int)v)" selected="@(v == line.InkSet)">@v</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-1 white-ink-group @(line.InkSet is InkSet.CMYKW or InkSet.CMYKW_PlusSpot ? "" : "d-none")">
+                                <label class="form-label small mb-0">White hits</label>
+                                <select name="Input.Lines[@i].WhiteHits" class="form-select form-select-sm" disabled="@isLocked">
+                                    @for (var h = 0; h <= 3; h++)
+                                    {
+                                        <option value="@h" selected="@(h == (line.WhiteHits ?? 0))">@h</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-1 white-ink-group @(line.InkSet is InkSet.CMYKW or InkSet.CMYKW_PlusSpot ? "" : "d-none")">
+                                <label class="form-label small mb-0">White %</label>
+                                <input name="Input.Lines[@i].WhiteCoveragePct" value="@(line.WhiteCoveragePct?.ToString("0"))" class="form-control form-control-sm" readonly="@isLocked" />
+                            </div>
+
+                            <div class="col-12 spot-ink-group @(line.InkSet is InkSet.CMYK_PlusSpot or InkSet.CMYKW_PlusSpot ? "" : "d-none")">
+                                <label class="form-label small mb-0 d-block">Spot colors</label>
+                                <div class="spot-rows">
+                                    @for (var j = 0; j < line.Spots.Count; j++)
+                                    {
+                                        var spot = line.Spots[j];
+                                        <div class="row g-1 mb-1 spot-row align-items-center">
+                                            <div class="col-md-4">
+                                                <select name="Input.Lines[@i].Spots[@j].InkId" class="form-select form-select-sm spot-ink" disabled="@isLocked">
+                                                    <option value="">Select spot color</option>
+                                                    @foreach (var ink in spotInks)
+                                                    {
+                                                        <option value="@ink.Value" selected="@(ink.Value == spot.InkId.ToString())">@ink.Text</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="col-4 col-md-2">
+                                                <select name="Input.Lines[@i].Spots[@j].Hits" class="form-select form-select-sm spot-hits" disabled="@isLocked">
+                                                    @for (var h = 1; h <= 3; h++)
+                                                    {
+                                                        <option value="@h" selected="@(h == spot.Hits)">@h hit@(h == 1 ? "" : "s")</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="col-4 col-md-2">
+                                                <div class="input-group input-group-sm">
+                                                    <input name="Input.Lines[@i].Spots[@j].CoveragePct" value="@spot.CoveragePct.ToString("0")" class="form-control spot-coverage" readonly="@isLocked" />
+                                                    <span class="input-group-text">%</span>
+                                                </div>
+                                            </div>
+                                            @if (!isLocked)
+                                            {
+                                                <div class="col-4 col-md-1">
+                                                    <button type="button" class="btn btn-sm btn-outline-danger spot-remove">×</button>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                                @if (!isLocked)
                                 {
-                                    <span class="badge text-bg-light border me-1 mb-1">@op</span>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary spot-add" data-line-index="@i">Add spot color</button>
                                 }
-                            }
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="spec-section">
+                        <div class="spec-section-title">Finishing</div>
+                        <div class="row g-2">
+                            <div class="col-12">
+                                <div class="row g-1">
+                                    @for (var j = 0; j < finishingOps.Count; j++)
+                                    {
+                                        var op = finishingOps[j];
+                                        var selection = line.Finishing.FirstOrDefault(f => f.OperationId.ToString() == op.Value);
+                                        <div class="col-md-6">
+                                            <div class="d-flex align-items-center gap-2 border rounded px-2 py-1">
+                                                <input type="hidden" name="Input.Lines[@i].Finishing[@j].OperationId" value="@op.Value" />
+                                                <input type="hidden" name="Input.Lines[@i].Finishing[@j].SetupMinutesOverride" value="@(selection?.SetupMinutesOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" />
+                                                <input type="hidden" name="Input.Lines[@i].Finishing[@j].RunSpeedFpmOverride" value="@(selection?.RunSpeedFpmOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" />
+                                                <div class="form-check mb-0 flex-grow-1">
+                                                    <input type="checkbox" class="form-check-input" id="fin-@i-@j" name="Input.Lines[@i].Finishing[@j].Include" value="true"
+                                                           checked="@(selection is not null)" disabled="@isLocked" />
+                                                    <label class="form-check-label small" for="fin-@i-@j">@op.Text</label>
+                                                </div>
+                                                @if (finishingStocks.Count > 0)
+                                                {
+                                                    <select name="Input.Lines[@i].Finishing[@j].StockId" class="form-select form-select-sm" style="max-width: 12rem;" disabled="@isLocked">
+                                                        <option value="">Material —</option>
+                                                        @foreach (var stock in finishingStocks)
+                                                        {
+                                                            <option value="@stock.Value" selected="@(stock.Value == selection?.StockId?.ToString())">@stock.Text</option>
+                                                        }
+                                                    </select>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="spec-section">
+                        <div class="spec-section-title">Waste &amp; imposition</div>
+                        <div class="row g-2">
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-0">Setup waste (imp)</label>
+                                <input name="Input.Lines[@i].SetupWasteImpressions" value="@(line.SetupWasteImpressions?.ToString("0.##"))" class="form-control form-control-sm" readonly="@isLocked" />
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-0">Running waste %</label>
+                                <input name="Input.Lines[@i].RunningWastePct" value="@(line.RunningWastePct?.ToString("0.####"))" class="form-control form-control-sm" readonly="@isLocked" />
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-0">Labels across</label>
+                                <select name="Input.Lines[@i].MaxLabelsAcrossOverride" class="form-select form-select-sm" disabled="@isLocked">
+                                    <option value="" selected="@(!line.MaxLabelsAcrossOverride.HasValue)">Auto</option>
+                                    @for (var n = 1; n <= 12; n++)
+                                    {
+                                        <option value="@n" selected="@(line.MaxLabelsAcrossOverride == n)">@n up</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-0">Orientation</label>
+                                <select name="Input.Lines[@i].LabelOrientationOverride" class="form-select form-select-sm" disabled="@isLocked">
+                                    <option value="" selected="@(!line.LabelOrientationOverride.HasValue)">Auto</option>
+                                    <option value="@((int)LabelOrientation.AsEntered)" selected="@(line.LabelOrientationOverride == LabelOrientation.AsEntered)">As entered</option>
+                                    <option value="@((int)LabelOrientation.Rotated)" selected="@(line.LabelOrientationOverride == LabelOrientation.Rotated)">Rotated 90°</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-0">Unwind direction</label>
+                                <select name="Input.Lines[@i].Unwind" class="form-select form-select-sm" disabled="@isLocked">
+                                    <option value="" selected="@(!line.Unwind.HasValue)">Not specified</option>
+                                    @foreach (var unwind in Enum.GetValues<UnwindDirection>())
+                                    {
+                                        <option value="@((int)unwind)" selected="@(line.Unwind == unwind)">@unwind.Label()</option>
+                                    }
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -165,3 +444,60 @@
         }
     </div>
 }
+
+@{
+    // Blank spot-row template, cloned by the add button; __LINE__/__SPOT__ are replaced by JS.
+    var spotTemplate = $@"<div class=""row g-1 mb-1 spot-row align-items-center"">
+  <div class=""col-md-4""><select name=""Input.Lines[__LINE__].Spots[__SPOT__].InkId"" class=""form-select form-select-sm spot-ink""><option value="""">Select spot color</option>{string.Join("", spotInks.Select(x => $@"<option value=""{x.Value}"">{System.Net.WebUtility.HtmlEncode(x.Text)}</option>"))}</select></div>
+  <div class=""col-4 col-md-2""><select name=""Input.Lines[__LINE__].Spots[__SPOT__].Hits"" class=""form-select form-select-sm spot-hits""><option value=""1"">1 hit</option><option value=""2"">2 hits</option><option value=""3"">3 hits</option></select></div>
+  <div class=""col-4 col-md-2""><div class=""input-group input-group-sm""><input name=""Input.Lines[__LINE__].Spots[__SPOT__].CoveragePct"" value=""100"" class=""form-control spot-coverage"" /><span class=""input-group-text"">%</span></div></div>
+  <div class=""col-4 col-md-1""><button type=""button"" class=""btn btn-sm btn-outline-danger spot-remove"">×</button></div>
+</div>";
+}
+<script type="text/template" id="spot-row-template">@Html.Raw(spotTemplate)</script>
+<script>
+    (function () {
+        function reindexSpots(lineEl) {
+            const lineIndex = lineEl.dataset.lineIndex;
+            lineEl.querySelectorAll('.spot-row').forEach((row, spotIndex) => {
+                row.querySelectorAll('[name]').forEach(input => {
+                    input.name = input.name
+                        .replace(/Lines\[\d+\]/, `Lines[${lineIndex}]`)
+                        .replace(/Spots\[\d+\]|Spots\[__SPOT__\]/, `Spots[${spotIndex}]`)
+                        .replace(/Lines\[__LINE__\]/, `Lines[${lineIndex}]`);
+                });
+            });
+        }
+
+        document.addEventListener('click', e => {
+            const addButton = e.target.closest('.spot-add');
+            if (addButton) {
+                const lineEl = addButton.closest('.order-line');
+                const rows = lineEl.querySelector('.spot-rows');
+                const template = document.getElementById('spot-row-template').textContent;
+                const holder = document.createElement('div');
+                holder.innerHTML = template.trim();
+                rows.appendChild(holder.firstElementChild);
+                reindexSpots(lineEl);
+            }
+
+            const removeButton = e.target.closest('.spot-remove');
+            if (removeButton) {
+                const lineEl = removeButton.closest('.order-line');
+                removeButton.closest('.spot-row').remove();
+                reindexSpots(lineEl);
+            }
+        });
+
+        document.addEventListener('change', e => {
+            const inkSetSelect = e.target.closest('.inkset-select');
+            if (!inkSetSelect) return;
+            const lineEl = inkSetSelect.closest('.order-line');
+            const value = inkSetSelect.options[inkSetSelect.selectedIndex]?.text ?? '';
+            const hasWhite = value.startsWith('CMYKW');
+            const hasSpot = value.includes('PlusSpot');
+            lineEl.querySelectorAll('.white-ink-group').forEach(el => el.classList.toggle('d-none', !hasWhite));
+            lineEl.querySelectorAll('.spot-ink-group').forEach(el => el.classList.toggle('d-none', !hasSpot));
+        });
+    })();
+</script>

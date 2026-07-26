@@ -77,4 +77,16 @@
 @await Html.PartialAsync("Shared/_Pager", new PagerModel(
     Model.Result.Page,
     Model.Result.TotalPages,
-    Model.Result.TotalCount))
+    Model.Result.TotalCount,
+    Model.Search,
+    Model.Sort)
+{
+    Extra = new Dictionary<string, string?>
+    {
+        ["status"] = Model.Status?.ToString(),
+        ["customerId"] = Model.CustomerId?.ToString(),
+        ["salesRepId"] = Model.SalesRepId?.ToString(),
+        ["fromDate"] = Model.FromDate?.ToString("yyyy-MM-dd"),
+        ["toDate"] = Model.ToDate?.ToString("yyyy-MM-dd")
+    }
+})

@@ -3,8 +3,27 @@ using FrontEndSuite.PdfPlatform.Cos;
 using FrontEndSuite.PdfPlatform.Document;
 using FrontEndSuite.PdfPlatform.Fonts;
 using FrontEndSuite.PdfPlatform.Geometry;
+using FrontEndSuite.PdfPlatform.Layout;
 
 namespace LabelsMis.Web.Pdf;
+
+/// <summary>
+/// A Code 128 barcode as a flow element, right-aligned in its box. Possible because the vendored
+/// PdfPlatform sources compile into this assembly, so FlowElement's internal contract is visible.
+/// </summary>
+internal sealed class FlowBarcode(string content, float height, float maxWidth = 130f) : FlowElement
+{
+    internal override float Measure(float width) => height;
+
+    internal override void Draw(FlowContext context, float x, float top, float width)
+    {
+        var barcode = Barcode1D.Encode(content, BarcodeSymbology.Code128);
+        var form = barcode.CreateFormXObject(context.Document, heightModules: height);
+        var drawWidth = Math.Min(maxWidth, width);
+        var scaleX = drawWidth / barcode.WidthWithQuietZones;
+        context.Canvas.AddFormXObject(form, scaleX, 0, 0, 1f, x + width - drawWidth, top - height);
+    }
+}
 
 /// <summary>Shared palette and low-level drawing helpers for the PdfPlatform-based generators.</summary>
 internal static class PdfStyle

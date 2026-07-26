@@ -20,6 +20,11 @@ public class GeneralSettings : EntityBase
     public string? Email { get; private set; }
     public string? Website { get; private set; }
     public string? TermsText { get; private set; }
+
+    /// <summary>Sales tax rate as a fraction (0.0825 = 8.25%), applied to new invoices for
+    /// taxable customers.</summary>
+    public decimal TaxRate { get; private set; } = 0.0825m;
+
     public byte[]? LogoBytes { get; private set; }
     public string? LogoContentType { get; private set; }
 
@@ -41,9 +46,15 @@ public class GeneralSettings : EntityBase
         string? email,
         string? website,
         string? termsText,
+        decimal taxRate,
         Guid modifiedById,
         DateTime modifiedAt)
     {
+        if (taxRate is < 0m or > 1m)
+        {
+            throw new ArgumentOutOfRangeException(nameof(taxRate), "Tax rate must be between 0 and 1.");
+        }
+
         CompanyName = companyName.Trim();
         AddressLine1 = Normalize(addressLine1);
         AddressLine2 = Normalize(addressLine2);
@@ -54,6 +65,7 @@ public class GeneralSettings : EntityBase
         Email = Normalize(email);
         Website = Normalize(website);
         TermsText = Normalize(termsText);
+        TaxRate = taxRate;
         SetModified(modifiedById, modifiedAt);
     }
 

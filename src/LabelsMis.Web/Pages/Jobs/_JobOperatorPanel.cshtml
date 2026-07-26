@@ -4,13 +4,18 @@
 @{
     var job = Model.Detail!.Job;
     var status = job.Status;
+    var countsView = Model.CountOperations.FirstOrDefault(o => o.Id == Model.DefaultCountsOperationId);
+
+    // Counts are part of the advance action everywhere production has happened; pre-press has
+    // nothing to count yet, so its advance stays a plain button.
+    var showCounts = Model.CanRecordCounts && countsView is not null && status != JobStatus.PrePress;
 }
-<div class="card mb-4">
-    <div class="card-header">
+<div class="card">
+    <div class="card-header py-2">
         <strong>Current step: @status</strong>
     </div>
-    <div class="card-body">
-        <ul class="nav nav-pills mb-3 flex-wrap">
+    <div class="card-body py-2">
+        <ul class="nav nav-pills nav-pills-sm mb-2 flex-wrap small">
             @foreach (var stage in ProductionStages.All)
             {
                 var active = stage.Status == status;
@@ -23,118 +28,142 @@
             }
         </ul>
 
-        @if (status == JobStatus.Printed)
+        @if (status == JobStatus.Printed && Model.FinishingTasks.Count > 0)
         {
-            @if (Model.FinishingTasks.Count == 0)
-            {
-                <p class="text-muted mb-2">No finishing tasks on this job.</p>
-                @if (Model.CanAdvanceStage)
+            var remaining = Model.FinishingTasks.Count(t => !t.IsDone);
+            <p class="form-text mb-2">
+                Complete each finishing task. The job moves to Rewinding once all are done (@remaining remaining).
+            </p>
+            <ul class="list-group list-group-flush mb-0">
+                @foreach (var task in Model.FinishingTasks)
                 {
-                    <form method="post" asp-page-handler="AdvanceStage">
-                        <button type="submit" class="btn btn-primary">Mark finished</button>
-                    </form>
-                }
-            }
-            else
-            {
-                var remaining = Model.FinishingTasks.Count(t => !t.IsDone);
-                <p class="form-text mb-2">
-                    Complete each finishing task. The job moves to Rewinding once all are done (@remaining remaining).
-                </p>
-                <ul class="list-group list-group-flush mb-0">
-                    @foreach (var task in Model.FinishingTasks)
-                    {
-                        <li class="list-group-item px-0">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span>
-                                    @task.Label
-                                    @if (task.IsLamination)
-                                    {
-                                        <span class="badge text-bg-info ms-1">Laminate</span>
-                                    }
-                                </span>
-                                @if (task.IsDone)
+                    <li class="list-group-item px-0">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>
+                                @task.Label
+                                @if (task.IsLamination)
                                 {
-                                    <span class="badge text-bg-success">Done</span>
+                                    <span class="badge text-bg-info ms-1">Laminate</span>
                                 }
-                                else if (Model.CanAdvanceStage)
-                                {
-                                    <form method="post" asp-page-handler="CompleteFinishingTask" class="d-inline">
-                                        <input type="hidden" name="operationId" value="@task.OperationId" />
-                                        <button type="submit" class="btn btn-sm btn-outline-primary">Complete</button>
-                                    </form>
-                                }
-                                else
-                                {
-                                    <span class="badge text-bg-secondary">@task.Status</span>
-                                }
-                            </div>
-                            @if (task.IsLamination && !task.IsDone && Model.CanOperate)
+                            </span>
+                            @if (task.IsDone)
                             {
-                                <form method="post" asp-page-handler="RecordRollUsage" class="row g-2 align-items-end mt-2">
-                                    <div class="col-md-5">
-                                        <label class="form-label">Laminate roll barcode</label>
-                                        <input name="RollBarcode" class="form-control" autocomplete="off" placeholder="Scan or enter barcode" />
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label">Linear feet used</label>
-                                        <input name="ConsumedLf" class="form-control" type="number" min="0" step="0.01" />
-                                    </div>
-                                    <div class="col-md-auto">
-                                        <button type="submit" class="btn btn-outline-secondary">Record usage</button>
-                                    </div>
-                                    <div class="col-12"><div class="form-text">Scan the laminate roll and enter linear feet used. Appears under Material usage below.</div></div>
+                                <span class="badge text-bg-success">Done</span>
+                            }
+                            else if (Model.CanAdvanceStage)
+                            {
+                                <form method="post" asp-page-handler="CompleteFinishingTask" class="d-inline">
+                                    <input type="hidden" name="operationId" value="@task.OperationId" />
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">Complete</button>
                                 </form>
                             }
-                        </li>
-                    }
-                </ul>
-            }
-        }
-        else if (status == JobStatus.Queued)
-        {
-            @if (Model.CanOperate)
-            {
-                <form method="post" asp-page-handler="RecordRollUsage" class="row g-2 align-items-end mb-3">
-                    <div class="col-md-5">
-                        <label asp-for="RollBarcode" class="form-label">Roll barcode</label>
-                        <input asp-for="RollBarcode" class="form-control" autocomplete="off" placeholder="Scan or enter barcode" />
-                    </div>
-                    <div class="col-md-4">
-                        <label asp-for="ConsumedLf" class="form-label">Linear feet used</label>
-                        <input asp-for="ConsumedLf" class="form-control" type="number" min="0" step="0.01" />
-                    </div>
-                    <div class="col-md-auto">
-                        <button type="submit" class="btn btn-outline-secondary">Record usage</button>
-                    </div>
-                </form>
-                <div class="form-text mb-3">Scan a roll and enter the linear feet consumed on this run. Recorded usage appears under Material usage below.</div>
-            }
-            @if (Model.CanAdvanceStage)
-            {
-                <form method="post" asp-page-handler="AdvanceStage">
-                    <button type="submit" class="btn btn-primary">Mark printed</button>
-                </form>
-            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary">@task.Status</span>
+                            }
+                        </div>
+                        @if (task.IsLamination && !task.IsDone && Model.CanOperate)
+                        {
+                            <form method="post" asp-page-handler="RecordRollUsage" class="row g-2 align-items-end mt-2">
+                                <div class="col-md-5">
+                                    <label class="form-label">Laminate roll barcode</label>
+                                    <input name="RollBarcode" class="form-control" autocomplete="off" placeholder="Scan or enter barcode" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Linear feet used</label>
+                                    <input name="ConsumedLf" class="form-control" type="number" min="0" step="0.01" />
+                                </div>
+                                <div class="col-md-auto">
+                                    <button type="submit" class="btn btn-outline-secondary">Record usage</button>
+                                </div>
+                            </form>
+                        }
+                    </li>
+                }
+            </ul>
         }
         else if (Model.NextStep is { } step)
         {
-            <div class="d-flex flex-wrap gap-2 align-items-center">
-                @if (Model.CanAdvanceStage)
-                {
-                    <form method="post" asp-page-handler="AdvanceStage" class="d-inline">
-                        <button type="submit" class="btn btn-primary">@step.Label</button>
-                    </form>
-                }
-                else
-                {
-                    <p class="text-muted mb-0">Next: @step.Label</p>
-                }
-                @if (status == JobStatus.Rewound && Model.CanShip)
-                {
-                    <a asp-page="/Shipments/Record" asp-route-salesOrderId="@Model.Detail!.SalesOrderId" class="btn btn-success">Record shipment</a>
-                }
-            </div>
+            @if (status == JobStatus.Queued && Model.CanOperate)
+            {
+                <form method="post" asp-page-handler="RecordRollUsage" class="row g-2 align-items-end mb-2">
+                    <div class="col-md-5">
+                        <label asp-for="RollBarcode" class="form-label small mb-0">Roll barcode</label>
+                        <input asp-for="RollBarcode" class="form-control form-control-sm" autocomplete="off" placeholder="Scan or enter barcode" />
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="ConsumedLf" class="form-label small mb-0">Linear feet used</label>
+                        <input asp-for="ConsumedLf" class="form-control form-control-sm" type="number" min="0" step="0.01" />
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">Record usage</button>
+                    </div>
+                </form>
+                <hr class="my-2" />
+            }
+
+            @if (Model.CanAdvanceStage)
+            {
+                var buttonLabel = showCounts
+                    ? $"Record & {char.ToLowerInvariant(step.Label[0])}{step.Label[1..]}"
+                    : step.Label;
+                <form method="post" asp-page-handler="RecordAndAdvance" class="row g-2 align-items-end">
+                    @if (showCounts && countsView is not null)
+                    {
+                        <input type="hidden" name="OperationId" value="@countsView.Id" />
+                        <div class="col-12 small fw-semibold">
+                            Production counts — @countsView.Label
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small mb-0">Good</label>
+                            <input name="GoodCount" type="number" min="0" value="@countsView.PrefillGood" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small mb-0">Waste</label>
+                            <input name="WasteCount" type="number" min="0" value="@countsView.PrefillWaste" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small mb-0">Downtime (min)</label>
+                            <input name="DowntimeMinutes" type="number" min="0" step="0.5" value="@countsView.PrefillDowntime.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0">Downtime reason</label>
+                            <select name="DowntimeReason" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                @foreach (var reason in Enum.GetValues<DowntimeReasonCode>())
+                                {
+                                    <option value="@((int)reason)" selected="@(countsView.Reason == reason)">@reason</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <button type="submit" class="btn btn-sm btn-primary w-100">@buttonLabel</button>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-text mt-0">
+                                @(countsView.HasRecorded
+                                    ? "Adjusting previously recorded values — saving replaces them."
+                                    : "Prefilled with the expected counts (planned quantity and spec waste).")
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-primary">@step.Label</button>
+                        </div>
+                    }
+                </form>
+            }
+            else
+            {
+                <p class="text-muted mb-0">Next: @step.Label</p>
+            }
+
+            @if (status == JobStatus.Rewound && Model.CanShip)
+            {
+                <a asp-page="/Shipments/Record" asp-route-salesOrderId="@Model.Detail!.SalesOrderId" class="btn btn-success btn-sm mt-2">Record shipment</a>
+            }
         }
         else
         {

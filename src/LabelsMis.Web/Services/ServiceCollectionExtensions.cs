@@ -53,12 +53,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<RollService>();
         services.AddScoped<ShipmentService>();
         services.AddScoped<InvoiceService>();
+        services.AddScoped<InvoicePdfGenerator>();
         services.AddScoped<UserAdminService>();
         services.AddScoped<StorageSettingsService>();
         services.AddScoped<EmailSettingsService>();
         services.AddScoped<GeneralSettingsService>();
         services.AddScoped<ArtworkService>();
         services.AddScoped<Dashboard.DashboardService>();
+        services.AddScoped<Reports.ReportService>();
+        services.AddScoped<Reports.EvaService>();
         services.AddHostedService<ShipmentTrackingPoller>();
         return services;
     }
@@ -105,7 +108,9 @@ public static class ServiceCollectionExtensions
             .AddPolicy(TransactionPolicies.InvoicesEdit, policy =>
                 policy.RequireRole(TransactionPolicies.InvoicesEditRoles))
             .AddPolicy(TransactionPolicies.AdminOverride, policy =>
-                policy.RequireRole(TransactionPolicies.AdminOverrideRoles));
+                policy.RequireRole(TransactionPolicies.AdminOverrideRoles))
+            .AddPolicy(TransactionPolicies.FinanceReports, policy =>
+                policy.RequireRole(TransactionPolicies.FinanceReportsRoles));
         return services;
     }
 }

@@ -28,7 +28,8 @@ public record LabelSpec(
     decimal RunningWastePct,
     int? MaxLabelsAcrossOverride,
     LabelOrientation? LabelOrientationOverride,
-    string? ArtworkFilePath)
+    string? ArtworkFilePath,
+    UnwindDirection? Unwind = null)
 {
     /// <summary>Builds a normalized spec, defaulting the JSON columns to an empty array.</summary>
     public static LabelSpec Create(
@@ -49,7 +50,8 @@ public record LabelSpec(
         decimal runningWastePct,
         int? maxLabelsAcrossOverride,
         LabelOrientation? labelOrientationOverride,
-        string? artworkFilePath) => new(
+        string? artworkFilePath,
+        UnwindDirection? unwind = null) => new(
             labelAcrossIn,
             labelAroundIn,
             cornerRadiusIn,
@@ -67,7 +69,8 @@ public record LabelSpec(
             runningWastePct,
             maxLabelsAcrossOverride,
             labelOrientationOverride,
-            string.IsNullOrWhiteSpace(artworkFilePath) ? null : artworkFilePath.Trim());
+            string.IsNullOrWhiteSpace(artworkFilePath) ? null : artworkFilePath.Trim(),
+            unwind);
 
     private static string NormalizeJson(string? json) =>
         string.IsNullOrWhiteSpace(json) ? "[]" : json;

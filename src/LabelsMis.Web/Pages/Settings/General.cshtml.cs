@@ -37,7 +37,8 @@ public class GeneralModel(GeneralSettingsService generalSettings) : PageModel
             Phone = settings.Phone,
             Email = settings.Email,
             Website = settings.Website,
-            TermsText = settings.TermsText
+            TermsText = settings.TermsText,
+            TaxRatePercent = settings.TaxRate * 100m
         };
         LogoDataUri = BuildLogoDataUri(settings.LogoBytes, settings.LogoContentType);
     }
@@ -72,7 +73,8 @@ public class GeneralModel(GeneralSettingsService generalSettings) : PageModel
             Input.Phone,
             Input.Email,
             Input.Website,
-            Input.TermsText), cancellationToken);
+            Input.TermsText,
+            Input.TaxRatePercent / 100m), cancellationToken);
 
         if (LogoUpload is not null)
         {
@@ -152,4 +154,8 @@ public class GeneralSettingsPageInput
     [StringLength(2000)]
     [Display(Name = "Estimate terms text")]
     public string? TermsText { get; set; }
+
+    [Range(0, 100)]
+    [Display(Name = "Sales tax rate (%)")]
+    public decimal TaxRatePercent { get; set; } = 8.25m;
 }

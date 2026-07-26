@@ -19,6 +19,7 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
     [BindProperty] public ScheduleJobInput ScheduleInput { get; set; } = new(DateOnly.FromDateTime(DateTime.UtcNow), null);
     [BindProperty] public JobStatus StatusInput { get; set; }
+    [BindProperty] public Guid OperationId { get; set; }
     [BindProperty] public int GoodCount { get; set; }
     [BindProperty] public int WasteCount { get; set; }
     [BindProperty] public decimal DowntimeMinutes { get; set; }
@@ -29,7 +30,15 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
     [BindProperty] public IFormFile? ArtworkFile { get; set; }
 
     public JobDetail? Detail { get; private set; }
+    public JobTicketDetail? TicketDetail { get; private set; }
+    public IReadOnlyList<OrderJobLink> OrderJobs { get; private set; } = [];
     public OperatorJobView? OperatorView { get; private set; }
+
+    /// <summary>The die assigned by the job's spec (falling back to the product), for the hover details.</summary>
+    public Domain.Entities.Die? DieInfo { get; private set; }
+
+    /// <summary>Spot inks from the job's spec with their hits/coverage, for the ink hover details.</summary>
+    public IReadOnlyList<(Domain.Entities.Ink Ink, int Hits, decimal CoveragePct)> SpotInkInfo { get; private set; } = [];
     public bool CanEdit { get; private set; }
     public bool CanOperate { get; private set; }
     public bool CanChangeStatus { get; private set; }
@@ -39,8 +48,37 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
     public IReadOnlyList<FinishingTaskView> FinishingTasks { get; private set; } = [];
     public bool CanAdvanceStage => CanOperate || CanChangeStatus;
     public bool CanEditOrderNotes => CanOperate || CanChangeStatus;
+    public bool CanRecordCounts => CanOperate || CanChangeStatus;
+
+    /// <summary>An operation row in the counts recorder, prefilled with the recorded values or
+    /// the expected defaults when nothing has been recorded yet.</summary>
+    public record OperationCountsView(
+        Guid Id,
+        string Label,
+        JobOperationStatus Status,
+        int PrefillGood,
+        int PrefillWaste,
+        decimal PrefillDowntime,
+        DowntimeReasonCode? Reason,
+        bool HasRecorded);
+
+    public IReadOnlyList<OperationCountsView> CountOperations { get; private set; } = [];
+    public Guid? DefaultCountsOperationId { get; private set; }
     public (JobStatus Next, string Label)? NextStep =>
         Detail is null ? null : ProductionStages.NextStep(Detail.Job.Status);
+
+    private static readonly string[] PdfExtensions = [".pdf"];
+    private static readonly string[] ImageExtensions = [".png", ".jpg", ".jpeg"];
+
+    private string ArtworkExtension =>
+        Path.GetExtension(Detail?.ArtworkFilePath ?? string.Empty).ToLowerInvariant();
+
+    public bool ArtworkIsPdf => PdfExtensions.Contains(ArtworkExtension);
+    public bool ArtworkIsImage => ImageExtensions.Contains(ArtworkExtension);
+    public bool HasArtwork => !string.IsNullOrWhiteSpace(Detail?.ArtworkFilePath);
+    public string? ArtworkFileName => !HasArtwork
+        ? null
+        : Detail!.ArtworkOriginalFileName ?? Path.GetFileName(Detail.ArtworkFilePath!);
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -222,6 +260,10 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
         Detail = await jobService.GetDetailAsync(Id, cancellationToken);
         if (Detail is null) return;
 
+        TicketDetail = await jobService.GetTicketDetailAsync(Id, cancellationToken);
+        OrderJobs = await jobService.GetOrderJobsAsync(Id, cancellationToken);
+        await LoadEntityInfoAsync(cancellationToken);
+
         var finishingEquipmentIds = Detail.Operations
             .Where(o => o.Operation.OperationType == JobOperationType.Finishing && o.Operation.EquipmentId.HasValue)
             .Select(o => o.Operation.EquipmentId!.Value)
@@ -248,6 +290,8 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
             OperatorView = await jobService.GetOperatorViewAsync(Id, cancellationToken);
         }
 
+        BuildCountOperations();
+
         if (Detail.Job.ScheduledForDate.HasValue)
         {
             ScheduleInput = new ScheduleJobInput(Detail.Job.ScheduledForDate.Value, Detail.Job.ScheduledPressId);
@@ -259,6 +303,120 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
         ViewData["PressOptions"] = await db.Presses.AsNoTracking()
             .Where(p => p.IsActive).OrderBy(p => p.Name)
             .Select(p => new SelectListItem(p.Name, p.Id.ToString())).ToListAsync(cancellationToken);
+    }
+
+    /// <summary>Loads the die and spot-ink entities referenced by the job's spec for the hover popovers.</summary>
+    private async Task LoadEntityInfoAsync(CancellationToken cancellationToken)
+    {
+        if (Detail is null)
+        {
+            return;
+        }
+
+        var spec = Detail.Job.Spec;
+        var dieId = spec?.DieId ?? Detail.Job.Product.DieId;
+        if (dieId is { } id)
+        {
+            DieInfo = await db.Dies.AsNoTracking()
+                .Include(d => d.Customer)
+                .Include(d => d.Supplier)
+                .SingleOrDefaultAsync(d => d.Id == id, cancellationToken);
+        }
+
+        if (spec is not null)
+        {
+            var spots = Services.Estimates.EstimateCalculationMapper.DeserializeSpots(spec.SpotsJson)
+                .OrderBy(s => s.SortOrder)
+                .ToList();
+            if (spots.Count > 0)
+            {
+                var inkIds = spots.Select(s => s.InkId).Distinct().ToList();
+                var inks = await db.Inks.AsNoTracking()
+                    .Where(i => inkIds.Contains(i.Id))
+                    .ToDictionaryAsync(i => i.Id, cancellationToken);
+                SpotInkInfo = spots
+                    .Where(s => inks.ContainsKey(s.InkId))
+                    .Select(s => (inks[s.InkId], s.Hits, s.CoveragePct))
+                    .ToList();
+            }
+        }
+    }
+
+    /// <summary>Builds the counts-recorder rows: every operation, prefilled with recorded values
+    /// or the expected defaults (planned quantity / spec waste), with the default selection
+    /// following the job's current stage so returning to a stage re-offers its operation.</summary>
+    private void BuildCountOperations()
+    {
+        if (Detail is null)
+        {
+            return;
+        }
+
+        var job = Detail.Job;
+        var expectedGood = job.QuantityPlanned;
+        var runningWastePct = job.Spec?.RunningWastePct ?? 0m;
+        var expectedWaste = (int)Math.Ceiling(job.QuantityPlanned * runningWastePct);
+
+        CountOperations = Detail.Operations.OrderBy(o => o.Operation.Sequence).Select(o =>
+        {
+            var operation = o.Operation;
+            var hasRecorded = operation.GoodCount > 0 || operation.WasteCount > 0 || operation.DowntimeMinutes > 0;
+            return new OperationCountsView(
+                operation.Id,
+                $"{operation.Sequence}. {o.TypeLabel}{(o.EquipmentName is null ? "" : $" — {o.EquipmentName}")}",
+                operation.Status,
+                hasRecorded ? operation.GoodCount : expectedGood,
+                hasRecorded ? operation.WasteCount : expectedWaste,
+                operation.DowntimeMinutes,
+                operation.DowntimeReasonCode,
+                hasRecorded);
+        }).ToList();
+
+        var operations = Detail.Operations.Select(o => o.Operation).OrderBy(o => o.Sequence).ToList();
+        var stageOperation = job.Status switch
+        {
+            JobStatus.Queued => operations.FirstOrDefault(o => o.OperationType == JobOperationType.Press),
+            JobStatus.Printed => operations.FirstOrDefault(o => o.OperationType == JobOperationType.Finishing && o.Status != JobOperationStatus.Complete)
+                ?? operations.FirstOrDefault(o => o.OperationType == JobOperationType.Finishing),
+            JobStatus.Finished or JobStatus.Rewound => operations.FirstOrDefault(o => o.OperationType == JobOperationType.Inspection)
+                ?? operations.FirstOrDefault(o => o.OperationType == JobOperationType.Pack),
+            JobStatus.Shipped => operations.FirstOrDefault(o => o.OperationType == JobOperationType.Ship),
+            _ => null
+        };
+
+        DefaultCountsOperationId = stageOperation?.Id
+            ?? operations.FirstOrDefault(o => o.Status is JobOperationStatus.Pending or JobOperationStatus.InProgress)?.Id
+            ?? operations.FirstOrDefault()?.Id;
+    }
+
+    /// <summary>The single "Record &amp; mark …" action: records the stage operation's counts
+    /// (when the stage has one), then advances the job — so a stage can't be marked done
+    /// without its numbers.</summary>
+    public async Task<IActionResult> OnPostRecordAndAdvanceAsync(CancellationToken cancellationToken)
+    {
+        if (!CanOperateForUser() && !CanChangeStatusForUser()) return Forbid();
+        try
+        {
+            if (OperationId != Guid.Empty)
+            {
+                await jobService.RecordCountsAsync(OperationId, GoodCount, WasteCount, DowntimeMinutes, DowntimeReason, cancellationToken);
+            }
+
+            var detail = await jobService.GetDetailAsync(Id, cancellationToken);
+            if (detail is null) return NotFound();
+            if (ProductionStages.NextStep(detail.Job.Status) is { } step)
+            {
+                await jobService.AdvanceJobStatusAsync(Id, step.Next, cancellationToken);
+            }
+
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            await LoadPageAsync(cancellationToken);
+            return Page();
+        }
     }
 
     private bool CanOperateForUser() =>

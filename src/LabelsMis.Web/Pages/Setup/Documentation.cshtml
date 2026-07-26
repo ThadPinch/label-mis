@@ -17,6 +17,10 @@
     <div class="docs-layout">
         <nav class="docs-sidebar" aria-label="Documentation sections">
             <div class="docs-sidebar-inner">
+                <p class="docs-nav-heading">Release notes</p>
+                <ul class="docs-nav-list">
+                    <li><a class="docs-nav-link" href="#whats-new">What's new — July 2026</a></li>
+                </ul>
                 <p class="docs-nav-heading">Master data</p>
                 <ul class="docs-nav-list">
                     <li><a class="docs-nav-link" href="#customers">Customers</a></li>
@@ -33,11 +37,94 @@
                     <li><a class="docs-nav-link" href="#purchase-orders">Purchase orders</a></li>
                     <li><a class="docs-nav-link" href="#shipping">Shipping &amp; fulfillment</a></li>
                     <li><a class="docs-nav-link" href="#invoicing">Invoicing</a></li>
+                    <li><a class="docs-nav-link" href="#finance-reports">Finance &amp; reports</a></li>
                 </ul>
             </div>
         </nav>
 
         <div class="docs-content">
+            <section class="docs-section" id="whats-new">
+                <h2 class="docs-section-title">What's new — July 2026</h2>
+                <p>
+                    A summary of recent functionality across the app. All database changes shipped as additive
+                    migrations that apply automatically on the next deploy.
+                </p>
+
+                <h3 class="docs-subtitle">Estimate → Sales order → Production pipeline</h3>
+                <ul class="docs-list">
+                    <li><strong>Notes carry through conversion</strong> — the Convert form pre-fills order notes and per-line notes from the estimate (previously dropped).</li>
+                    <li><strong>Sales rep carries to the sales order</strong> — set from the estimate, shown on the order page; historical orders backfilled.</li>
+                    <li><strong>Quoted description carries</strong> — the estimate line's reworded description is snapshotted on sales order lines and shown on order pages, job screens, the ticket, and invoice lines; backfilled.</li>
+                    <li><strong>Convert page validation</strong> — a quantity tier must be chosen per line (no silent top-break default); Customer PO and ship date required.</li>
+                    <li><strong>Unwind direction</strong> — selectable per estimate line and per sales order line (standard #1–#8 chart), carried through the spec snapshot to jobs, the job page, and the ticket.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Sales order editing</h3>
+                <ul class="docs-list">
+                    <li><strong>Redesigned order page</strong> — dense Order/Shipping cards, related jobs/shipments/invoices and the order total in a side rail.</li>
+                    <li><strong>Full line spec editor</strong> — every estimate-level attribute is editable per line: size, corner radius, gutters, bleed, substrate, die, ink set, white/spot colors, finishing operations with materials, waste, imposition overrides, and unwind.</li>
+                    <li><strong>Unlock in-production orders</strong> — Admin/CSR can unlock a locked order, edit any detail, and save; spec and quantity changes flow to the linked jobs in place. Lines with jobs keep their product; lines without jobs stay fully editable.</li>
+                    <li><strong>Exported-invoice warning</strong> — editing an order whose invoice was already exported to QuickBooks shows a red alert naming the invoice and export date.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Estimating engine &amp; form</h3>
+                <ul class="docs-list">
+                    <li><strong>CMYKW $0 click bug fixed</strong> — CMYK-family ink sets without their own non-spot ink row fall back to the CMYK process click rate.</li>
+                    <li><strong>Per-quantity margins</strong> — each quantity break has its own margin control; the line-level control sets all; persisted per break.</li>
+                    <li><strong>Lamination/foil material costing</strong> — those finishing types take an assigned laminate stock, charge its consumption (MSI × cost), and the stock choice rides the spec into the sales order and job.</li>
+                    <li><strong>UX fixes</strong> — the calculation breakdown keeps expanded sections through recalcs; quantity reordering runs on a visible 3-second countdown; the estimate email is saved with the estimate, re-editable, with a customer-contacts picker in the send modal.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Jobs &amp; the production floor</h3>
+                <ul class="docs-list">
+                    <li><strong>Job page redesigned for operators</strong> — everything above the fold: collapsible artwork viewer (expandable in-browser PDF preview, file name in the header), current-step panel, dense job facts (SKU, size, die, ink, substrate, unwind, line notes, ship-by), operations and material usage.</li>
+                    <li><strong>Production counts</strong> — one <em>Record &amp; mark …</em> button per stage records good/waste/downtime for that stage's operation <em>and</em> advances the job, so a stage can't be completed without its numbers. Fields prefill with expected counts (planned quantity, spec waste) or the previously recorded values for adjustments.</li>
+                    <li><strong>Order context</strong> — the job page lists all sibling jobs on the sales order with statuses and links; the jobs list shows each job's order number.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Sales order ticket (job ticket)</h3>
+                <ul class="docs-list">
+                    <li><strong>Full redesign as a sales order ticket</strong> — company logo/name from General Settings, a scannable Code 128 of the sales order number up top, an order-level banner (due, ship date, total qty, jobs, PO), order + line notes before the job blocks.</li>
+                    <li><strong>A compact block for every job on the order</strong> — description, size, die, substrate, ink, quantities, status/schedule, finishing tasks with materials, packaging, unwind, spec, and line notes — each with its own small scannable job barcode.</li>
+                    <li><strong>Route with operator sign-off columns</strong> and the printed job's notes remain specific to the printed job.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">PDFs</h3>
+                <ul class="docs-list">
+                    <li><strong>All PDF generation moved to the in-house PdfPlatform library</strong> (estimates, purchase orders, tickets) — QuestPDF removed. Includes QR and 1D barcode (Code 128 et al.) support.</li>
+                    <li><strong>Artwork keeps its original file name</strong> — shown on the job page and sales order lines, and used for downloads instead of the timestamped storage key.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Shipping</h3>
+                <ul class="docs-list">
+                    <li><strong>Mark shipped without packages</strong> — a one-click action on the Ready to Ship tab (with confirmation) for hand-offs that have no packages or tracking; reads <em>Mark picked up</em> for pickup-method orders. Only enabled when every item on the order is ready.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Invoices &amp; QuickBooks</h3>
+                <ul class="docs-list">
+                    <li><strong>Ready to export / Exported tabs</strong> — invoices track who exported them and when; per-row and checkbox bulk actions to mark exported, export selected to a QuickBooks CSV, or unmark.</li>
+                    <li><strong>Sales tax rate</strong> moved from configuration into <a asp-page="/Settings/General">General settings</a>.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Finance &amp; access</h3>
+                <ul class="docs-list">
+                    <li><strong>Dashboard is now purely operational</strong> — financial widgets moved to the new <a asp-page="/Reports/Index">Finance reports</a> page (revenue, receivables, AR aging, order intake, top customers) with an ad-hoc report generator (invoices, payments, orders, estimates, jobs, shipments, POs; date + customer/product/die/supplier filters; CSV export).</li>
+                    <li><strong>Estimate vs Actual</strong> — a job-costing page comparing quoted cost against recorded labor + material, with variance and margin per job, charts, filters, and CSV export.</li>
+                    <li><strong>Access</strong> — the entire Finance area (invoices, reports, EVA, AR aging) requires the <strong>Accounting</strong> role explicitly; assign it alongside other roles under Setup → Users.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Dies, stocks, customers</h3>
+                <ul class="docs-list">
+                    <li><strong>Die entity</strong> — labels across is user-entered (formula validation removed); dimension fields display 4 decimals consistently.</li>
+                    <li><strong>Form layouts</strong> — dies, stocks, and customers reorganized into labeled fieldsets; customer address/contact lists compacted to two-line cards with corner ✕ remove.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Pagination</h3>
+                <ul class="docs-list">
+                    <li><strong>Fixed and unified</strong> — corrected swapped page/total arguments ("page 31 of 25"), and every list now uses the shared pager: First/Prev/Next/Last plus a window of up to 10 page links around the current page, carrying all active filters. Products (previously unpaged) and sales orders (previously hand-rolled) included.</li>
+                </ul>
+            </section>
+
             <section class="docs-section" id="master-data-overview">
                 <h2 class="docs-section-title">Master data overview</h2>
                 <p>
@@ -377,6 +464,13 @@
                     <li>Click <strong>Record shipment</strong>. The shipment is created as <strong>In transit</strong>, the shipped jobs advance to <strong>Shipped</strong>, and the sales order rolls up to Shipped once all lines are out.</li>
                 </ol>
 
+                <h3 class="docs-subtitle">Mark shipped / picked up (no packages)</h3>
+                <ul class="docs-list">
+                    <li>For hand-offs with no packages or tracking, use <strong>Mark shipped</strong> on the Ready to Ship tab — it creates a package-less shipment for all ready items, advances the jobs, and rolls up the order.</li>
+                    <li>Orders on a <strong>pickup</strong> shipping method show <strong>Mark picked up</strong> instead.</li>
+                    <li>The button is disabled until <strong>every item on the order is ready</strong>; partial orders go through the Record shipment form. An "Unmark" is not needed — the shipment appears in history like any other.</li>
+                </ul>
+
                 <h3 class="docs-subtitle">Usage</h3>
                 <ul class="docs-list">
                     <li>Recorded shipments appear under <a asp-page="/Shipments/Index">Shipping → all shipments</a> and on each shipment's detail page (ship-from/ship-to, carrier, packages, and tracking).</li>
@@ -411,8 +505,36 @@
 
                 <h3 class="docs-subtitle">Usage</h3>
                 <ul class="docs-list">
-                    <li>The invoices list shows all non-void invoices; filter by status, customer, date, or AR aging bucket.</li>
-                    <li>Record <strong>payments</strong>, <strong>void</strong> an invoice, or <strong>export</strong> a date range to a QuickBooks-style CSV from the invoice screens.</li>
+                    <li>The invoices page is split into <strong>Ready to export</strong> and <strong>Exported</strong> tabs; filter by status, customer, date, or AR aging bucket within either.</li>
+                    <li>Check invoices and <strong>Export to QuickBooks</strong> (downloads the CSV and marks them exported, with who/when recorded) or <strong>Mark selected as exported</strong> without a download; <strong>Unmark exported</strong> reverses a mistake.</li>
+                    <li>Record <strong>payments</strong> and <strong>void</strong> invoices from the invoice detail page.</li>
+                    <li>The <strong>sales tax rate</strong> applied to new invoices is set in <a asp-page="/Settings/General">General settings</a>; tax-exempt customers are never taxed.</li>
+                    <li>Access to all invoice pages requires the <strong>Accounting</strong> role.</li>
+                </ul>
+            </section>
+
+            <section class="docs-section docs-section--workflows" id="finance-reports">
+                <div class="docs-section-header">
+                    <h2 class="docs-section-title">Finance &amp; reports</h2>
+                    <a class="docs-section-action" asp-page="/Reports/Index">Open finance reports</a>
+                </div>
+                <p>
+                    The Finance menu is visible only to users with the <strong>Accounting</strong> role
+                    (assigned under Setup → Users, combinable with any other roles). The shop dashboard itself
+                    carries no financial data — it stays operational for the floor.
+                </p>
+
+                <h3 class="docs-subtitle">Finance reports</h3>
+                <ul class="docs-list">
+                    <li><strong>Widgets</strong> — revenue this month, receivables, open order value, invoiced revenue trend, AR aging, order intake, and top customers, with a 30-day to 12-month range selector and customizable layout.</li>
+                    <li><strong>Report generator</strong> — pick an area (invoices, payments, sales orders, estimates, jobs, shipments, purchase orders), a date range, and optional customer/product/die/supplier filters; view the table on screen or <strong>Download CSV</strong>.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Estimate vs Actual</h3>
+                <ul class="docs-list">
+                    <li>Compares each job's <strong>quoted cost</strong> (from its estimate quantity break) against <strong>actual cost</strong> (clocked labor × equipment rate + recorded material usage), alongside revenue and margins.</li>
+                    <li>Summary tiles, variance and lowest-margin charts, and a per-job table with variance highlighted; filter by date, customer, and finished-only; export to CSV.</li>
+                    <li>Accuracy depends on the floor recording counts, clocking time, and scanning rolls — jobs with nothing recorded show near-zero actual cost.</li>
                 </ul>
             </section>
         </div>

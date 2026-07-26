@@ -59,14 +59,23 @@ public class InvoiceOptions
 {
     public const string SectionName = "Invoices";
     public decimal DefaultTaxRate { get; set; } = 0.0825m;
+    public string PdfStoragePath { get; set; } = "./data/pdfs/invoices";
 }
 
 public class InvoiceService(
     LabelsMisDbContext db,
     ICurrentUserService currentUser,
     DocumentNumberService documentNumbers,
-    Microsoft.Extensions.Options.IOptions<InvoiceOptions> options)
+    Settings.GeneralSettingsService generalSettings,
+    Microsoft.Extensions.Options.IOptions<InvoiceOptions> options,
+    LabelsMis.Domain.Email.IEmailSender emailSender,
+    Pdf.InvoicePdfGenerator pdfGenerator)
 {
+    /// <summary>The shop's tax rate from general settings; appsettings fallback until the
+    /// settings row exists.</summary>
+    private async Task<decimal> GetTaxRateAsync(CancellationToken cancellationToken) =>
+        (await generalSettings.GetAsync(cancellationToken))?.TaxRate ?? options.Value.DefaultTaxRate;
+
     public async Task<PagedResult<InvoiceListItem>> ListAsync(
         string? search,
         InvoiceStatus? status,
@@ -221,7 +230,7 @@ public class InvoiceService(
     public async Task<InvoiceDetail?> GetDetailAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var invoice = await db.Invoices
-            .Include(i => i.Customer)
+            .Include(i => i.Customer).ThenInclude(c => c.Addresses)
             .Include(i => i.SalesOrder)
             .Include(i => i.Lines)
             .Include(i => i.Payments)
@@ -265,7 +274,7 @@ public class InvoiceService(
         var subtotal = order.Lines.Sum(l => l.Quantity * l.UnitPrice);
         var taxAmount = order.Customer.TaxExempt
             ? 0m
-            : Math.Round(subtotal * options.Value.DefaultTaxRate, 4, MidpointRounding.AwayFromZero);
+            : Math.Round(subtotal * await GetTaxRateAsync(cancellationToken), 4, MidpointRounding.AwayFromZero);
         var shippingAmount = order.ShippingCost;
 
         var invoice = Invoice.CreateDraft(
@@ -337,7 +346,7 @@ public class InvoiceService(
         var subtotal = shipment.Lines.Sum(l => l.QuantityShipped * l.SalesOrderLine.UnitPrice);
         var taxAmount = shipment.SalesOrder.Customer.TaxExempt
             ? 0m
-            : Math.Round(subtotal * options.Value.DefaultTaxRate, 4, MidpointRounding.AwayFromZero);
+            : Math.Round(subtotal * await GetTaxRateAsync(cancellationToken), 4, MidpointRounding.AwayFromZero);
         var shippingAmount = shipment.TotalShippingCost > 0
             ? shipment.TotalShippingCost
             : shipment.Packages.Sum(p => p.ShippingCost);
@@ -406,6 +415,46 @@ public class InvoiceService(
         invoice.RecordPayment(payment);
         db.Payments.Add(payment);
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Emails the invoice to the customer, attaching a freshly rendered PDF. A draft
+    /// invoice is marked Sent; re-sending an already-sent invoice just emails it again.</summary>
+    public async Task SendAsync(
+        Guid invoiceId,
+        string? emailTo,
+        string? subject,
+        string? body,
+        bool includePdf,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        if (string.IsNullOrWhiteSpace(emailTo))
+        {
+            throw new InvalidOperationException("An email address is required to send the invoice.");
+        }
+
+        var detail = await GetDetailAsync(invoiceId, cancellationToken)
+            ?? throw new InvalidOperationException("Invoice not found.");
+        if (detail.Invoice.Status == InvoiceStatus.Void)
+        {
+            throw new InvalidOperationException("A void invoice cannot be sent.");
+        }
+
+        var pdfPath = await pdfGenerator.GenerateAsync(detail, cancellationToken);
+
+        await emailSender.SendAsync(
+            emailTo,
+            string.IsNullOrWhiteSpace(subject) ? $"Invoice {detail.Invoice.InvoiceNumber}" : subject,
+            string.IsNullOrWhiteSpace(body) ? $"Please find attached invoice {detail.Invoice.InvoiceNumber}." : body,
+            includePdf ? [pdfPath] : null,
+            cancellationToken);
+
+        var tracked = await db.Invoices.SingleAsync(i => i.Id == invoiceId, cancellationToken);
+        if (tracked.Status == InvoiceStatus.Draft)
+        {
+            tracked.MarkSent(pdfPath, userId, DateTime.UtcNow);
+            await db.SaveChangesAsync(cancellationToken);
+        }
     }
 
     /// <summary>Marks the given invoices as exported, skipping void or already-exported ones.

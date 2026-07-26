@@ -120,7 +120,7 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
                 p.IsActive))
             .ToList();
 
-        return new PagedResult<ProductListItem>(items, total, page, pageSize);
+        return new PagedResult<ProductListItem>(items, page, pageSize, total);
     }
 
     public async Task<Product?> GetAsync(Guid id, CancellationToken cancellationToken = default) =>

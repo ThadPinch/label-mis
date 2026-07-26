@@ -81,45 +81,15 @@
     </tbody>
 </table>
 
-@{
-    Dictionary<string, string> PageRoute(int page)
-    {
-        var rv = new Dictionary<string, string> { ["pageNumber"] = page.ToString() };
-        if (!string.IsNullOrWhiteSpace(Model.Search)) rv["Search"] = Model.Search!;
-        if (Model.Status.HasValue) rv["Status"] = Model.Status.Value.ToString();
-        if (Model.CustomerId.HasValue) rv["CustomerId"] = Model.CustomerId.Value.ToString();
-        if (Model.ShipFrom.HasValue) rv["ShipFrom"] = Model.ShipFrom.Value.ToString("yyyy-MM-dd");
-        if (Model.ShipTo.HasValue) rv["ShipTo"] = Model.ShipTo.Value.ToString("yyyy-MM-dd");
-        return rv;
-    }
-}
-@if (Model.Result.TotalPages > 1)
+@await Html.PartialAsync("Shared/_Pager", new PagerModel(
+    Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount)
 {
-    <nav aria-label="Pagination">
-        <ul class="pagination">
-            <li class="page-item @(Model.Result.HasPreviousPage ? "" : "disabled")">
-                @if (Model.Result.HasPreviousPage)
-                {
-                    <a class="page-link" asp-page="Index" asp-all-route-data="PageRoute(Model.Result.Page - 1)">Previous</a>
-                }
-                else
-                {
-                    <span class="page-link">Previous</span>
-                }
-            </li>
-            <li class="page-item disabled">
-                <span class="page-link">Page @Model.Result.Page of @Model.Result.TotalPages (@Model.Result.TotalCount total)</span>
-            </li>
-            <li class="page-item @(Model.Result.HasNextPage ? "" : "disabled")">
-                @if (Model.Result.HasNextPage)
-                {
-                    <a class="page-link" asp-page="Index" asp-all-route-data="PageRoute(Model.Result.Page + 1)">Next</a>
-                }
-                else
-                {
-                    <span class="page-link">Next</span>
-                }
-            </li>
-        </ul>
-    </nav>
-}
+    Extra = new Dictionary<string, string?>
+    {
+        ["Search"] = Model.Search,
+        ["Status"] = Model.Status?.ToString(),
+        ["CustomerId"] = Model.CustomerId?.ToString(),
+        ["ShipFrom"] = Model.ShipFrom?.ToString("yyyy-MM-dd"),
+        ["ShipTo"] = Model.ShipTo?.ToString("yyyy-MM-dd")
+    }
+})

@@ -154,7 +154,7 @@ public class EstimateService(
             })
             .ToList();
 
-        return new PagedResult<EstimateListItem>(items, total, page, pageSize);
+        return new PagedResult<EstimateListItem>(items, page, pageSize, total);
     }
 
     public async Task<EstimateDetail?> GetDetailAsync(Guid id, CancellationToken cancellationToken = default)
@@ -622,6 +622,7 @@ public class EstimateService(
                 input.MarkupPctOverride,
                 input.MaxLabelsAcrossOverride,
                 input.LabelOrientationOverride,
+                input.Unwind,
                 userId,
                 now);
 

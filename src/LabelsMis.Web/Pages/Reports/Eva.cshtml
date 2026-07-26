@@ -1,0 +1,213 @@
+@page "/reports/eva"
+@using LabelsMis.Domain.Enums
+@model LabelsMis.Web.Pages.Reports.EvaModel
+@{
+    ViewData["Title"] = "Estimate vs Actual";
+    var summary = Model.Report.Summary;
+}
+
+@functions {
+    private static string Money(decimal v) => v.ToString("C0");
+
+    private static string VarianceClass(decimal? variance) => variance switch
+    {
+        > 0 => "text-danger",
+        < 0 => "text-success",
+        _ => "text-muted"
+    };
+}
+
+<div class="dash" id="dashRoot" data-user="@(User.Identity?.Name ?? "anon"):eva">
+
+    <div class="dash-toolbar">
+        <div class="dash-toolbar-title">
+            <h1>Estimate vs Actual</h1>
+            <span class="dash-asof">@Model.From?.ToString("MMM d, yyyy") — @Model.To?.ToString("MMM d, yyyy")</span>
+        </div>
+        <div class="dash-toolbar-actions">
+            <button type="button" class="btn btn-outline-secondary btn-sm dash-customize-btn" id="dashCustomizeBtn"
+                    aria-pressed="false">Customize</button>
+        </div>
+    </div>
+
+    <form method="get" class="row g-2 align-items-end mb-3">
+        <div class="col-md-2">
+            <label class="form-label small mb-0">From</label>
+            <input type="date" name="from" value="@(Model.From?.ToString("yyyy-MM-dd"))" class="form-control form-control-sm" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small mb-0">To</label>
+            <input type="date" name="to" value="@(Model.To?.ToString("yyyy-MM-dd"))" class="form-control form-control-sm" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small mb-0">Customer</label>
+            <select asp-for="CustomerId" class="form-select form-select-sm" asp-items="@((IEnumerable<SelectListItem>)ViewData["CustomerOptions"]!)">
+                <option value="">All customers</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small mb-0">Sort by</label>
+            <select asp-for="Sort" class="form-select form-select-sm">
+                <option value="">Largest variance</option>
+                <option value="margin">Worst margin</option>
+                <option value="revenue">Revenue</option>
+                <option value="job">Job number</option>
+            </select>
+        </div>
+        <div class="col-md-auto form-check ms-2 mb-1">
+            <input asp-for="FinishedOnly" class="form-check-input" />
+            <label asp-for="FinishedOnly" class="form-check-label small">Finished jobs only</label>
+        </div>
+        <div class="col-md-auto">
+            <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+        </div>
+        <div class="col-md-auto">
+            <a class="btn btn-sm btn-outline-secondary"
+               href="?handler=Export&from=@Model.From?.ToString("yyyy-MM-dd")&to=@Model.To?.ToString("yyyy-MM-dd")&customerId=@Model.CustomerId&finishedOnly=@Model.FinishedOnly">
+                Download CSV
+            </a>
+        </div>
+    </form>
+
+    <div class="dash-tiles" id="dashTiles" data-dash-zone="tiles">
+        <div class="dash-tile" data-widget="tile-jobs" data-title="Jobs">
+            <span class="dash-tile-label">Jobs</span>
+            <span class="dash-tile-value">@summary.JobCount</span>
+            <span class="dash-tile-sub">in range@(Model.FinishedOnly ? ", finished only" : "")</span>
+        </div>
+        <div class="dash-tile" data-widget="tile-revenue" data-title="Revenue">
+            <span class="dash-tile-label">Revenue</span>
+            <span class="dash-tile-value">@Money(summary.TotalRevenue)</span>
+            <span class="dash-tile-sub">ordered line value</span>
+        </div>
+        <div class="dash-tile" data-widget="tile-est" data-title="Estimated cost">
+            <span class="dash-tile-label">Estimated cost</span>
+            <span class="dash-tile-value">@Money(summary.TotalEstimated)</span>
+            <span class="dash-tile-sub">from quoted quantity breaks</span>
+        </div>
+        <div class="dash-tile" data-widget="tile-actual" data-title="Actual cost">
+            <span class="dash-tile-label">Actual cost</span>
+            <span class="dash-tile-value">@Money(summary.TotalActual)</span>
+            <span class="dash-tile-sub">recorded labor + material</span>
+        </div>
+        <div class="dash-tile" data-widget="tile-variance" data-title="Cost variance">
+            <span class="dash-tile-label">Cost variance</span>
+            <span class="dash-tile-value @VarianceClass(summary.TotalVariance)">@Money(summary.TotalVariance)</span>
+            <span class="dash-tile-sub">actual minus estimated</span>
+        </div>
+        <div class="dash-tile" data-widget="tile-margin" data-title="Actual margin">
+            <span class="dash-tile-label">Actual margin</span>
+            <span class="dash-tile-value">@(summary.ActualMarginPct is { } m ? $"{m:0.#}%" : "—")</span>
+            <span class="dash-tile-sub">across all jobs in range</span>
+        </div>
+    </div>
+
+    <div class="dash-grid" id="dashGrid" data-dash-zone="cards">
+        <section class="dash-card dash-span-6" data-widget="variance" data-title="Cost variance by job">
+            <header class="dash-card-head">
+                <div>
+                    <h2 class="dash-card-title">Cost variance by job</h2>
+                    <p class="dash-card-sub">actual minus estimated, largest first</p>
+                </div>
+                <div class="dash-card-actions">
+                    <button type="button" class="dash-iconbtn dash-table-toggle" aria-pressed="false"
+                            title="Toggle table view" aria-label="Toggle table view"></button>
+                </div>
+            </header>
+            <div class="dash-chart" data-chart="bars" data-series="varianceByJob"
+                 data-format="currency" data-name="Variance" data-col="Job"></div>
+        </section>
+
+        <section class="dash-card dash-span-6" data-widget="margin" data-title="Lowest actual margins">
+            <header class="dash-card-head">
+                <div>
+                    <h2 class="dash-card-title">Lowest actual margins</h2>
+                    <p class="dash-card-sub">actual margin % by job, worst first</p>
+                </div>
+                <div class="dash-card-actions">
+                    <button type="button" class="dash-iconbtn dash-table-toggle" aria-pressed="false"
+                            title="Toggle table view" aria-label="Toggle table view"></button>
+                </div>
+            </header>
+            <div class="dash-chart" data-chart="bars" data-series="marginByJob"
+                 data-format="number" data-name="Margin %" data-col="Job"></div>
+        </section>
+    </div>
+
+    <div class="dash-tray" id="dashTray" hidden>
+        <span class="dash-tray-label">Hidden widgets — click to restore:</span>
+        <span class="dash-tray-items" id="dashTrayItems"></span>
+        <button type="button" class="btn btn-link btn-sm dash-tray-reset" id="dashResetBtn">Reset layout</button>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header py-2 fw-semibold">Jobs — estimate vs actual</div>
+    @if (Model.Report.Rows.Count == 0)
+    {
+        <div class="card-body py-3 small text-muted">No jobs in this range.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm table-striped small mb-0">
+                <thead>
+                    <tr>
+                        <th>Job</th>
+                        <th>Customer</th>
+                        <th>Product</th>
+                        <th>Status</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Good</th>
+                        <th class="text-end">Waste</th>
+                        <th class="text-end">Revenue</th>
+                        <th class="text-end">Est. cost</th>
+                        <th class="text-end">Actual labor</th>
+                        <th class="text-end">Actual matl</th>
+                        <th class="text-end">Actual total</th>
+                        <th class="text-end">Variance</th>
+                        <th class="text-end">Est. margin</th>
+                        <th class="text-end">Actual margin</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.Report.Rows)
+                    {
+                        <tr>
+                            <td><a asp-page="/Jobs/Detail" asp-route-id="@row.JobId">@row.JobNumber</a></td>
+                            <td>@row.CustomerName</td>
+                            <td class="text-truncate" style="max-width: 14rem;" title="@row.ProductDescription">@row.ProductDescription</td>
+                            <td><span class="badge text-bg-secondary">@row.Status</span></td>
+                            <td class="text-end">@row.QuantityOrdered.ToString("N0")</td>
+                            <td class="text-end">@row.GoodCount.ToString("N0")</td>
+                            <td class="text-end">@row.WasteCount.ToString("N0")</td>
+                            <td class="text-end">@row.Revenue.ToString("C2")</td>
+                            <td class="text-end">@(row.EstimatedCost?.ToString("C2") ?? "—")</td>
+                            <td class="text-end">@row.ActualLaborCost.ToString("C2")</td>
+                            <td class="text-end">@row.ActualMaterialCost.ToString("C2")</td>
+                            <td class="text-end">@row.ActualTotalCost.ToString("C2")</td>
+                            <td class="text-end @VarianceClass(row.CostVariance)">
+                                @(row.CostVariance?.ToString("C2") ?? "—")
+                                @if (row.CostVariancePct is { } pct)
+                                {
+                                    <span class="text-muted">(@(pct > 0 ? "+" : "")@pct.ToString("0.#")%)</span>
+                                }
+                            </td>
+                            <td class="text-end">@(row.EstimatedMarginPct is { } em ? $"{em:0.#}%" : "—")</td>
+                            <td class="text-end @(row.ActualMarginPct < 0 ? "text-danger" : "")">@(row.ActualMarginPct is { } am ? $"{am:0.#}%" : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script>window.DASHBOARD_DATA = @Html.Raw(Model.ChartJson);</script>
+    <script src="~/js/dashboard.js" asp-append-version="true"></script>
+}

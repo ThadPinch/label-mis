@@ -17,7 +17,8 @@ public class TicketModel(JobService jobService, JobTicketPdfGenerator pdfGenerat
         var detail = await jobService.GetTicketDetailAsync(Id, cancellationToken);
         if (detail is null) return NotFound();
 
-        var pdf = await pdfGenerator.GenerateAsync(detail, cancellationToken);
+        var orderJobs = await jobService.GetOrderTicketDetailsAsync(Id, cancellationToken);
+        var pdf = await pdfGenerator.GenerateAsync(detail, orderJobs, cancellationToken);
         return File(pdf, "application/pdf", $"{detail.Job.JobNumber.Replace('/', '-')}-ticket.pdf");
     }
 }

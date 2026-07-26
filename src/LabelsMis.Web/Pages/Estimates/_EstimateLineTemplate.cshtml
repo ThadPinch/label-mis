@@ -143,6 +143,16 @@
                         </select>
                     </div>
                     <div class="col-6 col-md-3">
+                        <label class="form-label">Unwind direction</label>
+                        <select name="Input.Lines[@i].Unwind" class="form-select unwind-select">
+                            <option value="" selected>Not specified</option>
+                            @foreach (var unwind in Enum.GetValues<UnwindDirection>())
+                            {
+                                <option value="@((int)unwind)">@unwind.Label()</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-3">
                         <label class="form-label">Setup waste (imp)</label>
                         <input name="Input.Lines[@i].SetupWasteImpressions" value="30" class="form-control calc-trigger" />
                     </div>

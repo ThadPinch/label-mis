@@ -82,6 +82,23 @@ public class Job : EntityBase
         SetModified(modifiedById, modifiedAt);
     }
 
+    /// <summary>
+    /// Follows an unlocked sales-order edit that changed the line quantity. Planned quantity keeps
+    /// its overrun above the old ordered quantity when possible, and never drops below ordered.
+    /// </summary>
+    public void UpdateOrderedQuantity(int quantityOrdered, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (quantityOrdered <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(quantityOrdered));
+        }
+
+        var overrun = Math.Max(0, QuantityPlanned - QuantityOrdered);
+        QuantityOrdered = quantityOrdered;
+        QuantityPlanned = quantityOrdered + overrun;
+        SetModified(modifiedById, modifiedAt);
+    }
+
     /// <summary>Assigns a production date/press. Status moves through the stages explicitly, not here.</summary>
     public void Schedule(DateOnly scheduledForDate, Guid? pressId, Guid modifiedById, DateTime modifiedAt)
     {

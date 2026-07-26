@@ -19,6 +19,17 @@ public record JobListItem(
     DateOnly? DueDate,
     DateOnly? ScheduledForDate,
     int Priority,
+    int QuantityOrdered,
+    Guid SalesOrderId,
+    string OrderNumber);
+
+/// <summary>A job on the same sales order, for cross-referencing sibling lines.</summary>
+public record OrderJobLink(
+    Guid JobId,
+    string JobNumber,
+    int LineNumber,
+    string ProductDescription,
+    JobStatus Status,
     int QuantityOrdered);
 
 public record JobCostSummary(
@@ -30,12 +41,14 @@ public record JobDetail(
     string CustomerName,
     string ProductDescription,
     string? ArtworkFilePath,
+    string? ArtworkOriginalFileName,
     Stock Substrate,
     JobCostSummary CostSummary,
     IReadOnlyList<(JobOperation Operation, string? EquipmentName, string TypeLabel)> Operations,
     Guid SalesOrderId,
     string OrderNumber,
-    string? OrderNotes);
+    string? OrderNotes,
+    string? LineNotes);
 
 public record JobTicketRouteStep(
     int Sequence,
@@ -59,7 +72,9 @@ public record JobTicketDetail(
     string? DieDescription,
     string? ScheduledPressName,
     RollSpec? RollSpec,
-    IReadOnlyList<JobTicketRouteStep> Route);
+    IReadOnlyList<JobTicketRouteStep> Route,
+    string? OrderNotes = null,
+    string? LineNotes = null);
 
 public record OperatorJobView(
     Job Job,
@@ -185,10 +200,53 @@ public class JobService(
                 j.DueDate,
                 j.ScheduledForDate,
                 j.Priority,
-                j.QuantityOrdered))
+                j.QuantityOrdered,
+                j.SalesOrderLine.SalesOrderId,
+                j.SalesOrderLine.SalesOrder.OrderNumber))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<JobListItem>(items, page, pageSize, total);
+    }
+
+    /// <summary>All jobs on the same sales order as the given job (including it), in line order.</summary>
+    public async Task<IReadOnlyList<OrderJobLink>> GetOrderJobsAsync(Guid jobId, CancellationToken cancellationToken = default)
+    {
+        var salesOrderId = await db.Jobs.AsNoTracking()
+            .Where(j => j.Id == jobId)
+            .Select(j => j.SalesOrderLine.SalesOrderId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (salesOrderId == Guid.Empty)
+        {
+            return [];
+        }
+
+        return await db.Jobs.AsNoTracking()
+            .Where(j => j.SalesOrderLine.SalesOrderId == salesOrderId)
+            .OrderBy(j => j.SalesOrderLine.LineNumber)
+            .Select(j => new OrderJobLink(
+                j.Id,
+                j.JobNumber,
+                j.SalesOrderLine.LineNumber,
+                j.SalesOrderLine.Description ?? j.Product.Description,
+                j.Status,
+                j.QuantityOrdered))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>Ticket details for every job on the printed job's sales order, in line order.</summary>
+    public async Task<IReadOnlyList<JobTicketDetail>> GetOrderTicketDetailsAsync(Guid jobId, CancellationToken cancellationToken = default)
+    {
+        var links = await GetOrderJobsAsync(jobId, cancellationToken);
+        var details = new List<JobTicketDetail>(links.Count);
+        foreach (var link in links)
+        {
+            if (await GetTicketDetailAsync(link.JobId, cancellationToken) is { } detail)
+            {
+                details.Add(detail);
+            }
+        }
+
+        return details;
     }
 
     public async Task<JobDetail?> GetDetailAsync(Guid id, CancellationToken cancellationToken = default)
@@ -224,12 +282,14 @@ public class JobService(
             job.Product.PrimaryCustomer != null ? job.Product.PrimaryCustomer.Name : "",
             job.SalesOrderLine.Description ?? job.Product.Description,
             job.Product.ArtworkFilePath,
+            job.Product.ArtworkOriginalFileName,
             job.Product.Substrate,
             new JobCostSummary(estimatedCost, actualCost),
             operations,
             order.Id,
             order.OrderNumber,
-            order.Notes);
+            order.Notes,
+            job.SalesOrderLine.LineNotes);
     }
 
     /// <summary>Updates the parent sales order's header notes from the job page (shared notes).</summary>
@@ -356,7 +416,9 @@ public class JobService(
             dieDescription,
             scheduledPressName,
             job.Product.RollSpec,
-            route);
+            route,
+            order.Notes,
+            job.SalesOrderLine.LineNotes);
     }
 
     public async Task<OperatorJobView?> GetOperatorViewAsync(
@@ -494,6 +556,22 @@ public class JobService(
         var now = DateTime.UtcNow;
         var job = await db.Jobs.SingleAsync(j => j.Id == jobId, cancellationToken);
         job.Schedule(input.ScheduledForDate, input.PressId, userId, now);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Records or adjusts an operation's production counts as absolute values.</summary>
+    public async Task RecordCountsAsync(
+        Guid operationId,
+        int goodCount,
+        int wasteCount,
+        decimal downtimeMinutes,
+        DowntimeReasonCode? downtimeReason,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var operation = await db.JobOperations.SingleAsync(o => o.Id == operationId, cancellationToken);
+        operation.SetCounts(goodCount, wasteCount, downtimeMinutes, downtimeReason, userId, now);
         await db.SaveChangesAsync(cancellationToken);
     }
 

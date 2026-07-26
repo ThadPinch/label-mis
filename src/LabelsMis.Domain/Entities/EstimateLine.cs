@@ -36,6 +36,7 @@ public class EstimateLine : EntityBase
     public decimal? MarkupPctOverride { get; private set; }
     public int? MaxLabelsAcrossOverride { get; private set; }
     public LabelOrientation? LabelOrientationOverride { get; private set; }
+    public UnwindDirection? Unwind { get; private set; }
 
     public IReadOnlyCollection<EstimateQuantityBreak> QuantityBreaks => _quantityBreaks;
 
@@ -63,6 +64,7 @@ public class EstimateLine : EntityBase
         decimal? markupPctOverride,
         int? maxLabelsAcrossOverride,
         LabelOrientation? labelOrientationOverride,
+        UnwindDirection? unwind,
         Guid createdById,
         DateTime createdAt)
     {
@@ -95,7 +97,8 @@ public class EstimateLine : EntityBase
             LineNotes = string.IsNullOrWhiteSpace(lineNotes) ? null : lineNotes.Trim(),
             MarkupPctOverride = markupPctOverride,
             MaxLabelsAcrossOverride = maxLabelsAcrossOverride,
-            LabelOrientationOverride = labelOrientationOverride
+            LabelOrientationOverride = labelOrientationOverride,
+            Unwind = unwind
         };
         line.SetCreated(id, createdById, createdAt);
         return line;
@@ -123,6 +126,7 @@ public class EstimateLine : EntityBase
         decimal? markupPctOverride,
         int? maxLabelsAcrossOverride,
         LabelOrientation? labelOrientationOverride,
+        UnwindDirection? unwind,
         Guid modifiedById,
         DateTime modifiedAt)
     {
@@ -153,6 +157,7 @@ public class EstimateLine : EntityBase
         MarkupPctOverride = markupPctOverride;
         MaxLabelsAcrossOverride = maxLabelsAcrossOverride;
         LabelOrientationOverride = labelOrientationOverride;
+        Unwind = unwind;
         SetModified(modifiedById, modifiedAt);
     }
 
@@ -172,7 +177,7 @@ public class EstimateLine : EntityBase
         SubstrateId, dieId, InkSet,
         WhiteHits, WhiteCoveragePct, SpotsJson, FinishingOperationsJson,
         SetupWasteImpressions, RunningWastePct,
-        MaxLabelsAcrossOverride, LabelOrientationOverride, artworkFilePath);
+        MaxLabelsAcrossOverride, LabelOrientationOverride, artworkFilePath, Unwind);
 
     private static void ValidateDimensions(decimal labelAcrossIn, decimal labelAroundIn)
     {

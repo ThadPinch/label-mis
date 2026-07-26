@@ -686,6 +686,9 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000001"));
 
+                    b.Property<int?>("Unwind")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("WhiteCoveragePct")
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
@@ -947,6 +950,12 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<string>("State")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("TaxRate")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasDefaultValue(0.0825m);
 
                     b.Property<Guid>("TenantId")
                         .ValueGeneratedOnAdd()
@@ -1687,6 +1696,10 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<string>("ArtworkFilePath")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ArtworkOriginalFileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<decimal>("CornerRadiusIn")
                         .HasPrecision(10, 4)
@@ -3738,6 +3751,9 @@ namespace LabelsMis.Infrastructure.Migrations
                                 .HasColumnType("uuid")
                                 .HasColumnName("SpecSubstrateId");
 
+                            b1.Property<int?>("Unwind")
+                                .HasColumnType("integer");
+
                             b1.Property<decimal>("WhiteCoveragePct")
                                 .HasPrecision(18, 4)
                                 .HasColumnType("numeric(18,4)")
@@ -4267,6 +4283,9 @@ namespace LabelsMis.Infrastructure.Migrations
                             b1.Property<Guid>("SubstrateId")
                                 .HasColumnType("uuid")
                                 .HasColumnName("SpecSubstrateId");
+
+                            b1.Property<int?>("Unwind")
+                                .HasColumnType("integer");
 
                             b1.Property<decimal>("WhiteCoveragePct")
                                 .HasPrecision(18, 4)

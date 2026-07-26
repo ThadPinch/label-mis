@@ -30,6 +30,10 @@ public class Product : MasterDataEntity
     public Guid? DieId { get; private set; }
     public Die? Die { get; private set; }
     public string? ArtworkFilePath { get; private set; }
+
+    /// <summary>The original file name of the uploaded artwork, for display; the stored key in
+    /// <see cref="ArtworkFilePath"/> is timestamped and opaque.</summary>
+    public string? ArtworkOriginalFileName { get; private set; }
     public ProductStatus Status { get; private set; }
 
     public IReadOnlyCollection<ProductCustomer> CustomerAssignments => _customerAssignments;
@@ -117,6 +121,19 @@ public class Product : MasterDataEntity
         FinishingOperationsJson = string.IsNullOrWhiteSpace(finishingOperationsJson) ? "[]" : finishingOperationsJson;
         DieId = dieId;
         ArtworkFilePath = string.IsNullOrWhiteSpace(artworkFilePath) ? null : artworkFilePath.Trim();
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>Points the product at a newly uploaded artwork file.</summary>
+    public void SetArtworkFile(string storageKey, string? originalFileName, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (string.IsNullOrWhiteSpace(storageKey))
+        {
+            throw new ArgumentException("Storage key is required.", nameof(storageKey));
+        }
+
+        ArtworkFilePath = storageKey.Trim();
+        ArtworkOriginalFileName = string.IsNullOrWhiteSpace(originalFileName) ? null : originalFileName.Trim();
         SetModified(modifiedById, modifiedAt);
     }
 

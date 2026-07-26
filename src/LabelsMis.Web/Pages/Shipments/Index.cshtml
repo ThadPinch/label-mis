@@ -25,6 +25,21 @@
     <div class="tab-pane fade @(Model.ReadyActive ? "show active" : "")" id="ready-pane" role="tabpanel">
         <p class="text-muted">Orders with items finished and ready to ship. Record a shipment to capture packages and tracking.</p>
 
+        @if (TempData["ShipMessage"] is string shipMessage)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @shipMessage
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+        @if (TempData["ShipError"] is string shipError)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @shipError
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
         <form method="get" class="row g-2 mb-3">
             <input type="hidden" name="tab" value="ready" />
             <div class="col-md-4"><input asp-for="ReadySearch" class="form-control" placeholder="Search order or customer" /></div>
@@ -65,6 +80,26 @@
                             @if (Model.CanShip)
                             {
                                 <a asp-page="/Shipments/Record" asp-route-salesOrderId="@order.SalesOrderId" class="btn btn-sm btn-success">Record shipment</a>
+                                var markLabel = order.IsPickup ? "Mark picked up" : "Mark shipped";
+                                var markConfirm = order.IsPickup
+                                    ? "Are you sure you want to mark this order picked up without a package?"
+                                    : "Are you sure you want to mark this order shipped without a package?";
+                                <form method="post" asp-page-handler="MarkShipped" class="d-inline"
+                                      onsubmit="return confirm('@markConfirm');">
+                                    <input type="hidden" name="salesOrderId" value="@order.SalesOrderId" />
+                                    <input type="hidden" name="isPickup" value="@order.IsPickup" />
+                                    <input type="hidden" name="ReadySearch" value="@Model.ReadySearch" />
+                                    <input type="hidden" name="readyPage" value="@Model.ReadyPage" />
+                                    @if (order.ReadyItemCount < order.TotalItemCount)
+                                    {
+                                        <button type="submit" class="btn btn-sm btn-outline-success" disabled
+                                                title="All items must be ready before the order can be marked @(order.IsPickup ? "picked up" : "shipped")">@markLabel</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="submit" class="btn btn-sm btn-outline-success">@markLabel</button>
+                                    }
+                                </form>
                             }
                             <a asp-page="/SalesOrders/Edit" asp-route-id="@order.SalesOrderId" class="btn btn-sm btn-outline-primary">View order</a>
                         </td>

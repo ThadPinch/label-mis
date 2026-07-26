@@ -103,4 +103,10 @@ public class SalesOrderLine : EntityBase
         LineNotes = string.IsNullOrWhiteSpace(lineNotes) ? null : lineNotes.Trim();
         SetModified(modifiedById, modifiedAt);
     }
+
+    public void UpdateDescription(string? description, Guid modifiedById, DateTime modifiedAt)
+    {
+        Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        SetModified(modifiedById, modifiedAt);
+    }
 }

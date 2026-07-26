@@ -36,19 +36,7 @@ public class ArtworkService(
         await using var stream = file.OpenReadStream();
         await fileStorage.UploadAsync(key, stream, file.ContentType, cancellationToken);
 
-        product.Update(
-            product.CustomerSku,
-            product.Description,
-            product.LabelAcrossIn,
-            product.LabelAroundIn,
-            product.CornerRadiusIn,
-            product.SubstrateId,
-            product.InkSet,
-            product.FinishingOperationsJson,
-            product.DieId,
-            key,
-            userId,
-            now);
+        product.SetArtworkFile(key, Path.GetFileName(file.FileName), userId, now);
 
         await db.SaveChangesAsync(cancellationToken);
     }
@@ -75,7 +63,11 @@ public class ArtworkService(
             ".tif" or ".tiff" => "image/tiff",
             _ => "application/octet-stream"
         };
-        return (stream, contentType, Path.GetFileName(product.ArtworkFilePath));
+        // Prefer the original upload name so downloads aren't the opaque timestamped storage key.
+        var fileName = string.IsNullOrWhiteSpace(product.ArtworkOriginalFileName)
+            ? Path.GetFileName(product.ArtworkFilePath)
+            : product.ArtworkOriginalFileName;
+        return (stream, contentType, fileName);
     }
 
     private static void ValidateFile(IFormFile file)

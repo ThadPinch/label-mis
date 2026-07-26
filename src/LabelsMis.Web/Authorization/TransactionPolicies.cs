@@ -23,6 +23,9 @@ public static class TransactionPolicies
     public const string InvoicesEdit = "InvoicesEdit";
     public const string AdminOverride = "AdminOverride";
 
+    /// <summary>Finance reports pages: requires the Accounting role explicitly.</summary>
+    public const string FinanceReports = "FinanceReports";
+
     public static readonly string[] EstimatesReadRoles = [AppRoles.Admin, AppRoles.Estimator, AppRoles.Csr];
     public static readonly string[] EstimatesEditRoles = [AppRoles.Admin, AppRoles.Estimator];
     public static readonly string[] EstimatesAdminRoles = [AppRoles.Admin];
@@ -38,7 +41,10 @@ public static class TransactionPolicies
     public static readonly string[] InventoryEditRoles = [AppRoles.Admin, AppRoles.Scheduler];
     public static readonly string[] ShippingReadRoles = [AppRoles.Admin, AppRoles.Shipping, AppRoles.Csr];
     public static readonly string[] ShippingEditRoles = [AppRoles.Admin, AppRoles.Shipping];
-    public static readonly string[] InvoicesReadRoles = [AppRoles.Admin, AppRoles.Accounting, AppRoles.Csr];
-    public static readonly string[] InvoicesEditRoles = [AppRoles.Admin, AppRoles.Accounting];
+    // Finance-tab pages are gated strictly on the Accounting role: users (including admins)
+    // must have it explicitly assigned to see or edit anything financial.
+    public static readonly string[] InvoicesReadRoles = [AppRoles.Accounting];
+    public static readonly string[] InvoicesEditRoles = [AppRoles.Accounting];
+    public static readonly string[] FinanceReportsRoles = [AppRoles.Accounting];
     public static readonly string[] AdminOverrideRoles = [AppRoles.Admin];
 }

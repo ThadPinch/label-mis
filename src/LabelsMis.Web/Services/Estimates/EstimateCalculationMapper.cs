@@ -50,7 +50,8 @@ public record EstimateLineFormInput(
     decimal? MarkupPctOverride,
     int? MaxLabelsAcrossOverride,
     LabelOrientation? LabelOrientationOverride,
-    IReadOnlyDictionary<int, decimal>? QuantityMarkupOverrides = null);
+    IReadOnlyDictionary<int, decimal>? QuantityMarkupOverrides = null,
+    UnwindDirection? Unwind = null);
 
 public record EstimateFormInput(
     Guid CustomerId,

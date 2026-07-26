@@ -1,0 +1,256 @@
+@page "/reports"
+@using LabelsMis.Web.Services.Reports
+@model LabelsMis.Web.Pages.Reports.IndexModel
+@{
+    ViewData["Title"] = "Finance reports";
+}
+
+@functions {
+    private static string Money(decimal v)
+    {
+        var abs = Math.Abs(v);
+        return abs switch
+        {
+            >= 1_000_000 => $"${v / 1_000_000m:0.#}M",
+            >= 10_000 => $"${v / 1_000m:0.#}K",
+            _ => v.ToString("C0")
+        };
+    }
+}
+
+<div class="dash" id="dashRoot" data-user="@(User.Identity?.Name ?? "anon"):reports">
+
+    <div class="dash-toolbar">
+        <div class="dash-toolbar-title">
+            <h1>Finance reports</h1>
+            <span class="dash-asof">as of @Model.Data.Today.ToString("MMMM d, yyyy")</span>
+        </div>
+        <div class="dash-toolbar-actions">
+            <nav class="dash-range" aria-label="Date range">
+                @foreach (var (days, label) in new[] { (30, "30 days"), (90, "3 mo"), (180, "6 mo"), (365, "12 mo") })
+                {
+                    <a class="dash-range-btn @(Model.Range == days ? "active" : "")"
+                       aria-current="@(Model.Range == days ? "true" : "false")"
+                       href="?range=@days">@label</a>
+                }
+            </nav>
+            <button type="button" class="btn btn-outline-secondary btn-sm dash-customize-btn" id="dashCustomizeBtn"
+                    aria-pressed="false">Customize</button>
+        </div>
+    </div>
+
+    <div class="dash-tiles" id="dashTiles" data-dash-zone="tiles">
+        @if (Model.Data.Finance is { } fin)
+        {
+            <a class="dash-tile" data-widget="tile-revenue" data-title="Revenue this month" href="/Invoices">
+                <span class="dash-tile-label">Revenue this month</span>
+                <span class="dash-tile-value">@Money(fin.RevenueMtd)</span>
+                <span class="dash-tile-sub">@Money(fin.RevenueLastMonth) last month</span>
+            </a>
+            <a class="dash-tile" data-widget="tile-ar" data-title="Receivables" href="/Reports/ArAging">
+                <span class="dash-tile-label">Receivables</span>
+                <span class="dash-tile-value">@Money(fin.ArOutstanding)</span>
+                <span class="dash-tile-sub">@fin.ArOpenInvoiceCount open invoice@(fin.ArOpenInvoiceCount == 1 ? "" : "s")</span>
+            </a>
+        }
+        @if (Model.Data.Sales is { } sales)
+        {
+            <a class="dash-tile" data-widget="tile-orders" data-title="Open order value" href="/sales-orders">
+                <span class="dash-tile-label">Open order value</span>
+                <span class="dash-tile-value">@Money(sales.OpenOrderValue)</span>
+                <span class="dash-tile-sub">@sales.OpenOrderCount open orders</span>
+            </a>
+        }
+    </div>
+
+    <div class="dash-grid" id="dashGrid" data-dash-zone="cards">
+
+        @if (Model.Data.Finance is not null)
+        {
+            <section class="dash-card dash-span-8" data-widget="revenue" data-title="Invoiced revenue">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">Invoiced revenue</h2>
+                        <p class="dash-card-sub">@Model.RangeLabel, excludes voided invoices</p>
+                    </div>
+                    <div class="dash-card-actions">
+                        <button type="button" class="dash-iconbtn dash-table-toggle" aria-pressed="false"
+                                title="Toggle table view" aria-label="Toggle table view"></button>
+                    </div>
+                </header>
+                <div class="dash-chart" data-chart="line" data-series="revenueTrend"
+                     data-format="currency" data-name="Invoiced" data-col="Period"></div>
+            </section>
+
+            <section class="dash-card dash-span-4" data-widget="aging" data-title="AR aging">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">AR aging</h2>
+                        <p class="dash-card-sub">open balances by days past due</p>
+                    </div>
+                    <div class="dash-card-actions">
+                        <button type="button" class="dash-iconbtn dash-table-toggle" aria-pressed="false"
+                                title="Toggle table view" aria-label="Toggle table view"></button>
+                    </div>
+                </header>
+                <div class="dash-chart" data-chart="bars" data-series="arAging" data-format="currency"
+                     data-name="Balance" data-col="Bucket" data-ramp="ordinal"></div>
+            </section>
+        }
+
+        @if (Model.Data.Sales is not null)
+        {
+            <section class="dash-card dash-span-8" data-widget="intake" data-title="Order intake">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">Order intake</h2>
+                        <p class="dash-card-sub">booked order value, @Model.RangeLabel</p>
+                    </div>
+                    <div class="dash-card-actions">
+                        <button type="button" class="dash-iconbtn dash-table-toggle" aria-pressed="false"
+                                title="Toggle table view" aria-label="Toggle table view"></button>
+                    </div>
+                </header>
+                <div class="dash-chart" data-chart="columns" data-series="orderIntake"
+                     data-format="currency" data-name="Booked" data-col="Period"></div>
+            </section>
+        }
+
+        @if (Model.Data.Finance is not null)
+        {
+            <section class="dash-card dash-span-4" data-widget="customers" data-title="Top customers">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">Top customers</h2>
+                        <p class="dash-card-sub">invoiced revenue, @Model.RangeLabel</p>
+                    </div>
+                    <div class="dash-card-actions">
+                        <button type="button" class="dash-iconbtn dash-table-toggle" aria-pressed="false"
+                                title="Toggle table view" aria-label="Toggle table view"></button>
+                    </div>
+                </header>
+                <div class="dash-chart" data-chart="bars" data-series="topCustomers"
+                     data-format="currency" data-name="Invoiced" data-col="Customer"></div>
+            </section>
+        }
+    </div>
+
+    <div class="dash-tray" id="dashTray" hidden>
+        <span class="dash-tray-label">Hidden widgets — click to restore:</span>
+        <span class="dash-tray-items" id="dashTrayItems"></span>
+        <button type="button" class="btn btn-link btn-sm dash-tray-reset" id="dashResetBtn">Reset layout</button>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header py-2 fw-semibold">Generate a report</div>
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <input type="hidden" name="range" value="@Model.Range" />
+            <div class="col-md-3">
+                <label class="form-label small mb-0">Report</label>
+                <select name="reportType" class="form-select form-select-sm">
+                    @foreach (var type in Enum.GetValues<ReportType>())
+                    {
+                        <option value="@type" selected="@(Model.ReportType == type)">@(type switch
+                        {
+                            ReportType.SalesOrders => "Sales orders",
+                            ReportType.PurchaseOrders => "Purchase orders",
+                            _ => type.ToString()
+                        })</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-0">From</label>
+                <input type="date" name="from" value="@(Model.From?.ToString("yyyy-MM-dd"))" class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-0">To</label>
+                <input type="date" name="to" value="@(Model.To?.ToString("yyyy-MM-dd"))" class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-0">Customer</label>
+                <select asp-for="CustomerId" class="form-select form-select-sm" asp-items="@((IEnumerable<SelectListItem>)ViewData["CustomerOptions"]!)">
+                    <option value="">All customers</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-0">Product</label>
+                <select asp-for="ProductId" class="form-select form-select-sm" asp-items="@((IEnumerable<SelectListItem>)ViewData["ProductOptions"]!)">
+                    <option value="">All products</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-0">Die</label>
+                <select asp-for="DieId" class="form-select form-select-sm" asp-items="@((IEnumerable<SelectListItem>)ViewData["DieOptions"]!)">
+                    <option value="">All dies</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-0">Supplier <span class="text-muted">(POs)</span></label>
+                <select asp-for="SupplierId" class="form-select form-select-sm" asp-items="@((IEnumerable<SelectListItem>)ViewData["SupplierOptions"]!)">
+                    <option value="">All suppliers</option>
+                </select>
+            </div>
+            <div class="col-md-auto">
+                <button type="submit" class="btn btn-sm btn-primary">Generate</button>
+            </div>
+            @if (Model.Report is not null && Model.ReportType is { } exportType && Model.From is { } exportFrom && Model.To is { } exportTo)
+            {
+                <div class="col-md-auto">
+                    <a class="btn btn-sm btn-outline-secondary"
+                       href="?handler=Export&reportType=@exportType&from=@exportFrom.ToString("yyyy-MM-dd")&to=@exportTo.ToString("yyyy-MM-dd")&customerId=@Model.CustomerId&productId=@Model.ProductId&dieId=@Model.DieId&supplierId=@Model.SupplierId">
+                        Download CSV
+                    </a>
+                </div>
+            }
+        </form>
+
+        @if (Model.Report is { } report)
+        {
+            <div class="mt-3">
+                <div class="fw-semibold small mb-1">@report.Title · @report.Rows.Count rows</div>
+                @if (report.Rows.Count == 0)
+                {
+                    <p class="text-muted small mb-0">No rows in this date range.</p>
+                }
+                else
+                {
+                    <div class="table-responsive" style="max-height: 60vh;">
+                        <table class="table table-sm table-striped small mb-0">
+                            <thead>
+                                <tr>
+                                    @foreach (var column in report.Columns)
+                                    {
+                                        <th>@column</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in report.Rows)
+                                {
+                                    <tr>
+                                        @foreach (var cell in row)
+                                        {
+                                            <td>@cell</td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script>window.DASHBOARD_DATA = @Html.Raw(Model.ChartJson);</script>
+    <script src="~/js/dashboard.js" asp-append-version="true"></script>
+}

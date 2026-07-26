@@ -97,6 +97,27 @@ public class ShipmentTests
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*without packages*");
     }
+
+    [Fact]
+    public void MarkShippedWithoutPackages_ShipsPendingShipment_AndRejectsRepeat()
+    {
+        var shipment = Shipment.CreatePending(
+            Guid.NewGuid(), "SHP-2026-00002", Guid.NewGuid(), DateOnly.FromDateTime(Now),
+            Carrier.Other, null, null,
+            LabelsMis.Domain.ValueObjects.ShippingAddress.Empty,
+            LabelsMis.Domain.ValueObjects.ShippingAddress.Empty, null,
+            0m, BillingType.Sender, null, UserId, Now);
+
+        shipment.MarkShippedWithoutPackages(UserId, Now);
+
+        shipment.Status.Should().Be(ShipmentStatus.InTransit);
+        shipment.TotalShippingCost.Should().Be(0m);
+
+        var act = () => shipment.MarkShippedWithoutPackages(UserId, Now);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*pending*");
+    }
 }
 
 public class InvoiceTests

@@ -156,6 +156,23 @@ public class Shipment : EntityBase
         SetModified(modifiedById, modifiedAt);
     }
 
+    /// <summary>
+    /// Ships without any packages — the floor's "mark shipped" action for pickups and other
+    /// hand-offs where nothing is packaged or tracked. Regular shipping goes through
+    /// <see cref="MarkInTransit"/>, which requires tracked packages.
+    /// </summary>
+    public void MarkShippedWithoutPackages(Guid modifiedById, DateTime modifiedAt)
+    {
+        if (Status is not ShipmentStatus.Pending)
+        {
+            throw new InvalidOperationException("Only pending shipments can be marked shipped.");
+        }
+
+        Status = ShipmentStatus.InTransit;
+        TotalShippingCost = 0m;
+        SetModified(modifiedById, modifiedAt);
+    }
+
     public void MarkDelivered(Guid modifiedById, DateTime modifiedAt)
     {
         Status = ShipmentStatus.Delivered;

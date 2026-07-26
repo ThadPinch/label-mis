@@ -92,12 +92,20 @@ public class PdfGeneratorSmokeTests
     [Fact]
     public async Task JobTicketPdf_renders()
     {
-        var generator = new JobTicketPdfGenerator(Options.Create(new JobOptions()));
+        var generator = new JobTicketPdfGenerator(
+            Options.Create(new JobOptions()),
+            new StubGeneralSettingsService(BrandedSettings()));
+
+        var spec = LabelsMis.Domain.ValueObjects.LabelSpec.Create(
+            4m, 3m, 0.125m, 0.0625m, 0.0625m, 0.0625m,
+            Guid.NewGuid(), Guid.NewGuid(), InkSet.CMYK_PlusSpot,
+            0, 1m, "[]", "[]", 250m, 0.04m, null, null, null,
+            UnwindDirection.Position3);
 
         var job = Job.CreatePlanned(
             Guid.NewGuid(), "J-1042", Guid.NewGuid(), Guid.NewGuid(),
             5000, 5250, new DateOnly(2026, 8, 10), 2,
-            "Customer wants cores shrink-wrapped.", null, UserId, Now);
+            "Customer wants cores shrink-wrapped.", spec, UserId, Now);
         job.Schedule(new DateOnly(2026, 8, 3), Guid.NewGuid(), UserId, Now);
 
         var rollSpec = RollSpec.Create(Guid.NewGuid(), Guid.NewGuid(), 250, 3m, 4, 8m, 12, "CASE-{n}", UserId, Now);
@@ -119,16 +127,79 @@ public class PdfGeneratorSmokeTests
             rollSpec,
             new[]
             {
-                new JobTicketRouteStep(1, default, "Prepress / plate mount", 45m),
-                new JobTicketRouteStep(2, default, "Print — Mark Andy P5", 120m),
-                new JobTicketRouteStep(3, default, "Lamination", 40m),
-                new JobTicketRouteStep(4, default, "Die cut & rewind", 60m),
-                new JobTicketRouteStep(5, default, "Pack & label cases", 30m)
-            });
+                new JobTicketRouteStep(1, JobOperationType.Press, "Prepress / plate mount", 45m),
+                new JobTicketRouteStep(2, JobOperationType.Press, "Print — Mark Andy P5", 120m),
+                new JobTicketRouteStep(3, JobOperationType.Finishing, "Gloss lamination — material: LAM-G — 1.2 mil gloss", 40m),
+                new JobTicketRouteStep(4, JobOperationType.Finishing, "Die cut & rewind", 60m),
+                new JobTicketRouteStep(5, JobOperationType.Pack, "Pack & label cases", 30m)
+            },
+            OrderNotes: "Rush order — customer will pick up partials as they finish.",
+            LineNotes: "Matte finish only — no gloss substitutes.");
 
-        var bytes = await generator.GenerateAsync(detail);
+        // A sibling line on the same order: the ticket shows a compact block for every job.
+        var siblingJob = Job.CreatePlanned(
+            Guid.NewGuid(), "J-1043", Guid.NewGuid(), Guid.NewGuid(),
+            2000, 2100, new DateOnly(2026, 8, 10), 2,
+            null, null, UserId, Now);
+        var sibling = detail with
+        {
+            Job = siblingJob,
+            ProductDescription = "4×3 gloss BOPP label",
+            ProductSku = "SKU-4X3-GLOSS",
+            InkSet = InkSet.CMYK,
+            SpecialInksSummary = null,
+            ScheduledPressName = null
+        };
+
+        var bytes = await generator.GenerateAsync(detail, new[] { detail, sibling });
 
         AssertLoadablePdf(bytes, minPages: 1, "job-ticket.pdf");
+    }
+
+    [Fact]
+    public async Task InvoicePdf_renders()
+    {
+        var generator = new InvoicePdfGenerator(
+            Options.Create(new LabelsMis.Web.Services.Invoices.InvoiceOptions()),
+            new StubGeneralSettingsService(BrandedSettings()));
+
+        var customer = Customer.Create(
+            Guid.NewGuid(), "Acme Foods", "ACME", PaymentTerms.Prepay, false, 0.4m,
+            CustomerStatus.Active, null, UserId, Now);
+        customer.AddAddress(Address.Create(
+            Guid.NewGuid(), customer.Id, AddressType.Billing, "123 Main St", "Suite 4",
+            "Phoenix", "AZ", "85001", "US", true, UserId, Now));
+
+        var order = SalesOrder.CreateOpen(
+            Guid.NewGuid(), "SO-2026-0117", customer.Id, null, null, "PO-88231",
+            Now, new DateOnly(2026, 8, 7), null, null, 42.50m,
+            LabelsMis.Domain.ValueObjects.ShippingAddress.Empty, UserId, Now);
+
+        var invoice = Invoice.CreateDraft(
+            Guid.NewGuid(), "INV-2026-0042", customer.Id, order.Id, null,
+            new DateOnly(2026, 7, 25), new DateOnly(2026, 7, 25),
+            617.00m, 50.90m, 42.50m, "Thanks for your business!", UserId, Now);
+        SetNavigation(invoice, nameof(Invoice.Customer), customer);
+        SetNavigation(invoice, nameof(Invoice.SalesOrder), order);
+
+        for (var i = 1; i <= 2; i++)
+        {
+            invoice.AddLine(InvoiceLine.Create(
+                Guid.NewGuid(), invoice.Id, i, null, null,
+                $"4×3 matte BOPP label — design {i}", 2500 * i, 0.1234m, "TAX", UserId, Now));
+        }
+
+        var payment = Payment.Create(
+            Guid.NewGuid(), invoice.Id, new DateOnly(2026, 7, 25), 200m,
+            PaymentMethod.Check, "CHK 1042", null, UserId, Now);
+        invoice.RecordPayment(payment);
+
+        var detail = new LabelsMis.Web.Services.Invoices.InvoiceDetail(
+            invoice, customer.Name, order.Id, order.OrderNumber, [payment]);
+
+        var bytes = await generator.GenerateBytesAsync(detail);
+
+        AssertLoadablePdf(bytes, minPages: 1, "invoice.pdf");
     }
 
     private static GeneralSettings BrandedSettings()
@@ -138,7 +209,7 @@ public class PdfGeneratorSmokeTests
             "Printing Solutions AZ", "2120 W Broadway Rd", null, "Mesa", "AZ", "85202",
             "(480) 555-0142", "orders@printingsolutionsaz.com", "printingsolutionsaz.com",
             "Prices valid for 30 days. 10% over/under constitutes a complete order.",
-            UserId, Now);
+            0.0825m, UserId, Now);
         settings.SetLogo(TinyPng, "image/png", UserId, Now);
         return settings;
     }

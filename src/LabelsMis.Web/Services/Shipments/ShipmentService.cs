@@ -52,6 +52,7 @@ public record ReadyToShipOrder(
     string? CustomerPoNumber,
     DateOnly? RequestedShipDate,
     string? ShippingMethodName,
+    bool IsPickup,
     int ReadyItemCount,
     int TotalItemCount,
     IReadOnlyList<ReadyJobRef> ReadyJobs);
@@ -239,6 +240,7 @@ public class ShipmentService(
                 o.CustomerPoNumber,
                 o.RequestedShipDate,
                 o.ShippingMethod != null ? o.ShippingMethod.Name : null,
+                o.ShippingMethod != null && o.ShippingMethod.MethodType == ShippingMethodType.Pickup,
                 o.Lines.Count(l => db.Jobs.Any(j => j.Status == JobStatus.Rewound && j.SalesOrderLineId == l.Id)),
                 o.Lines.Count,
                 db.Jobs
@@ -404,6 +406,82 @@ public class ShipmentService(
         db.Shipments.Add(shipment);
 
         var jobIds = shipLines.Where(l => l.JobId.HasValue).Select(l => l.JobId!.Value).Distinct().ToList();
+        if (jobIds.Count > 0)
+        {
+            var jobs = await db.Jobs.Where(j => jobIds.Contains(j.Id)).ToListAsync(cancellationToken);
+            foreach (var job in jobs.Where(j => j.Status < JobStatus.Shipped))
+            {
+                job.AdvanceStatus(JobStatus.Shipped, userId, now);
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        // Roll up the order status after the lines are persisted, so the query sees this shipment.
+        await UpdateSalesOrderStatusAsync(salesOrderId, userId, now, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return shipment;
+    }
+
+    /// <summary>
+    /// Marks an order shipped without packages or tracking (pickups and other hand-offs):
+    /// creates a package-less shipment for every ready line's remaining quantity, advances the
+    /// jobs to Shipped, and rolls up the sales-order status.
+    /// </summary>
+    public async Task<Shipment> MarkShippedAsync(Guid salesOrderId, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+
+        var order = await GetOrderForManualShipmentAsync(salesOrderId, cancellationToken)
+            ?? throw new InvalidOperationException("Order not found.");
+
+        var readyLines = order.Lines.Where(l => l.IsReady && l.QuantityRemaining > 0).ToList();
+        if (readyLines.Count == 0)
+        {
+            throw new InvalidOperationException("Nothing on this order is ready to ship.");
+        }
+
+        // One-click shipping is all-or-nothing: every line must be ready (or already shipped).
+        // Partial orders go through the record-shipment form where lines are picked explicitly.
+        if (order.Lines.Any(l => !l.IsReady && l.QuantityRemaining > 0))
+        {
+            throw new InvalidOperationException("All items must be ready before the order can be marked shipped without packages.");
+        }
+
+        var shipFrom = await GetCompanyShipFromAsync(cancellationToken);
+        var shipmentNumber = await documentNumbers.NextShipmentNumberAsync(cancellationToken);
+
+        var shipment = Shipment.CreatePending(
+            Guid.NewGuid(),
+            shipmentNumber,
+            salesOrderId,
+            DateOnly.FromDateTime(now),
+            Carrier.Other,
+            null,
+            null,
+            shipFrom,
+            order.DefaultShipTo,
+            shipToAddressId: null,
+            totalDeclaredValue: 0m,
+            BillingType.Sender,
+            null,
+            userId,
+            now);
+
+        foreach (var line in readyLines)
+        {
+            var shipmentLine = ShipmentLine.Create(
+                Guid.NewGuid(), shipment.Id, line.SalesOrderLineId, line.JobId, line.QuantityRemaining, userId, now);
+            shipment.AddLine(shipmentLine);
+            db.ShipmentLines.Add(shipmentLine);
+        }
+
+        shipment.MarkShippedWithoutPackages(userId, now);
+        db.Shipments.Add(shipment);
+
+        var jobIds = readyLines.Where(l => l.JobId.HasValue).Select(l => l.JobId!.Value).Distinct().ToList();
         if (jobIds.Count > 0)
         {
             var jobs = await db.Jobs.Where(j => jobIds.Contains(j.Id)).ToListAsync(cancellationToken);

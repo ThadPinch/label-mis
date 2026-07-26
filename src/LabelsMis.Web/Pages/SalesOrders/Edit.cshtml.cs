@@ -5,6 +5,7 @@ using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Services.Artwork;
 using LabelsMis.Web.Services.Customers;
 using LabelsMis.Web.Services.Estimates;
+using LabelsMis.Web.Services.Invoices;
 using LabelsMis.Web.Services.Jobs;
 using LabelsMis.Web.Services.SalesOrders;
 using LabelsMis.Web.Services.Shipping;
@@ -35,9 +36,11 @@ public class EditModel(
     ArtworkService artworkService,
     ShippingMethodService shippingMethodService,
     CustomerService customerService,
+    InvoiceService invoiceService,
     LabelsMisDbContext db) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
+    [BindProperty(SupportsGet = true)] public bool Unlocked { get; set; }
     [BindProperty] public SalesOrderPageInput Input { get; set; } = new();
     public Domain.Entities.SalesOrder? Order { get; private set; }
     public bool CanEdit { get; private set; }
@@ -45,6 +48,33 @@ public class EditModel(
     public bool CanDelete { get; private set; }
     public bool CanCancel { get; private set; }
     public bool IsLocked { get; private set; }
+
+    /// <summary>Admins and CSRs may unlock an in-production order to edit it.</summary>
+    public bool CanUnlock => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Csr);
+
+    public bool CanSendInvoice => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Csr) || User.IsInRole(AppRoles.Accounting);
+
+    /// <summary>The form is editable: the order is open, or it was explicitly unlocked.</summary>
+    public bool IsEditing => !IsLocked || (Unlocked && CanUnlock);
+    // Invoice email modal fields.
+    [BindProperty] public Guid SendInvoiceId { get; set; }
+    [BindProperty] public string? EmailTo { get; set; }
+    [BindProperty] public string? EmailSubject { get; set; }
+    [BindProperty] public string? EmailBody { get; set; }
+    [BindProperty] public bool IncludePdf { get; set; } = true;
+
+    /// <summary>Customer payment terms; Prepay gates scheduling on full payment.</summary>
+    public PaymentTerms? CustomerTerms { get; private set; }
+    public bool RequiresPrepay => CustomerTerms == PaymentTerms.Prepay;
+
+    /// <summary>Sum of payments recorded against the order's non-void invoices.</summary>
+    public decimal AmountPaid { get; private set; }
+    public decimal OrderTotal { get; private set; }
+    public bool PrepaySatisfied => AmountPaid >= OrderTotal;
+
+    public IReadOnlyList<(string Name, string Email)> CustomerContacts { get; private set; } = [];
+    public string? DefaultInvoiceEmail { get; private set; }
+
     public IReadOnlyList<LineJobInfo> LineJobs { get; private set; } = [];
     public IReadOnlyList<OrderShipmentInfo> Shipments { get; private set; } = [];
     public IReadOnlyList<OrderInvoiceInfo> Invoices { get; private set; } = [];
@@ -72,7 +102,8 @@ public class EditModel(
         DateOnly InvoiceDate,
         InvoiceStatus Status,
         decimal Total,
-        decimal BalanceDue);
+        decimal BalanceDue,
+        DateTime? QbExportedAt);
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -102,10 +133,26 @@ public class EditModel(
                 .FirstOrDefaultAsync(cancellationToken);
         }
         await LoadLineJobsAsync(cancellationToken);
+        ApplyLineJobsToInput();
         await LoadLineDetailsAsync(cancellationToken);
         await LoadRelatedDocumentsAsync(cancellationToken);
         await LoadLookupsAsync(Order.CustomerId, cancellationToken);
+        ViewData["IsLocked"] = !IsEditing;
         return Page();
+    }
+
+    /// <summary>Marks each line input with its existing job so the form can pin the product select.</summary>
+    private void ApplyLineJobsToInput()
+    {
+        foreach (var lineJob in LineJobs)
+        {
+            var line = Input.Lines.ElementAtOrDefault(lineJob.LineNumber - 1);
+            if (line is not null && lineJob.JobId is not null)
+            {
+                line.HasJob = true;
+                line.JobNumber = lineJob.JobNumber;
+            }
+        }
     }
 
     private async Task LoadLineDetailsAsync(CancellationToken cancellationToken)
@@ -196,8 +243,25 @@ public class EditModel(
         Invoices = await db.Invoices.AsNoTracking()
             .Where(i => i.SalesOrderId == Id)
             .OrderBy(i => i.InvoiceDate)
-            .Select(i => new OrderInvoiceInfo(i.Id, i.InvoiceNumber, i.InvoiceDate, i.Status, i.Total, i.BalanceDue))
+            .Select(i => new OrderInvoiceInfo(i.Id, i.InvoiceNumber, i.InvoiceDate, i.Status, i.Total, i.BalanceDue, i.QbExportedAt))
             .ToListAsync(cancellationToken);
+
+        AmountPaid = Invoices
+            .Where(i => i.Status != InvoiceStatus.Void)
+            .Sum(i => i.Total - i.BalanceDue);
+        OrderTotal = Order is null ? 0m : Order.Lines.Sum(l => l.LineTotal) + Order.ShippingCost;
+
+        if (Order is not null)
+        {
+            var customer = await customerService.GetByIdAsync(Order.CustomerId, cancellationToken);
+            CustomerTerms = customer?.Terms;
+            CustomerContacts = (customer?.Contacts ?? [])
+                .Where(c => !string.IsNullOrWhiteSpace(c.Email))
+                .OrderByDescending(c => c.IsPrimary)
+                .Select(c => (c.FullName, c.Email!))
+                .ToList();
+            DefaultInvoiceEmail = CustomerContacts.Select(c => c.Email).FirstOrDefault();
+        }
     }
 
     private async Task LoadLineJobsAsync(CancellationToken cancellationToken)
@@ -263,16 +327,59 @@ public class EditModel(
         ShipToState = order.ShipToState,
         ShipToZip = order.ShipToZip,
         ShipToCountry = order.ShipToCountry,
-        Lines = order.Lines.OrderBy(l => l.LineNumber).Select(l => new SalesOrderLinePageInput
+        Lines = order.Lines.OrderBy(l => l.LineNumber).Select(l =>
         {
-            ProductId = l.ProductId,
-            SourceEstimateLineId = l.SourceEstimateLineId,
-            Quantity = l.Quantity,
-            UnitPrice = l.UnitPrice,
-            LineNotes = l.LineNotes,
-            Description = l.Description,
-            HasArtwork = !string.IsNullOrWhiteSpace(l.Product.ArtworkFilePath),
-            SpecJson = l.Spec is null ? null : System.Text.Json.JsonSerializer.Serialize(l.Spec)
+            var spec = l.Spec;
+            return new SalesOrderLinePageInput
+            {
+                Id = l.Id,
+                ProductId = l.ProductId,
+                SourceEstimateLineId = l.SourceEstimateLineId,
+                Quantity = l.Quantity,
+                UnitPrice = l.UnitPrice,
+                LineNotes = l.LineNotes,
+                Description = l.Description,
+                Unwind = spec?.Unwind,
+                HasArtwork = !string.IsNullOrWhiteSpace(l.Product.ArtworkFilePath),
+                ArtworkFileName = string.IsNullOrWhiteSpace(l.Product.ArtworkFilePath)
+                    ? null
+                    : l.Product.ArtworkOriginalFileName ?? Path.GetFileName(l.Product.ArtworkFilePath),
+                SpecJson = spec is null ? null : System.Text.Json.JsonSerializer.Serialize(spec),
+                LabelAcrossIn = spec?.LabelAcrossIn,
+                LabelAroundIn = spec?.LabelAroundIn,
+                CornerRadiusIn = spec?.CornerRadiusIn,
+                GutterAcrossIn = spec?.GutterAcrossIn,
+                GutterAroundIn = spec?.GutterAroundIn,
+                BleedIn = spec?.BleedIn,
+                SubstrateId = spec?.SubstrateId,
+                DieId = spec?.DieId,
+                InkSet = spec?.InkSet,
+                WhiteHits = spec?.WhiteHits,
+                WhiteCoveragePct = spec is null ? null : spec.WhiteCoveragePct * 100m,
+                SetupWasteImpressions = spec?.SetupWasteImpressions,
+                RunningWastePct = spec?.RunningWastePct,
+                MaxLabelsAcrossOverride = spec?.MaxLabelsAcrossOverride,
+                LabelOrientationOverride = spec?.LabelOrientationOverride,
+                Spots = spec is null
+                    ? []
+                    : EstimateCalculationMapper.DeserializeSpots(spec.SpotsJson)
+                        .OrderBy(s => s.SortOrder)
+                        .Select(s => new OrderSpotPageInput { InkId = s.InkId, Hits = s.Hits, CoveragePct = s.CoveragePct * 100m })
+                        .ToList(),
+                Finishing = spec is null
+                    ? []
+                    : EstimateCalculationMapper.DeserializeFinishingOperations(spec.FinishingOperationsJson)
+                        .OrderBy(f => f.SortOrder)
+                        .Select(f => new OrderFinishingPageInput
+                        {
+                            OperationId = f.OperationId,
+                            Include = true,
+                            StockId = f.StockId,
+                            SetupMinutesOverride = f.SetupMinutesOverride,
+                            RunSpeedFpmOverride = f.RunSpeedFpmOverride
+                        })
+                        .ToList()
+            };
         }).ToList()
     };
 
@@ -280,9 +387,33 @@ public class EditModel(
     {
         var admin = User.IsInRole(AppRoles.Admin);
         if (!admin && !User.IsInRole(AppRoles.Csr) && !User.IsInRole(AppRoles.Estimator)) return Forbid();
-        await salesOrderService.UpdateAsync(Id, Input.ToForm(), admin, cancellationToken);
-        await UploadLineArtworkAsync(cancellationToken);
-        return RedirectToPage(new { id = Id });
+
+        try
+        {
+            var status = await db.SalesOrders.AsNoTracking()
+                .Where(o => o.Id == Id)
+                .Select(o => o.Status)
+                .SingleAsync(cancellationToken);
+
+            if (status == SalesOrderStatus.Open)
+            {
+                await salesOrderService.UpdateAsync(Id, Input.ToForm(), admin, cancellationToken);
+            }
+            else
+            {
+                // Unlocked edit of an in-production order: in-place line updates + job propagation.
+                if (!CanUnlock) return Forbid();
+                await salesOrderService.UpdateInProductionAsync(Id, Input.ToForm(), cancellationToken);
+            }
+
+            await UploadLineArtworkAsync(cancellationToken);
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return await OnGetAsync(cancellationToken);
+        }
     }
 
     public async Task<IActionResult> OnPostDeleteAsync(CancellationToken cancellationToken)
@@ -318,7 +449,7 @@ public class EditModel(
         }
     }
 
-    public async Task<IActionResult> OnPostScheduleForProductionAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostScheduleForProductionAsync(bool force, CancellationToken cancellationToken)
     {
         if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.Scheduler) && !User.IsInRole(AppRoles.Csr))
         {
@@ -327,18 +458,68 @@ public class EditModel(
 
         try
         {
+            // Prepay customers must have the order paid in full before it can be scheduled,
+            // unless the user explicitly forces it.
+            if (!force && await IsPrepayOutstandingAsync(cancellationToken))
+            {
+                throw new InvalidOperationException(
+                    "This customer has Prepay terms and the order is not paid in full. " +
+                    "Record the payment on the invoice, or use Force to production.");
+            }
+
             var jobs = await jobService.ScheduleFromSalesOrderAsync(Id, cancellationToken);
             return RedirectToPage("/Production/PrePress");
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            Order = await salesOrderService.GetAsync(Id, cancellationToken);
-            IsLocked = Order!.Status != SalesOrderStatus.Open;
-            CanEdit = false;
-            CanSchedule = false;
-            await LoadLookupsAsync(Order.CustomerId, cancellationToken);
-            return Page();
+            return await OnGetAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>True when the customer is on Prepay terms and payments do not yet cover the order total.</summary>
+    private async Task<bool> IsPrepayOutstandingAsync(CancellationToken cancellationToken)
+    {
+        var order = await db.SalesOrders.AsNoTracking()
+            .Include(o => o.Customer)
+            .Include(o => o.Lines)
+            .SingleAsync(o => o.Id == Id, cancellationToken);
+        if (order.Customer.Terms != PaymentTerms.Prepay)
+        {
+            return false;
+        }
+
+        var orderTotal = order.Lines.Sum(l => l.LineTotal) + order.ShippingCost;
+        var paid = await db.Invoices.AsNoTracking()
+            .Where(i => i.SalesOrderId == Id && i.Status != InvoiceStatus.Void)
+            .SumAsync(i => i.Total - i.BalanceDue, cancellationToken);
+        return paid < orderTotal;
+    }
+
+    public async Task<IActionResult> OnPostSendInvoiceAsync(CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.Csr) && !User.IsInRole(AppRoles.Accounting))
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var belongsToOrder = await db.Invoices.AsNoTracking()
+                .AnyAsync(i => i.Id == SendInvoiceId && i.SalesOrderId == Id, cancellationToken);
+            if (!belongsToOrder)
+            {
+                throw new InvalidOperationException("Invoice not found on this order.");
+            }
+
+            await invoiceService.SendAsync(SendInvoiceId, EmailTo, EmailSubject, EmailBody, IncludePdf, cancellationToken);
+            TempData["OrderStatus"] = $"Invoice emailed to {EmailTo}.";
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            TempData["OrderError"] = $"Could not send the invoice: {ex.Message}";
+            return RedirectToPage(new { id = Id });
         }
     }
 
@@ -355,6 +536,33 @@ public class EditModel(
             .Where(p => p.IsActive && p.CustomerAssignments.Any(a => a.CustomerId == customerId))
             .OrderBy(p => p.InternalSku)
             .Select(p => new SelectListItem($"{p.InternalSku} — {p.Description}", p.Id.ToString()))
+            .ToListAsync(cancellationToken);
+
+        // Spec editor lookups, matching what the estimate form offers.
+        ViewData["Substrates"] = await db.Stocks.AsNoTracking()
+            .Where(s => s.IsActive && s.StockType == StockType.Substrate)
+            .OrderBy(s => s.Code)
+            .Select(s => new SelectListItem($"{s.Code} — {s.Description}", s.Id.ToString()))
+            .ToListAsync(cancellationToken);
+        ViewData["Dies"] = await db.Dies.AsNoTracking()
+            .Where(d => d.IsActive)
+            .OrderBy(d => d.Description)
+            .Select(d => new SelectListItem(d.Description, d.Id.ToString()))
+            .ToListAsync(cancellationToken);
+        ViewData["SpotInks"] = await db.Inks.AsNoTracking()
+            .Where(i => i.IsActive && i.IsSpot && i.SpotColor != SpotColor.White)
+            .OrderBy(i => i.Code)
+            .Select(i => new SelectListItem($"{i.Code} — {i.Description}", i.Id.ToString()))
+            .ToListAsync(cancellationToken);
+        ViewData["FinishingOperations"] = await db.FinishingOperations.AsNoTracking()
+            .Where(o => o.IsActive)
+            .OrderBy(o => o.Code)
+            .Select(o => new SelectListItem($"{o.Code} — {o.Description}", o.Id.ToString()))
+            .ToListAsync(cancellationToken);
+        ViewData["FinishingStocks"] = await db.Stocks.AsNoTracking()
+            .Where(s => s.IsActive && s.StockType == StockType.Laminate)
+            .OrderBy(s => s.Code)
+            .Select(s => new SelectListItem($"{s.Code} — {s.Description}", s.Id.ToString()))
             .ToListAsync(cancellationToken);
     }
 }

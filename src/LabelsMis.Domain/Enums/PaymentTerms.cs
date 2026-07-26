@@ -37,6 +37,19 @@ public static class PaymentTermsExtensions
     /// <summary>Days from invoice date until the invoice is due. Immediate terms (Prepay, Due on
     /// Receipt, COD) are due the same day (0).</summary>
     public static int ToDueDays(this PaymentTerms terms) => (int)terms < 0 ? 0 : (int)terms;
+
+    /// <summary>Human-readable label matching the <see cref="DisplayAttribute"/> names.</summary>
+    public static string Label(this PaymentTerms terms) => terms switch
+    {
+        PaymentTerms.Prepay => "Prepay",
+        PaymentTerms.DueOnReceipt => "Due on Receipt",
+        PaymentTerms.Cod => "COD",
+        PaymentTerms.Net15 => "Net 15",
+        PaymentTerms.Net30 => "Net 30",
+        PaymentTerms.Net60 => "Net 60",
+        PaymentTerms.Net90 => "Net 90",
+        _ => terms.ToString()
+    };
 }
 
 public static class PaymentTermsParser

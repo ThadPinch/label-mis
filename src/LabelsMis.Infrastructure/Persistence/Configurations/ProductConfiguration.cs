@@ -20,6 +20,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.InkSet).IsRequired();
         builder.Property(p => p.FinishingOperationsJson).HasColumnType("jsonb").IsRequired();
         builder.Property(p => p.ArtworkFilePath).HasMaxLength(500);
+        builder.Property(p => p.ArtworkOriginalFileName).HasMaxLength(255);
         builder.Property(p => p.Status).IsRequired();
 
         builder.HasIndex(p => p.InternalSku).IsUnique();

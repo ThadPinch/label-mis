@@ -23,22 +23,36 @@
         return "?" + string.Join("&", parts);
     }
 }
-<nav aria-label="Pagination" class="mt-3">
-    <ul class="pagination">
-        @if (Model.Page > 1)
-        {
-            <li class="page-item">
-                <a class="page-link" href="@PageUrl(Model.Page - 1)">Previous</a>
-            </li>
-        }
-        <li class="page-item disabled">
-            <span class="page-link">Page @Model.Page of @Math.Max(Model.TotalPages, 1) (@Model.TotalCount total)</span>
+@{
+    var totalPages = Math.Max(Model.TotalPages, 1);
+    var current = Math.Clamp(Model.Page, 1, totalPages);
+
+    // A window of up to 10 page links around the current page, clamped to the ends.
+    const int windowSize = 10;
+    var windowStart = Math.Max(1, current - (windowSize / 2 - 1));
+    var windowEnd = Math.Min(totalPages, windowStart + windowSize - 1);
+    windowStart = Math.Max(1, windowEnd - windowSize + 1);
+}
+<nav aria-label="Pagination" class="mt-3 d-flex flex-wrap align-items-center gap-2">
+    <ul class="pagination pagination-sm mb-0">
+        <li class="page-item @(current == 1 ? "disabled" : "")">
+            <a class="page-link" href="@PageUrl(1)" aria-label="First page">&laquo; First</a>
         </li>
-        @if (Model.Page < Model.TotalPages)
+        <li class="page-item @(current == 1 ? "disabled" : "")">
+            <a class="page-link" href="@PageUrl(Math.Max(1, current - 1))" aria-label="Previous page">&lsaquo; Prev</a>
+        </li>
+        @for (var pageNumber = windowStart; pageNumber <= windowEnd; pageNumber++)
         {
-            <li class="page-item">
-                <a class="page-link" href="@PageUrl(Model.Page + 1)">Next</a>
+            <li class="page-item @(pageNumber == current ? "active" : "")">
+                <a class="page-link" href="@PageUrl(pageNumber)">@pageNumber</a>
             </li>
         }
+        <li class="page-item @(current == totalPages ? "disabled" : "")">
+            <a class="page-link" href="@PageUrl(Math.Min(totalPages, current + 1))" aria-label="Next page">Next &rsaquo;</a>
+        </li>
+        <li class="page-item @(current == totalPages ? "disabled" : "")">
+            <a class="page-link" href="@PageUrl(totalPages)" aria-label="Last page">Last &raquo;</a>
+        </li>
     </ul>
+    <span class="small text-muted">Page @current of @totalPages · @Model.TotalCount total</span>
 </nav>

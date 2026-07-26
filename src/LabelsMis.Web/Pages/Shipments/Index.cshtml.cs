@@ -35,6 +35,25 @@ public class IndexModel(ShipmentService shipmentService, LabelsMisDbContext db) 
     public bool CanShip => User.IsInRole("Admin") || User.IsInRole("Shipping");
     public bool ReadyActive => !string.Equals(Tab, "history", StringComparison.OrdinalIgnoreCase);
 
+    public async Task<IActionResult> OnPostMarkShippedAsync(Guid salesOrderId, bool isPickup, CancellationToken cancellationToken)
+    {
+        if (!CanShip) return Forbid();
+
+        try
+        {
+            var shipment = await shipmentService.MarkShippedAsync(salesOrderId, cancellationToken);
+            TempData["ShipMessage"] = isPickup
+                ? $"Order marked picked up — shipment {shipment.ShipmentNumber} recorded without packages."
+                : $"Order marked shipped — shipment {shipment.ShipmentNumber} created without packages.";
+        }
+        catch (Exception ex)
+        {
+            TempData["ShipError"] = ex.Message;
+        }
+
+        return RedirectToPage(new { tab = "ready", ReadySearch, readyPage = ReadyPage > 1 ? ReadyPage : (int?)null });
+    }
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         ReadyResult = await shipmentService.GetReadyToShipAsync(ReadySearch, ReadyPage, 25, cancellationToken);

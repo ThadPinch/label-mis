@@ -10,7 +10,7 @@ Built to replace spreadsheet-driven workflows with a real system: estimates, pro
 
 ## Stack
 
-.NET 10 · ASP.NET Core (Razor Pages) · EF Core 10 · PostgreSQL 16 · QuestPDF · Docker
+.NET 10 · ASP.NET Core (Razor Pages) · EF Core 10 · PostgreSQL 16 · PdfPlatform (in-house, vendored under `src/LabelsMis.Web/PdfPlatform`) · Docker
 
 ## Prerequisites
 
@@ -38,6 +38,38 @@ dotnet run --project src/LabelsMis.Web --urls "https://localhost:5001;http://loc
 App runs at the URL shown in the console. Default seeded admin: `admin@labels-mis.local` / `pa55w0rd` — you will be prompted to change the password on first login.
 
 On startup the app applies pending migrations and seeds roles, the admin user, and the Indigo 6800 press when the database is empty.
+
+## Running the app
+
+```bash
+dotnet run --project src/LabelsMis.Web --urls "https://localhost:5001;http://localhost:5010"
+```
+
+Pass `--urls` when the default port 5000 is taken (macOS AirPlay squats on it). The app auto-applies
+pending migrations on startup, so a plain run is usually all you need after pulling changes.
+
+## Database migrations
+
+Migrations live in `src/LabelsMis.Infrastructure/Migrations` and every EF command needs both the
+migrations project (`-p`) and the web startup project (`-s`):
+
+```bash
+# Create a new migration after changing entities or EF configurations
+dotnet ef migrations add <MigrationName> -p src/LabelsMis.Infrastructure -s src/LabelsMis.Web
+
+# Apply pending migrations to the database (also happens automatically on app startup)
+dotnet ef database update -p src/LabelsMis.Infrastructure -s src/LabelsMis.Web
+
+# Undo the last migration (only if it hasn't been applied/shipped)
+dotnet ef migrations remove -p src/LabelsMis.Infrastructure -s src/LabelsMis.Web
+
+# Generate an idempotent SQL script (what CI validates)
+dotnet ef migrations script --idempotent -p src/LabelsMis.Infrastructure -s src/LabelsMis.Web -o migrations.sql
+```
+
+Review every scaffolded migration before committing — especially anything EF flags as a possible
+data loss. Owned-type columns (e.g. the `LabelSpec` snapshots on `SalesOrderLine`/`Job`) get
+`Spec_`-prefixed column names automatically.
 
 ## Tests
 

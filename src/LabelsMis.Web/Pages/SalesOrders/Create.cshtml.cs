@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
@@ -35,33 +36,131 @@ public class SalesOrderPageInput
 
     public SalesOrderFormInput ToForm() => new(
         CustomerId, CustomerPoNumber, RequestedShipDate, Notes,
-        Lines.Select(l => new SalesOrderLineInput(null, l.ProductId, l.SourceEstimateLineId, l.Quantity, l.UnitPrice, l.LineNotes, l.Description, l.DeserializeSpec())).ToList(),
+        Lines.Select(l => new SalesOrderLineInput(
+            l.Id, l.ProductId, l.SourceEstimateLineId, l.Quantity, l.UnitPrice, l.LineNotes, l.Description, l.BuildSpec())).ToList(),
         ShippingMethodId,
         ShippingCost,
         new ShippingAddress(ShipToName, ShipToStreet1, ShipToStreet2, ShipToCity, ShipToState, ShipToZip, ShipToCountry));
 }
 
+public class OrderSpotPageInput
+{
+    public Guid InkId { get; set; }
+    [Range(1, 3)] public int Hits { get; set; } = 1;
+    [Range(0, 100)] public decimal CoveragePct { get; set; } = 100m;
+}
+
+public class OrderFinishingPageInput
+{
+    public Guid OperationId { get; set; }
+    public bool Include { get; set; }
+    public Guid? StockId { get; set; }
+    public decimal? SetupMinutesOverride { get; set; }
+    public decimal? RunSpeedFpmOverride { get; set; }
+}
+
 public class SalesOrderLinePageInput
 {
+    /// <summary>Existing line id, round-tripped so saves update lines in place (jobs reference them).</summary>
+    public Guid? Id { get; set; }
+
     public Guid ProductId { get; set; }
     public Guid? SourceEstimateLineId { get; set; }
     [Range(1, int.MaxValue)] public int Quantity { get; set; } = 1000;
     [Range(0, double.MaxValue)] public decimal UnitPrice { get; set; }
     public string? LineNotes { get; set; }
+    public UnwindDirection? Unwind { get; set; }
     public bool HasArtwork { get; set; }
+
+    /// <summary>Display-only: the uploaded artwork's file name, shown next to the download link.</summary>
+    public string? ArtworkFileName { get; set; }
+
+    /// <summary>Display-only: the production job already created for this line, when any.</summary>
+    public string? JobNumber { get; set; }
+    public bool HasJob { get; set; }
+
     public IFormFile? ArtworkFile { get; set; }
 
-    /// <summary>The quoted description snapshot, round-tripped through the form as a hidden field
-    /// so a save preserves it (mirrors SpecJson).</summary>
+    /// <summary>The quoted description snapshot; editable on the line.</summary>
     public string? Description { get; set; }
 
-    /// <summary>The line's ordered spec, round-tripped through the form as JSON so a save preserves
-    /// it (until the editable spec UI lands). Rendered as a hidden field.</summary>
+    /// <summary>The line's ordered spec, round-tripped through the form as JSON. The spec editor
+    /// fields below override individual values on save; JSON-only fields (artwork path, spots and
+    /// finishing when the editor wasn't rendered) survive untouched.</summary>
     public string? SpecJson { get; set; }
+
+    /// <summary>True when the spec editor was rendered for this line, so empty spot/finishing
+    /// lists mean "cleared" rather than "not shown".</summary>
+    public bool SpecEdited { get; set; }
+
+    [Range(0.01, 100)] public decimal? LabelAcrossIn { get; set; }
+    [Range(0.01, 100)] public decimal? LabelAroundIn { get; set; }
+    [Range(0, 10)] public decimal? CornerRadiusIn { get; set; }
+    [Range(0, 10)] public decimal? GutterAcrossIn { get; set; }
+    [Range(0, 10)] public decimal? GutterAroundIn { get; set; }
+    [Range(0, 10)] public decimal? BleedIn { get; set; }
+    public Guid? SubstrateId { get; set; }
+    public Guid? DieId { get; set; }
+    public InkSet? InkSet { get; set; }
+    [Range(0, 3)] public int? WhiteHits { get; set; }
+    [Range(0, 100)] public decimal? WhiteCoveragePct { get; set; }
+    [Range(0, 10000)] public decimal? SetupWasteImpressions { get; set; }
+    [Range(0, 1)] public decimal? RunningWastePct { get; set; }
+    [Range(1, 100)] public int? MaxLabelsAcrossOverride { get; set; }
+    public LabelOrientation? LabelOrientationOverride { get; set; }
+    public List<OrderSpotPageInput> Spots { get; set; } = [];
+    public List<OrderFinishingPageInput> Finishing { get; set; } = [];
 
     public LabelSpec? DeserializeSpec() => string.IsNullOrWhiteSpace(SpecJson)
         ? null
         : System.Text.Json.JsonSerializer.Deserialize<LabelSpec>(SpecJson);
+
+    /// <summary>The spec to persist: the round-tripped snapshot with any edited fields applied.</summary>
+    public LabelSpec? BuildSpec()
+    {
+        var baseSpec = DeserializeSpec();
+        if (baseSpec is null)
+        {
+            return null; // no snapshot yet — the service seeds one from the product
+        }
+
+        if (!SpecEdited)
+        {
+            return baseSpec with { Unwind = Unwind };
+        }
+
+        var spots = Spots
+            .Where(s => s.InkId != Guid.Empty)
+            .Select((s, index) => new Services.Estimates.SpotSelectionInput(s.InkId, s.Hits, s.CoveragePct / 100m, index))
+            .ToList();
+        var finishing = Finishing
+            .Where(f => f.Include && f.OperationId != Guid.Empty)
+            .Select((f, index) => new Services.Estimates.FinishingOperationSelectionInput(
+                f.OperationId, f.SetupMinutesOverride, f.RunSpeedFpmOverride, index, f.StockId))
+            .ToList();
+
+        return baseSpec with
+        {
+            LabelAcrossIn = LabelAcrossIn ?? baseSpec.LabelAcrossIn,
+            LabelAroundIn = LabelAroundIn ?? baseSpec.LabelAroundIn,
+            CornerRadiusIn = CornerRadiusIn ?? baseSpec.CornerRadiusIn,
+            GutterAcrossIn = GutterAcrossIn ?? baseSpec.GutterAcrossIn,
+            GutterAroundIn = GutterAroundIn ?? baseSpec.GutterAroundIn,
+            BleedIn = BleedIn ?? baseSpec.BleedIn,
+            SubstrateId = SubstrateId is { } substrateId && substrateId != Guid.Empty ? substrateId : baseSpec.SubstrateId,
+            DieId = DieId is { } dieId && dieId != Guid.Empty ? dieId : null,
+            InkSet = InkSet ?? baseSpec.InkSet,
+            WhiteHits = WhiteHits ?? baseSpec.WhiteHits,
+            WhiteCoveragePct = WhiteCoveragePct.HasValue ? WhiteCoveragePct.Value / 100m : baseSpec.WhiteCoveragePct,
+            SpotsJson = Services.Estimates.EstimateCalculationMapper.SerializeSpots(spots),
+            FinishingOperationsJson = Services.Estimates.EstimateCalculationMapper.SerializeFinishingOperations(finishing),
+            SetupWasteImpressions = SetupWasteImpressions ?? baseSpec.SetupWasteImpressions,
+            RunningWastePct = RunningWastePct ?? baseSpec.RunningWastePct,
+            MaxLabelsAcrossOverride = MaxLabelsAcrossOverride,
+            LabelOrientationOverride = LabelOrientationOverride,
+            Unwind = Unwind
+        };
+    }
 }
 
 [Authorize(Policy = TransactionPolicies.SalesOrdersEdit)]

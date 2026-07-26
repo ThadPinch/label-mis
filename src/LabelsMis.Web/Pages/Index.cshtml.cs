@@ -42,7 +42,8 @@ public class IndexModel(DashboardService dashboardService, IAuthorizationService
         CanSales = await Allowed(TransactionPolicies.SalesOrdersRead);
         CanJobs = await Allowed(TransactionPolicies.JobsRead);
         CanEstimates = await Allowed(TransactionPolicies.EstimatesRead);
-        CanFinance = await Allowed(TransactionPolicies.InvoicesRead);
+        // Finance widgets moved to the finance reports page; the shop dashboard stays operational.
+        CanFinance = false;
         CanInventory = await Allowed(TransactionPolicies.InventoryRead);
         CanShipping = await Allowed(TransactionPolicies.ShippingRead);
 
@@ -54,10 +55,6 @@ public class IndexModel(DashboardService dashboardService, IAuthorizationService
     public string ChartJson => JsonSerializer.Serialize(new
     {
         rangeLabel = RangeLabel,
-        orderIntake = Data.Sales?.OrderIntake,
-        revenueTrend = Data.Finance?.RevenueTrend,
-        arAging = Data.Finance?.ArAging,
-        topCustomers = Data.Finance?.TopCustomers,
         jobPipeline = Data.Jobs?.Pipeline,
         estimateFunnel = Data.Estimates?.Funnel,
         stockLevels = Data.Inventory?.StockLevels

@@ -1258,3 +1258,84 @@ body {
     border-top: 1px dashed var(--lm-gray-200);
   }
 }
+
+/* ==========================================================================
+   Sales order line spec editor
+   ========================================================================== */
+.order-line > .card-header {
+  background: var(--lm-gray-100);
+}
+
+.spec-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.75rem;
+  border: 0;
+  border-top: 1px solid var(--lm-gray-200);
+  border-radius: 0 0 calc(var(--lm-radius) - 1px) calc(var(--lm-radius) - 1px);
+  background: var(--lm-gray-100);
+  color: var(--lm-text);
+  font-size: 0.8125rem;
+  text-align: left;
+}
+
+.spec-toggle:hover {
+  background: var(--lm-gray-200);
+}
+
+.spec-toggle .spec-chevron {
+  flex: 0 0 auto;
+  color: var(--lm-orange);
+  transition: transform 0.15s ease;
+}
+
+.spec-toggle[aria-expanded="true"] {
+  border-radius: 0;
+}
+
+.spec-toggle[aria-expanded="true"] .spec-chevron {
+  transform: rotate(90deg);
+}
+
+.spec-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.spec-chip {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--lm-gray-200);
+  border-radius: 99px;
+  background: var(--lm-white);
+  font-size: 0.7rem;
+  color: var(--lm-gray-600);
+  white-space: nowrap;
+}
+
+.spec-body {
+  padding: 0.25rem 0.75rem 0.75rem;
+  border-top: 1px solid var(--lm-gray-200);
+}
+
+.spec-section {
+  padding-top: 0.5rem;
+}
+
+.spec-section + .spec-section {
+  margin-top: 0.75rem;
+  border-top: 1px dashed var(--lm-gray-200);
+}
+
+.spec-section-title {
+  margin-bottom: 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lm-text-muted);
+}

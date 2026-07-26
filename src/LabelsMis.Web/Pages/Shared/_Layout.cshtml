@@ -73,17 +73,22 @@
                                 <a class="nav-link" asp-page="/Shipments/Index">Shipping</a>
                             </li>
 
-                            <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    Finance
-                                </a>
-                                <ul class="dropdown-menu app-dropdown-menu">
-                                    <li><h6 class="dropdown-header">Accounts receivable</h6></li>
-                                    <li><a class="dropdown-item" asp-page="/Invoices/Index">Invoices</a></li>
-                                    <li><hr class="dropdown-divider" /></li>
-                                    <li><a class="dropdown-item" asp-page="/Reports/ArAging">AR aging report</a></li>
-                                </ul>
-                            </li>
+                            @if (User.IsInRole(AppRoles.Accounting))
+                            {
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        Finance
+                                    </a>
+                                    <ul class="dropdown-menu app-dropdown-menu">
+                                        <li><h6 class="dropdown-header">Accounts receivable</h6></li>
+                                        <li><a class="dropdown-item" asp-page="/Invoices/Index">Invoices</a></li>
+                                        <li><hr class="dropdown-divider" /></li>
+                                        <li><a class="dropdown-item" asp-page="/Reports/Index">Finance reports</a></li>
+                                        <li><a class="dropdown-item" asp-page="/Reports/Eva">Estimate vs Actual</a></li>
+                                        <li><a class="dropdown-item" asp-page="/Reports/ArAging">AR aging report</a></li>
+                                    </ul>
+                                </li>
+                            }
 
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
