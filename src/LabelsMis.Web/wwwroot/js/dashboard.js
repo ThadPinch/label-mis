@@ -46,6 +46,7 @@
 
     function formatter(kind, full) {
         if (kind === "currency") { return full ? fmtCurrencyFull : fmtCurrency; }
+        if (kind === "hours") { return function (v) { return trimNum(v) + " h"; }; }
         return fmtNumber;
     }
 

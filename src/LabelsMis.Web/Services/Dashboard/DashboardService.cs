@@ -75,6 +75,20 @@ public record ShippingSection(
     int InTransitCount,
     int ShippedLast7Days);
 
+public record WorkloadRow(
+    string Task,
+    string Department,
+    int OperationCount,
+    int JobCount,
+    decimal Hours);
+
+public record WorkloadSection(
+    decimal TotalHours,
+    int OperationCount,
+    int JobCount,
+    IReadOnlyList<CategoryValue> ByDepartment,
+    IReadOnlyList<WorkloadRow> ByTask);
+
 public record DashboardData(
     DateOnly Today,
     int RangeDays,
@@ -83,7 +97,8 @@ public record DashboardData(
     EstimatesSection? Estimates,
     FinanceSection? Finance,
     InventorySection? Inventory,
-    ShippingSection? Shipping);
+    ShippingSection? Shipping,
+    WorkloadSection? Workload);
 
 public class DashboardService(LabelsMisDbContext db)
 {
@@ -110,9 +125,82 @@ public class DashboardService(LabelsMisDbContext db)
         var finance = includeFinance ? await LoadFinanceAsync(fromDate, rangeDays, today, cancellationToken) : null;
         var inventory = includeInventory ? await LoadInventoryAsync(cancellationToken) : null;
         var shipping = includeShipping ? await LoadShippingAsync(today, cancellationToken) : null;
+        var workload = includeJobs ? await LoadWorkloadAsync(cancellationToken) : null;
 
-        return new DashboardData(today, rangeDays, sales, jobs, estimates, finance, inventory, shipping);
+        return new DashboardData(today, rangeDays, sales, jobs, estimates, finance, inventory, shipping, workload);
     }
+
+    /// <summary>
+    /// Remaining planned hours on active jobs, from each job's pending/in-progress operations —
+    /// how much work is queued up per department and per machine/task.
+    /// </summary>
+    private async Task<WorkloadSection> LoadWorkloadAsync(CancellationToken ct)
+    {
+        var openStatuses = new[] { JobOperationStatus.Pending, JobOperationStatus.InProgress };
+        var openOps = await db.JobOperations
+            .Where(o => WipStatuses.Contains(o.Job.Status) && openStatuses.Contains(o.Status))
+            .Select(o => new { o.JobId, o.OperationType, o.EquipmentId, o.PlannedMinutes })
+            .ToListAsync(ct);
+
+        var pressNames = await db.Presses.AsNoTracking()
+            .ToDictionaryAsync(p => p.Id, p => p.Name, ct);
+        var finishingNames = await db.FinishingOperations.AsNoTracking()
+            .ToDictionaryAsync(f => f.Id, f => f.Description, ct);
+
+        JobOperationType[] departmentOrder =
+            [JobOperationType.Press, JobOperationType.Finishing, JobOperationType.Inspection, JobOperationType.Pack, JobOperationType.Ship];
+
+        var byDepartment = departmentOrder
+            .Select(type =>
+            {
+                var ops = openOps.Where(o => o.OperationType == type).ToList();
+                return new CategoryValue(
+                    DepartmentLabel(type),
+                    Math.Round(ops.Sum(o => o.PlannedMinutes) / 60m, 1),
+                    ops.Count);
+            })
+            .ToList();
+
+        var byTask = openOps
+            .GroupBy(o => new { o.OperationType, o.EquipmentId })
+            .OrderBy(g => Array.IndexOf(departmentOrder, g.Key.OperationType))
+            .ThenByDescending(g => g.Sum(o => o.PlannedMinutes))
+            .Select(g => new WorkloadRow(
+                TaskLabel(g.Key.OperationType, g.Key.EquipmentId, pressNames, finishingNames),
+                DepartmentLabel(g.Key.OperationType),
+                g.Count(),
+                g.Select(o => o.JobId).Distinct().Count(),
+                Math.Round(g.Sum(o => o.PlannedMinutes) / 60m, 1)))
+            .ToList();
+
+        return new WorkloadSection(
+            Math.Round(openOps.Sum(o => o.PlannedMinutes) / 60m, 1),
+            openOps.Count,
+            openOps.Select(o => o.JobId).Distinct().Count(),
+            byDepartment,
+            byTask);
+    }
+
+    private static string DepartmentLabel(JobOperationType type) => type switch
+    {
+        JobOperationType.Press => "Press",
+        JobOperationType.Finishing => "Finishing",
+        JobOperationType.Inspection => "QC inspection",
+        JobOperationType.Pack => "Pack",
+        JobOperationType.Ship => "Ship",
+        _ => type.ToString()
+    };
+
+    private static string TaskLabel(
+        JobOperationType type,
+        Guid? equipmentId,
+        IReadOnlyDictionary<Guid, string> pressNames,
+        IReadOnlyDictionary<Guid, string> finishingNames) => type switch
+    {
+        JobOperationType.Press when equipmentId is Guid pressId && pressNames.TryGetValue(pressId, out var press) => press,
+        JobOperationType.Finishing when equipmentId is Guid finId && finishingNames.TryGetValue(finId, out var fin) => fin,
+        _ => DepartmentLabel(type)
+    };
 
     private async Task<SalesSection> LoadSalesAsync(
         DateTime fromDateTime, int rangeDays, DateOnly today, CancellationToken ct)

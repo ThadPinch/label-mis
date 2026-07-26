@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.Estimating;
 using LabelsMis.Domain.Jobs;
 using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
@@ -104,7 +105,9 @@ public record FinishingJobView(
 public class JobService(
     LabelsMisDbContext db,
     ICurrentUserService currentUser,
-    DocumentNumberService documentNumbers)
+    DocumentNumberService documentNumbers,
+    EstimateCalculationMapper calculationMapper,
+    EstimatingService estimatingService)
 {
     /// <summary>Job statuses considered "live" — still moving through production.</summary>
     public static readonly IReadOnlyList<JobStatus> LiveStatuses =
@@ -526,7 +529,8 @@ public class JobService(
                 userId,
                 now);
 
-            var operations = await BuildOperationsAsync(job.Id, spec, userId, now, cancellationToken);
+            var operations = await BuildOperationsAsync(
+                job.Id, spec, quantityPlanned, order.CustomerId, userId, now, cancellationToken);
             foreach (var operation in operations)
             {
                 job.AddOperation(operation);
@@ -882,12 +886,16 @@ public class JobService(
     private async Task<List<JobOperation>> BuildOperationsAsync(
         Guid jobId,
         LabelSpec spec,
+        int quantityPlanned,
+        Guid customerId,
         Guid userId,
         DateTime now,
         CancellationToken cancellationToken)
     {
         var press = await db.Presses.AsNoTracking()
             .SingleAsync(p => p.Id == Press.Indigo6800Id, cancellationToken);
+
+        var basis = await ComputeTimeBasisAsync(spec, quantityPlanned, customerId, cancellationToken);
 
         var sequence = 1;
         var operations = new List<JobOperation>
@@ -899,7 +907,7 @@ public class JobService(
                 JobOperationType.Press,
                 EquipmentType.Press,
                 Press.Indigo6800Id,
-                plannedMinutes: press.SetupMinutes + 45,
+                plannedMinutes: basis?.PressMinutes ?? press.SetupMinutes + 45,
                 userId,
                 now)
         };
@@ -914,13 +922,11 @@ public class JobService(
 
         foreach (var selection in finishingSelections.OrderBy(s => s.SortOrder))
         {
-            if (!finishingOps.ContainsKey(selection.OperationId))
+            if (!finishingOps.TryGetValue(selection.OperationId, out var finishingOp))
             {
                 continue;
             }
 
-            var setupMinutes = selection.SetupMinutesOverride
-                ?? finishingOps[selection.OperationId].DefaultSetupMinutes;
             operations.Add(JobOperation.Create(
                 Guid.NewGuid(),
                 jobId,
@@ -928,7 +934,7 @@ public class JobService(
                 JobOperationType.Finishing,
                 EquipmentType.FinishingOperation,
                 selection.OperationId,
-                plannedMinutes: setupMinutes + 20,
+                plannedMinutes: FinishingPlannedMinutes(selection, finishingOp, basis),
                 userId,
                 now));
         }
@@ -941,6 +947,156 @@ public class JobService(
             Guid.NewGuid(), jobId, sequence, JobOperationType.Ship, EquipmentType.None, null, 10, userId, now));
 
         return operations;
+    }
+
+    /// <summary>Press and web-length figures computed at the job's planned quantity.</summary>
+    private sealed record PlannedTimeBasis(decimal PressMinutes, decimal WebLengthFt);
+
+    /// <summary>
+    /// Runs the estimating engine against the job's spec at its planned quantity so operation
+    /// plan minutes reflect the real run (imposition, waste, ink speed slowdowns), not flat
+    /// allowances. Returns null when the spec can't be calculated (e.g. missing substrate),
+    /// in which case callers fall back to the legacy allowances.
+    /// </summary>
+    private async Task<PlannedTimeBasis?> ComputeTimeBasisAsync(
+        LabelSpec spec,
+        int quantityPlanned,
+        Guid customerId,
+        CancellationToken cancellationToken)
+    {
+        if (quantityPlanned <= 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            var input = new EstimateLineFormInput(
+                null,
+                null,
+                string.Empty,
+                spec.LabelAcrossIn,
+                spec.LabelAroundIn,
+                spec.CornerRadiusIn,
+                spec.GutterAcrossIn,
+                spec.GutterAroundIn,
+                spec.BleedIn,
+                spec.SubstrateId,
+                spec.InkSet,
+                spec.WhiteHits,
+                spec.WhiteCoveragePct,
+                EstimateCalculationMapper.DeserializeSpots(spec.SpotsJson),
+                EstimateCalculationMapper.DeserializeFinishingOperations(spec.FinishingOperationsJson)
+                    .Where(s => s.OperationId != Guid.Empty)
+                    .ToList(),
+                spec.SetupWasteImpressions,
+                spec.RunningWastePct,
+                null,
+                [quantityPlanned],
+                null,
+                spec.MaxLabelsAcrossOverride,
+                spec.LabelOrientationOverride);
+
+            var request = await calculationMapper.BuildRequestAsync(customerId, input, cancellationToken);
+            var result = estimatingService.Calculate(request);
+            var quantityBreak = result.QuantityBreaks.FirstOrDefault();
+            if (result.Errors.Count > 0 || quantityBreak is null)
+            {
+                return null;
+            }
+
+            // RunTimeMinutes is press setup + run at this quantity.
+            return new PlannedTimeBasis(quantityBreak.RunTimeMinutes, quantityBreak.WebLengthFt);
+        }
+        catch
+        {
+            // A stale spec (deleted stock, retired ink) shouldn't block scheduling.
+            return null;
+        }
+    }
+
+    /// <summary>Setup + run time for one finishing pass, mirroring FinishingCalculator's math.</summary>
+    private static decimal FinishingPlannedMinutes(
+        FinishingOperationSelectionInput selection,
+        FinishingOperation finishingOp,
+        PlannedTimeBasis? basis)
+    {
+        var setupMinutes = selection.SetupMinutesOverride ?? finishingOp.DefaultSetupMinutes;
+        var runSpeedFpm = selection.RunSpeedFpmOverride ?? finishingOp.DefaultRunSpeedFpm;
+        return basis is not null && runSpeedFpm > 0
+            ? Math.Round(setupMinutes + Math.Round(basis.WebLengthFt / runSpeedFpm, 2), 2)
+            : setupMinutes + 20;
+    }
+
+    /// <summary>
+    /// Recomputes plan minutes on a job's pending press/finishing operations after its spec or
+    /// quantity changed (unlocked sales-order edits). Started/completed operations and the flat
+    /// inspection/pack/ship allowances are left alone. Does not save — the caller's unit of work
+    /// persists the changes.
+    /// </summary>
+    public async Task RecomputePlannedMinutesAsync(Guid jobId, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var job = await db.Jobs
+            .Include(j => j.Operations)
+            .SingleAsync(j => j.Id == jobId, cancellationToken);
+        if (job.Spec is null)
+        {
+            return;
+        }
+
+        var customerId = await db.SalesOrderLines
+            .Where(l => l.Id == job.SalesOrderLineId)
+            .Select(l => l.SalesOrder.CustomerId)
+            .SingleAsync(cancellationToken);
+
+        var basis = await ComputeTimeBasisAsync(job.Spec, job.QuantityPlanned, customerId, cancellationToken);
+        if (basis is null)
+        {
+            return;
+        }
+
+        foreach (var pressOp in job.Operations.Where(o =>
+                     o.OperationType == JobOperationType.Press && o.Status == JobOperationStatus.Pending))
+        {
+            pressOp.UpdatePlannedMinutes(basis.PressMinutes, userId, now);
+        }
+
+        var finishingSelections = EstimateCalculationMapper.DeserializeFinishingOperations(job.Spec.FinishingOperationsJson)
+            .Where(s => s.OperationId != Guid.Empty)
+            .OrderBy(s => s.SortOrder)
+            .ToList();
+        var finishingIds = finishingSelections.Select(s => s.OperationId).ToList();
+        var finishingOps = await db.FinishingOperations.AsNoTracking()
+            .Where(f => finishingIds.Contains(f.Id))
+            .ToDictionaryAsync(f => f.Id, cancellationToken);
+
+        // Match spec selections to existing operations by finishing-op id, in sequence order;
+        // spec edits don't add/remove job operations, so unmatched rows on either side are skipped.
+        var replanned = new HashSet<Guid>();
+        foreach (var selection in finishingSelections)
+        {
+            if (!finishingOps.TryGetValue(selection.OperationId, out var finishingOp))
+            {
+                continue;
+            }
+
+            var operation = job.Operations
+                .Where(o => o.OperationType == JobOperationType.Finishing
+                    && o.EquipmentId == selection.OperationId
+                    && o.Status == JobOperationStatus.Pending
+                    && !replanned.Contains(o.Id))
+                .OrderBy(o => o.Sequence)
+                .FirstOrDefault();
+            if (operation is null)
+            {
+                continue;
+            }
+
+            replanned.Add(operation.Id);
+            operation.UpdatePlannedMinutes(FinishingPlannedMinutes(selection, finishingOp, basis), userId, now);
+        }
     }
 
     private static string GetOperationTypeLabel(

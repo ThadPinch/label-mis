@@ -57,7 +57,8 @@ public class SalesOrderService(
     ICurrentUserService currentUser,
     DocumentNumberService documentNumbers,
     ProductService productService,
-    Invoices.InvoiceService invoiceService)
+    Invoices.InvoiceService invoiceService,
+    Jobs.JobService jobService)
 {
     public async Task<PagedResult<SalesOrderListItem>> ListAsync(
         string? search,
@@ -353,6 +354,7 @@ public class SalesOrderService(
             .ToLookup(j => j.SalesOrderLineId);
 
         var keptIds = new HashSet<Guid>();
+        var replanJobIds = new List<Guid>();
         var seedSpecs = await LoadProductSeedSpecsAsync(input.Lines, cancellationToken);
 
         foreach (var lineInput in input.Lines)
@@ -386,6 +388,11 @@ public class SalesOrderService(
                     {
                         job.UpdateOrderedQuantity(lineInput.Quantity, userId, now);
                     }
+
+                    if (lineInput.Spec is not null || quantityChanged)
+                    {
+                        replanJobIds.Add(job.Id);
+                    }
                 }
             }
             else
@@ -418,6 +425,12 @@ public class SalesOrderService(
             }
 
             db.SalesOrderLines.Remove(removed);
+        }
+
+        // Spec/quantity changes invalidate the plan minutes on pending operations.
+        foreach (var jobId in replanJobIds)
+        {
+            await jobService.RecomputePlannedMinutesAsync(jobId, cancellationToken);
         }
 
         await db.SaveChangesAsync(cancellationToken);

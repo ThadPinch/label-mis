@@ -105,6 +105,14 @@
                 </span>
             </a>
         }
+        @if (Model.Data.Workload is { } wl)
+        {
+            <a class="dash-tile" data-widget="tile-workload" data-title="Open workload" href="/jobs">
+                <span class="dash-tile-label">Open workload</span>
+                <span class="dash-tile-value">@wl.TotalHours.ToString("0.#")<span class="dash-tile-unit"> hrs</span></span>
+                <span class="dash-tile-sub">@wl.OperationCount steps across @wl.JobCount jobs</span>
+            </a>
+        }
         @if (Model.Data.Shipping is { } ship)
         {
             <a class="dash-tile" data-widget="tile-shipping" data-title="Shipments" href="/Shipments">
@@ -135,6 +143,25 @@
             </section>
         }
 
+        @if (Model.Data.Workload is { } wlChart)
+        {
+            <section class="dash-card dash-span-4" data-widget="workload" data-title="Hours by department">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">Hours by department</h2>
+                        <p class="dash-card-sub">planned hours remaining on active jobs</p>
+                    </div>
+                    <div class="dash-card-actions">
+                        <button type="button" class="dash-iconbtn dash-table-toggle" aria-pressed="false"
+                                title="Toggle table view" aria-label="Toggle table view"></button>
+                    </div>
+                </header>
+                <div class="dash-chart" data-chart="bars" data-series="workloadByDepartment"
+                     data-format="hours" data-name="Hours" data-col="Department"></div>
+                <footer class="dash-card-foot">@wlChart.TotalHours.ToString("0.#") hours across @wlChart.JobCount active jobs</footer>
+            </section>
+        }
+
         @if (Model.Data.Estimates is { } estCard)
         {
             <section class="dash-card dash-span-4" data-widget="funnel" data-title="Estimate funnel">
@@ -153,6 +180,57 @@
                 @if (estCard.WinRatePct is { } winRate)
                 {
                     <footer class="dash-card-foot">Win rate @winRate.ToString("0.#")% (@estCard.WonCount won, @estCard.LostCount lost)</footer>
+                }
+            </section>
+        }
+
+        @if (Model.Data.Workload is { } wlTable)
+        {
+            <section class="dash-card dash-span-6" data-widget="workload-tasks" data-title="Hours by machine &amp; task">
+                <header class="dash-card-head">
+                    <div>
+                        <h2 class="dash-card-title">Hours by machine &amp; task</h2>
+                        <p class="dash-card-sub">planned hours remaining per machine / task</p>
+                    </div>
+                </header>
+                @if (wlTable.ByTask.Count == 0)
+                {
+                    <div class="dash-empty">No open production steps.</div>
+                }
+                else
+                {
+                    var maxHours = Math.Max(wlTable.ByTask.Max(t => t.Hours), 0.1m);
+                    <div class="dash-table-wrap">
+                        <table class="dash-table dash-inv-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Machine / task</th>
+                                    <th scope="col">Department</th>
+                                    <th scope="col" class="num">Jobs</th>
+                                    <th scope="col" class="num">Hours</th>
+                                    <th scope="col" class="dash-inv-meter-col"><span class="visually-hidden">Load</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var t in wlTable.ByTask)
+                                {
+                                    <tr>
+                                        <td><span class="dash-strong">@t.Task</span></td>
+                                        <td><span class="dash-badge">@t.Department</span></td>
+                                        <td class="num">@t.JobCount</td>
+                                        <td class="num">@t.Hours.ToString("0.#")</td>
+                                        <td class="dash-inv-meter-col">
+                                            <div class="dash-meter" role="img"
+                                                 aria-label="@t.Hours.ToString("0.#") planned hours remaining">
+                                                <div class="dash-meter-fill"
+                                                     style="width:@Math.Max(Math.Round(100 * t.Hours / maxHours), 2)%"></div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 }
             </section>
         }

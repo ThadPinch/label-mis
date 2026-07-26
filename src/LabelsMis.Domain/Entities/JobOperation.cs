@@ -142,6 +142,21 @@ public class JobOperation : EntityBase
         SetModified(modifiedById, modifiedAt);
     }
 
+    /// <summary>
+    /// Replans the expected duration — used when the job's spec or quantity changes. Only pending
+    /// operations can be replanned; once work has started the plan is history, not a forecast.
+    /// </summary>
+    public void UpdatePlannedMinutes(decimal plannedMinutes, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (Status != JobOperationStatus.Pending)
+        {
+            throw new InvalidOperationException("Only pending operations can be replanned.");
+        }
+
+        PlannedMinutes = plannedMinutes;
+        SetModified(modifiedById, modifiedAt);
+    }
+
     public void Complete(Guid modifiedById, DateTime modifiedAt)
     {
         if (_timeEntries.Any(t => t.ClockedOutAt is null))

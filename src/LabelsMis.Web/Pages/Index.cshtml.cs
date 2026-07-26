@@ -57,7 +57,8 @@ public class IndexModel(DashboardService dashboardService, IAuthorizationService
         rangeLabel = RangeLabel,
         jobPipeline = Data.Jobs?.Pipeline,
         estimateFunnel = Data.Estimates?.Funnel,
-        stockLevels = Data.Inventory?.StockLevels
+        stockLevels = Data.Inventory?.StockLevels,
+        workloadByDepartment = Data.Workload?.ByDepartment
     }, ChartJsonOptions);
 
     private async Task<bool> Allowed(string policy) =>
