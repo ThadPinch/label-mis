@@ -22,6 +22,10 @@ public class DieConfiguration : IEntityTypeConfiguration<Die>
         builder.Property(d => d.WebWidthIn).HasDimensionPrecision();
         builder.Property(d => d.SupplierPartNumber).HasMaxLength(100);
         builder.Property(d => d.Location).HasMaxLength(100);
+        builder.Property(d => d.DieRepeatIn).HasPrecision(10, 4);
+        builder.Property(d => d.LinerSpec).HasMaxLength(500);
+        builder.Property(d => d.SetupRating).HasPrecision(10, 4);
+        builder.Property(d => d.SpeedRating).HasPrecision(10, 4);
 
         builder.HasOne(d => d.Customer)
             .WithMany()

@@ -27,6 +27,23 @@ public class ConvertLinePageInput
     public int? SelectedTierQuantity { get; set; }
 }
 
+/// <summary>A quoted non-label charge (die creation, design time) carried onto the order.</summary>
+public class ConvertChargePageInput
+{
+    public Guid? EstimateChargeId { get; set; }
+
+    /// <summary>Unchecked charges are left off the order.</summary>
+    public bool Include { get; set; } = true;
+
+    public string? Description { get; set; }
+
+    [Range(1, 1000000)]
+    public int Quantity { get; set; } = 1;
+
+    [Range(0, double.MaxValue)]
+    public decimal UnitPrice { get; set; }
+}
+
 [Authorize(Policy = TransactionPolicies.SalesOrdersEdit)]
 public class ConvertModel(
     EstimateService estimateService,
@@ -47,7 +64,13 @@ public class ConvertModel(
     public string? Notes { get; set; }
 
     [BindProperty]
+    public string? BillingNotes { get; set; }
+
+    [BindProperty]
     public List<ConvertLinePageInput> Lines { get; set; } = [];
+
+    [BindProperty]
+    public List<ConvertChargePageInput> Charges { get; set; } = [];
 
     public EstimateDetail? Detail { get; private set; }
 
@@ -67,10 +90,18 @@ public class ConvertModel(
         // Seed the form with the estimate's notes so they survive conversion unless deliberately
         // edited. Quantity and price stay empty: the user must pick a tier explicitly.
         Notes = Detail.Estimate.Notes;
+        BillingNotes = Detail.Estimate.BillingNotes;
         Lines = Detail.Estimate.Lines.OrderBy(l => l.LineNumber).Select(line => new ConvertLinePageInput
         {
             EstimateLineId = line.Id,
             LineNotes = line.LineNotes
+        }).ToList();
+        Charges = Detail.Estimate.Charges.OrderBy(c => c.LineNumber).Select(charge => new ConvertChargePageInput
+        {
+            EstimateChargeId = charge.Id,
+            Description = charge.Description,
+            Quantity = charge.Quantity,
+            UnitPrice = charge.UnitPrice
         }).ToList();
 
         return Page();
@@ -108,7 +139,12 @@ public class ConvertModel(
                 RequestedShipDate,
                 Notes,
                 Lines.Select(l => new EstimateConversionLineInput(
-                    l.EstimateLineId, l.Quantity, l.UnitPrice, l.LineNotes)).ToList());
+                    l.EstimateLineId, l.Quantity, l.UnitPrice, l.LineNotes)).ToList(),
+                BillingNotes,
+                Charges
+                    .Where(c => c.Include && !string.IsNullOrWhiteSpace(c.Description))
+                    .Select(c => new EstimateConversionChargeInput(
+                        c.EstimateChargeId, c.Description!, c.Quantity, c.UnitPrice)).ToList());
 
             var order = await salesOrderService.CreateFromEstimateAsync(conversion, cancellationToken);
             return RedirectToPage("/SalesOrders/Edit", new { id = order.Id });

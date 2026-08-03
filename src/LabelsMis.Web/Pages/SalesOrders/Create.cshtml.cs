@@ -22,7 +22,9 @@ public class SalesOrderPageInput
     public string? CustomerPoNumber { get; set; }
     public DateOnly? RequestedShipDate { get; set; }
     public string? Notes { get; set; }
+    [StringLength(4000)] public string? BillingNotes { get; set; }
     public List<SalesOrderLinePageInput> Lines { get; set; } = [new()];
+    public List<SalesOrderChargePageInput> Charges { get; set; } = [];
 
     public Guid? ShippingMethodId { get; set; }
     [Range(0, 999999)] public decimal ShippingCost { get; set; }
@@ -40,7 +42,28 @@ public class SalesOrderPageInput
             l.Id, l.ProductId, l.SourceEstimateLineId, l.Quantity, l.UnitPrice, l.LineNotes, l.Description, l.BuildSpec())).ToList(),
         ShippingMethodId,
         ShippingCost,
-        new ShippingAddress(ShipToName, ShipToStreet1, ShipToStreet2, ShipToCity, ShipToState, ShipToZip, ShipToCountry));
+        new ShippingAddress(ShipToName, ShipToStreet1, ShipToStreet2, ShipToCity, ShipToState, ShipToZip, ShipToCountry),
+        BillingNotes,
+        Charges
+            .Where(c => !string.IsNullOrWhiteSpace(c.Description))
+            .Select(c => new SalesOrderChargeInput(c.Id, c.Description!, c.Quantity, c.UnitPrice, c.SourceEstimateChargeId))
+            .ToList());
+}
+
+/// <summary>A flat, non-label charge row (die creation, design time) on the order form.</summary>
+public class SalesOrderChargePageInput
+{
+    public Guid? Id { get; set; }
+    public Guid? SourceEstimateChargeId { get; set; }
+
+    [StringLength(500)]
+    public string? Description { get; set; }
+
+    [Range(1, 1000000)]
+    public int Quantity { get; set; } = 1;
+
+    [Range(0, 1000000)]
+    public decimal UnitPrice { get; set; }
 }
 
 public class OrderSpotPageInput
@@ -55,6 +78,7 @@ public class OrderFinishingPageInput
     public Guid OperationId { get; set; }
     public bool Include { get; set; }
     public Guid? StockId { get; set; }
+    public Guid? DieId { get; set; }
     public decimal? SetupMinutesOverride { get; set; }
     public decimal? RunSpeedFpmOverride { get; set; }
 }
@@ -101,6 +125,7 @@ public class SalesOrderLinePageInput
     [Range(0, 10)] public decimal? BleedIn { get; set; }
     public Guid? SubstrateId { get; set; }
     public Guid? DieId { get; set; }
+    [Range(0.0001, 1000)] public decimal? ShrinkLayflatIn { get; set; }
     public InkSet? InkSet { get; set; }
     [Range(0, 3)] public int? WhiteHits { get; set; }
     [Range(0, 100)] public decimal? WhiteCoveragePct { get; set; }
@@ -136,7 +161,7 @@ public class SalesOrderLinePageInput
         var finishing = Finishing
             .Where(f => f.Include && f.OperationId != Guid.Empty)
             .Select((f, index) => new Services.Estimates.FinishingOperationSelectionInput(
-                f.OperationId, f.SetupMinutesOverride, f.RunSpeedFpmOverride, index, f.StockId))
+                f.OperationId, f.SetupMinutesOverride, f.RunSpeedFpmOverride, index, f.StockId, f.DieId))
             .ToList();
 
         return baseSpec with
@@ -149,6 +174,7 @@ public class SalesOrderLinePageInput
             BleedIn = BleedIn ?? baseSpec.BleedIn,
             SubstrateId = SubstrateId is { } substrateId && substrateId != Guid.Empty ? substrateId : baseSpec.SubstrateId,
             DieId = DieId is { } dieId && dieId != Guid.Empty ? dieId : null,
+            ShrinkLayflatIn = ShrinkLayflatIn,
             InkSet = InkSet ?? baseSpec.InkSet,
             WhiteHits = WhiteHits ?? baseSpec.WhiteHits,
             WhiteCoveragePct = WhiteCoveragePct.HasValue ? WhiteCoveragePct.Value / 100m : baseSpec.WhiteCoveragePct,

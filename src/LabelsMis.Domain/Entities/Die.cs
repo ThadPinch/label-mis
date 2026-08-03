@@ -25,6 +25,12 @@ public class Die : MasterDataEntity
     public int LabelsAround { get; private set; }
     public decimal RepeatLengthIn { get; private set; }
     public decimal WebWidthIn { get; private set; }
+
+    /// <summary>The die maker's stated repeat (in); RepeatLengthIn remains the calculated value.</summary>
+    public decimal? DieRepeatIn { get; private set; }
+    public string? LinerSpec { get; private set; }
+    public decimal? SetupRating { get; private set; }
+    public decimal? SpeedRating { get; private set; }
     public Guid? SupplierId { get; private set; }
     public Supplier? Supplier { get; private set; }
     public string? SupplierPartNumber { get; private set; }
@@ -162,6 +168,21 @@ public class Die : MasterDataEntity
         SupplierId = supplierId;
         SupplierPartNumber = string.IsNullOrWhiteSpace(supplierPartNumber) ? null : supplierPartNumber.Trim();
         Location = string.IsNullOrWhiteSpace(location) ? null : location.Trim();
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    public void UpdateSpecs(
+        decimal? dieRepeatIn,
+        string? linerSpec,
+        decimal? setupRating,
+        decimal? speedRating,
+        Guid modifiedById,
+        DateTime modifiedAt)
+    {
+        DieRepeatIn = dieRepeatIn;
+        LinerSpec = string.IsNullOrWhiteSpace(linerSpec) ? null : linerSpec.Trim();
+        SetupRating = setupRating;
+        SpeedRating = speedRating;
         SetModified(modifiedById, modifiedAt);
     }
 

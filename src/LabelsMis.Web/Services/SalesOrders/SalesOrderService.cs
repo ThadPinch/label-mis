@@ -19,6 +19,15 @@ public record SalesOrderLineInput(
     string? Description = null,
     LabelSpec? Spec = null);
 
+/// <summary>A flat, non-label charge on the order (die creation, design time). Invoiced with the
+/// order and shown on the job ticket, but never scheduled as a production job.</summary>
+public record SalesOrderChargeInput(
+    Guid? Id,
+    string Description,
+    int Quantity,
+    decimal UnitPrice,
+    Guid? SourceEstimateChargeId = null);
+
 public record SalesOrderFormInput(
     Guid CustomerId,
     string? CustomerPoNumber,
@@ -27,7 +36,9 @@ public record SalesOrderFormInput(
     IReadOnlyList<SalesOrderLineInput> Lines,
     Guid? ShippingMethodId,
     decimal ShippingCost,
-    ShippingAddress ShippingAddress);
+    ShippingAddress ShippingAddress,
+    string? BillingNotes = null,
+    IReadOnlyList<SalesOrderChargeInput>? Charges = null);
 
 public record EstimateConversionLineInput(
     Guid EstimateLineId,
@@ -35,12 +46,20 @@ public record EstimateConversionLineInput(
     decimal UnitPrice,
     string? LineNotes);
 
+public record EstimateConversionChargeInput(
+    Guid? EstimateChargeId,
+    string Description,
+    int Quantity,
+    decimal UnitPrice);
+
 public record EstimateConversionInput(
     Guid EstimateId,
     string? CustomerPoNumber,
     DateOnly? RequestedShipDate,
     string? Notes,
-    IReadOnlyList<EstimateConversionLineInput> Lines);
+    IReadOnlyList<EstimateConversionLineInput> Lines,
+    string? BillingNotes = null,
+    IReadOnlyList<EstimateConversionChargeInput>? Charges = null);
 
 public record SalesOrderListItem(
     Guid Id,
@@ -108,11 +127,15 @@ public class SalesOrderService(
                 || o.Customer.Name.ToUpper().Contains(term));
         }
 
-        query = sort switch
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
         {
-            "number" => query.OrderBy(o => o.OrderNumber),
-            "ship" => query.OrderBy(o => o.RequestedShipDate),
-            "status" => query.OrderBy(o => o.Status),
+            "number" => query.OrderByDir(desc, o => o.OrderNumber),
+            "customer" => query.OrderByDir(desc, o => o.Customer.Name),
+            "po" => query.OrderByDir(desc, o => o.CustomerPoNumber),
+            "ship" => query.OrderByDir(desc, o => o.RequestedShipDate),
+            "status" => query.OrderByDir(desc, o => o.Status),
+            "total" => query.OrderByDir(desc, o => o.Lines.Sum(l => l.LineTotal) + o.Charges.Sum(c => c.LineTotal)),
             _ => query.OrderByDescending(o => o.OrderedAt)
         };
 
@@ -127,7 +150,7 @@ public class SalesOrderService(
                 o.CustomerPoNumber,
                 o.RequestedShipDate,
                 o.Status,
-                o.Lines.Sum(l => l.LineTotal),
+                o.Lines.Sum(l => l.LineTotal) + o.Charges.Sum(c => c.LineTotal),
                 o.OrderedAt))
             .ToListAsync(cancellationToken);
 
@@ -139,6 +162,7 @@ public class SalesOrderService(
             .Include(o => o.Customer)
             .Include(o => o.ShippingMethod)
             .Include(o => o.Lines).ThenInclude(l => l.Product)
+            .Include(o => o.Charges)
             .SingleOrDefaultAsync(o => o.Id == id, cancellationToken);
 
     public async Task<SalesOrder> CreateAsync(SalesOrderFormInput input, CancellationToken cancellationToken = default)
@@ -165,6 +189,7 @@ public class SalesOrderService(
             now,
             input.RequestedShipDate,
             input.Notes,
+            input.BillingNotes,
             input.ShippingMethodId,
             input.ShippingCost,
             input.ShippingAddress,
@@ -180,6 +205,7 @@ public class SalesOrderService(
             db.SalesOrderLines.Add(line);
         }
 
+        ReplaceCharges(order, input.Charges, userId, now);
         await db.SaveChangesAsync(cancellationToken);
         await invoiceService.CreateFromSalesOrderAsync(order.Id, cancellationToken);
         return order;
@@ -222,6 +248,7 @@ public class SalesOrderService(
             now,
             input.RequestedShipDate,
             input.Notes,
+            input.BillingNotes,
             estimate.ShippingMethodId,
             estimate.ShippingCost,
             estimate.ShippingAddress,
@@ -264,6 +291,26 @@ public class SalesOrderService(
         }
 
         order.ReplaceLines(orderLines);
+
+        var chargeNumber = 1;
+        var orderCharges = new List<SalesOrderCharge>();
+        foreach (var chargeInput in (input.Charges ?? []).Where(c => !string.IsNullOrWhiteSpace(c.Description)))
+        {
+            var charge = SalesOrderCharge.Create(
+                Guid.NewGuid(),
+                order.Id,
+                chargeNumber++,
+                chargeInput.Description,
+                chargeInput.EstimateChargeId,
+                Math.Max(1, chargeInput.Quantity),
+                chargeInput.UnitPrice,
+                userId,
+                now);
+            orderCharges.Add(charge);
+            db.SalesOrderCharges.Add(charge);
+        }
+
+        order.ReplaceCharges(orderCharges);
         await db.SaveChangesAsync(cancellationToken);
         await invoiceService.CreateFromSalesOrderAsync(order.Id, cancellationToken);
         return order;
@@ -281,6 +328,7 @@ public class SalesOrderService(
 
         var order = await db.SalesOrders
             .Include(o => o.Lines)
+            .Include(o => o.Charges)
             .SingleAsync(o => o.Id == id, cancellationToken);
 
         if (order.Status is not SalesOrderStatus.Open && !adminOverride)
@@ -293,6 +341,7 @@ public class SalesOrderService(
             input.CustomerPoNumber,
             input.RequestedShipDate,
             input.Notes,
+            input.BillingNotes,
             input.ShippingMethodId,
             input.ShippingCost,
             input.ShippingAddress,
@@ -307,6 +356,7 @@ public class SalesOrderService(
             db.SalesOrderLines.Add(line);
         }
 
+        ReplaceCharges(order, input.Charges, userId, now);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -328,6 +378,7 @@ public class SalesOrderService(
 
         var order = await db.SalesOrders
             .Include(o => o.Lines)
+            .Include(o => o.Charges)
             .SingleAsync(o => o.Id == id, cancellationToken);
 
         if (order.Status is SalesOrderStatus.Cancelled or SalesOrderStatus.Closed)
@@ -340,6 +391,7 @@ public class SalesOrderService(
             input.CustomerPoNumber,
             input.RequestedShipDate,
             input.Notes,
+            input.BillingNotes,
             input.ShippingMethodId,
             input.ShippingCost,
             input.ShippingAddress,
@@ -427,6 +479,9 @@ public class SalesOrderService(
             db.SalesOrderLines.Remove(removed);
         }
 
+        // Charges never have jobs, so they can be replaced wholesale even in production.
+        ReplaceCharges(order, input.Charges, userId, now);
+
         // Spec/quantity changes invalidate the plan minutes on pending operations.
         foreach (var jobId in replanJobIds)
         {
@@ -440,6 +495,7 @@ public class SalesOrderService(
     {
         var order = await db.SalesOrders
             .Include(o => o.Lines)
+            .Include(o => o.Charges)
             .SingleOrDefaultAsync(o => o.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("Sales order not found.");
 
@@ -460,6 +516,7 @@ public class SalesOrderService(
         }
 
         db.SalesOrderLines.RemoveRange(order.Lines);
+        db.SalesOrderCharges.RemoveRange(order.Charges);
         db.SalesOrders.Remove(order);
         await db.SaveChangesAsync(cancellationToken);
     }
@@ -543,6 +600,37 @@ public class SalesOrderService(
             .ToList();
     }
 
+    /// <summary>Rebuilds the order's charge rows from the form input. Charges have no downstream
+    /// references (no jobs), so a wholesale replace is safe in any editable status.</summary>
+    private void ReplaceCharges(
+        SalesOrder order,
+        IReadOnlyList<SalesOrderChargeInput>? inputs,
+        Guid userId,
+        DateTime now)
+    {
+        db.SalesOrderCharges.RemoveRange(order.Charges);
+
+        var charges = new List<SalesOrderCharge>();
+        var lineNumber = 1;
+        foreach (var input in (inputs ?? []).Where(c => !string.IsNullOrWhiteSpace(c.Description)))
+        {
+            var charge = SalesOrderCharge.Create(
+                Guid.NewGuid(),
+                order.Id,
+                lineNumber++,
+                input.Description,
+                input.SourceEstimateChargeId,
+                Math.Max(1, input.Quantity),
+                input.UnitPrice,
+                userId,
+                now);
+            charges.Add(charge);
+            db.SalesOrderCharges.Add(charge);
+        }
+
+        order.ReplaceCharges(charges);
+    }
+
     private async Task<Dictionary<Guid, LabelSpec>> LoadProductSeedSpecsAsync(
         IReadOnlyList<SalesOrderLineInput> lines,
         CancellationToken cancellationToken)
@@ -551,7 +639,18 @@ public class SalesOrderService(
         var products = await db.Products.AsNoTracking()
             .Where(p => productIds.Contains(p.Id))
             .ToListAsync(cancellationToken);
-        return products.ToDictionary(p => p.Id, p => p.ToLabelSpec());
+
+        // Products don't hold a layflat, so shrink-film substrates seed it from the stock default.
+        var substrateIds = products.Select(p => p.SubstrateId).Distinct().ToList();
+        var shrinkLayflats = await db.Stocks.AsNoTracking()
+            .Where(s => substrateIds.Contains(s.Id) && s.StockType == StockType.Shrink)
+            .ToDictionaryAsync(s => s.Id, s => s.ShrinkLayflatIn, cancellationToken);
+
+        return products.ToDictionary(
+            p => p.Id,
+            p => shrinkLayflats.TryGetValue(p.SubstrateId, out var layflat)
+                ? p.ToLabelSpec() with { ShrinkLayflatIn = layflat }
+                : p.ToLabelSpec());
     }
 
     private async Task ValidateShippingMethodAsync(Guid? shippingMethodId, CancellationToken cancellationToken)

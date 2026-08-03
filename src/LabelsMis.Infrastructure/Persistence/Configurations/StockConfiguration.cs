@@ -22,6 +22,7 @@ public class StockConfiguration : IEntityTypeConfiguration<Stock>
         builder.Property(s => s.CostPerMsi).HasMoneyPrecision();
         builder.Property(s => s.MinOrderQtyLf).HasQuantityPrecision();
         builder.Property(s => s.StockType).HasConversion<int>().IsRequired();
+        builder.Property(s => s.ShrinkLayflatIn).HasPrecision(10, 4);
 
         builder.HasIndex(s => s.Code).IsUnique();
 

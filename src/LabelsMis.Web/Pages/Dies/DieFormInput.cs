@@ -58,6 +58,22 @@ public class DieFormInput
 
     public string? Location { get; set; }
 
+    [Range(0.0001, 1000)]
+    [Display(Name = "Die repeat (in)")]
+    public decimal? DieRepeatIn { get; set; }
+
+    [StringLength(500)]
+    [Display(Name = "Liner spec")]
+    public string? LinerSpec { get; set; }
+
+    [Range(0, 100000)]
+    [Display(Name = "Setup rating")]
+    public decimal? SetupRating { get; set; }
+
+    [Range(0, 100000)]
+    [Display(Name = "Speed rating")]
+    public decimal? SpeedRating { get; set; }
+
     public DieForm ToForm() => new(
         Description,
         CustomerId,
@@ -73,7 +89,11 @@ public class DieFormInput
         WebWidthIn,
         SupplierId,
         SupplierPartNumber,
-        Location);
+        Location,
+        DieRepeatIn,
+        LinerSpec,
+        SetupRating,
+        SpeedRating);
 
     public static DieFormInput FromEntity(Domain.Entities.Die die) => new()
     {
@@ -91,7 +111,11 @@ public class DieFormInput
         WebWidthIn = die.WebWidthIn,
         SupplierId = die.SupplierId,
         SupplierPartNumber = die.SupplierPartNumber,
-        Location = die.Location
+        Location = die.Location,
+        DieRepeatIn = die.DieRepeatIn,
+        LinerSpec = die.LinerSpec,
+        SetupRating = die.SetupRating,
+        SpeedRating = die.SpeedRating
     };
 
     public static DieFormInput ForDuplicate(Domain.Entities.Die die)

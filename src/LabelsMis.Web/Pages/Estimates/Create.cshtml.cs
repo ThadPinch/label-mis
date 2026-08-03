@@ -24,10 +24,16 @@ public class CreateModel(
     public EstimatePageInput Input { get; set; } = new();
 
     [BindProperty]
-    public bool SendEmail { get; set; } = true;
+    public string? EmailTo { get; set; }
 
     [BindProperty]
-    public string? EmailTo { get; set; }
+    public string? EmailSubject { get; set; }
+
+    [BindProperty]
+    public string? EmailBody { get; set; }
+
+    [BindProperty]
+    public bool IncludePdf { get; set; } = true;
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
@@ -86,8 +92,8 @@ public class CreateModel(
         // The draft now exists; send it and surface any email failure on the edit page.
         try
         {
-            await estimateService.SendAsync(estimateId, SendEmail ? EmailTo : null, null, null, includePdf: true, cancellationToken);
-            TempData["EstimateStatus"] = SendEmail && !string.IsNullOrWhiteSpace(EmailTo)
+            await estimateService.SendAsync(estimateId, EmailTo, EmailSubject, EmailBody, IncludePdf, cancellationToken);
+            TempData["EstimateStatus"] = !string.IsNullOrWhiteSpace(EmailTo)
                 ? $"Estimate created and emailed to {EmailTo}."
                 : "Estimate created and marked sent.";
         }
@@ -127,6 +133,15 @@ public class CreateModel(
             .Where(i => i.IsActive && i.IsSpot && i.SpotColor != SpotColor.White)
             .OrderBy(i => i.Code)
             .ToListAsync(cancellationToken);
+
+        ViewData["Dies"] = await db.Dies.AsNoTracking()
+            .Where(d => d.IsActive)
+            .OrderBy(d => d.Description)
+            .ToListAsync(cancellationToken);
+
+        ViewData["ShrinkStocks"] = await db.Stocks.AsNoTracking()
+            .Where(s => s.StockType == StockType.Shrink)
+            .ToDictionaryAsync(s => s.Id, s => s.ShrinkLayflatIn, cancellationToken);
 
         var users = await userManager.Users.OrderBy(u => u.Email).ToListAsync(cancellationToken);
         ViewData["SalesRepOptions"] = users.Select(u => new SelectListItem(

@@ -42,7 +42,7 @@ public class EstimateTests
         var estimate = CreateDraftWithLine();
         estimate.MarkSent("/tmp/test.pdf", UserId, Now);
 
-        var act = () => estimate.UpdateDraft(null, "notes", null, null, 0m, ShippingAddress.Empty, UserId, Now);
+        var act = () => estimate.UpdateDraft(null, "notes", null, null, null, 0m, ShippingAddress.Empty, UserId, Now);
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -74,7 +74,7 @@ public class EstimateTests
     {
         var estimate = Estimate.CreateDraft(
             Guid.NewGuid(), "EST-2026-00099", Guid.NewGuid(), null,
-            null, null, null, 0m, ShippingAddress.Empty, UserId, Now);
+            null, null, null, null, 0m, ShippingAddress.Empty, UserId, Now);
 
         var act = () => estimate.MarkSent(null, UserId, Now);
 
@@ -86,11 +86,11 @@ public class EstimateTests
     {
         var estimate = Estimate.CreateDraft(
             Guid.NewGuid(), "EST-2026-00001", Guid.NewGuid(), null,
-            null, null, null, 0m, ShippingAddress.Empty, UserId, Now);
+            null, null, null, null, 0m, ShippingAddress.Empty, UserId, Now);
         var line = EstimateLine.Create(
             Guid.NewGuid(), estimate.Id, 1, null, "Test labels",
             4, 3, 0.125m, 0.0625m, 0.0625m, 0.0625m,
-            Guid.NewGuid(), InkSet.CMYK, 0, 1m, "[]", "[]", 30, 0.03m, null, null, null, null, null,
+            Guid.NewGuid(), InkSet.CMYK, 0, 1m, "[]", "[]", 30, 0.03m, null, null, null, null, null, null,
             UserId, Now);
         estimate.AddLine(line);
         return estimate;

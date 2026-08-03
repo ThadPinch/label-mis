@@ -7,6 +7,7 @@ namespace LabelsMis.Domain.Entities;
 public class Estimate : EntityBase
 {
     private readonly List<EstimateLine> _lines = [];
+    private readonly List<EstimateCharge> _charges = [];
     private readonly List<EstimateRevision> _revisions = [];
 
     private Estimate()
@@ -20,6 +21,9 @@ public class Estimate : EntityBase
     public Guid? SalesRepId { get; private set; }
     public EstimateStatus Status { get; private set; }
     public string? Notes { get; private set; }
+
+    /// <summary>Internal billing instructions; carried onto the sales order and surfaced on the invoice.</summary>
+    public string? BillingNotes { get; private set; }
     public DateOnly? ValidUntilDate { get; private set; }
     public DateTime? WonAt { get; private set; }
     public DateTime? LostAt { get; private set; }
@@ -44,6 +48,7 @@ public class Estimate : EntityBase
         ShipToName, ShipToStreet1, ShipToStreet2, ShipToCity, ShipToState, ShipToZip, ShipToCountry);
 
     public IReadOnlyCollection<EstimateLine> Lines => _lines;
+    public IReadOnlyCollection<EstimateCharge> Charges => _charges;
     public IReadOnlyCollection<EstimateRevision> Revisions => _revisions;
 
     public static Estimate CreateDraft(
@@ -52,6 +57,7 @@ public class Estimate : EntityBase
         Guid customerId,
         Guid? salesRepId,
         string? notes,
+        string? billingNotes,
         DateOnly? validUntilDate,
         Guid? shippingMethodId,
         decimal shippingCost,
@@ -66,6 +72,7 @@ public class Estimate : EntityBase
             SalesRepId = salesRepId,
             Status = EstimateStatus.Draft,
             Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+            BillingNotes = string.IsNullOrWhiteSpace(billingNotes) ? null : billingNotes.Trim(),
             ValidUntilDate = validUntilDate
         };
         estimate.SetShipping(shippingMethodId, shippingCost, shippingAddress);
@@ -76,6 +83,7 @@ public class Estimate : EntityBase
     public void UpdateDraft(
         Guid? salesRepId,
         string? notes,
+        string? billingNotes,
         DateOnly? validUntilDate,
         Guid? shippingMethodId,
         decimal shippingCost,
@@ -87,6 +95,7 @@ public class Estimate : EntityBase
 
         SalesRepId = salesRepId;
         Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        BillingNotes = string.IsNullOrWhiteSpace(billingNotes) ? null : billingNotes.Trim();
         ValidUntilDate = validUntilDate;
         SetShipping(shippingMethodId, shippingCost, shippingAddress);
         SetModified(modifiedById, modifiedAt);
@@ -114,6 +123,15 @@ public class Estimate : EntityBase
     }
 
     public void AddLine(EstimateLine line) => _lines.Add(line);
+
+    public void ReplaceCharges(IEnumerable<EstimateCharge> charges)
+    {
+        EnsureDraft();
+        _charges.Clear();
+        _charges.AddRange(charges);
+    }
+
+    public void AddCharge(EstimateCharge charge) => _charges.Add(charge);
 
     /// <summary>Records the recipient address used for the latest send. Allowed in any status
     /// so resends can update it.</summary>

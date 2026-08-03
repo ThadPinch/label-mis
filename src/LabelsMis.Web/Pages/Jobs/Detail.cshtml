@@ -18,7 +18,8 @@
             + PopRow("Corner radius", $"{die.CornerRadiusIn:0.####}\"")
             + PopRow("Gutters", $"{die.GutterAcrossIn:0.####}\" × {die.GutterAroundIn:0.####}\"")
             + PopRow("Layout", $"{die.LabelsAcross} across × {die.LabelsAround} around")
-            + PopRow("Repeat length", $"{die.RepeatLengthIn:0.####}\"")
+            + PopRow("Die repeat", die.DieRepeatIn is { } dieRepeat ? $"{dieRepeat:0.0000}\"" : null)
+            + PopRow("Liner spec", die.LinerSpec)
             + PopRow("Web width", $"{die.WebWidthIn:0.####}\"")
             + PopRow("Owner", die.Customer?.Name)
             + PopRow("Supplier", die.Supplier is null ? null : $"{die.Supplier.Name}{(string.IsNullOrWhiteSpace(die.SupplierPartNumber) ? "" : $" · {die.SupplierPartNumber}")}")
@@ -34,6 +35,7 @@
             + PopRow("Face material", stock.FaceMaterial)
             + PopRow("Adhesive", stock.Adhesive)
             + PopRow("Liner", stock.Liner)
+            + PopRow("Shrink layflat", stock.ShrinkLayflatIn is { } stockLayflat ? $"{stockLayflat:0.0000}\"" : null)
             + PopRow("Caliper", $"{stock.TotalCaliperMil:0.##} mil")
             + PopRow("Roll width", $"{stock.WidthIn:0.###}\"")
             + PopRow("Supplier part #", stock.SupplierPartNumber);
@@ -279,6 +281,10 @@ else
                                 </td>
                             </tr>
                             <tr><th class="text-muted fw-normal">Unwind</th><td>@(Model.Detail.Job.Spec?.Unwind?.Label() ?? "—")</td></tr>
+                            @if (Model.Detail.Job.Spec?.ShrinkLayflatIn is { } shrinkLayflat)
+                            {
+                                <tr><th class="text-muted fw-normal">Shrink layflat</th><td>@shrinkLayflat.ToString("0.0000")&quot;</td></tr>
+                            }
                             @if (!string.IsNullOrWhiteSpace(Model.Detail.LineNotes))
                             {
                                 <tr><th class="text-muted fw-normal">Line notes</th><td>@Model.Detail.LineNotes</td></tr>

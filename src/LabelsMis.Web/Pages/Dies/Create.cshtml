@@ -6,11 +6,13 @@
     ViewData["BackNav"] = new BackNavModel();
 }
 
-<h1 class="h3 mb-3">New die</h1>
+<h1 class="h4 mb-2">New die</h1>
 <form method="post">
-    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
     <partial name="_DieForm" model="Model.Input" />
-    <button type="submit" class="btn btn-primary">Create</button>
+    <div class="d-flex gap-2 mt-1">
+        <button type="submit" class="btn btn-sm btn-primary">Create</button>
+    </div>
 </form>
 
 @section Scripts {

@@ -6,7 +6,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LabelsMis.Web.Services.Dies;
 
-public record DieListItem(Guid Id, string Description, string? CustomerName, bool IsActive);
+public record DieListItem(
+    Guid Id,
+    string Description,
+    string? CustomerName,
+    decimal LabelAcrossIn,
+    decimal LabelAroundIn,
+    int LabelsAcross,
+    int LabelsAround,
+    decimal? DieRepeatIn,
+    string? Location,
+    bool IsActive);
 
 public record DieForm(
     string Description,
@@ -23,7 +33,11 @@ public record DieForm(
     decimal WebWidthIn,
     Guid? SupplierId,
     string? SupplierPartNumber,
-    string? Location);
+    string? Location,
+    decimal? DieRepeatIn,
+    string? LinerSpec,
+    decimal? SetupRating,
+    decimal? SpeedRating);
 
 public class DieService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
@@ -39,10 +53,27 @@ public class DieService(LabelsMisDbContext db, ICurrentUserService currentUser)
             var term = search.Trim().ToUpperInvariant();
             query = query.Where(d => d.Description.ToUpper().Contains(term));
         }
-        query = query.OrderBy(d => d.Description);
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
+        {
+            "description" => query.OrderByDir(desc, d => d.Description),
+            "customer" => query.OrderByDir(desc, d => d.Customer != null ? d.Customer.Name : ""),
+            "active" => query.OrderByDir(desc, d => d.IsActive),
+            _ => query.OrderBy(d => d.Description)
+        };
         var total = await query.CountAsync(ct);
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(d => new DieListItem(d.Id, d.Description, d.Customer != null ? d.Customer.Name : null, d.IsActive))
+            .Select(d => new DieListItem(
+                d.Id,
+                d.Description,
+                d.Customer != null ? d.Customer.Name : null,
+                d.LabelAcrossIn,
+                d.LabelAroundIn,
+                d.LabelsAcross,
+                d.LabelsAround,
+                d.DieRepeatIn,
+                d.Location,
+                d.IsActive))
             .ToListAsync(ct);
         return new PagedResult<DieListItem>(items, page, pageSize, total);
     }
@@ -57,6 +88,7 @@ public class DieService(LabelsMisDbContext db, ICurrentUserService currentUser)
         var die = Die.Create(Guid.NewGuid(), form.Description, form.CustomerId, form.DieType, form.Shape,
             form.LabelAcrossIn, form.LabelAroundIn, form.CornerRadiusIn, form.GutterAcrossIn, form.GutterAroundIn,
             form.LabelsAcross, form.LabelsAround, form.WebWidthIn, form.SupplierId, form.SupplierPartNumber, form.Location, userId, now);
+        die.UpdateSpecs(form.DieRepeatIn, form.LinerSpec, form.SetupRating, form.SpeedRating, userId, now);
         db.Dies.Add(die);
         await db.SaveChangesAsync(ct);
         return die;
@@ -72,6 +104,7 @@ public class DieService(LabelsMisDbContext db, ICurrentUserService currentUser)
             form.SupplierId, form.SupplierPartNumber, form.Location, userId, now);
         die.UpdateImposition(form.LabelAcrossIn, form.LabelAroundIn, form.CornerRadiusIn,
             form.GutterAcrossIn, form.GutterAroundIn, form.LabelsAcross, form.LabelsAround, form.WebWidthIn, userId, now);
+        die.UpdateSpecs(form.DieRepeatIn, form.LinerSpec, form.SetupRating, form.SpeedRating, userId, now);
         await db.SaveChangesAsync(ct);
     }
 

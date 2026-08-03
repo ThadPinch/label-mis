@@ -20,7 +20,8 @@ public record StockForm(
     string? SupplierPartNumber,
     decimal CostPerMsi,
     decimal MinOrderQtyLf,
-    StockType StockType);
+    StockType StockType,
+    decimal? ShrinkLayflatIn = null);
 
 public class StockService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
@@ -37,7 +38,16 @@ public class StockService(LabelsMisDbContext db, ICurrentUserService currentUser
             var term = search.Trim().ToUpperInvariant();
             query = query.Where(s => s.Code.Contains(term) || s.Description.ToUpper().Contains(term));
         }
-        query = sort == "code" ? query.OrderBy(s => s.Code) : query.OrderBy(s => s.Description);
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
+        {
+            "code" => query.OrderByDir(desc, s => s.Code),
+            "description" => query.OrderByDir(desc, s => s.Description),
+            "type" => query.OrderByDir(desc, s => s.StockType),
+            "supplier" => query.OrderByDir(desc, s => s.Supplier.Name),
+            "active" => query.OrderByDir(desc, s => s.IsActive),
+            _ => query.OrderBy(s => s.Description)
+        };
         var total = await query.CountAsync(ct);
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
             .Select(s => new StockListItem(s.Id, s.Code, s.Description, s.Supplier.Name, s.IsActive, s.StockType)).ToListAsync(ct);
@@ -54,7 +64,7 @@ public class StockService(LabelsMisDbContext db, ICurrentUserService currentUser
         await EnsureCodeAvailableAsync(form.Code, null, ct);
         var stock = Stock.Create(Guid.NewGuid(), form.Code, form.Description, form.FaceMaterial, form.Adhesive,
             form.Liner, form.TotalCaliperMil, form.WidthIn, form.SupplierId, form.SupplierPartNumber,
-            form.CostPerMsi, form.MinOrderQtyLf, userId, now, form.StockType);
+            form.CostPerMsi, form.MinOrderQtyLf, userId, now, form.StockType, form.ShrinkLayflatIn);
         stock.RecordCostChange(Guid.NewGuid(), form.CostPerMsi, now.Date, userId, now);
         db.Stocks.Add(stock);
         await db.SaveChangesAsync(ct);
@@ -83,7 +93,7 @@ public class StockService(LabelsMisDbContext db, ICurrentUserService currentUser
 
         stock.Update(form.Code, form.Description, form.FaceMaterial, form.Adhesive, form.Liner,
             form.TotalCaliperMil, form.WidthIn, form.SupplierId, form.SupplierPartNumber,
-            form.CostPerMsi, form.MinOrderQtyLf, userId, now, form.StockType);
+            form.CostPerMsi, form.MinOrderQtyLf, userId, now, form.StockType, form.ShrinkLayflatIn);
 
         await db.SaveChangesAsync(ct);
     }

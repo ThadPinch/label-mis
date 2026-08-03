@@ -19,6 +19,7 @@ public class IndexModel(SalesOrderService salesOrderService, LabelsMisDbContext 
     [BindProperty(SupportsGet = true)] public Guid? CustomerId { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? ShipFrom { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? ShipTo { get; set; }
+    [BindProperty(SupportsGet = true)] public string? Sort { get; set; }
     [BindProperty(SupportsGet = true, Name = "pageNumber")] public int PageNumber { get; set; } = 1;
 
     public Services.Models.PagedResult<SalesOrderListItem> Result { get; private set; } = null!;
@@ -75,7 +76,8 @@ public class IndexModel(SalesOrderService salesOrderService, LabelsMisDbContext 
         if (CustomerId.HasValue) query = query.Add("CustomerId", CustomerId.Value.ToString());
         if (ShipFrom.HasValue) query = query.Add("ShipFrom", ShipFrom.Value.ToString("yyyy-MM-dd"));
         if (ShipTo.HasValue) query = query.Add("ShipTo", ShipTo.Value.ToString("yyyy-MM-dd"));
-        if (PageNumber > 1) query = query.Add("page", PageNumber.ToString());
+        if (!string.IsNullOrWhiteSpace(Sort)) query = query.Add("Sort", Sort);
+        if (PageNumber > 1) query = query.Add("pageNumber", PageNumber.ToString());
         return Redirect($"{Request.Path}{query}");
     }
 
@@ -85,7 +87,7 @@ public class IndexModel(SalesOrderService salesOrderService, LabelsMisDbContext 
             || User.IsInRole(AppRoles.Csr)
             || User.IsInRole(AppRoles.Estimator);
         CanDelete = User.IsInRole(AppRoles.Admin);
-        Result = await salesOrderService.ListAsync(Search, Status, CustomerId, ShipFrom, ShipTo, null, PageNumber, 25, cancellationToken);
+        Result = await salesOrderService.ListAsync(Search, Status, CustomerId, ShipFrom, ShipTo, Sort, PageNumber, 25, cancellationToken);
         ViewData["CustomerOptions"] = await db.Customers.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.Name)
             .Select(c => new SelectListItem(c.Name, c.Id.ToString())).ToListAsync(cancellationToken);
     }

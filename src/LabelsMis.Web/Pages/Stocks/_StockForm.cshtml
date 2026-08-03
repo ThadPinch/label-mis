@@ -14,8 +14,8 @@
     </div>
     <div class="col-6 col-md-3">
         <label asp-for="StockType" class="form-label"></label>
-        <select asp-for="StockType" asp-items="Html.GetEnumSelectList<StockType>()" class="form-select"></select>
-        <div class="form-text">Laminate stocks can be consumed by lamination finishing tasks.</div>
+        <select asp-for="StockType" id="stock-type-select" asp-items="Html.GetEnumSelectList<StockType>()" class="form-select"></select>
+        <div class="form-text">Laminate stocks feed lamination tasks; shrink stocks act as substrates with a layflat spec.</div>
     </div>
 </div>
 
@@ -32,10 +32,15 @@
             <input asp-for="Adhesive" class="form-control" />
             <span asp-validation-for="Adhesive" class="text-danger"></span>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-4 liner-group @(Model.StockType == StockType.Shrink ? "d-none" : "")">
             <label asp-for="Liner" class="form-label"></label>
             <input asp-for="Liner" class="form-control" />
             <span asp-validation-for="Liner" class="text-danger"></span>
+        </div>
+        <div class="col-md-4 shrink-layflat-group @(Model.StockType == StockType.Shrink ? "" : "d-none")">
+            <label asp-for="ShrinkLayflatIn" class="form-label"></label>
+            <input asp-for="ShrinkLayflatIn" asp-format="{0:0.0000}" class="form-control" />
+            <span asp-validation-for="ShrinkLayflatIn" class="text-danger"></span>
         </div>
         <div class="col-6 col-md-3">
             <label asp-for="TotalCaliperMil" class="form-label"></label>
@@ -74,3 +79,17 @@
         </div>
     </div>
 </fieldset>
+
+<script>
+(() => {
+    const typeSelect = document.getElementById('stock-type-select');
+    if (!typeSelect) return;
+    const sync = () => {
+        const isShrink = typeSelect.selectedOptions[0]?.text === 'Shrink';
+        document.querySelector('.liner-group')?.classList.toggle('d-none', isShrink);
+        document.querySelector('.shrink-layflat-group')?.classList.toggle('d-none', !isShrink);
+    };
+    typeSelect.addEventListener('change', sync);
+    sync();
+})();
+</script>

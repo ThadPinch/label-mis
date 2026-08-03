@@ -38,7 +38,14 @@ public class SupplierService(LabelsMisDbContext db, ICurrentUserService currentU
             var term = search.Trim().ToUpperInvariant();
             query = query.Where(s => s.Name.ToUpper().Contains(term) || s.Code.Contains(term));
         }
-        query = sort == "code" ? query.OrderBy(s => s.Code) : query.OrderBy(s => s.Name);
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
+        {
+            "name" => query.OrderByDir(desc, s => s.Name),
+            "code" => query.OrderByDir(desc, s => s.Code),
+            "active" => query.OrderByDir(desc, s => s.IsActive),
+            _ => query.OrderBy(s => s.Name)
+        };
         var total = await query.CountAsync(ct);
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
             .Select(s => new SupplierListItem(s.Id, s.Name, s.Code, s.IsActive)).ToListAsync(ct);

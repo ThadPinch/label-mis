@@ -32,6 +32,29 @@ public class DieTests
         die.RepeatLengthIn.Should().Be(3.0625m);
     }
 
+    [Fact]
+    public void UpdateSpecs_StoresValuesAndNormalizesLinerSpec()
+    {
+        var die = Die.Create(
+            Guid.NewGuid(), "Test die", null, DieType.Flexible, null,
+            4.0m, 3.0m, 0m, 0.0625m, 0.0625m, 3, 1, 13.0m,
+            null, null, null, Guid.NewGuid(), DateTime.UtcNow);
+
+        die.UpdateSpecs(3.7650m, "  40# SCK ", 15m, 200m, Guid.NewGuid(), DateTime.UtcNow);
+
+        die.DieRepeatIn.Should().Be(3.7650m);
+        die.LinerSpec.Should().Be("40# SCK");
+        die.SetupRating.Should().Be(15m);
+        die.SpeedRating.Should().Be(200m);
+
+        die.UpdateSpecs(null, "   ", null, null, Guid.NewGuid(), DateTime.UtcNow);
+
+        die.DieRepeatIn.Should().BeNull();
+        die.LinerSpec.Should().BeNull();
+        die.SetupRating.Should().BeNull();
+        die.SpeedRating.Should().BeNull();
+    }
+
     [Theory]
     [InlineData(13.0, 0.0625, 4.0, 3)]
     [InlineData(13.0, 0.0625, 6.4375, 2)]

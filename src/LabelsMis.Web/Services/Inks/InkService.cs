@@ -26,7 +26,7 @@ public record InkForm(
 public class InkService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
     public async Task<PagedResult<InkListItem>> ListAsync(
-        string? search, int page, int pageSize, bool includeInactive, CancellationToken ct = default)
+        string? search, string? sort, int page, int pageSize, bool includeInactive, CancellationToken ct = default)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 5, 100);
@@ -37,7 +37,15 @@ public class InkService(LabelsMisDbContext db, ICurrentUserService currentUser)
             var term = search.Trim().ToUpperInvariant();
             query = query.Where(i => i.Code.Contains(term) || i.Description.ToUpper().Contains(term));
         }
-        query = query.OrderBy(i => i.Code);
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
+        {
+            "code" => query.OrderByDir(desc, i => i.Code),
+            "description" => query.OrderByDir(desc, i => i.Description),
+            "inkset" => query.OrderByDir(desc, i => i.InkSet),
+            "active" => query.OrderByDir(desc, i => i.IsActive),
+            _ => query.OrderBy(i => i.Code)
+        };
         var total = await query.CountAsync(ct);
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
             .Select(i => new InkListItem(i.Id, i.Code, i.Description, i.InkSet, i.IsActive)).ToListAsync(ct);

@@ -91,11 +91,15 @@ public class PurchaseOrderService(
                 || p.Supplier.Name.ToUpper().Contains(term));
         }
 
-        query = sort switch
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
         {
-            "number" => query.OrderBy(p => p.PoNumber),
-            "expected" => query.OrderBy(p => p.ExpectedAt),
-            "status" => query.OrderBy(p => p.Status),
+            "number" => query.OrderByDir(desc, p => p.PoNumber),
+            "supplier" => query.OrderByDir(desc, p => p.Supplier.Name),
+            "status" => query.OrderByDir(desc, p => p.Status),
+            "ordered" => query.OrderByDir(desc, p => p.OrderedAt),
+            "expected" => query.OrderByDir(desc, p => p.ExpectedAt),
+            "total" => query.OrderByDir(desc, p => p.Lines.Sum(l => l.LineTotal)),
             _ => query.OrderByDescending(p => p.OrderedAt)
         };
 

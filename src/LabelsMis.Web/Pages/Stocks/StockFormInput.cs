@@ -5,7 +5,7 @@ using LabelsMis.Web.Services.Stocks;
 
 namespace LabelsMis.Web.Pages.Stocks;
 
-public class StockFormInput
+public class StockFormInput : IValidatableObject
 {
     [Required]
     public string Code { get; set; } = string.Empty;
@@ -23,8 +23,11 @@ public class StockFormInput
     [Required]
     public string Adhesive { get; set; } = string.Empty;
 
-    [Required]
     public string Liner { get; set; } = string.Empty;
+
+    [Range(0.0001, 1000)]
+    [Display(Name = "Shrink layflat (in)")]
+    public decimal? ShrinkLayflatIn { get; set; }
 
     [Range(0.0001, 100)]
     [Display(Name = "Total caliper (mil)")]
@@ -49,19 +52,34 @@ public class StockFormInput
     [Display(Name = "Re-Order Quantity")]
     public decimal MinOrderQtyLf { get; set; }
 
+    // Shrink stocks have no liner; other types have no layflat.
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (StockType == StockType.Shrink && ShrinkLayflatIn is null)
+        {
+            yield return new ValidationResult("Shrink layflat is required for shrink stocks.", [nameof(ShrinkLayflatIn)]);
+        }
+
+        if (StockType != StockType.Shrink && string.IsNullOrWhiteSpace(Liner))
+        {
+            yield return new ValidationResult("The Liner field is required.", [nameof(Liner)]);
+        }
+    }
+
     public StockForm ToForm() => new(
         Code,
         Description,
         FaceMaterial,
         Adhesive,
-        Liner,
+        StockType == StockType.Shrink ? string.Empty : Liner,
         TotalCaliperMil,
         WidthIn,
         SupplierId,
         SupplierPartNumber,
         CostPerMsi,
         MinOrderQtyLf,
-        StockType);
+        StockType,
+        ShrinkLayflatIn);
 
     public static StockFormInput FromEntity(Domain.Entities.Stock stock) => new()
     {
@@ -71,6 +89,7 @@ public class StockFormInput
         FaceMaterial = stock.FaceMaterial,
         Adhesive = stock.Adhesive,
         Liner = stock.Liner,
+        ShrinkLayflatIn = stock.ShrinkLayflatIn,
         TotalCaliperMil = stock.TotalCaliperMil,
         WidthIn = stock.WidthIn,
         SupplierId = stock.SupplierId,

@@ -46,6 +46,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EstimatePdfGenerator>();
         services.AddScoped<ProductService>();
         services.AddScoped<SalesOrderService>();
+        services.AddScoped<SalesOrderDocumentService>();
         services.AddScoped<JobService>();
         services.AddScoped<JobTicketPdfGenerator>();
         services.AddScoped<PurchaseOrderService>();

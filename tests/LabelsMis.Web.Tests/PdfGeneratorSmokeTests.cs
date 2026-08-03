@@ -172,7 +172,7 @@ public class PdfGeneratorSmokeTests
 
         var order = SalesOrder.CreateOpen(
             Guid.NewGuid(), "SO-2026-0117", customer.Id, null, null, "PO-88231",
-            Now, new DateOnly(2026, 8, 7), null, null, 42.50m,
+            Now, new DateOnly(2026, 8, 7), null, null, null, 42.50m,
             LabelsMis.Domain.ValueObjects.ShippingAddress.Empty, UserId, Now);
 
         var invoice = Invoice.CreateDraft(

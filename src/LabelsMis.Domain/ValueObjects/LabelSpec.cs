@@ -29,7 +29,8 @@ public record LabelSpec(
     int? MaxLabelsAcrossOverride,
     LabelOrientation? LabelOrientationOverride,
     string? ArtworkFilePath,
-    UnwindDirection? Unwind = null)
+    UnwindDirection? Unwind = null,
+    decimal? ShrinkLayflatIn = null)
 {
     /// <summary>Builds a normalized spec, defaulting the JSON columns to an empty array.</summary>
     public static LabelSpec Create(
@@ -51,7 +52,8 @@ public record LabelSpec(
         int? maxLabelsAcrossOverride,
         LabelOrientation? labelOrientationOverride,
         string? artworkFilePath,
-        UnwindDirection? unwind = null) => new(
+        UnwindDirection? unwind = null,
+        decimal? shrinkLayflatIn = null) => new(
             labelAcrossIn,
             labelAroundIn,
             cornerRadiusIn,
@@ -70,7 +72,8 @@ public record LabelSpec(
             maxLabelsAcrossOverride,
             labelOrientationOverride,
             string.IsNullOrWhiteSpace(artworkFilePath) ? null : artworkFilePath.Trim(),
-            unwind);
+            unwind,
+            shrinkLayflatIn);
 
     private static string NormalizeJson(string? json) =>
         string.IsNullOrWhiteSpace(json) ? "[]" : json;

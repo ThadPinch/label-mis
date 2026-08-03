@@ -59,12 +59,12 @@ public class TransactionFlowPersistenceTests : IAsyncLifetime
         DateOnly? validUntil = null)
     {
         var estimate = Estimate.CreateDraft(
-            estimateId, estimateNumber, customerId, null, null, validUntil,
+            estimateId, estimateNumber, customerId, null, null, null, validUntil,
             null, 0m, ShippingAddress.Empty, userId, now);
         var line = EstimateLine.Create(
             Guid.NewGuid(), estimate.Id, 1, null, "Flow labels",
             4, 3, 0.125m, 0.0625m, 0.0625m, 0.0625m,
-            stockId, InkSet.CMYK, 0, 1m, "[]", "[]", 30, 0.03m, null, null, null, null, null, userId, now);
+            stockId, InkSet.CMYK, 0, 1m, "[]", "[]", 30, 0.03m, null, null, null, null, null, null, userId, now);
         estimate.AddLine(line);
         return (estimate, line);
     }
@@ -105,7 +105,7 @@ public class TransactionFlowPersistenceTests : IAsyncLifetime
         await _db.SaveChangesAsync();
 
         var order = SalesOrder.CreateOpen(
-            Guid.NewGuid(), "SO-2026-99999", customerId, estimateId, null, "PO-123", now, null, null,
+            Guid.NewGuid(), "SO-2026-99999", customerId, estimateId, null, "PO-123", now, null, null, null,
             null, 0m, ShippingAddress.Empty, TestUserId, now);
         var orderLine = SalesOrderLine.Create(
             Guid.NewGuid(), order.Id, 1, product.Id, "Flow labels", line.Id, 5000, 0.05m, null, line.ToLabelSpec(), TestUserId, now);

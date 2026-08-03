@@ -8,6 +8,7 @@ internal static class IndigoInkSeparations
         inkSet switch
         {
             IndigoInkSet.EPM => 3,
+            IndigoInkSet.EPMW => 3,
             IndigoInkSet.CMYK => 4,
             IndigoInkSet.CMYK_PlusSpot => 4,
             IndigoInkSet.CMYKW => 4,

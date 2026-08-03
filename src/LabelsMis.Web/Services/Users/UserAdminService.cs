@@ -1,4 +1,5 @@
 using LabelsMis.Infrastructure.Identity;
+using LabelsMis.Web.Services.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -36,6 +37,7 @@ public class UserAdminService(
 {
     public async Task<IReadOnlyList<UserListItem>> ListAsync(
         string? search,
+        string? sort = null,
         CancellationToken cancellationToken = default)
     {
         var query = userManager.Users.AsNoTracking().AsQueryable();
@@ -62,7 +64,19 @@ public class UserAdminService(
                 user.MustChangePassword));
         }
 
-        return items;
+        // Roles and status only exist after materialization, so sorting happens in memory.
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        return sortKey switch
+        {
+            "email" => (desc ? items.OrderByDescending(i => i.Email) : items.OrderBy(i => i.Email)).ToList(),
+            "roles" => (desc
+                ? items.OrderByDescending(i => string.Join(", ", i.Roles))
+                : items.OrderBy(i => string.Join(", ", i.Roles))).ToList(),
+            "status" => (desc
+                ? items.OrderByDescending(i => i.IsLockedOut ? 2 : i.MustChangePassword ? 1 : 0)
+                : items.OrderBy(i => i.IsLockedOut ? 2 : i.MustChangePassword ? 1 : 0)).ToList(),
+            _ => items
+        };
     }
 
     public async Task<UserDetail?> GetAsync(Guid id, CancellationToken cancellationToken = default)

@@ -18,6 +18,7 @@ public class IndexModel(PurchaseOrderService purchaseOrderService, LabelsMisDbCo
     [BindProperty(SupportsGet = true)] public Guid? SupplierId { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? ExpectedFrom { get; set; }
     [BindProperty(SupportsGet = true)] public DateOnly? ExpectedTo { get; set; }
+    [BindProperty(SupportsGet = true)] public string? Sort { get; set; }
     [BindProperty(SupportsGet = true, Name = "pageNumber")] public int PageNumber { get; set; } = 1;
 
     public Services.Models.PagedResult<PurchaseOrderListItem> Result { get; private set; } = null!;
@@ -26,7 +27,7 @@ public class IndexModel(PurchaseOrderService purchaseOrderService, LabelsMisDbCo
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Result = await purchaseOrderService.ListAsync(
-            Search, Status, SupplierId, ExpectedFrom, ExpectedTo, null, PageNumber, 25, cancellationToken);
+            Search, Status, SupplierId, ExpectedFrom, ExpectedTo, Sort, PageNumber, 25, cancellationToken);
 
         ViewData["SupplierOptions"] = await db.Suppliers.AsNoTracking()
             .Where(s => s.IsActive).OrderBy(s => s.Name)

@@ -1,0 +1,24 @@
+@model LabelsMis.Web.Pages.Shared.SortHeaderModel
+@{
+    // Clicking an unsorted column sorts ascending; clicking again flips to descending.
+    // Sorting always returns to page 1, so pageNumber is deliberately left out of the link.
+    var isAsc = string.Equals(Model.CurrentSort, Model.Key, StringComparison.OrdinalIgnoreCase);
+    var isDesc = string.Equals(Model.CurrentSort, Model.Key + "_desc", StringComparison.OrdinalIgnoreCase);
+    var next = isAsc ? Model.Key + "_desc" : Model.Key;
+
+    var parts = new List<string> { $"sort={Uri.EscapeDataString(next)}" };
+    if (Model.Route is not null)
+    {
+        foreach (var kv in Model.Route)
+        {
+            if (string.IsNullOrWhiteSpace(kv.Value)) continue;
+            if (string.Equals(kv.Key, "sort", StringComparison.OrdinalIgnoreCase)) continue;
+            if (string.Equals(kv.Key, "pageNumber", StringComparison.OrdinalIgnoreCase)) continue;
+            parts.Add($"{kv.Key}={Uri.EscapeDataString(kv.Value)}");
+        }
+    }
+}
+<a class="text-reset text-decoration-none" href="?@string.Join("&", parts)">@Model.Label@if (isAsc)
+    {<text>&nbsp;<span aria-hidden="true">&#9650;</span></text>}
+    else if (isDesc)
+    {<text>&nbsp;<span aria-hidden="true">&#9660;</span></text>}</a>

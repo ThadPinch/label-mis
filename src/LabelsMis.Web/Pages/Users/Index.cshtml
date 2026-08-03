@@ -2,6 +2,11 @@
 @model LabelsMis.Web.Pages.Users.IndexModel
 @{
     ViewData["Title"] = "Users";
+    var route = new Dictionary<string, string?>
+    {
+        ["Search"] = Model.Search,
+        ["Sort"] = Model.Sort
+    };
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -10,6 +15,7 @@
 </div>
 
 <form method="get" class="row g-2 mb-3">
+    <input type="hidden" asp-for="Sort" />
     <div class="col-md-6">
         <input asp-for="Search" class="form-control" placeholder="Search email" />
     </div>
@@ -21,9 +27,9 @@
 <table class="table table-striped">
     <thead>
         <tr>
-            <th>Email</th>
-            <th>Roles</th>
-            <th>Status</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Email", "email", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Roles", "roles", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Status", "status", Model.Sort, route))</th>
             <th></th>
         </tr>
     </thead>

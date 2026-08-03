@@ -6,5 +6,6 @@ public enum InkSet
     CMYK = 1,
     CMYK_PlusSpot = 2,
     CMYKW = 3,
-    CMYKW_PlusSpot = 4
+    CMYKW_PlusSpot = 4,
+    EPMW = 5
 }

@@ -24,6 +24,7 @@ public class IndexModel(InvoiceService invoiceService, LabelsMisDbContext db) : 
     [BindProperty(SupportsGet = true)] public DateOnly? ToDate { get; set; }
     [BindProperty(SupportsGet = true)] public string? AgingBucket { get; set; }
     [BindProperty(SupportsGet = true)] public string Tab { get; set; } = ReadyTab;
+    [BindProperty(SupportsGet = true)] public string? Sort { get; set; }
     [BindProperty(SupportsGet = true, Name = "pageNumber")] public int PageNumber { get; set; } = 1;
 
     public Services.Models.PagedResult<InvoiceListItem> Result { get; private set; } = null!;
@@ -35,7 +36,7 @@ public class IndexModel(InvoiceService invoiceService, LabelsMisDbContext db) : 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Result = await invoiceService.ListAsync(
-            Search, Status, CustomerId, FromDate, ToDate, AgingBucket, OnExportedTab, null, PageNumber, 25, cancellationToken);
+            Search, Status, CustomerId, FromDate, ToDate, AgingBucket, OnExportedTab, Sort, PageNumber, 25, cancellationToken);
 
         (ReadyCount, ExportedCount) = await invoiceService.GetExportCountsAsync(cancellationToken);
 
@@ -93,6 +94,7 @@ public class IndexModel(InvoiceService invoiceService, LabelsMisDbContext db) : 
             ["FromDate"] = FromDate?.ToString("yyyy-MM-dd"),
             ["ToDate"] = ToDate?.ToString("yyyy-MM-dd"),
             ["AgingBucket"] = AgingBucket,
+            ["Sort"] = Sort,
             ["Tab"] = tab ?? Tab,
             ["pageNumber"] = tab is null && PageNumber > 1 ? PageNumber.ToString() : null
         };

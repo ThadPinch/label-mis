@@ -34,6 +34,7 @@ public class EditModel(
     SalesOrderService salesOrderService,
     JobService jobService,
     ArtworkService artworkService,
+    SalesOrderDocumentService documentService,
     ShippingMethodService shippingMethodService,
     CustomerService customerService,
     InvoiceService invoiceService,
@@ -53,6 +54,9 @@ public class EditModel(
     public bool CanUnlock => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Csr);
 
     public bool CanSendInvoice => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Csr) || User.IsInRole(AppRoles.Accounting);
+
+    /// <summary>Supporting documents may be added/removed in any order status — they arrive throughout the order's life.</summary>
+    public bool CanManageDocuments => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Csr) || User.IsInRole(AppRoles.Estimator);
 
     /// <summary>The form is editable: the order is open, or it was explicitly unlocked.</summary>
     public bool IsEditing => !IsLocked || (Unlocked && CanUnlock);
@@ -78,6 +82,8 @@ public class EditModel(
     public IReadOnlyList<LineJobInfo> LineJobs { get; private set; } = [];
     public IReadOnlyList<OrderShipmentInfo> Shipments { get; private set; } = [];
     public IReadOnlyList<OrderInvoiceInfo> Invoices { get; private set; } = [];
+    public IReadOnlyList<OrderDocumentInfo> Documents { get; private set; } = [];
+    [BindProperty] public IFormFile? DocumentFile { get; set; }
     public IReadOnlyList<SalesOrderLineDetail> LineDetails { get; private set; } = [];
     public Guid? SourceEstimateId { get; private set; }
     public string? SourceEstimateNumber { get; private set; }
@@ -95,6 +101,12 @@ public class EditModel(
         string ShipmentNumber,
         DateOnly ShipDate,
         ShipmentStatus Status);
+
+    public record OrderDocumentInfo(
+        Guid Id,
+        string FileName,
+        long SizeBytes,
+        DateTime UploadedAt);
 
     public record OrderInvoiceInfo(
         Guid Id,
@@ -246,10 +258,18 @@ public class EditModel(
             .Select(i => new OrderInvoiceInfo(i.Id, i.InvoiceNumber, i.InvoiceDate, i.Status, i.Total, i.BalanceDue, i.QbExportedAt))
             .ToListAsync(cancellationToken);
 
+        Documents = await db.SalesOrderDocuments.AsNoTracking()
+            .Where(d => d.SalesOrderId == Id)
+            .OrderBy(d => d.CreatedAt)
+            .Select(d => new OrderDocumentInfo(d.Id, d.OriginalFileName, d.FileSizeBytes, d.CreatedAt))
+            .ToListAsync(cancellationToken);
+
         AmountPaid = Invoices
             .Where(i => i.Status != InvoiceStatus.Void)
             .Sum(i => i.Total - i.BalanceDue);
-        OrderTotal = Order is null ? 0m : Order.Lines.Sum(l => l.LineTotal) + Order.ShippingCost;
+        OrderTotal = Order is null
+            ? 0m
+            : Order.Lines.Sum(l => l.LineTotal) + Order.Charges.Sum(c => c.LineTotal) + Order.ShippingCost;
 
         if (Order is not null)
         {
@@ -318,6 +338,7 @@ public class EditModel(
         CustomerPoNumber = order.CustomerPoNumber,
         RequestedShipDate = order.RequestedShipDate,
         Notes = order.Notes,
+        BillingNotes = order.BillingNotes,
         ShippingMethodId = order.ShippingMethodId,
         ShippingCost = order.ShippingCost,
         ShipToName = order.ShipToName,
@@ -327,6 +348,14 @@ public class EditModel(
         ShipToState = order.ShipToState,
         ShipToZip = order.ShipToZip,
         ShipToCountry = order.ShipToCountry,
+        Charges = order.Charges.OrderBy(c => c.LineNumber).Select(c => new SalesOrderChargePageInput
+        {
+            Id = c.Id,
+            SourceEstimateChargeId = c.SourceEstimateChargeId,
+            Description = c.Description,
+            Quantity = c.Quantity,
+            UnitPrice = c.UnitPrice
+        }).ToList(),
         Lines = order.Lines.OrderBy(l => l.LineNumber).Select(l =>
         {
             var spec = l.Spec;
@@ -353,6 +382,7 @@ public class EditModel(
                 BleedIn = spec?.BleedIn,
                 SubstrateId = spec?.SubstrateId,
                 DieId = spec?.DieId,
+                ShrinkLayflatIn = spec?.ShrinkLayflatIn,
                 InkSet = spec?.InkSet,
                 WhiteHits = spec?.WhiteHits,
                 WhiteCoveragePct = spec is null ? null : spec.WhiteCoveragePct * 100m,
@@ -375,6 +405,7 @@ public class EditModel(
                             OperationId = f.OperationId,
                             Include = true,
                             StockId = f.StockId,
+                            DieId = f.DieId,
                             SetupMinutesOverride = f.SetupMinutesOverride,
                             RunSpeedFpmOverride = f.RunSpeedFpmOverride
                         })
@@ -483,13 +514,14 @@ public class EditModel(
         var order = await db.SalesOrders.AsNoTracking()
             .Include(o => o.Customer)
             .Include(o => o.Lines)
+            .Include(o => o.Charges)
             .SingleAsync(o => o.Id == Id, cancellationToken);
         if (order.Customer.Terms != PaymentTerms.Prepay)
         {
             return false;
         }
 
-        var orderTotal = order.Lines.Sum(l => l.LineTotal) + order.ShippingCost;
+        var orderTotal = order.Lines.Sum(l => l.LineTotal) + order.Charges.Sum(c => c.LineTotal) + order.ShippingCost;
         var paid = await db.Invoices.AsNoTracking()
             .Where(i => i.SalesOrderId == Id && i.Status != InvoiceStatus.Void)
             .SumAsync(i => i.Total - i.BalanceDue, cancellationToken);
@@ -523,6 +555,57 @@ public class EditModel(
         }
     }
 
+    public async Task<IActionResult> OnPostUploadDocumentAsync(CancellationToken cancellationToken)
+    {
+        if (!CanManageDocuments) return Forbid();
+
+        if (DocumentFile is null || DocumentFile.Length == 0)
+        {
+            TempData["OrderError"] = "Choose a file to upload.";
+            return RedirectToPage(new { id = Id, unlocked = Unlocked ? "true" : null });
+        }
+
+        try
+        {
+            await documentService.UploadAsync(Id, DocumentFile, cancellationToken);
+            TempData["OrderStatus"] = $"Uploaded {DocumentFile.FileName}.";
+        }
+        catch (Exception ex)
+        {
+            TempData["OrderError"] = $"Could not upload the document: {ex.Message}";
+        }
+
+        return RedirectToPage(new { id = Id, unlocked = Unlocked ? "true" : null });
+    }
+
+    public async Task<IActionResult> OnGetDocumentAsync(Guid documentId, CancellationToken cancellationToken)
+    {
+        var file = await documentService.OpenAsync(Id, documentId, cancellationToken);
+        if (file is null)
+        {
+            return NotFound();
+        }
+
+        return File(file.Value.Stream, file.Value.ContentType, file.Value.FileName);
+    }
+
+    public async Task<IActionResult> OnPostDeleteDocumentAsync(Guid documentId, CancellationToken cancellationToken)
+    {
+        if (!CanManageDocuments) return Forbid();
+
+        try
+        {
+            await documentService.DeleteAsync(Id, documentId, cancellationToken);
+            TempData["OrderStatus"] = "Document deleted.";
+        }
+        catch (Exception ex)
+        {
+            TempData["OrderError"] = $"Could not delete the document: {ex.Message}";
+        }
+
+        return RedirectToPage(new { id = Id, unlocked = Unlocked ? "true" : null });
+    }
+
     public Task<IActionResult> OnGetAddressesAsync(Guid? customerId, CancellationToken cancellationToken) =>
         ShipToAddressJson.BuildAsync(customerService, customerId, cancellationToken);
 
@@ -540,14 +623,17 @@ public class EditModel(
 
         // Spec editor lookups, matching what the estimate form offers.
         ViewData["Substrates"] = await db.Stocks.AsNoTracking()
-            .Where(s => s.IsActive && s.StockType == StockType.Substrate)
+            .Where(s => s.IsActive && (s.StockType == StockType.Substrate || s.StockType == StockType.Shrink))
             .OrderBy(s => s.Code)
             .Select(s => new SelectListItem($"{s.Code} — {s.Description}", s.Id.ToString()))
             .ToListAsync(cancellationToken);
+
+        ViewData["ShrinkStocks"] = await db.Stocks.AsNoTracking()
+            .Where(s => s.StockType == StockType.Shrink)
+            .ToDictionaryAsync(s => s.Id, s => s.ShrinkLayflatIn, cancellationToken);
         ViewData["Dies"] = await db.Dies.AsNoTracking()
             .Where(d => d.IsActive)
             .OrderBy(d => d.Description)
-            .Select(d => new SelectListItem(d.Description, d.Id.ToString()))
             .ToListAsync(cancellationToken);
         ViewData["SpotInks"] = await db.Inks.AsNoTracking()
             .Where(i => i.IsActive && i.IsSpot && i.SpotColor != SpotColor.White)
@@ -557,7 +643,6 @@ public class EditModel(
         ViewData["FinishingOperations"] = await db.FinishingOperations.AsNoTracking()
             .Where(o => o.IsActive)
             .OrderBy(o => o.Code)
-            .Select(o => new SelectListItem($"{o.Code} — {o.Description}", o.Id.ToString()))
             .ToListAsync(cancellationToken);
         ViewData["FinishingStocks"] = await db.Stocks.AsNoTracking()
             .Where(s => s.IsActive && s.StockType == StockType.Laminate)

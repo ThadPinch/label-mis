@@ -34,8 +34,8 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
 
     /// <summary>
     /// Renders the ticket for <paramref name="detail"/>. When <paramref name="orderJobs"/> is
-    /// given (all jobs on the same sales order, in line order), every job gets a compact spec
-    /// block so the floor sees the whole order; the route and notes stay those of the printed job.
+    /// given (all jobs on the same sales order, in line order), every job gets a spec block with
+    /// its own route underneath, so the ticket prints identically from any job on the order.
     /// </summary>
     public async Task<byte[]> GenerateAsync(
         JobTicketDetail detail,
@@ -75,31 +75,45 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
         document.Add(WithMarginBottom(OrderSection(detail)));
 
         // Notes up front, always shown so the floor sees them before the job specs
-        // and has a place to write. Order notes first, then the printed job's own notes.
+        // and has a place to write. Order notes first, then every job's own notes so
+        // the ticket prints identically no matter which job it was printed from.
         var notesParts = new List<string>();
         if (!string.IsNullOrWhiteSpace(detail.OrderNotes))
         {
             notesParts.Add(detail.OrderNotes!.Trim());
         }
 
-        if (!string.IsNullOrWhiteSpace(detail.Job.Notes))
+        foreach (var job in orderJobs)
         {
-            notesParts.Add($"{detail.Job.JobNumber}: {detail.Job.Notes!.Trim()}");
+            if (!string.IsNullOrWhiteSpace(job.Job.Notes))
+            {
+                notesParts.Add($"{job.Job.JobNumber}: {job.Job.Notes!.Trim()}");
+            }
         }
 
         var notesBody = new FlowCell { Border = (PdfStyle.GreyDarken1, 1f), Padding = 6f, PaddingBottom = 56f };
         notesBody.Add(Paragraph(string.Join("\n", notesParts)));
         document.Add(WithMarginBottom(SectionShell("NOTES", notesBody)));
 
-        foreach (var job in orderJobs)
+        // Non-label charges on the order (die creation, design) — informational only, no job exists.
+        if (detail.OrderCharges is { Count: > 0 } orderCharges)
         {
-            document.Add(WithMarginBottom(JobBlock(job, isCurrent: job.Job.Id == detail.Job.Id)));
+            var chargesBody = new FlowCell { Border = (PdfStyle.GreyDarken1, 1f), Padding = 6f };
+            foreach (var charge in orderCharges)
+            {
+                chargesBody.Add(Paragraph($"• {charge}", StandardFont.HelveticaBold, 9f));
+            }
+            chargesBody.Add(Paragraph(
+                "Billed with this order — no production job is scheduled for these items.",
+                size: 7.5f, color: PdfStyle.GreyDarken2));
+            document.Add(WithMarginBottom(SectionShell("ORDER CHARGES (NOT PRODUCED)", chargesBody)));
         }
 
-        // Route with sign-off columns for the floor — the printed job's route only.
-        document.Add(SectionShell(
-            orderJobs.Count > 1 ? $"ROUTE — {detail.Job.JobNumber}" : "ROUTE",
-            BuildRouteBody(detail)));
+        // Each job's spec block with its own route (sign-off columns) directly underneath.
+        foreach (var job in orderJobs)
+        {
+            document.Add(WithMarginBottom(JobBlock(job)));
+        }
     }
 
     private static FlowTable OrderSection(JobTicketDetail detail)
@@ -113,7 +127,7 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
         return SectionShell("ORDER", PairGridBody(rows));
     }
 
-    private static FlowTable JobBlock(JobTicketDetail job, bool isCurrent)
+    private static FlowTable JobBlock(JobTicketDetail job)
     {
         var qty = $"{job.Job.QuantityPlanned:N0} planned of {job.Job.QuantityOrdered:N0} ordered{OverrunSuffix(job)}";
         var status = $"{job.Job.Status} · {ScheduleText(job)}";
@@ -127,8 +141,8 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
         {
             ("Description", job.ProductDescription, "Status", status),
             ("Label size", $"{job.LabelAcrossIn:0.####}\" × {job.LabelAroundIn:0.####}\"", "Qty", qty),
-            ("Die", job.DieDescription ?? "—", "Due", job.Job.DueDate?.ToString("MMM d, yyyy") ?? "—"),
-            ("Substrate", job.SubstrateDescription, "Ink", ink)
+            ("Substrate", job.SubstrateDescription, "Due", job.Job.DueDate?.ToString("MMM d, yyyy") ?? "—"),
+            ("Ink", ink, "Spec", SpecSummary(job) ?? "—")
         };
 
         // Finishing tasks from the job's route, with any assigned materials in the descriptions.
@@ -139,7 +153,38 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
         rows.Add(("Finishing", finishing.Count > 0 ? string.Join(" · ", finishing) : "None",
             "Packaging", PackagingSummary(job.RollSpec) ?? "—"));
 
-        rows.Add(("Unwind", job.Job.Spec?.Unwind?.Label() ?? "—", "Spec", SpecSummary(job) ?? "—"));
+        rows.Add(("Unwind", job.Job.Spec?.Unwind?.Label() ?? "—",
+            "Shrink layflat", job.Job.Spec?.ShrinkLayflatIn is { } shrinkLayflat ? $"{shrinkLayflat:0.0000}\"" : "—"));
+
+        // Die details — the same facts the job page's die popover shows.
+        if (job.Die is { } die)
+        {
+            var dieType = die.DieType.ToString();
+            if (!string.IsNullOrWhiteSpace(die.Shape))
+            {
+                dieType += $" · {die.Shape}";
+            }
+
+            var repeat = die.DieRepeatIn ?? die.RepeatLengthIn;
+            var supplier = die.Supplier?.Name;
+            if (supplier is not null && !string.IsNullOrWhiteSpace(die.SupplierPartNumber))
+            {
+                supplier += $" · {die.SupplierPartNumber}";
+            }
+
+            rows.Add(("Die", job.DieDescription ?? die.Description, "Die type", dieType));
+            rows.Add(("Die layout", $"{die.LabelsAcross} across × {die.LabelsAround} around · {repeat:0.0000}\" repeat",
+                "Web width", $"{die.WebWidthIn:0.####}\""));
+            rows.Add(("Die location", die.Location ?? "—", "Liner spec", die.LinerSpec ?? "—"));
+            if (supplier is not null || die.Customer is not null)
+            {
+                rows.Add(("Die supplier", supplier ?? "—", "Die owner", die.Customer?.Name ?? "—"));
+            }
+        }
+        else
+        {
+            rows.Add(("Die", job.DieDescription ?? "—", "", ""));
+        }
 
         if (!string.IsNullOrWhiteSpace(job.LineNotes))
         {
@@ -147,16 +192,12 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
         }
 
         var title = $"JOB {job.Job.JobNumber} — {job.ProductSku}";
-        if (isCurrent)
-        {
-            title += "   «« THIS TICKET";
-        }
-
-        return JobSectionShell(title, job.Job.JobNumber, PairGridBody(rows));
+        return JobSectionShell(title, job.Job.JobNumber, PairGridBody(rows), BuildRouteBody(job));
     }
 
-    /// <summary>Section shell whose header carries a small scannable barcode of the job number.</summary>
-    private static FlowTable JobSectionShell(string title, string jobNumber, FlowCell body)
+    /// <summary>Section shell whose header carries a small scannable barcode of the job number.
+    /// The job's route (with sign-off columns) renders directly beneath the spec body.</summary>
+    private static FlowTable JobSectionShell(string title, string jobNumber, FlowCell body, FlowCell routeBody)
     {
         var header = new FlowTable(new[] { 3.2f, 1f });
         var titleParagraph = Paragraph(title, StandardFont.HelveticaBold, 8f);
@@ -165,14 +206,16 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
         header.AddCell(new FlowCell { NoBorder = true, Padding = 0f }
             .Add(new FlowBarcode(jobNumber, JobBarcodeHeight, maxWidth: 110f)));
 
+        // Header row so the job title repeats when the block breaks across pages.
         var table = new FlowTable(new[] { 1f });
-        table.AddCell(new FlowCell
+        table.AddHeaderCell(new FlowCell
         {
             Background = PdfStyle.GreyLighten3,
             Border = (PdfStyle.GreyDarken1, 1f),
             Padding = 4f
         }.Add(header));
         table.AddCell(body);
+        table.AddCell(routeBody);
         return table;
     }
 
@@ -262,19 +305,19 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
         {
             Background = PdfStyle.GreyLighten3,
             Border = (PdfStyle.GreyDarken1, 0.5f),
-            Padding = 3.5f
-        }.Add(Paragraph(text, StandardFont.HelveticaBold, 8f));
+            Padding = 2.5f
+        }.Add(Paragraph(text, StandardFont.HelveticaBold, 7.5f));
     }
 
     private static FlowCell RouteCell(string text)
     {
-        // Generous bottom padding leaves the floor room to write in the sign-off columns.
+        // A little bottom padding leaves the floor room to write in the sign-off columns.
         return new FlowCell
         {
             Border = (PdfStyle.GreyLighten1, 0.5f),
-            Padding = 4f,
-            PaddingBottom = 14f
-        }.Add(Paragraph(text));
+            Padding = 3f,
+            PaddingBottom = 7f
+        }.Add(Paragraph(text, size: 8.5f));
     }
 
     private static FlowTable SectionShell(string title, FlowCell body)

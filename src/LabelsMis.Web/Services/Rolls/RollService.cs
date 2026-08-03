@@ -87,11 +87,16 @@ public class RollService(
                 || r.SupplierLotNumber.ToUpper().Contains(term));
         }
 
-        query = sort switch
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
         {
-            "barcode" => query.OrderBy(r => r.RollBarcode),
-            "remaining" => query.OrderByDescending(r => r.RemainingLengthLf),
-            "status" => query.OrderBy(r => r.Status),
+            "barcode" => query.OrderByDir(desc, r => r.RollBarcode),
+            "stock" => query.OrderByDir(desc, r => r.Stock.Description),
+            "lot" => query.OrderByDir(desc, r => r.SupplierLotNumber),
+            "width" => query.OrderByDir(desc, r => r.WidthIn),
+            "remaining" => query.OrderByDir(desc, r => r.RemainingLengthLf),
+            "location" => query.OrderByDir(desc, r => r.Location),
+            "status" => query.OrderByDir(desc, r => r.Status),
             _ => query.OrderByDescending(r => r.ReceivedAt)
         };
 

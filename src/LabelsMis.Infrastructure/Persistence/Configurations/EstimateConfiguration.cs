@@ -15,6 +15,7 @@ public class EstimateConfiguration : IEntityTypeConfiguration<Estimate>
         builder.Property(e => e.RevisionNumber).IsRequired();
         builder.Property(e => e.Status).IsRequired();
         builder.Property(e => e.Notes).HasMaxLength(4000);
+        builder.Property(e => e.BillingNotes).HasMaxLength(4000);
         builder.Property(e => e.LostReason).HasMaxLength(500);
         builder.Property(e => e.PdfFilePath).HasMaxLength(500);
         builder.Property(e => e.ContactEmail).HasMaxLength(256);
@@ -54,6 +55,7 @@ public class EstimateConfiguration : IEntityTypeConfiguration<Estimate>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Navigation(e => e.Lines).HasField("_lines");
+        builder.Navigation(e => e.Charges).HasField("_charges");
         builder.Navigation(e => e.Revisions).HasField("_revisions");
     }
 }

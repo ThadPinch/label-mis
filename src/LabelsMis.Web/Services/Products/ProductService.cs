@@ -51,7 +51,8 @@ public record ProductPickerItem(
     Guid SubstrateId,
     InkSet InkSet,
     string FinishingOperationsJson,
-    Guid? DieId);
+    Guid? DieId,
+    int? UnwindPosition = null);
 
 public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
@@ -96,10 +97,14 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
                 || p.Description.ToUpper().Contains(term));
         }
 
-        query = sort switch
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
         {
-            "sku" => query.OrderBy(p => p.InternalSku),
-            "customer" => query.OrderBy(p => p.PrimaryCustomer != null ? p.PrimaryCustomer.Name : "").ThenBy(p => p.InternalSku),
+            "sku" => query.OrderByDir(desc, p => p.InternalSku),
+            "customersku" => query.OrderByDir(desc, p => p.CustomerSku),
+            "description" => query.OrderByDir(desc, p => p.Description),
+            "customer" => query.OrderByDir(desc, p => p.PrimaryCustomer != null ? p.PrimaryCustomer.Name : "").ThenBy(p => p.InternalSku),
+            "status" => query.OrderByDir(desc, p => p.Status),
             _ => query.OrderBy(p => p.InternalSku)
         };
 
@@ -392,7 +397,8 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
                 p.SubstrateId,
                 p.InkSet,
                 p.FinishingOperationsJson,
-                p.DieId))
+                p.DieId,
+                p.RollSpec == null ? (int?)null : p.RollSpec.UnwindPosition))
             .ToListAsync(cancellationToken);
     }
 

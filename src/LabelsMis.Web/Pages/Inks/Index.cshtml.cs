@@ -14,6 +14,9 @@ public class IndexModel(InkService inkService, ICurrentUserService currentUser) 
     [BindProperty(SupportsGet = true)]
     public string? Search { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public string? Sort { get; set; }
+
     [BindProperty(SupportsGet = true, Name = "pageNumber")]
     public int PageNumber { get; set; } = 1;
 
@@ -27,6 +30,6 @@ public class IndexModel(InkService inkService, ICurrentUserService currentUser) 
     {
         ViewData["Search"] = Search;
         ViewData["IncludeInactive"] = IncludeInactive;
-        Result = await inkService.ListAsync(Search, PageNumber, 20, IncludeInactive, cancellationToken);
+        Result = await inkService.ListAsync(Search, Sort, PageNumber, 20, IncludeInactive, cancellationToken);
     }
 }

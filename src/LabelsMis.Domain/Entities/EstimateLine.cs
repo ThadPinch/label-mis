@@ -38,6 +38,9 @@ public class EstimateLine : EntityBase
     public LabelOrientation? LabelOrientationOverride { get; private set; }
     public UnwindDirection? Unwind { get; private set; }
 
+    /// <summary>Layflat width (in) for shrink film lines; seeded from the substrate, adjustable per line.</summary>
+    public decimal? ShrinkLayflatIn { get; private set; }
+
     public IReadOnlyCollection<EstimateQuantityBreak> QuantityBreaks => _quantityBreaks;
 
     public static EstimateLine Create(
@@ -65,6 +68,7 @@ public class EstimateLine : EntityBase
         int? maxLabelsAcrossOverride,
         LabelOrientation? labelOrientationOverride,
         UnwindDirection? unwind,
+        decimal? shrinkLayflatIn,
         Guid createdById,
         DateTime createdAt)
     {
@@ -98,7 +102,8 @@ public class EstimateLine : EntityBase
             MarkupPctOverride = markupPctOverride,
             MaxLabelsAcrossOverride = maxLabelsAcrossOverride,
             LabelOrientationOverride = labelOrientationOverride,
-            Unwind = unwind
+            Unwind = unwind,
+            ShrinkLayflatIn = shrinkLayflatIn
         };
         line.SetCreated(id, createdById, createdAt);
         return line;
@@ -127,6 +132,7 @@ public class EstimateLine : EntityBase
         int? maxLabelsAcrossOverride,
         LabelOrientation? labelOrientationOverride,
         UnwindDirection? unwind,
+        decimal? shrinkLayflatIn,
         Guid modifiedById,
         DateTime modifiedAt)
     {
@@ -158,6 +164,7 @@ public class EstimateLine : EntityBase
         MaxLabelsAcrossOverride = maxLabelsAcrossOverride;
         LabelOrientationOverride = labelOrientationOverride;
         Unwind = unwind;
+        ShrinkLayflatIn = shrinkLayflatIn;
         SetModified(modifiedById, modifiedAt);
     }
 
@@ -177,7 +184,7 @@ public class EstimateLine : EntityBase
         SubstrateId, dieId, InkSet,
         WhiteHits, WhiteCoveragePct, SpotsJson, FinishingOperationsJson,
         SetupWasteImpressions, RunningWastePct,
-        MaxLabelsAcrossOverride, LabelOrientationOverride, artworkFilePath, Unwind);
+        MaxLabelsAcrossOverride, LabelOrientationOverride, artworkFilePath, Unwind, ShrinkLayflatIn);
 
     private static void ValidateDimensions(decimal labelAcrossIn, decimal labelAroundIn)
     {

@@ -2,55 +2,75 @@
 @model LabelsMis.Web.Pages.Products.IndexModel
 @{
     ViewData["Title"] = "Products";
+    var route = new Dictionary<string, string?>
+    {
+        ["Search"] = Model.Search,
+        ["CustomerId"] = Model.CustomerId?.ToString(),
+        ["Status"] = Model.Status?.ToString(),
+        ["Sort"] = Model.Sort
+    };
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="h3 mb-0">Products</h1>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+    <h1 class="h4 mb-0">Products</h1>
     @if (Model.CanEdit)
     {
-        <a class="btn btn-primary" asp-page="Create">New product</a>
+        <a class="btn btn-sm btn-primary" asp-page="Create">New product</a>
     }
 </div>
 
-<form method="get" class="row g-2 mb-3">
-    <div class="col-md-4"><input asp-for="Search" class="form-control" placeholder="Search SKU or description" /></div>
-    <div class="col-md-3">
-        <select asp-for="CustomerId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["CustomerOptions"]!)">
+<form method="get" class="row g-2 align-items-center mb-2">
+    <input type="hidden" asp-for="Sort" />
+    <div class="col-md-4 col-lg-3">
+        <input asp-for="Search" class="form-control form-control-sm" placeholder="Search SKU or description" />
+    </div>
+    <div class="col-md-3 col-lg-2">
+        <select asp-for="CustomerId" class="form-select form-select-sm" asp-items="@((IEnumerable<SelectListItem>)ViewData["CustomerOptions"]!)">
             <option value="">All customers</option>
         </select>
     </div>
-    <div class="col-md-3">
-        <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.ProductStatus>()">
+    <div class="col-md-3 col-lg-2">
+        <select asp-for="Status" class="form-select form-select-sm" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.ProductStatus>()">
             <option value="">All statuses</option>
         </select>
     </div>
-    <div class="col-md-2"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Filter</button>
+    </div>
 </form>
 
-<table class="table table-striped">
-    <thead><tr><th>Internal SKU</th><th>Customer SKU</th><th>Description</th><th>Customer</th><th>Status</th><th></th></tr></thead>
-    <tbody>
-    @foreach (var item in Model.Result.Items)
-    {
+<div class="card mb-2">
+    <table class="table table-sm table-striped small align-middle mb-0">
+        <thead>
         <tr>
-            <td>@item.InternalSku</td>
-            <td>@(item.CustomerSku ?? "—")</td>
-            <td>@item.Description</td>
-            <td>@(string.IsNullOrWhiteSpace(item.CustomerNames) ? "—" : item.CustomerNames)</td>
-            <td>@item.Status</td>
-            <td class="text-end"><a asp-page="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a></td>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Internal SKU", "sku", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer SKU", "customersku", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Description", "description", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer", "customer", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Status", "status", Model.Sort, route))</th>
+            <th></th>
         </tr>
-    }
-    </tbody>
-</table>
+        </thead>
+        <tbody>
+        @foreach (var item in Model.Result.Items)
+        {
+            <tr>
+                <td class="text-nowrap">@item.InternalSku</td>
+                <td>@(item.CustomerSku ?? "—")</td>
+                <td>@item.Description</td>
+                <td>@(string.IsNullOrWhiteSpace(item.CustomerNames) ? "—" : item.CustomerNames)</td>
+                <td>
+                    <span class="badge @(item.Status == LabelsMis.Domain.Enums.ProductStatus.Active ? "text-bg-success" : "text-bg-secondary")">@item.Status</span>
+                </td>
+                <td class="text-end"><a asp-page="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>
 
 @await Html.PartialAsync("Shared/_Pager", new PagerModel(
     Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount)
 {
-    Extra = new Dictionary<string, string?>
-    {
-        ["Search"] = Model.Search,
-        ["CustomerId"] = Model.CustomerId?.ToString(),
-        ["Status"] = Model.Status?.ToString()
-    }
+    Extra = route
 })

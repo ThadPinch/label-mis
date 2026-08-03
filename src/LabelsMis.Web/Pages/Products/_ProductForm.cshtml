@@ -2,132 +2,237 @@
 @using LabelsMis.Domain.Entities
 @{
     var finishingOps = (IReadOnlyList<FinishingOperation>?)ViewData["FinishingOperations"] ?? Array.Empty<FinishingOperation>();
-    var finishingPrefix = string.IsNullOrEmpty(ViewData.TemplateInfo.HtmlFieldPrefix)
+    var fieldPrefix = string.IsNullOrEmpty(ViewData.TemplateInfo.HtmlFieldPrefix)
         ? ""
         : ViewData.TemplateInfo.HtmlFieldPrefix + ".";
 }
-<div class="row g-3">
-    <div class="col-md-6">
-        <label class="form-label">Customers <span class="text-muted">(optional)</span></label>
-        <select asp-for="CustomerIds" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)" multiple size="5"></select>
-        <span asp-validation-for="CustomerIds" class="text-danger"></span>
-        <div class="form-text">Hold Ctrl/Cmd to select multiple customers. Leave empty for a stock product with no customer affiliation.</div>
-    </div>
-    <div class="col-md-6">
-        <label asp-for="PrimaryCustomerId" class="form-label">Primary customer <span class="text-muted">(optional)</span></label>
-        <select asp-for="PrimaryCustomerId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)">
-            <option value="">— No customer (stock product) —</option>
-        </select>
-        <span asp-validation-for="PrimaryCustomerId" class="text-danger"></span>
-        <div class="form-text">Used for the internal SKU prefix (e.g. ACME-0001). Stock products use the STK prefix.</div>
-    </div>
-    <div class="col-md-4">
-        <label asp-for="CustomerSku" class="form-label">Customer SKU</label>
-        <input asp-for="CustomerSku" class="form-control" />
-        <span asp-validation-for="CustomerSku" class="text-danger"></span>
-    </div>
-    <div class="col-md-8">
-        <label asp-for="Description" class="form-label">Description</label>
-        <input asp-for="Description" class="form-control" />
-        <span asp-validation-for="Description" class="text-danger"></span>
-    </div>
-    <div class="col-md-3">
-        <label asp-for="LabelAcrossIn" class="form-label">Across (in)</label>
-        <input asp-for="LabelAcrossIn" class="form-control" />
-        <span asp-validation-for="LabelAcrossIn" class="text-danger"></span>
-    </div>
-    <div class="col-md-3">
-        <label asp-for="LabelAroundIn" class="form-label">Around (in)</label>
-        <input asp-for="LabelAroundIn" class="form-control" />
-        <span asp-validation-for="LabelAroundIn" class="text-danger"></span>
-    </div>
-    <div class="col-md-3">
-        <label asp-for="CornerRadiusIn" class="form-label">Corner radius</label>
-        <input asp-for="CornerRadiusIn" class="form-control" />
-        <span asp-validation-for="CornerRadiusIn" class="text-danger"></span>
-    </div>
-    <div class="col-md-3">
-        <label asp-for="SubstrateId" class="form-label">Substrate</label>
-        <select asp-for="SubstrateId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Substrates"]!)">
-            <option value="">— Select substrate —</option>
-        </select>
-        <span asp-validation-for="SubstrateId" class="text-danger"></span>
-    </div>
-    <div class="col-md-3">
-        <label asp-for="InkSet" class="form-label">Ink set</label>
-        <select asp-for="InkSet" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.InkSet>()"></select>
-    </div>
-    <div class="col-md-3">
-        <label asp-for="DieId" class="form-label">Die</label>
-        <select asp-for="DieId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Dies"]!)"><option value="">None</option></select>
-    </div>
-    <input type="hidden" asp-for="ArtworkFilePath" />
-    <div class="col-12">
-        <hr />
-        <h2 class="h5">Finishing operations</h2>
-        <p class="text-muted small mb-2">Added operations are auto-populated when this product is pulled into an estimate.</p>
-        <script type="application/json" id="finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString() })))</script>
-        <div id="product-finishing" data-prefix="@finishingPrefix">
-            <div class="finishing-builder row g-2 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label small mb-1">Category</label>
-                    <select class="form-select finishing-category-select">
-                        <option value="">Select category</option>
-                        @foreach (var cat in finishingOps.Select(o => o.OperationType).Distinct())
-                        {
-                            <option value="@cat">@cat</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-5">
-                    <label class="form-label small mb-1">Operation</label>
-                    <select class="form-select finishing-operation-select" disabled>
-                        <option value="">Select operation</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <button type="button" class="btn btn-outline-primary finishing-add w-100" disabled>Add operation</button>
+<input type="hidden" asp-for="ArtworkFilePath" />
+<div class="row g-2">
+    <div class="col-lg-8">
+        <div class="card mb-2">
+            <div class="card-header py-1 small fw-semibold">Product</div>
+            <div class="card-body py-2">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small mb-0">Customers <span class="text-muted">(optional)</span></label>
+                        <div class="border rounded px-2 py-1 overflow-auto bg-body" style="max-height: 10rem;">
+                            @foreach (var customer in (IEnumerable<SelectListItem>)ViewData["Customers"]!)
+                            {
+                                var customerChecked = Guid.TryParse(customer.Value, out var customerId) && Model!.CustomerIds?.Contains(customerId) == true;
+                                <div class="form-check mb-0">
+                                    <input type="checkbox" class="form-check-input" name="@(fieldPrefix)CustomerIds"
+                                           value="@customer.Value" id="product-customer-@customer.Value" checked="@customerChecked" />
+                                    <label class="form-check-label small" for="product-customer-@customer.Value">@customer.Text</label>
+                                </div>
+                            }
+                        </div>
+                        <span asp-validation-for="CustomerIds" class="text-danger small"></span>
+                        <div class="form-text">Leave empty for a stock product with no customer affiliation.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="PrimaryCustomerId" class="form-label small mb-0">Primary customer <span class="text-muted">(optional)</span></label>
+                        <select asp-for="PrimaryCustomerId" class="form-select form-select-sm" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)">
+                            <option value="">— No customer (stock product) —</option>
+                        </select>
+                        <span asp-validation-for="PrimaryCustomerId" class="text-danger small"></span>
+                        <div class="form-text">Used for the internal SKU prefix (e.g. ACME-0001). Stock products use the STK prefix.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="CustomerSku" class="form-label small mb-0">Customer SKU</label>
+                        <input asp-for="CustomerSku" class="form-control form-control-sm" />
+                        <span asp-validation-for="CustomerSku" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-8">
+                        <label asp-for="Description" class="form-label small mb-0">Description</label>
+                        <input asp-for="Description" class="form-control form-control-sm" />
+                        <span asp-validation-for="Description" class="text-danger small"></span>
+                    </div>
                 </div>
             </div>
-            <div class="finishing-selected mt-2">
-                @for (var j = 0; j < Model.FinishingOperations.Count; j++)
-                {
-                    var sel = Model.FinishingOperations[j];
-                    var op = finishingOps.FirstOrDefault(o => o.Id == sel.OperationId);
-                    <div class="finishing-item border rounded p-2 mb-2" data-op-id="@sel.OperationId">
-                        <div class="d-flex flex-wrap gap-2 align-items-end">
-                            <div class="flex-grow-1">
-                                <div class="fw-semibold">@(op is null ? sel.OperationId.ToString() : $"{op.Code} — {op.Description}")</div>
-                                @if (op is not null)
+        </div>
+
+        <div class="card mb-2">
+            <div class="card-header py-1 small fw-semibold">Label spec</div>
+            <div class="card-body py-2">
+                <div class="row g-2">
+                    <div class="col-6 col-md-2">
+                        <label asp-for="LabelAcrossIn" class="form-label small mb-0">Across (in)</label>
+                        <input asp-for="LabelAcrossIn" class="form-control form-control-sm" />
+                        <span asp-validation-for="LabelAcrossIn" class="text-danger small"></span>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label asp-for="LabelAroundIn" class="form-label small mb-0">Around (in)</label>
+                        <input asp-for="LabelAroundIn" class="form-control form-control-sm" />
+                        <span asp-validation-for="LabelAroundIn" class="text-danger small"></span>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label asp-for="CornerRadiusIn" class="form-label small mb-0">Corner radius</label>
+                        <input asp-for="CornerRadiusIn" class="form-control form-control-sm" />
+                        <span asp-validation-for="CornerRadiusIn" class="text-danger small"></span>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label asp-for="InkSet" class="form-label small mb-0">Ink set</label>
+                        <select asp-for="InkSet" class="form-select form-select-sm" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.InkSet>()"></select>
+                    </div>
+                    <div class="col-md-3">
+                        <label asp-for="DieId" class="form-label small mb-0">Die</label>
+                        <select asp-for="DieId" class="form-select form-select-sm" asp-items="@((IEnumerable<SelectListItem>)ViewData["Dies"]!)"><option value="">None</option></select>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="SubstrateId" class="form-label small mb-0">Substrate</label>
+                        <select asp-for="SubstrateId" class="form-select form-select-sm" asp-items="@((IEnumerable<SelectListItem>)ViewData["Substrates"]!)">
+                            <option value="">— Select substrate —</option>
+                        </select>
+                        <span asp-validation-for="SubstrateId" class="text-danger small"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-2">
+            <div class="card-header py-1 small fw-semibold">Finishing operations</div>
+            <div class="card-body py-2">
+                <p class="text-muted small mb-2">Added operations are auto-populated when this product is pulled into an estimate.</p>
+                <script type="application/json" id="finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString(), dieId = o.DieId, setupMinutes = o.DefaultSetupMinutes, runSpeedFpm = o.DefaultRunSpeedFpm })))</script>
+                <div id="product-finishing" data-prefix="@fieldPrefix">
+                    <div class="finishing-builder row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label small mb-0">Category</label>
+                            <select class="form-select form-select-sm finishing-category-select">
+                                <option value="">Select category</option>
+                                @foreach (var cat in finishingOps.Select(o => o.OperationType).Distinct())
                                 {
-                                    <span class="text-muted small">@op.OperationType</span>
+                                    <option value="@cat">@cat</option>
                                 }
-                                <input type="hidden" name="@(finishingPrefix)FinishingOperations[@j].OperationId" value="@sel.OperationId" class="finishing-op-id" />
-                                <input type="hidden" name="@(finishingPrefix)FinishingOperations[@j].SortOrder" value="@j" class="finishing-sort" />
-                                <input type="hidden" name="@(finishingPrefix)FinishingOperations[@j].StockId" value="@(sel.StockId?.ToString() ?? "")" />
-                            </div>
-                            <div>
-                                <label class="form-label small mb-0">Setup min override</label>
-                                <input name="@(finishingPrefix)FinishingOperations[@j].SetupMinutesOverride" value="@(sel.SetupMinutesOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" class="form-control form-control-sm" style="max-width: 8rem;" />
-                            </div>
-                            <div>
-                                <label class="form-label small mb-0">Run speed fpm override</label>
-                                <input name="@(finishingPrefix)FinishingOperations[@j].RunSpeedFpmOverride" value="@(sel.RunSpeedFpmOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" class="form-control form-control-sm" style="max-width: 8rem;" />
-                            </div>
-                            <button type="button" class="btn btn-sm btn-outline-danger finishing-remove">Remove</button>
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small mb-0">Operation</label>
+                            <select class="form-select form-select-sm finishing-operation-select" disabled>
+                                <option value="">Select operation</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary finishing-add w-100" disabled>Add operation</button>
                         </div>
                     </div>
-                }
+                    <div class="finishing-selected mt-2">
+                        @for (var j = 0; j < Model.FinishingOperations.Count; j++)
+                        {
+                            var sel = Model.FinishingOperations[j];
+                            var op = finishingOps.FirstOrDefault(o => o.Id == sel.OperationId);
+                            <div class="finishing-item border rounded p-2 mb-2" data-op-id="@sel.OperationId">
+                                <input type="hidden" name="@(fieldPrefix)FinishingOperations[@j].OperationId" value="@sel.OperationId" class="finishing-op-id" />
+                                <input type="hidden" name="@(fieldPrefix)FinishingOperations[@j].SortOrder" value="@j" class="finishing-sort" />
+                                <input type="hidden" name="@(fieldPrefix)FinishingOperations[@j].StockId" value="@(sel.StockId?.ToString() ?? "")" />
+                                <input type="hidden" name="@(fieldPrefix)FinishingOperations[@j].DieId" value="@(sel.DieId?.ToString() ?? "")" />
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <div class="text-truncate">
+                                        <span class="fw-semibold">@(op is null ? sel.OperationId.ToString() : $"{op.Code} — {op.Description}")</span>
+                                        @if (op is not null)
+                                        {
+                                            <span class="badge text-bg-secondary ms-1">@op.OperationType</span>
+                                        }
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 finishing-remove">Remove</button>
+                                </div>
+                                <div class="row g-2 mt-0">
+                                    <div class="col-6 col-md-3">
+                                        <label class="form-label small mb-0">Setup (min)</label>
+                                        <input name="@(fieldPrefix)FinishingOperations[@j].SetupMinutesOverride" value="@(sel.SetupMinutesOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" placeholder="@op?.DefaultSetupMinutes.ToString("0.##")" class="form-control form-control-sm" />
+                                    </div>
+                                    <div class="col-6 col-md-3">
+                                        <label class="form-label small mb-0">Speed (fpm)</label>
+                                        <input name="@(fieldPrefix)FinishingOperations[@j].RunSpeedFpmOverride" value="@(sel.RunSpeedFpmOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" placeholder="@op?.DefaultRunSpeedFpm.ToString("0.##")" class="form-control form-control-sm" />
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-12"><hr /><h2 class="h5">Roll spec</h2></div>
-    <div class="col-md-2"><label asp-for="LabelsPerRoll" class="form-label">Labels/roll</label><input asp-for="LabelsPerRoll" class="form-control" /></div>
-    <div class="col-md-2"><label asp-for="CoreSizeIn" class="form-label">Core (in)</label><input asp-for="CoreSizeIn" class="form-control" /></div>
-    <div class="col-md-2"><label asp-for="UnwindPosition" class="form-label">Unwind</label><input asp-for="UnwindPosition" class="form-control" /></div>
-    <div class="col-md-2"><label asp-for="MaxOdIn" class="form-label">Max OD</label><input asp-for="MaxOdIn" class="form-control" /></div>
-    <div class="col-md-2"><label asp-for="RollsPerCase" class="form-label">Rolls/case</label><input asp-for="RollsPerCase" class="form-control" /></div>
-    <div class="col-md-4"><label asp-for="CaseLabelFormat" class="form-label">Case label format</label><input asp-for="CaseLabelFormat" class="form-control" /></div>
+
+    <div class="col-lg-4">
+        <div class="card mb-2">
+            <div class="card-header py-1 small fw-semibold">Roll spec</div>
+            <div class="card-body py-2">
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label asp-for="LabelsPerRoll" class="form-label small mb-0">Labels/roll</label>
+                        <input asp-for="LabelsPerRoll" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-6">
+                        <label asp-for="CoreSizeIn" class="form-label small mb-0">Core (in)</label>
+                        <input asp-for="CoreSizeIn" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-6">
+                        <label asp-for="UnwindPosition" class="form-label small mb-0">Unwind</label>
+                        <input asp-for="UnwindPosition" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-6">
+                        <label asp-for="MaxOdIn" class="form-label small mb-0">Max OD</label>
+                        <input asp-for="MaxOdIn" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-6">
+                        <label asp-for="RollsPerCase" class="form-label small mb-0">Rolls/case</label>
+                        <input asp-for="RollsPerCase" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-12">
+                        <label asp-for="CaseLabelFormat" class="form-label small mb-0">Case label format</label>
+                        <input asp-for="CaseLabelFormat" class="form-control form-control-sm" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (ViewData["ArtworkProductId"] is Guid artworkProductId)
+        {
+            var canEditArtwork = ViewData["CanEditArtwork"] as bool? ?? false;
+            <div class="card mb-2">
+                <div class="card-header py-1 small fw-semibold">Artwork</div>
+                <div class="card-body py-2">
+                    @if (!string.IsNullOrWhiteSpace(Model.ArtworkFilePath))
+                    {
+                        var fileName = System.IO.Path.GetFileName(Model.ArtworkFilePath);
+                        var ext = System.IO.Path.GetExtension(Model.ArtworkFilePath)!.ToLowerInvariant();
+                        var inlineUrl = Url.Page("/Artwork/Download", new { productId = artworkProductId, inline = true });
+                        <p class="small mb-2">
+                            Current file:
+                            <a asp-page="/Artwork/Download" asp-route-productId="@artworkProductId" target="_blank">@fileName</a>
+                        </p>
+                        @if (ext is ".png" or ".jpg" or ".jpeg")
+                        {
+                            <img src="@inlineUrl" alt="Artwork preview" class="img-fluid border rounded mb-2" style="max-height: 260px;" />
+                        }
+                        else if (ext == ".pdf")
+                        {
+                            <embed src="@inlineUrl" type="application/pdf" class="w-100 border rounded mb-2" style="height: 320px;" />
+                        }
+                        else
+                        {
+                            <p class="text-muted small">No inline preview for @ext files — download to view.</p>
+                        }
+                    }
+                    else
+                    {
+                        <p class="text-muted small mb-2">No artwork uploaded yet.</p>
+                    }
+
+                    @if (canEditArtwork)
+                    {
+                        @* The upload posts through its own form (declared outside the product form
+                           on the page) via the form attribute, since forms cannot nest. *@
+                        <label for="ArtworkFile" class="form-label small mb-0">Upload @(string.IsNullOrWhiteSpace(Model.ArtworkFilePath) ? "" : "new ")artwork</label>
+                        <input type="file" id="ArtworkFile" name="ArtworkFile" form="artwork-upload-form" class="form-control form-control-sm" accept=".pdf,.ai,.eps,.png,.jpg,.jpeg,.tif,.tiff" />
+                        <button type="submit" form="artwork-upload-form" class="btn btn-sm btn-outline-primary w-100 mt-1">Upload</button>
+                        <div class="form-text">Allowed: PDF, AI, EPS, PNG, JPG, TIFF. Replaces the current file.</div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
 </div>
 
 <script>
@@ -167,23 +272,28 @@
         const item = document.createElement('div');
         item.className = 'finishing-item border rounded p-2 mb-2';
         item.dataset.opId = op.id;
+        // Die-cut operations carry their configured die so it flows into estimates.
+        const dieId = op.category === 'DieCut' && op.dieId ? String(op.dieId) : '';
         item.innerHTML = `
-            <div class="d-flex flex-wrap gap-2 align-items-end">
-                <div class="flex-grow-1">
-                    <div class="fw-semibold">${esc(op.code)} — ${esc(op.description)}</div>
-                    <span class="text-muted small">${esc(op.category)}</span>
-                    <input type="hidden" name="${prefix}FinishingOperations[0].OperationId" value="${esc(op.id)}" class="finishing-op-id" />
-                    <input type="hidden" name="${prefix}FinishingOperations[0].SortOrder" value="0" class="finishing-sort" />
+            <input type="hidden" name="${prefix}FinishingOperations[0].OperationId" value="${esc(op.id)}" class="finishing-op-id" />
+            <input type="hidden" name="${prefix}FinishingOperations[0].SortOrder" value="0" class="finishing-sort" />
+            <input type="hidden" name="${prefix}FinishingOperations[0].DieId" value="${esc(dieId)}" />
+            <div class="d-flex justify-content-between align-items-center gap-2">
+                <div class="text-truncate">
+                    <span class="fw-semibold">${esc(op.code)} — ${esc(op.description)}</span>
+                    <span class="badge text-bg-secondary ms-1">${esc(op.category)}</span>
                 </div>
-                <div>
-                    <label class="form-label small mb-0">Setup min override</label>
-                    <input name="${prefix}FinishingOperations[0].SetupMinutesOverride" class="form-control form-control-sm" style="max-width: 8rem;" />
+                <button type="button" class="btn btn-sm btn-link text-danger p-0 finishing-remove">Remove</button>
+            </div>
+            <div class="row g-2 mt-0">
+                <div class="col-6 col-md-3">
+                    <label class="form-label small mb-0">Setup (min)</label>
+                    <input name="${prefix}FinishingOperations[0].SetupMinutesOverride" placeholder="${op.setupMinutes ?? ''}" class="form-control form-control-sm" />
                 </div>
-                <div>
-                    <label class="form-label small mb-0">Run speed fpm override</label>
-                    <input name="${prefix}FinishingOperations[0].RunSpeedFpmOverride" class="form-control form-control-sm" style="max-width: 8rem;" />
+                <div class="col-6 col-md-3">
+                    <label class="form-label small mb-0">Speed (fpm)</label>
+                    <input name="${prefix}FinishingOperations[0].RunSpeedFpmOverride" placeholder="${op.runSpeedFpm ?? ''}" class="form-control form-control-sm" />
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-danger finishing-remove">Remove</button>
             </div>`;
         list.appendChild(item);
         renumber();

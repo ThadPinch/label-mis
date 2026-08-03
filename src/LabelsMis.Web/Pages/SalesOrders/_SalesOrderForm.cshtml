@@ -1,3 +1,4 @@
+@using LabelsMis.Domain.Entities
 @using LabelsMis.Domain.Enums
 @using LabelsMis.Web.Services.Shipping
 @using LabelsMis.Web.Pages.SalesOrders
@@ -7,11 +8,16 @@
     var products = (IEnumerable<SelectListItem>?)ViewData["Products"] ?? Enumerable.Empty<SelectListItem>();
     var shippingMethods = (IReadOnlyList<ShippingMethodListItem>?)ViewData["ShippingMethods"] ?? Array.Empty<ShippingMethodListItem>();
     var substrates = (IEnumerable<SelectListItem>?)ViewData["Substrates"] ?? Enumerable.Empty<SelectListItem>();
-    var dies = (IEnumerable<SelectListItem>?)ViewData["Dies"] ?? Enumerable.Empty<SelectListItem>();
+    var dies = (IReadOnlyList<Die>?)ViewData["Dies"] ?? Array.Empty<Die>();
     var spotInks = ((IEnumerable<SelectListItem>?)ViewData["SpotInks"] ?? Enumerable.Empty<SelectListItem>()).ToList();
-    var finishingOps = ((IEnumerable<SelectListItem>?)ViewData["FinishingOperations"] ?? Enumerable.Empty<SelectListItem>()).ToList();
+    var finishingOps = ((IReadOnlyList<FinishingOperation>?)ViewData["FinishingOperations"] ?? Array.Empty<FinishingOperation>()).ToList();
     var finishingStocks = ((IEnumerable<SelectListItem>?)ViewData["FinishingStocks"] ?? Enumerable.Empty<SelectListItem>()).ToList();
+    var shrinkStocks = (IReadOnlyDictionary<Guid, decimal?>?)ViewData["ShrinkStocks"] ?? new Dictionary<Guid, decimal?>();
 }
+<script type="application/json" id="shrink-stocks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(shrinkStocks))</script>
+<script type="application/json" id="so-finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString(), dieId = o.DieId, setupMinutes = o.DefaultSetupMinutes, runSpeedFpm = o.DefaultRunSpeedFpm })))</script>
+<script type="application/json" id="so-dies-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(dies.Select(d => new { id = d.Id, description = d.Description, setupRating = d.SetupRating, speedRating = d.SpeedRating })))</script>
+<script type="application/json" id="so-finishing-stocks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingStocks.Select(s => new { id = s.Value, label = s.Text })))</script>
 
 <div class="row g-2">
     <div class="col-lg-6">
@@ -36,6 +42,11 @@
                     <div class="col-12">
                         <label asp-for="Notes" class="form-label small mb-0">Notes</label>
                         <textarea asp-for="Notes" class="form-control form-control-sm" rows="3" readonly="@isLocked"></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label asp-for="BillingNotes" class="form-label small mb-0">Billing notes</label>
+                        <textarea asp-for="BillingNotes" class="form-control form-control-sm" rows="2" readonly="@isLocked"></textarea>
+                        <div class="form-text">Internal — shows on the invoice page.</div>
                     </div>
                 </div>
             </div>
@@ -213,6 +224,10 @@
             {
                 chips.Add($"Unwind #{(int)unwindChip}");
             }
+            if (line.ShrinkLayflatIn is { } layflatChip)
+            {
+                chips.Add($"Layflat {layflatChip:0.####}″");
+            }
             chips.Add(line.Finishing.Count == 0
                 ? "No finishing"
                 : $"{line.Finishing.Count} finishing op{(line.Finishing.Count == 1 ? "" : "s")}");
@@ -265,7 +280,7 @@
                         <div class="row g-2">
                             <div class="col-md-4">
                                 <label class="form-label small mb-0">Substrate</label>
-                                <select name="Input.Lines[@i].SubstrateId" class="form-select form-select-sm" disabled="@isLocked">
+                                <select name="Input.Lines[@i].SubstrateId" class="form-select form-select-sm spec-substrate-select" disabled="@isLocked">
                                     <option value="">Select substrate</option>
                                     @foreach (var s in substrates)
                                     {
@@ -279,9 +294,13 @@
                                     <option value="">No die assigned</option>
                                     @foreach (var d in dies)
                                     {
-                                        <option value="@d.Value" selected="@(d.Value == line.DieId?.ToString())">@d.Text</option>
+                                        <option value="@d.Id" selected="@(d.Id == line.DieId)">@d.Description</option>
                                     }
                                 </select>
+                            </div>
+                            <div class="col-md-4 shrink-layflat-group @(line.SubstrateId is { } specShrinkSub && shrinkStocks.ContainsKey(specShrinkSub) ? "" : "d-none")">
+                                <label class="form-label small mb-0">Shrink layflat (in)</label>
+                                <input name="Input.Lines[@i].ShrinkLayflatIn" value="@(line.ShrinkLayflatIn?.ToString("0.0000", System.Globalization.CultureInfo.InvariantCulture))" class="form-control form-control-sm shrink-layflat-input" readonly="@isLocked" />
                             </div>
                         </div>
                     </div>
@@ -298,7 +317,7 @@
                                     }
                                 </select>
                             </div>
-                            <div class="col-6 col-md-1 white-ink-group @(line.InkSet is InkSet.CMYKW or InkSet.CMYKW_PlusSpot ? "" : "d-none")">
+                            <div class="col-6 col-md-1 white-ink-group @(line.InkSet is InkSet.CMYKW or InkSet.CMYKW_PlusSpot or InkSet.EPMW ? "" : "d-none")">
                                 <label class="form-label small mb-0">White hits</label>
                                 <select name="Input.Lines[@i].WhiteHits" class="form-select form-select-sm" disabled="@isLocked">
                                     @for (var h = 0; h <= 3; h++)
@@ -307,7 +326,7 @@
                                     }
                                 </select>
                             </div>
-                            <div class="col-6 col-md-1 white-ink-group @(line.InkSet is InkSet.CMYKW or InkSet.CMYKW_PlusSpot ? "" : "d-none")">
+                            <div class="col-6 col-md-1 white-ink-group @(line.InkSet is InkSet.CMYKW or InkSet.CMYKW_PlusSpot or InkSet.EPMW ? "" : "d-none")">
                                 <label class="form-label small mb-0">White %</label>
                                 <input name="Input.Lines[@i].WhiteCoveragePct" value="@(line.WhiteCoveragePct?.ToString("0"))" class="form-control form-control-sm" readonly="@isLocked" />
                             </div>
@@ -362,39 +381,101 @@
 
                     <div class="spec-section">
                         <div class="spec-section-title">Finishing</div>
-                        <div class="row g-2">
-                            <div class="col-12">
-                                <div class="row g-1">
-                                    @for (var j = 0; j < finishingOps.Count; j++)
-                                    {
-                                        var op = finishingOps[j];
-                                        var selection = line.Finishing.FirstOrDefault(f => f.OperationId.ToString() == op.Value);
-                                        <div class="col-md-6">
-                                            <div class="d-flex align-items-center gap-2 border rounded px-2 py-1">
-                                                <input type="hidden" name="Input.Lines[@i].Finishing[@j].OperationId" value="@op.Value" />
-                                                <input type="hidden" name="Input.Lines[@i].Finishing[@j].SetupMinutesOverride" value="@(selection?.SetupMinutesOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" />
-                                                <input type="hidden" name="Input.Lines[@i].Finishing[@j].RunSpeedFpmOverride" value="@(selection?.RunSpeedFpmOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" />
-                                                <div class="form-check mb-0 flex-grow-1">
-                                                    <input type="checkbox" class="form-check-input" id="fin-@i-@j" name="Input.Lines[@i].Finishing[@j].Include" value="true"
-                                                           checked="@(selection is not null)" disabled="@isLocked" />
-                                                    <label class="form-check-label small" for="fin-@i-@j">@op.Text</label>
-                                                </div>
-                                                @if (finishingStocks.Count > 0)
-                                                {
-                                                    <select name="Input.Lines[@i].Finishing[@j].StockId" class="form-select form-select-sm" style="max-width: 12rem;" disabled="@isLocked">
-                                                        <option value="">Material —</option>
-                                                        @foreach (var stock in finishingStocks)
-                                                        {
-                                                            <option value="@stock.Value" selected="@(stock.Value == selection?.StockId?.ToString())">@stock.Text</option>
-                                                        }
-                                                    </select>
-                                                }
-                                            </div>
-                                        </div>
-                                    }
+                        @if (!isLocked)
+                        {
+                            <div class="finishing-builder row g-2 align-items-end">
+                                <div class="col-md-4">
+                                    <label class="form-label small mb-0">Category</label>
+                                    <select class="form-select form-select-sm so-finishing-category">
+                                        <option value="">Select category</option>
+                                        @foreach (var cat in finishingOps.Select(o => o.OperationType).Distinct())
+                                        {
+                                            <option value="@cat">@cat</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label small mb-0">Operation</label>
+                                    <select class="form-select form-select-sm so-finishing-operation" disabled>
+                                        <option value="">Select operation</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <button type="button" class="btn btn-sm btn-outline-primary so-finishing-add w-100" disabled>Add operation</button>
                                 </div>
                             </div>
-
+                        }
+                        <div class="so-finishing-selected mt-2">
+                            @for (var j = 0; j < line.Finishing.Count; j++)
+                            {
+                                var selection = line.Finishing[j];
+                                var op = finishingOps.FirstOrDefault(o => o.Id == selection.OperationId);
+                                <div class="finishing-item border rounded p-2 mb-2" data-op-id="@selection.OperationId">
+                                    <input type="hidden" name="Input.Lines[@i].Finishing[@j].OperationId" value="@selection.OperationId" />
+                                    <input type="hidden" name="Input.Lines[@i].Finishing[@j].Include" value="true" />
+                                    <div class="d-flex justify-content-between align-items-center gap-2">
+                                        <div class="text-truncate">
+                                            <span class="fw-semibold small">@(op is null ? selection.OperationId.ToString() : $"{op.Code} — {op.Description}")</span>
+                                            @if (op is not null)
+                                            {
+                                                <span class="badge text-bg-secondary ms-1">@op.OperationType</span>
+                                            }
+                                        </div>
+                                        @if (!isLocked)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-link text-danger p-0 so-finishing-remove">Remove</button>
+                                        }
+                                    </div>
+                                    <div class="row g-2 mt-0">
+                                        @if (op?.OperationType is FinishingOperationType.DieCut)
+                                        {
+                                            <div class="col-md-4">
+                                                <label class="form-label small mb-0">Die</label>
+                                                <select name="Input.Lines[@i].Finishing[@j].DieId" class="form-select form-select-sm so-finishing-die" disabled="@isLocked">
+                                                    <option value="">No die</option>
+                                                    @foreach (var d in dies)
+                                                    {
+                                                        <option value="@d.Id" selected="@(d.Id == selection.DieId)">@d.Description</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <input type="hidden" name="Input.Lines[@i].Finishing[@j].DieId" value="@(selection.DieId?.ToString())" />
+                                        }
+                                        <div class="col-6 col-md-3">
+                                            <label class="form-label small mb-0">Setup (min)</label>
+                                            <input name="Input.Lines[@i].Finishing[@j].SetupMinutesOverride" value="@(selection.SetupMinutesOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" placeholder="@op?.DefaultSetupMinutes.ToString("0.##")" class="form-control form-control-sm" readonly="@isLocked" />
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <label class="form-label small mb-0">Speed (fpm)</label>
+                                            <input name="Input.Lines[@i].Finishing[@j].RunSpeedFpmOverride" value="@(selection.RunSpeedFpmOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" placeholder="@op?.DefaultRunSpeedFpm.ToString("0.##")" class="form-control form-control-sm" readonly="@isLocked" />
+                                        </div>
+                                        @if (op?.OperationType is FinishingOperationType.Laminate or FinishingOperationType.Foil)
+                                        {
+                                            <div class="col-md-4">
+                                                <label class="form-label small mb-0">Material stock</label>
+                                                <select name="Input.Lines[@i].Finishing[@j].StockId" class="form-select form-select-sm" disabled="@isLocked">
+                                                    <option value="">Select stock</option>
+                                                    @foreach (var stock in finishingStocks)
+                                                    {
+                                                        <option value="@stock.Value" selected="@(stock.Value == selection.StockId?.ToString())">@stock.Text</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <input type="hidden" name="Input.Lines[@i].Finishing[@j].StockId" value="@(selection.StockId?.ToString())" />
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            @if (line.Finishing.Count == 0)
+                            {
+                                <div class="text-muted small so-finishing-empty">No finishing operations.</div>
+                            }
                         </div>
                     </div>
 
@@ -443,6 +524,143 @@
             </div>
         }
     </div>
+}
+
+@if (!isLocked || Model.Charges.Count > 0)
+{
+    <h2 class="h6 mt-3 mb-1">Additional charges</h2>
+    <div class="card mb-2">
+        <div class="card-body py-2">
+            @if (!isLocked)
+            {
+                <div class="form-text mb-2">One-time, non-label charges (die creation, design time). Billed on the invoice and shown on the job ticket — never scheduled as production jobs.</div>
+            }
+            <div id="order-charges">
+                @for (var c = 0; c < Model.Charges.Count; c++)
+                {
+                    var charge = Model.Charges[c];
+                    <div class="row g-2 align-items-end mb-2 order-charge-row">
+                        @if (charge.Id.HasValue)
+                        {
+                            <input type="hidden" name="Input.Charges[@c].Id" value="@charge.Id" />
+                        }
+                        @if (charge.SourceEstimateChargeId.HasValue)
+                        {
+                            <input type="hidden" name="Input.Charges[@c].SourceEstimateChargeId" value="@charge.SourceEstimateChargeId" />
+                        }
+                        <div class="col-md-6">
+                            <label class="form-label small mb-0">Description</label>
+                            <input name="Input.Charges[@c].Description" value="@charge.Description" list="order-charge-presets"
+                                   class="form-control form-control-sm order-charge-desc" readonly="@isLocked" />
+                        </div>
+                        <div class="col-4 col-md-2">
+                            <label class="form-label small mb-0">Qty</label>
+                            <input name="Input.Charges[@c].Quantity" value="@charge.Quantity" class="form-control form-control-sm order-charge-qty" readonly="@isLocked" />
+                        </div>
+                        <div class="col-4 col-md-2">
+                            <label class="form-label small mb-0">Unit price</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input name="Input.Charges[@c].UnitPrice" value="@charge.UnitPrice.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" class="form-control order-charge-price" readonly="@isLocked" />
+                            </div>
+                        </div>
+                        <div class="col-4 col-md-2 d-flex align-items-center justify-content-between gap-2 pb-1">
+                            <span class="small fw-semibold order-charge-total">@((charge.UnitPrice * charge.Quantity).ToString("C2"))</span>
+                            @if (!isLocked)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-danger order-charge-remove" aria-label="Remove charge">×</button>
+                            }
+                        </div>
+                    </div>
+                }
+                @if (isLocked && Model.Charges.Count == 0)
+                {
+                    <div class="text-muted small">No charges.</div>
+                }
+            </div>
+            @if (!isLocked)
+            {
+                <button type="button" id="add-order-charge" class="btn btn-sm btn-outline-secondary">+ Add charge</button>
+                <datalist id="order-charge-presets">
+                    <option value="Die charge"></option>
+                    <option value="Design charge"></option>
+                    <option value="Plate charge"></option>
+                    <option value="Setup charge"></option>
+                </datalist>
+            }
+        </div>
+    </div>
+
+    @if (!isLocked)
+    {
+        <script type="text/template" id="order-charge-row-template">
+            <div class="row g-2 align-items-end mb-2 order-charge-row">
+                <div class="col-md-6">
+                    <label class="form-label small mb-0">Description</label>
+                    <input name="Input.Charges[__CHARGE__].Description" list="order-charge-presets" class="form-control form-control-sm order-charge-desc" />
+                </div>
+                <div class="col-4 col-md-2">
+                    <label class="form-label small mb-0">Qty</label>
+                    <input name="Input.Charges[__CHARGE__].Quantity" value="1" class="form-control form-control-sm order-charge-qty" />
+                </div>
+                <div class="col-4 col-md-2">
+                    <label class="form-label small mb-0">Unit price</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">$</span>
+                        <input name="Input.Charges[__CHARGE__].UnitPrice" value="" class="form-control order-charge-price" />
+                    </div>
+                </div>
+                <div class="col-4 col-md-2 d-flex align-items-center justify-content-between gap-2 pb-1">
+                    <span class="small fw-semibold order-charge-total">—</span>
+                    <button type="button" class="btn btn-sm btn-outline-danger order-charge-remove" aria-label="Remove charge">×</button>
+                </div>
+            </div>
+        </script>
+        <script>
+            (function () {
+                const container = document.getElementById('order-charges');
+                const addBtn = document.getElementById('add-order-charge');
+                const template = document.getElementById('order-charge-row-template');
+                if (!container || !addBtn || !template) return;
+
+                const reindex = () => {
+                    container.querySelectorAll('.order-charge-row').forEach((row, index) => {
+                        row.querySelectorAll('[name]').forEach(input => {
+                            input.name = input.name.replace(/Charges\[\d+\]|Charges\[__CHARGE__\]/, `Charges[${index}]`);
+                        });
+                    });
+                };
+
+                const updateRowTotals = () => {
+                    container.querySelectorAll('.order-charge-row').forEach(row => {
+                        const qtyRaw = Number(row.querySelector('.order-charge-qty')?.value);
+                        const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
+                        const priceRaw = Number(row.querySelector('.order-charge-price')?.value);
+                        const totalEl = row.querySelector('.order-charge-total');
+                        if (totalEl) totalEl.textContent = Number.isFinite(priceRaw)
+                            ? `$${(qty * priceRaw).toFixed(2)}`
+                            : '—';
+                    });
+                };
+
+                addBtn.addEventListener('click', () => {
+                    const holder = document.createElement('div');
+                    holder.innerHTML = template.textContent.trim();
+                    container.appendChild(holder.firstElementChild);
+                    reindex();
+                });
+
+                container.addEventListener('click', e => {
+                    if (e.target.closest('.order-charge-remove')) {
+                        e.target.closest('.order-charge-row')?.remove();
+                        reindex();
+                    }
+                });
+
+                container.addEventListener('input', updateRowTotals);
+            })();
+        </script>
+    }
 }
 
 @{
@@ -494,10 +712,169 @@
             if (!inkSetSelect) return;
             const lineEl = inkSetSelect.closest('.order-line');
             const value = inkSetSelect.options[inkSetSelect.selectedIndex]?.text ?? '';
-            const hasWhite = value.startsWith('CMYKW');
+            const hasWhite = value.startsWith('CMYKW') || value === 'EPMW';
             const hasSpot = value.includes('PlusSpot');
             lineEl.querySelectorAll('.white-ink-group').forEach(el => el.classList.toggle('d-none', !hasWhite));
             lineEl.querySelectorAll('.spot-ink-group').forEach(el => el.classList.toggle('d-none', !hasSpot));
+        });
+
+        // Shrink substrates expose the layflat input, seeded from the stock's default.
+        let SHRINK_STOCKS = {};
+        try {
+            SHRINK_STOCKS = JSON.parse(document.getElementById('shrink-stocks-data')?.textContent || '{}');
+        } catch { SHRINK_STOCKS = {}; }
+
+        document.addEventListener('change', e => {
+            const substrateSelect = e.target.closest('.spec-substrate-select');
+            if (!substrateSelect) return;
+            const body = substrateSelect.closest('.spec-body');
+            const group = body?.querySelector('.shrink-layflat-group');
+            const input = body?.querySelector('.shrink-layflat-input');
+            if (!group || !input) return;
+            const isShrink = Object.prototype.hasOwnProperty.call(SHRINK_STOCKS, substrateSelect.value);
+            group.classList.toggle('d-none', !isShrink);
+            input.value = isShrink ? (SHRINK_STOCKS[substrateSelect.value] ?? '') : '';
+        });
+
+        // Finishing builder in the line spec editor, mirroring the estimate form: pick a
+        // category and operation, add it as an editable row.
+        const parseJson = (id, fallback) => {
+            try { return JSON.parse(document.getElementById(id)?.textContent || '') ?? fallback; }
+            catch { return fallback; }
+        };
+        const SO_FINISHING_OPS = parseJson('so-finishing-ops-data', []);
+        const SO_DIES = parseJson('so-dies-data', []);
+        const SO_FINISHING_STOCKS = parseJson('so-finishing-stocks-data', []);
+        const soOpById = new Map(SO_FINISHING_OPS.map(o => [String(o.id), o]));
+        const soDieById = new Map(SO_DIES.map(d => [String(d.id), d]));
+        const soEsc = t => String(t ?? '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        function reindexFinishing(lineEl) {
+            const lineIndex = lineEl.dataset.lineIndex;
+            lineEl.querySelectorAll('.so-finishing-selected .finishing-item').forEach((item, j) => {
+                item.querySelectorAll('[name]').forEach(input => {
+                    input.name = input.name
+                        .replace(/Lines\[\d+\]|Lines\[__LINE__\]/, `Lines[${lineIndex}]`)
+                        .replace(/Finishing\[\d+\]/, `Finishing[${j}]`);
+                });
+            });
+        }
+
+        function buildSoFinishingItem(op) {
+            const dieId = op.category === 'DieCut' && op.dieId ? String(op.dieId) : '';
+            const dieBlock = op.category === 'DieCut'
+                ? `<div class="col-md-4">
+                        <label class="form-label small mb-0">Die</label>
+                        <select name="Input.Lines[0].Finishing[0].DieId" class="form-select form-select-sm so-finishing-die">
+                            <option value="">No die</option>
+                            ${SO_DIES.map(d => `<option value="${soEsc(d.id)}"${String(d.id) === dieId ? ' selected' : ''}>${soEsc(d.description)}</option>`).join('')}
+                        </select>
+                    </div>`
+                : `<input type="hidden" name="Input.Lines[0].Finishing[0].DieId" value="" />`;
+            const stockBlock = (op.category === 'Laminate' || op.category === 'Foil')
+                ? `<div class="col-md-4">
+                        <label class="form-label small mb-0">Material stock</label>
+                        <select name="Input.Lines[0].Finishing[0].StockId" class="form-select form-select-sm">
+                            <option value="">Select stock</option>
+                            ${SO_FINISHING_STOCKS.map(s => `<option value="${soEsc(s.id)}">${soEsc(s.label)}</option>`).join('')}
+                        </select>
+                    </div>`
+                : `<input type="hidden" name="Input.Lines[0].Finishing[0].StockId" value="" />`;
+            const holder = document.createElement('div');
+            holder.innerHTML = `
+                <div class="finishing-item border rounded p-2 mb-2" data-op-id="${soEsc(op.id)}">
+                    <input type="hidden" name="Input.Lines[0].Finishing[0].OperationId" value="${soEsc(op.id)}" />
+                    <input type="hidden" name="Input.Lines[0].Finishing[0].Include" value="true" />
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        <div class="text-truncate">
+                            <span class="fw-semibold small">${soEsc(op.code)} — ${soEsc(op.description)}</span>
+                            <span class="badge text-bg-secondary ms-1">${soEsc(op.category)}</span>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-link text-danger p-0 so-finishing-remove">Remove</button>
+                    </div>
+                    <div class="row g-2 mt-0">
+                        ${dieBlock}
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-0">Setup (min)</label>
+                            <input name="Input.Lines[0].Finishing[0].SetupMinutesOverride" placeholder="${op.setupMinutes ?? ''}" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-0">Speed (fpm)</label>
+                            <input name="Input.Lines[0].Finishing[0].RunSpeedFpmOverride" placeholder="${op.runSpeedFpm ?? ''}" class="form-control form-control-sm" />
+                        </div>
+                        ${stockBlock}
+                    </div>
+                </div>`;
+            return holder.firstElementChild;
+        }
+
+        const applySoDieRatings = (item) => {
+            const die = soDieById.get(item.querySelector('.so-finishing-die')?.value);
+            const setup = item.querySelector('[name$=".SetupMinutesOverride"]');
+            const speed = item.querySelector('[name$=".RunSpeedFpmOverride"]');
+            if (setup) setup.value = die?.setupRating != null ? String(die.setupRating) : '';
+            if (speed) speed.value = die?.speedRating != null ? String(die.speedRating) : '';
+        };
+
+        document.addEventListener('change', e => {
+            const categorySel = e.target.closest('.so-finishing-category');
+            if (categorySel) {
+                const builder = categorySel.closest('.finishing-builder');
+                const opSel = builder?.querySelector('.so-finishing-operation');
+                const addBtn = builder?.querySelector('.so-finishing-add');
+                if (!opSel) return;
+                opSel.innerHTML = '<option value="">Select operation</option>';
+                SO_FINISHING_OPS.filter(o => o.category === categorySel.value).forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o.id;
+                    opt.textContent = `${o.code} — ${o.description}`;
+                    opSel.appendChild(opt);
+                });
+                opSel.disabled = !categorySel.value;
+                if (addBtn) addBtn.disabled = true;
+                return;
+            }
+
+            const operationSel = e.target.closest('.so-finishing-operation');
+            if (operationSel) {
+                const addBtn = operationSel.closest('.finishing-builder')?.querySelector('.so-finishing-add');
+                if (addBtn) addBtn.disabled = !operationSel.value;
+                return;
+            }
+
+            const dieSel = e.target.closest('.so-finishing-die');
+            if (dieSel) {
+                const item = dieSel.closest('.finishing-item');
+                if (item) applySoDieRatings(item);
+            }
+        });
+
+        document.addEventListener('click', e => {
+            const addBtn = e.target.closest('.so-finishing-add');
+            if (addBtn) {
+                const lineEl = addBtn.closest('.order-line');
+                const opSel = addBtn.closest('.finishing-builder')?.querySelector('.so-finishing-operation');
+                const op = soOpById.get(opSel?.value);
+                const list = lineEl?.querySelector('.so-finishing-selected');
+                if (op && list && !list.querySelector(`.finishing-item[data-op-id="${op.id}"]`)) {
+                    list.querySelector('.so-finishing-empty')?.remove();
+                    const item = buildSoFinishingItem(op);
+                    list.appendChild(item);
+                    reindexFinishing(lineEl);
+                    if (item.querySelector('.so-finishing-die')?.value) applySoDieRatings(item);
+                }
+                if (opSel) { opSel.value = ''; }
+                addBtn.disabled = true;
+                return;
+            }
+
+            const removeBtn = e.target.closest('.so-finishing-remove');
+            if (removeBtn) {
+                const lineEl = removeBtn.closest('.order-line');
+                removeBtn.closest('.finishing-item')?.remove();
+                if (lineEl) reindexFinishing(lineEl);
+            }
         });
     })();
 </script>

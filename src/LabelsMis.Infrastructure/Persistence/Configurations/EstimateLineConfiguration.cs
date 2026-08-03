@@ -28,6 +28,7 @@ public class EstimateLineConfiguration : IEntityTypeConfiguration<EstimateLine>
         builder.Property(l => l.RunningWastePct).HasMoneyPrecision();
         builder.Property(l => l.LineNotes).HasMaxLength(2000);
         builder.Property(l => l.MarkupPctOverride).HasPrecision(18, 4);
+        builder.Property(l => l.ShrinkLayflatIn).HasPrecision(10, 4);
         builder.Property(l => l.MaxLabelsAcrossOverride);
         builder.Property(l => l.LabelOrientationOverride);
 

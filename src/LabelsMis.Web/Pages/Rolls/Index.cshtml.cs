@@ -19,6 +19,7 @@ public class IndexModel(RollService rollService, LabelsMisDbContext db) : PageMo
     [BindProperty(SupportsGet = true)] public StockType? StockType { get; set; }
     [BindProperty(SupportsGet = true)] public string? Location { get; set; }
     [BindProperty(SupportsGet = true)] public string? LotNumber { get; set; }
+    [BindProperty(SupportsGet = true)] public string? Sort { get; set; }
     [BindProperty(SupportsGet = true, Name = "pageNumber")] public int PageNumber { get; set; } = 1;
 
     public Services.Models.PagedResult<RollListItem> Result { get; private set; } = null!;
@@ -26,7 +27,7 @@ public class IndexModel(RollService rollService, LabelsMisDbContext db) : PageMo
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
-        Result = await rollService.ListAsync(Search, StockId, Status, Location, LotNumber, StockType, null, PageNumber, 25, cancellationToken);
+        Result = await rollService.ListAsync(Search, StockId, Status, Location, LotNumber, StockType, Sort, PageNumber, 25, cancellationToken);
         ViewData["StockOptions"] = await db.Stocks.AsNoTracking().Where(s => s.IsActive).OrderBy(s => s.Code)
             .Select(s => new SelectListItem($"{s.Code} — {s.Description}", s.Id.ToString())).ToListAsync(cancellationToken);
     }

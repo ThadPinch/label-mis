@@ -38,6 +38,7 @@ internal static class EntityConfigurationExtensions
             spec.Property(s => s.MaxLabelsAcrossOverride).HasColumnName("SpecMaxLabelsAcrossOverride");
             spec.Property(s => s.LabelOrientationOverride).HasColumnName("SpecLabelOrientationOverride");
             spec.Property(s => s.ArtworkFilePath).HasColumnName("SpecArtworkFilePath").HasMaxLength(500);
+            spec.Property(s => s.ShrinkLayflatIn).HasPrecision(10, 4);
         });
     }
 

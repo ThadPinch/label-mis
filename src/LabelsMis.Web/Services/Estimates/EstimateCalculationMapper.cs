@@ -19,7 +19,8 @@ public record FinishingOperationSelectionInput(
     decimal? SetupMinutesOverride,
     decimal? RunSpeedFpmOverride,
     int SortOrder,
-    Guid? StockId = null);
+    Guid? StockId = null,
+    Guid? DieId = null);
 
 public record SpotSelectionInput(
     Guid InkId,
@@ -51,7 +52,15 @@ public record EstimateLineFormInput(
     int? MaxLabelsAcrossOverride,
     LabelOrientation? LabelOrientationOverride,
     IReadOnlyDictionary<int, decimal>? QuantityMarkupOverrides = null,
-    UnwindDirection? Unwind = null);
+    UnwindDirection? Unwind = null,
+    decimal? ShrinkLayflatIn = null);
+
+/// <summary>A flat, non-label charge (die creation, design time) quoted alongside the label lines.</summary>
+public record EstimateChargeFormInput(
+    Guid? Id,
+    string Description,
+    int Quantity,
+    decimal UnitPrice);
 
 public record EstimateFormInput(
     Guid CustomerId,
@@ -61,7 +70,9 @@ public record EstimateFormInput(
     IReadOnlyList<EstimateLineFormInput> Lines,
     Guid? ShippingMethodId,
     decimal ShippingCost,
-    ShippingAddress ShippingAddress);
+    ShippingAddress ShippingAddress,
+    string? BillingNotes = null,
+    IReadOnlyList<EstimateChargeFormInput>? Charges = null);
 
 public record ImpositionLayoutView(
     decimal PressWebWidthIn,
@@ -129,6 +140,15 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             .Where(s => finishingStockIds.Contains(s.Id))
             .ToDictionaryAsync(s => s.Id, cancellationToken);
 
+        var finishingDieIds = line.FinishingOperations
+            .Where(o => o.DieId is { } did && did != Guid.Empty)
+            .Select(o => o.DieId!.Value)
+            .Distinct()
+            .ToList();
+        var finishingDies = await db.Dies.AsNoTracking()
+            .Where(d => finishingDieIds.Contains(d.Id))
+            .ToDictionaryAsync(d => d.Id, cancellationToken);
+
         var finishingRequests = line.FinishingOperations
             .OrderBy(o => o.SortOrder)
             .Select(selection =>
@@ -143,10 +163,18 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
                     finishingStocks.TryGetValue(stockId, out material);
                 }
 
+                // A die assigned to the operation takes priority over the operation's own
+                // defaults; an explicit per-line override still wins over both.
+                Die? die = null;
+                if (selection.DieId is { } dieId)
+                {
+                    finishingDies.TryGetValue(dieId, out die);
+                }
+
                 return new FinishingOperationRequest(
                     op.Id,
-                    selection.SetupMinutesOverride ?? op.DefaultSetupMinutes,
-                    selection.RunSpeedFpmOverride ?? op.DefaultRunSpeedFpm,
+                    selection.SetupMinutesOverride ?? die?.SetupRating ?? op.DefaultSetupMinutes,
+                    selection.RunSpeedFpmOverride ?? die?.SpeedRating ?? op.DefaultRunSpeedFpm,
                     op.CostPerHour,
                     op.Description,
                     material?.Id,
@@ -206,6 +234,12 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             rate = await LookupProcessClickRateAsync(InkSet.CMYK, cancellationToken);
         }
 
+        // EPMW's process separations are the EPM three, so it falls back to the EPM rate.
+        if (rate is null or 0m && inkSet is InkSet.EPMW)
+        {
+            rate = await LookupProcessClickRateAsync(InkSet.EPM, cancellationToken);
+        }
+
         return rate ?? 0m;
     }
 
@@ -226,7 +260,7 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
     {
         var specialInks = new List<SpecialInkSpec>();
 
-        var whiteAllowed = line.InkSet is InkSet.CMYKW or InkSet.CMYKW_PlusSpot;
+        var whiteAllowed = line.InkSet is InkSet.CMYKW or InkSet.CMYKW_PlusSpot or InkSet.EPMW;
         var spotsAllowed = line.InkSet is InkSet.CMYK_PlusSpot or InkSet.CMYKW_PlusSpot;
 
         if (whiteAllowed && line.WhiteHits > 0)

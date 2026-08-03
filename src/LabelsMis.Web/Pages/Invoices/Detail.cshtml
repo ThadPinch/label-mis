@@ -1,83 +1,178 @@
 @page "/invoices/{id:guid}"
+@using LabelsMis.Domain.Enums
 @model LabelsMis.Web.Pages.Invoices.DetailModel
-@{ ViewData["Title"] = Model.Detail?.Invoice.InvoiceNumber ?? "Invoice"; 
+@{ ViewData["Title"] = Model.Detail?.Invoice.InvoiceNumber ?? "Invoice";
     ViewData["BackNav"] = new BackNavModel();
 }
 
 @if (Model.Detail is null) { <p>Not found.</p>; return; }
 
-<h1 class="h3 mb-1">@Model.Detail.Invoice.InvoiceNumber</h1>
-<p class="text-muted">@Model.Detail.CustomerName — @Model.Detail.Invoice.Status</p>
-<p class="mb-3">
-    Sales order:
-    <a asp-page="/SalesOrders/Edit" asp-route-id="@Model.Detail.SalesOrderId">@Model.Detail.OrderNumber</a>
-</p>
+@{
+    var invoice = Model.Detail.Invoice;
+    var documents = Model.Detail.Documents ?? [];
+    var statusBadge = invoice.Status switch
+    {
+        InvoiceStatus.Draft => "text-bg-secondary",
+        InvoiceStatus.Sent => "text-bg-primary",
+        InvoiceStatus.PartiallyPaid => "text-bg-warning",
+        InvoiceStatus.Paid => "text-bg-success",
+        InvoiceStatus.Void => "text-bg-danger",
+        _ => "text-bg-secondary"
+    };
+}
 
-<div class="row mb-4">
-    <div class="col-md-6">
-        <dl class="row">
-            <dt class="col-sm-4">Invoice date</dt><dd class="col-sm-8">@Model.Detail.Invoice.InvoiceDate.ToString("yyyy-MM-dd")</dd>
-            <dt class="col-sm-4">Due date</dt><dd class="col-sm-8">@Model.Detail.Invoice.DueDate.ToString("yyyy-MM-dd")</dd>
-            <dt class="col-sm-4">Subtotal</dt><dd class="col-sm-8">@Model.Detail.Invoice.Subtotal.ToString("C2")</dd>
-            <dt class="col-sm-4">Tax</dt><dd class="col-sm-8">@Model.Detail.Invoice.TaxAmount.ToString("C2")</dd>
-            <dt class="col-sm-4">Shipping</dt><dd class="col-sm-8">@Model.Detail.Invoice.ShippingAmount.ToString("C2")</dd>
-            <dt class="col-sm-4">Total</dt><dd class="col-sm-8"><strong>@Model.Detail.Invoice.Total.ToString("C2")</strong></dd>
-            <dt class="col-sm-4">Balance due</dt><dd class="col-sm-8"><strong>@Model.Detail.Invoice.BalanceDue.ToString("C2")</strong></dd>
-        </dl>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+    <div>
+        <h1 class="h4 mb-0">@invoice.InvoiceNumber <span class="badge @statusBadge align-middle">@invoice.Status</span></h1>
+        <div class="text-muted small">
+            @Model.Detail.CustomerName
+            &middot; Sales order <a asp-page="/SalesOrders/Edit" asp-route-id="@Model.Detail.SalesOrderId">@Model.Detail.OrderNumber</a>
+        </div>
     </div>
 </div>
 
-<table class="table table-sm table-striped mb-4">
-    <thead><tr><th>Line</th><th>Description</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead>
-    <tbody>
-    @foreach (var line in Model.Detail.Invoice.Lines.OrderBy(l => l.LineNumber))
-    {
-        <tr>
-            <td>@line.LineNumber</td><td>@line.Description</td>
-            <td>@line.Quantity.ToString("N0")</td><td>@line.UnitPrice.ToString("C4")</td><td>@line.LineTotal.ToString("C2")</td>
-        </tr>
-    }
-    </tbody>
-</table>
+<div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
 
-<h2 class="h6">Payments</h2>
-<table class="table table-sm table-striped mb-4">
-    <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Amount</th></tr></thead>
-    <tbody>
-    @foreach (var payment in Model.Detail.Payments.OrderByDescending(p => p.PaymentDate))
-    {
-        <tr>
-            <td>@payment.PaymentDate.ToString("yyyy-MM-dd")</td><td>@payment.Method</td>
-            <td>@(payment.Reference ?? "—")</td><td>@payment.Amount.ToString("C2")</td>
-        </tr>
-    }
-    </tbody>
-</table>
-
-@if (Model.CanEdit && Model.Detail.Invoice.BalanceDue > 0 && Model.Detail.Invoice.Status != LabelsMis.Domain.Enums.InvoiceStatus.Void)
+@if (!string.IsNullOrWhiteSpace(Model.Detail.BillingNotes))
 {
-    <div class="card mb-4">
-        <div class="card-body">
-            <h2 class="h6">Record payment</h2>
-            <form method="post" asp-page-handler="RecordPayment">
-                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-                <div class="row g-2">
-                    <div class="col-md-2"><input asp-for="Payment.PaymentDate" class="form-control" type="date" /></div>
-                    <div class="col-md-2"><input asp-for="Payment.Amount" class="form-control" placeholder="Amount" /></div>
-                    <div class="col-md-2"><select asp-for="Payment.Method" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.PaymentMethod>()"></select></div>
-                    <div class="col-md-3"><input asp-for="Payment.Reference" class="form-control" placeholder="Reference" /></div>
-                    <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Record</button></div>
-                </div>
-            </form>
-        </div>
+    <div class="alert alert-warning py-2 px-3 mb-2 small">
+        <strong>Billing notes:</strong> @Model.Detail.BillingNotes
+    </div>
+}
+@if (invoice.Status == InvoiceStatus.Void && !string.IsNullOrWhiteSpace(invoice.VoidReason))
+{
+    <div class="alert alert-danger py-2 px-3 mb-2 small">
+        <strong>Voided:</strong> @invoice.VoidReason
     </div>
 }
 
-@if (User.IsInRole("Admin") && Model.Detail.Invoice.Status != LabelsMis.Domain.Enums.InvoiceStatus.Void && Model.Detail.Invoice.Status != LabelsMis.Domain.Enums.InvoiceStatus.Paid)
-{
-    <form method="post" asp-page-handler="Void" class="mb-3">
-        <input asp-for="VoidReason" class="form-control mb-2" placeholder="Void reason" required />
-        <button type="submit" class="btn btn-outline-danger">Void invoice</button>
-    </form>
-}
+<div class="row g-2">
+    <div class="col-lg-8">
+        <div class="card mb-2">
+            <div class="card-header py-1 small fw-semibold">Line items</div>
+            <table class="table table-sm table-striped small mb-0">
+                <thead><tr><th>Line</th><th>Description</th><th class="text-end">Qty</th><th class="text-end">Unit</th><th class="text-end">Total</th></tr></thead>
+                <tbody>
+                @foreach (var line in invoice.Lines.OrderBy(l => l.LineNumber))
+                {
+                    <tr>
+                        <td>@line.LineNumber</td><td>@line.Description</td>
+                        <td class="text-end">@line.Quantity.ToString("N0")</td>
+                        <td class="text-end">@line.UnitPrice.ToString("C4")</td>
+                        <td class="text-end">@line.LineTotal.ToString("C2")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
 
+        <div class="card">
+            <div class="card-header py-1 small fw-semibold">Payments</div>
+            @if (Model.Detail.Payments.Any())
+            {
+                <table class="table table-sm table-striped small mb-0">
+                    <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th class="text-end">Amount</th></tr></thead>
+                    <tbody>
+                    @foreach (var payment in Model.Detail.Payments.OrderByDescending(p => p.PaymentDate))
+                    {
+                        <tr>
+                            <td>@payment.PaymentDate.ToString("yyyy-MM-dd")</td><td>@payment.Method</td>
+                            <td>@(payment.Reference ?? "—")</td><td class="text-end">@payment.Amount.ToString("C2")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <div class="card-body py-2 small text-muted">No payments recorded.</div>
+            }
+            @if (Model.CanEdit && invoice.BalanceDue > 0 && invoice.Status != InvoiceStatus.Void)
+            {
+                <div class="card-body py-2 border-top">
+                    <form method="post" asp-page-handler="RecordPayment">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-3">
+                                <label asp-for="Payment.PaymentDate" class="form-label small mb-0">Date</label>
+                                <input asp-for="Payment.PaymentDate" class="form-control form-control-sm" type="date" />
+                            </div>
+                            <div class="col-md-2">
+                                <label asp-for="Payment.Amount" class="form-label small mb-0">Amount</label>
+                                <input asp-for="Payment.Amount" class="form-control form-control-sm" placeholder="0.00" />
+                            </div>
+                            <div class="col-md-2">
+                                <label asp-for="Payment.Method" class="form-label small mb-0">Method</label>
+                                <select asp-for="Payment.Method" class="form-select form-select-sm" asp-items="Html.GetEnumSelectList<PaymentMethod>()"></select>
+                            </div>
+                            <div class="col-md-3">
+                                <label asp-for="Payment.Reference" class="form-label small mb-0">Reference</label>
+                                <input asp-for="Payment.Reference" class="form-control form-control-sm" placeholder="Check #, txn id…" />
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-sm btn-primary w-100">Record</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card mb-2">
+            <div class="card-header py-1 small fw-semibold">Summary</div>
+            <div class="card-body py-2 small">
+                <div class="d-flex justify-content-between"><span class="text-muted">Invoice date</span><span>@invoice.InvoiceDate.ToString("yyyy-MM-dd")</span></div>
+                <div class="d-flex justify-content-between"><span class="text-muted">Due date</span><span>@invoice.DueDate.ToString("yyyy-MM-dd")</span></div>
+                <hr class="my-1" />
+                <div class="d-flex justify-content-between"><span class="text-muted">Subtotal</span><span>@invoice.Subtotal.ToString("C2")</span></div>
+                <div class="d-flex justify-content-between"><span class="text-muted">Tax</span><span>@invoice.TaxAmount.ToString("C2")</span></div>
+                <div class="d-flex justify-content-between"><span class="text-muted">Shipping</span><span>@invoice.ShippingAmount.ToString("C2")</span></div>
+                <hr class="my-1" />
+                <div class="d-flex justify-content-between fw-semibold"><span>Total</span><span>@invoice.Total.ToString("C2")</span></div>
+                <div class="d-flex justify-content-between fw-semibold"><span>Balance due</span><span>@invoice.BalanceDue.ToString("C2")</span></div>
+            </div>
+        </div>
+
+        <div class="card mb-2">
+            <div class="card-header py-1 small fw-semibold">
+                Documents <span class="badge text-bg-secondary">@documents.Count</span>
+            </div>
+            @if (documents.Any())
+            {
+                <ul class="list-group list-group-flush small">
+                    @foreach (var document in documents)
+                    {
+                        var sizeLabel = document.SizeBytes >= 1024 * 1024
+                            ? $"{document.SizeBytes / (1024m * 1024m):N1} MB"
+                            : $"{Math.Max(1, document.SizeBytes / 1024):N0} KB";
+                        <li class="list-group-item py-1">
+                            <span class="text-truncate d-inline-block mw-100" title="@document.FileName — uploaded @document.UploadedAt.ToLocalTime().ToString("MMM d, yyyy")">
+                                <a asp-page="Detail" asp-page-handler="Document"
+                                   asp-route-id="@Model.Id" asp-route-documentId="@document.Id">@document.FileName</a>
+                                <span class="text-muted">&middot; @sizeLabel</span>
+                            </span>
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <div class="card-body py-2 small text-muted">No documents on the sales order.</div>
+            }
+        </div>
+
+        @if (User.IsInRole("Admin") && invoice.Status != InvoiceStatus.Void && invoice.Status != InvoiceStatus.Paid)
+        {
+            <div class="card border-danger">
+                <div class="card-header py-1 small fw-semibold">Void invoice</div>
+                <div class="card-body py-2">
+                    <form method="post" asp-page-handler="Void">
+                        <input asp-for="VoidReason" class="form-control form-control-sm mb-1" placeholder="Void reason" required />
+                        <button type="submit" class="btn btn-sm btn-outline-danger w-100">Void invoice</button>
+                    </form>
+                </div>
+            </div>
+        }
+    </div>
+</div>

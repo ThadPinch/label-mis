@@ -1,11 +1,13 @@
 @page "/products/new"
 @model LabelsMis.Web.Pages.Products.CreateModel
 @{ ViewData["Title"] = "New product"; ViewData["BackNav"] = new BackNavModel(); }
-<h1 class="h3 mb-3">New product</h1>
+<h1 class="h4 mb-2">New product</h1>
 <form method="post">
-    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+    <div asp-validation-summary="All" class="text-danger small mb-2"></div>
     <partial name="_ProductForm" for="Input" />
-    <button type="submit" class="btn btn-primary">Create</button>
+    <div class="d-flex gap-2 mt-1">
+        <button type="submit" class="btn btn-sm btn-primary">Create</button>
+    </div>
 </form>
 
 @section Scripts {

@@ -34,12 +34,20 @@ public record PaymentInput(
     string? Reference,
     string? Notes);
 
+public record InvoiceDocumentInfo(
+    Guid Id,
+    string FileName,
+    long SizeBytes,
+    DateTime UploadedAt);
+
 public record InvoiceDetail(
     Invoice Invoice,
     string CustomerName,
     Guid SalesOrderId,
     string OrderNumber,
-    IReadOnlyList<Payment> Payments);
+    IReadOnlyList<Payment> Payments,
+    string? BillingNotes = null,
+    IReadOnlyList<InvoiceDocumentInfo>? Documents = null);
 
 public record ArAgingRow(
     string CustomerName,
@@ -147,12 +155,18 @@ public class InvoiceService(
             };
         }
 
-        query = sort switch
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
         {
-            "number" => query.OrderBy(i => i.InvoiceNumber),
-            "customer" => query.OrderBy(i => i.Customer.Name),
-            "balance" => query.OrderByDescending(i => i.BalanceDue),
-            "due" => query.OrderBy(i => i.DueDate),
+            "number" => query.OrderByDir(desc, i => i.InvoiceNumber),
+            "customer" => query.OrderByDir(desc, i => i.Customer.Name),
+            "order" => query.OrderByDir(desc, i => i.SalesOrder.OrderNumber),
+            "date" => query.OrderByDir(desc, i => i.InvoiceDate),
+            "due" => query.OrderByDir(desc, i => i.DueDate),
+            "status" => query.OrderByDir(desc, i => i.Status),
+            "total" => query.OrderByDir(desc, i => i.Total),
+            "balance" => query.OrderByDir(desc, i => i.BalanceDue),
+            "exported" => query.OrderByDir(desc, i => i.QbExportedAt),
             _ => query.OrderByDescending(i => i.InvoiceDate)
         };
 
@@ -236,14 +250,25 @@ public class InvoiceService(
             .Include(i => i.Payments)
             .SingleOrDefaultAsync(i => i.Id == id, cancellationToken);
 
-        return invoice is null
-            ? null
-            : new InvoiceDetail(
-                invoice,
-                invoice.Customer.Name,
-                invoice.SalesOrderId,
-                invoice.SalesOrder.OrderNumber,
-                invoice.Payments.ToList());
+        if (invoice is null)
+        {
+            return null;
+        }
+
+        var documents = await db.SalesOrderDocuments.AsNoTracking()
+            .Where(d => d.SalesOrderId == invoice.SalesOrderId)
+            .OrderBy(d => d.CreatedAt)
+            .Select(d => new InvoiceDocumentInfo(d.Id, d.OriginalFileName, d.FileSizeBytes, d.CreatedAt))
+            .ToListAsync(cancellationToken);
+
+        return new InvoiceDetail(
+            invoice,
+            invoice.Customer.Name,
+            invoice.SalesOrderId,
+            invoice.SalesOrder.OrderNumber,
+            invoice.Payments.ToList(),
+            invoice.SalesOrder.BillingNotes,
+            documents);
     }
 
     /// <summary>
@@ -267,11 +292,13 @@ public class InvoiceService(
         var order = await db.SalesOrders
             .Include(o => o.Customer)
             .Include(o => o.Lines).ThenInclude(l => l.Product)
+            .Include(o => o.Charges)
             .SingleAsync(o => o.Id == salesOrderId, cancellationToken);
 
         var invoiceNumber = await documentNumbers.NextInvoiceNumberAsync(cancellationToken);
         var dueDate = today.AddDays(order.Customer.Terms.ToDueDays());
-        var subtotal = order.Lines.Sum(l => l.Quantity * l.UnitPrice);
+        var subtotal = order.Lines.Sum(l => l.Quantity * l.UnitPrice)
+            + order.Charges.Sum(c => c.Quantity * c.UnitPrice);
         var taxAmount = order.Customer.TaxExempt
             ? 0m
             : Math.Round(subtotal * await GetTaxRateAsync(cancellationToken), 4, MidpointRounding.AwayFromZero);
@@ -311,9 +338,33 @@ public class InvoiceService(
             db.InvoiceLines.Add(line);
         }
 
+        AddChargeLines(invoice, order, ref lineNumber, userId, now);
+
         db.Invoices.Add(invoice);
         await db.SaveChangesAsync(cancellationToken);
         return invoice;
+    }
+
+    /// <summary>Appends the order's non-label charges (die creation, design time) as invoice lines.</summary>
+    private void AddChargeLines(Invoice invoice, SalesOrder order, ref int lineNumber, Guid userId, DateTime now)
+    {
+        foreach (var charge in order.Charges.OrderBy(c => c.LineNumber))
+        {
+            var line = InvoiceLine.Create(
+                Guid.NewGuid(),
+                invoice.Id,
+                lineNumber++,
+                null,
+                null,
+                charge.Description,
+                charge.Quantity,
+                charge.UnitPrice,
+                order.Customer.TaxExempt ? "NON" : "TAX",
+                userId,
+                now);
+            invoice.AddLine(line);
+            db.InvoiceLines.Add(line);
+        }
     }
 
     public async Task<Invoice> CreateFromShipmentAsync(Guid shipmentId, CancellationToken cancellationToken = default)
@@ -324,6 +375,7 @@ public class InvoiceService(
 
         var shipment = await db.Shipments
             .Include(s => s.SalesOrder).ThenInclude(o => o.Customer)
+            .Include(s => s.SalesOrder).ThenInclude(o => o.Charges)
             .Include(s => s.Lines).ThenInclude(l => l.SalesOrderLine).ThenInclude(sl => sl.Product)
             .Include(s => s.Packages)
             .SingleAsync(s => s.Id == shipmentId, cancellationToken);
@@ -343,7 +395,10 @@ public class InvoiceService(
 
         var invoiceNumber = await documentNumbers.NextInvoiceNumberAsync(cancellationToken);
         var dueDate = today.AddDays(shipment.SalesOrder.Customer.Terms.ToDueDays());
-        var subtotal = shipment.Lines.Sum(l => l.QuantityShipped * l.SalesOrderLine.UnitPrice);
+        // Order-level charges (die, design) are billed on the order's single invoice, so they
+        // ride along whichever path creates it first.
+        var subtotal = shipment.Lines.Sum(l => l.QuantityShipped * l.SalesOrderLine.UnitPrice)
+            + shipment.SalesOrder.Charges.Sum(c => c.Quantity * c.UnitPrice);
         var taxAmount = shipment.SalesOrder.Customer.TaxExempt
             ? 0m
             : Math.Round(subtotal * await GetTaxRateAsync(cancellationToken), 4, MidpointRounding.AwayFromZero);
@@ -384,6 +439,8 @@ public class InvoiceService(
             invoice.AddLine(line);
             db.InvoiceLines.Add(line);
         }
+
+        AddChargeLines(invoice, shipment.SalesOrder, ref lineNumber, userId, now);
 
         db.Invoices.Add(invoice);
         await db.SaveChangesAsync(cancellationToken);

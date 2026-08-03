@@ -17,7 +17,8 @@ public record EstimatePdfModel(
     decimal ShippingCost,
     bool HasShipping,
     string? Notes,
-    string? SalesRepName);
+    string? SalesRepName,
+    IReadOnlyList<EstimatePdfCharge>? Charges = null);
 
 public record EstimatePdfAddress(
     string? RecipientName,
@@ -38,3 +39,6 @@ public record EstimatePdfLine(
     IReadOnlyList<EstimatePdfBreak> Breaks);
 
 public record EstimatePdfBreak(int Quantity, decimal UnitPrice, decimal TotalPrice);
+
+/// <summary>A flat, non-label charge (die creation, design time) shown once below the lines.</summary>
+public record EstimatePdfCharge(string Description, int Quantity, decimal UnitPrice, decimal Total);

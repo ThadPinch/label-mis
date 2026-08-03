@@ -23,6 +23,9 @@ public class IndexModel(ProductService productService, LabelsMisDbContext db) : 
     [BindProperty(SupportsGet = true)]
     public ProductStatus? Status { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public string? Sort { get; set; }
+
     [BindProperty(SupportsGet = true, Name = "pageNumber")]
     public int PageNumber { get; set; } = 1;
 
@@ -32,7 +35,7 @@ public class IndexModel(ProductService productService, LabelsMisDbContext db) : 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Estimator);
-        Result = await productService.ListAsync(Search, CustomerId, Status, null, PageNumber, 25, false, cancellationToken);
+        Result = await productService.ListAsync(Search, CustomerId, Status, Sort, PageNumber, 25, false, cancellationToken);
         ViewData["CustomerOptions"] = await db.Customers.AsNoTracking()
             .Where(c => c.IsActive).OrderBy(c => c.Name)
             .Select(c => new SelectListItem(c.Name, c.Id.ToString())).ToListAsync(cancellationToken);

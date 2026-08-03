@@ -29,12 +29,15 @@ public class LabelsMisDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<Estimate> Estimates => Set<Estimate>();
     public DbSet<EstimateLine> EstimateLines => Set<EstimateLine>();
     public DbSet<EstimateQuantityBreak> EstimateQuantityBreaks => Set<EstimateQuantityBreak>();
+    public DbSet<EstimateCharge> EstimateCharges => Set<EstimateCharge>();
     public DbSet<EstimateRevision> EstimateRevisions => Set<EstimateRevision>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductCustomer> ProductCustomers => Set<ProductCustomer>();
     public DbSet<RollSpec> RollSpecs => Set<RollSpec>();
     public DbSet<SalesOrder> SalesOrders => Set<SalesOrder>();
     public DbSet<SalesOrderLine> SalesOrderLines => Set<SalesOrderLine>();
+    public DbSet<SalesOrderCharge> SalesOrderCharges => Set<SalesOrderCharge>();
+    public DbSet<SalesOrderDocument> SalesOrderDocuments => Set<SalesOrderDocument>();
     public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
     public DbSet<Job> Jobs => Set<Job>();
     public DbSet<JobOperation> JobOperations => Set<JobOperation>();

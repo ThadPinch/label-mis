@@ -78,7 +78,9 @@ public class EstimatePdfGenerator(IOptions<EstimateOptions> options, GeneralSett
             detail.Estimate.ShippingCost,
             detail.Estimate.ShippingMethodId is not null || detail.Estimate.ShippingCost > 0,
             detail.Estimate.Notes,
-            detail.SalesRepName);
+            detail.SalesRepName,
+            detail.Estimate.Charges.OrderBy(c => c.LineNumber)
+                .Select(c => new EstimatePdfCharge(c.Description, c.Quantity, c.UnitPrice, c.LineTotal)).ToList());
     }
 
     private static byte[] Render(EstimatePdfModel model, string companyName, string termsText, byte[]? logo, IReadOnlyList<string> contactLines)
@@ -119,6 +121,15 @@ public class EstimatePdfGenerator(IOptions<EstimateOptions> options, GeneralSett
             {
                 document.Add(Paragraph($"Notes: {line.LineNotes}", StandardFont.HelveticaOblique, 9f, marginTop: 2f));
             }
+        }
+
+        if (model.Charges is { Count: > 0 } charges)
+        {
+            document.Add(Paragraph("Additional charges", StandardFont.HelveticaBold, 11f, marginTop: 14f));
+            document.Add(BuildChargesTable(charges));
+            document.Add(Paragraph(
+                "One-time charges billed with the order, in addition to the quantity totals above.",
+                StandardFont.HelveticaOblique, 8f, color: PdfStyle.GreyDarken1));
         }
 
         if (model.HasShipping)
@@ -189,6 +200,30 @@ public class EstimatePdfGenerator(IOptions<EstimateOptions> options, GeneralSett
             table.AddCell(BodyCell(breakRow.UnitPrice.ToString("C4"), TextHorizontalAlignment.Right));
             table.AddCell(BodyCell(breakRow.TotalPrice.ToString("C2"), TextHorizontalAlignment.Right, StandardFont.HelveticaBold));
         }
+
+        return table;
+    }
+
+    private static FlowTable BuildChargesTable(IReadOnlyList<EstimatePdfCharge> charges)
+    {
+        var table = new FlowTable(new[] { 2f, 0.7f, 1f, 1f }) { MarginTop = 6f, MarginBottom = 6f };
+        table.AddHeaderCell(HeaderCell("Charge"));
+        table.AddHeaderCell(HeaderCell("Qty", TextHorizontalAlignment.Right));
+        table.AddHeaderCell(HeaderCell("Unit price", TextHorizontalAlignment.Right));
+        table.AddHeaderCell(HeaderCell("Total", TextHorizontalAlignment.Right));
+
+        foreach (var charge in charges)
+        {
+            table.AddCell(BodyCell(charge.Description));
+            table.AddCell(BodyCell(charge.Quantity.ToString("N0"), TextHorizontalAlignment.Right));
+            table.AddCell(BodyCell(charge.UnitPrice.ToString("C2"), TextHorizontalAlignment.Right));
+            table.AddCell(BodyCell(charge.Total.ToString("C2"), TextHorizontalAlignment.Right, StandardFont.HelveticaBold));
+        }
+
+        table.AddCell(BodyCell("Charges total", TextHorizontalAlignment.Left, StandardFont.HelveticaBold));
+        table.AddCell(BodyCell(""));
+        table.AddCell(BodyCell(""));
+        table.AddCell(BodyCell(charges.Sum(c => c.Total).ToString("C2"), TextHorizontalAlignment.Right, StandardFont.HelveticaBold));
 
         return table;
     }

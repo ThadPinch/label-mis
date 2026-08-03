@@ -2,6 +2,13 @@
 @model LabelsMis.Web.Pages.Stocks.IndexModel
 @{
     ViewData["Title"] = "Stocks";
+    var route = new Dictionary<string, string?>
+    {
+        ["Search"] = Model.Search,
+        ["StockType"] = Model.StockType?.ToString(),
+        ["IncludeInactive"] = Model.IncludeInactive ? "true" : null,
+        ["Sort"] = Model.Sort
+    };
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -21,12 +28,7 @@
             <option value="">All types</option>
         </select>
     </div>
-    <div class="col-md-3">
-        <select asp-for="Sort" class="form-select">
-            <option value="">Sort by description</option>
-            <option value="code">Sort by code</option>
-        </select>
-    </div>
+    <input type="hidden" asp-for="Sort" />
     <div class="col-md-2 form-check align-self-center">
         <input asp-for="IncludeInactive" class="form-check-input" />
         <label asp-for="IncludeInactive" class="form-check-label">Show inactive</label>
@@ -39,11 +41,11 @@
 <table class="table table-striped">
     <thead>
         <tr>
-            <th>Code</th>
-            <th>Description</th>
-            <th>Type</th>
-            <th>Supplier</th>
-            <th>Active</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Code", "code", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Description", "description", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Type", "type", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Supplier", "supplier", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Active", "active", Model.Sort, route))</th>
             <th></th>
         </tr>
     </thead>

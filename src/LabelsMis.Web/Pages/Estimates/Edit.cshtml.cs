@@ -266,6 +266,15 @@ public class EditModel(
             .OrderBy(i => i.Code)
             .ToListAsync(cancellationToken);
 
+        ViewData["Dies"] = await db.Dies.AsNoTracking()
+            .Where(d => d.IsActive)
+            .OrderBy(d => d.Description)
+            .ToListAsync(cancellationToken);
+
+        ViewData["ShrinkStocks"] = await db.Stocks.AsNoTracking()
+            .Where(s => s.StockType == StockType.Shrink)
+            .ToDictionaryAsync(s => s.Id, s => s.ShrinkLayflatIn, cancellationToken);
+
         var users = await userManager.Users.OrderBy(u => u.Email).ToListAsync(cancellationToken);
         ViewData["SalesRepOptions"] = users.Select(u => new SelectListItem(
             u.Email ?? u.UserName ?? u.Id.ToString(), u.Id.ToString())).ToList();

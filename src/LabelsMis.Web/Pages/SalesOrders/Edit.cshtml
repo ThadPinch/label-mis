@@ -4,7 +4,8 @@
     ViewData["Title"] = Model.Order?.OrderNumber ?? "Sales order";
     ViewData["BackNav"] = new BackNavModel();
     var lineTotal = Model.Order?.Lines.Sum(l => l.LineTotal) ?? 0m;
-    var orderTotal = lineTotal + (Model.Order?.ShippingCost ?? 0m);
+    var chargesTotal = Model.Order?.Charges.Sum(c => c.LineTotal) ?? 0m;
+    var orderTotal = lineTotal + chargesTotal + (Model.Order?.ShippingCost ?? 0m);
 }
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
@@ -154,6 +155,63 @@ else if (Model.IsLocked)
             </div>
         }
 
+        <div class="card">
+            <div class="card-header py-1 small fw-semibold d-flex justify-content-between align-items-center">
+                <span>Documents <span class="badge text-bg-secondary">@Model.Documents.Count</span></span>
+                @if (Model.CanManageDocuments)
+                {
+                    <a class="text-decoration-none" data-bs-toggle="collapse" href="#order-document-upload"
+                       role="button" aria-expanded="false" aria-controls="order-document-upload"
+                       title="Upload a document">+ Add</a>
+                }
+            </div>
+            @if (Model.CanManageDocuments)
+            {
+                <div class="collapse" id="order-document-upload">
+                    <div class="card-body py-2 border-bottom">
+                        <form method="post" asp-page-handler="UploadDocument" enctype="multipart/form-data"
+                              asp-route-unlocked="@(Model.Unlocked ? "true" : null)">
+                            <input asp-for="DocumentFile" type="file" class="form-control form-control-sm"
+                                   accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.eml,.msg,.zip" required />
+                            <button type="submit" class="btn btn-sm btn-outline-primary w-100 mt-1">Upload document</button>
+                        </form>
+                        <div class="form-text lh-sm">External POs or supporting files. Max 50 MB.</div>
+                    </div>
+                </div>
+            }
+            @if (Model.Documents.Any())
+            {
+                <ul class="list-group list-group-flush small">
+                    @foreach (var document in Model.Documents)
+                    {
+                        var sizeLabel = document.SizeBytes >= 1024 * 1024
+                            ? $"{document.SizeBytes / (1024m * 1024m):N1} MB"
+                            : $"{Math.Max(1, document.SizeBytes / 1024):N0} KB";
+                        <li class="list-group-item py-1 d-flex justify-content-between align-items-center gap-1">
+                            <span class="text-truncate" title="@document.FileName — uploaded @document.UploadedAt.ToLocalTime().ToString("MMM d, yyyy")">
+                                <a asp-page="Edit" asp-page-handler="Document"
+                                   asp-route-id="@Model.Id" asp-route-documentId="@document.Id">@document.FileName</a>
+                                <span class="text-muted">· @sizeLabel</span>
+                            </span>
+                            @if (Model.CanManageDocuments)
+                            {
+                                <form method="post" asp-page-handler="DeleteDocument"
+                                      asp-route-documentId="@document.Id"
+                                      asp-route-unlocked="@(Model.Unlocked ? "true" : null)"
+                                      onsubmit="return confirm('Delete @document.FileName? This cannot be undone.');">
+                                    <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="Delete document">&times;</button>
+                                </form>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <div class="card-body py-2 small text-muted">No documents yet.</div>
+            }
+        </div>
+
         @if (Model.RequiresPrepay)
         {
             var paidPct = Model.OrderTotal <= 0 ? 100 : (int)Math.Clamp(Math.Round(Model.AmountPaid / Model.OrderTotal * 100m), 0, 100);
@@ -187,6 +245,10 @@ else if (Model.IsLocked)
         <div class="card">
             <div class="card-body py-2">
                 <div class="d-flex justify-content-between small"><span class="text-muted">Lines</span><span>@lineTotal.ToString("C2")</span></div>
+                @if (chargesTotal > 0)
+                {
+                    <div class="d-flex justify-content-between small"><span class="text-muted">Charges</span><span>@chargesTotal.ToString("C2")</span></div>
+                }
                 <div class="d-flex justify-content-between small"><span class="text-muted">Shipping</span><span>@((Model.Order?.ShippingCost ?? 0m).ToString("C2"))</span></div>
                 <div class="d-flex justify-content-between fw-semibold border-top mt-1 pt-1"><span>Order total</span><span>@orderTotal.ToString("C2")</span></div>
             </div>

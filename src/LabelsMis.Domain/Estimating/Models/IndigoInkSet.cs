@@ -6,5 +6,6 @@ public enum IndigoInkSet
     CMYK,
     CMYK_PlusSpot,
     CMYKW,
-    CMYKW_PlusSpot
+    CMYKW_PlusSpot,
+    EPMW
 }

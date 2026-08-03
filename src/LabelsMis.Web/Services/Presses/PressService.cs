@@ -29,7 +29,7 @@ public record PressForm(
 public class PressService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
     public async Task<PagedResult<PressListItem>> ListAsync(
-        string? search, int page, int pageSize, bool includeInactive, CancellationToken ct = default)
+        string? search, string? sort, int page, int pageSize, bool includeInactive, CancellationToken ct = default)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 5, 100);
@@ -40,7 +40,15 @@ public class PressService(LabelsMisDbContext db, ICurrentUserService currentUser
             var term = search.Trim().ToUpperInvariant();
             query = query.Where(p => p.Name.ToUpper().Contains(term) || p.Code.Contains(term));
         }
-        query = query.OrderBy(p => p.Name);
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
+        {
+            "name" => query.OrderByDir(desc, p => p.Name),
+            "code" => query.OrderByDir(desc, p => p.Code),
+            "type" => query.OrderByDir(desc, p => p.PressType),
+            "active" => query.OrderByDir(desc, p => p.IsActive),
+            _ => query.OrderBy(p => p.Name)
+        };
         var total = await query.CountAsync(ct);
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
             .Select(p => new PressListItem(p.Id, p.Name, p.Code, p.PressType, p.IsActive)).ToListAsync(ct);

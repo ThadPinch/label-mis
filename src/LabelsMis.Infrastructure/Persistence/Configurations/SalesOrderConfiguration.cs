@@ -16,6 +16,7 @@ public class SalesOrderConfiguration : IEntityTypeConfiguration<SalesOrder>
         builder.Property(o => o.OrderedAt).IsRequired();
         builder.Property(o => o.Status).IsRequired();
         builder.Property(o => o.Notes).HasMaxLength(4000);
+        builder.Property(o => o.BillingNotes).HasMaxLength(4000);
 
         builder.Property(o => o.ShippingCost).HasMoneyPrecision();
         builder.Property(o => o.ShipToName).HasMaxLength(200);
@@ -53,5 +54,6 @@ public class SalesOrderConfiguration : IEntityTypeConfiguration<SalesOrder>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Navigation(o => o.Lines).HasField("_lines");
+        builder.Navigation(o => o.Charges).HasField("_charges");
     }
 }

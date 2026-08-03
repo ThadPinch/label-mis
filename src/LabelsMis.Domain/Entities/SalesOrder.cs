@@ -7,6 +7,7 @@ namespace LabelsMis.Domain.Entities;
 public class SalesOrder : EntityBase
 {
     private readonly List<SalesOrderLine> _lines = [];
+    private readonly List<SalesOrderCharge> _charges = [];
 
     private SalesOrder()
     {
@@ -24,6 +25,9 @@ public class SalesOrder : EntityBase
     public SalesOrderStatus Status { get; private set; }
     public string? Notes { get; private set; }
 
+    /// <summary>Internal billing instructions carried over from the estimate; surfaced on the invoice.</summary>
+    public string? BillingNotes { get; private set; }
+
     public Guid? ShippingMethodId { get; private set; }
     public ShippingMethod? ShippingMethod { get; private set; }
     public decimal ShippingCost { get; private set; }
@@ -39,6 +43,7 @@ public class SalesOrder : EntityBase
         ShipToName, ShipToStreet1, ShipToStreet2, ShipToCity, ShipToState, ShipToZip, ShipToCountry);
 
     public IReadOnlyCollection<SalesOrderLine> Lines => _lines;
+    public IReadOnlyCollection<SalesOrderCharge> Charges => _charges;
 
     public static SalesOrder CreateOpen(
         Guid id,
@@ -50,6 +55,7 @@ public class SalesOrder : EntityBase
         DateTime orderedAt,
         DateOnly? requestedShipDate,
         string? notes,
+        string? billingNotes,
         Guid? shippingMethodId,
         decimal shippingCost,
         ShippingAddress shippingAddress,
@@ -66,7 +72,8 @@ public class SalesOrder : EntityBase
             OrderedAt = orderedAt,
             RequestedShipDate = requestedShipDate,
             Status = SalesOrderStatus.Open,
-            Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim()
+            Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+            BillingNotes = string.IsNullOrWhiteSpace(billingNotes) ? null : billingNotes.Trim()
         };
         order.SetShipping(shippingMethodId, shippingCost, shippingAddress);
         order.SetCreated(id, createdById, createdAt);
@@ -77,6 +84,7 @@ public class SalesOrder : EntityBase
         string? customerPoNumber,
         DateOnly? requestedShipDate,
         string? notes,
+        string? billingNotes,
         Guid? shippingMethodId,
         decimal shippingCost,
         ShippingAddress shippingAddress,
@@ -88,6 +96,7 @@ public class SalesOrder : EntityBase
         CustomerPoNumber = string.IsNullOrWhiteSpace(customerPoNumber) ? null : customerPoNumber.Trim();
         RequestedShipDate = requestedShipDate;
         Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        BillingNotes = string.IsNullOrWhiteSpace(billingNotes) ? null : billingNotes.Trim();
         SetShipping(shippingMethodId, shippingCost, shippingAddress);
         SetModified(modifiedById, modifiedAt);
     }
@@ -114,6 +123,7 @@ public class SalesOrder : EntityBase
         string? customerPoNumber,
         DateOnly? requestedShipDate,
         string? notes,
+        string? billingNotes,
         Guid? shippingMethodId,
         decimal shippingCost,
         ShippingAddress shippingAddress,
@@ -123,6 +133,7 @@ public class SalesOrder : EntityBase
         CustomerPoNumber = string.IsNullOrWhiteSpace(customerPoNumber) ? null : customerPoNumber.Trim();
         RequestedShipDate = requestedShipDate;
         Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        BillingNotes = string.IsNullOrWhiteSpace(billingNotes) ? null : billingNotes.Trim();
         SetShipping(shippingMethodId, shippingCost, shippingAddress);
         SetModified(modifiedById, modifiedAt);
     }
@@ -180,4 +191,14 @@ public class SalesOrder : EntityBase
     }
 
     public void AddLine(SalesOrderLine line) => _lines.Add(line);
+
+    /// <summary>Replaces the order's non-label charges. Unlike lines, charges have no dependent
+    /// jobs, so they may be replaced in any editable status (open or unlocked in-production edits).</summary>
+    public void ReplaceCharges(IEnumerable<SalesOrderCharge> charges)
+    {
+        _charges.Clear();
+        _charges.AddRange(charges);
+    }
+
+    public void AddCharge(SalesOrderCharge charge) => _charges.Add(charge);
 }

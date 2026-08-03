@@ -40,7 +40,9 @@ html {
 }
 
 body {
-  margin-bottom: 60px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   font-family: var(--lm-font);
   color: var(--lm-text);
   background-color: var(--lm-gray-100);
@@ -354,6 +356,8 @@ body {
 .app-main {
   padding-top: 1.5rem;
   padding-bottom: 2rem;
+  /* Fill leftover viewport height so the footer never floats above the bottom. */
+  flex: 1 0 auto;
 }
 
 .app-footer {
@@ -475,8 +479,8 @@ body {
 }
 
 .estimate-line-section {
-  margin-top: 1rem;
-  padding-top: 0.85rem;
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
   border-top: 1px solid var(--lm-gray-200);
 }
 
@@ -492,7 +496,33 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--lm-text-muted);
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+
+/* Compact form chrome across the estimate workspace, matching the tightened
+   card style used on the invoice/die pages. */
+.estimate-workspace-main .form-control:not(.form-control-sm),
+.estimate-workspace-main .form-select:not(.form-select-sm) {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.estimate-workspace-main .form-label {
+  font-size: 0.8rem;
+  margin-bottom: 0.125rem;
+}
+
+.estimate-workspace-main .form-text {
+  font-size: 0.75rem;
+}
+
+.estimate-workspace-main .card-header {
+  background: var(--lm-gray-100);
+}
+
+.estimate-workspace-main .estimate-line-body {
+  padding: 0.75rem;
 }
 
 .quantity-inputs .input-group-text {

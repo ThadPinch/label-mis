@@ -1,6 +1,18 @@
 @page "/rolls"
 @model LabelsMis.Web.Pages.Rolls.IndexModel
-@{ ViewData["Title"] = "Rolls"; }
+@{
+    ViewData["Title"] = "Rolls";
+    var route = new Dictionary<string, string?>
+    {
+        ["Search"] = Model.Search,
+        ["StockId"] = Model.StockId?.ToString(),
+        ["StockType"] = Model.StockType?.ToString(),
+        ["Status"] = Model.Status?.ToString(),
+        ["Location"] = Model.Location,
+        ["LotNumber"] = Model.LotNumber,
+        ["Sort"] = Model.Sort
+    };
+}
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0">Roll inventory</h1>
@@ -10,6 +22,7 @@
     }
 </div>
 <form method="get" class="row g-2 mb-3">
+    <input type="hidden" asp-for="Sort" />
     <div class="col-md-3"><input asp-for="Search" class="form-control" placeholder="Barcode or lot" autofocus /></div>
     <div class="col-md-2">
         <select asp-for="StockId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["StockOptions"]!)"><option value="">All stocks</option></select>
@@ -25,7 +38,18 @@
 </form>
 
 <table class="table table-striped">
-    <thead><tr><th>Barcode</th><th>Stock</th><th>Lot</th><th>Width</th><th>Remaining LF</th><th>Location</th><th>Status</th><th></th></tr></thead>
+    <thead>
+    <tr>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Barcode", "barcode", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Stock", "stock", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Lot", "lot", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Width", "width", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Remaining LF", "remaining", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Location", "location", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Status", "status", Model.Sort, route))</th>
+        <th></th>
+    </tr>
+    </thead>
     <tbody>
     @foreach (var item in Model.Result.Items)
     {
@@ -42,4 +66,7 @@
 @await Html.PartialAsync("Shared/_Pager", new PagerModel(
     Model.Result.Page,
     Model.Result.TotalPages,
-    Model.Result.TotalCount))
+    Model.Result.TotalCount)
+{
+    Extra = route
+})

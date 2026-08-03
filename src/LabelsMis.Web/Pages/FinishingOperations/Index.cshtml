@@ -2,6 +2,12 @@
 @model LabelsMis.Web.Pages.FinishingOperations.IndexModel
 @{
     ViewData["Title"] = "Finishing operations";
+    var route = new Dictionary<string, string?>
+    {
+        ["Search"] = Model.Search,
+        ["IncludeInactive"] = Model.IncludeInactive ? "true" : null,
+        ["Sort"] = Model.Sort
+    };
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -13,6 +19,7 @@
 </div>
 
 <form method="get" class="row g-2 mb-3">
+    <input type="hidden" asp-for="Sort" />
     <div class="col-md-4">
         <input asp-for="Search" class="form-control" placeholder="Search code or description" />
     </div>
@@ -28,10 +35,10 @@
 <table class="table table-striped">
     <thead>
         <tr>
-            <th>Code</th>
-            <th>Description</th>
-            <th>Type</th>
-            <th>Active</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Code", "code", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Description", "description", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Type", "type", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Active", "active", Model.Sort, route))</th>
             <th></th>
         </tr>
     </thead>
@@ -60,4 +67,5 @@
     Model.Result.TotalPages,
     Model.Result.TotalCount,
     Model.Search,
+    Model.Sort,
     IncludeInactive: Model.IncludeInactive))

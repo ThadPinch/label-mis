@@ -80,11 +80,13 @@ public class CustomerService(LabelsMisDbContext db, ICurrentUserService currentU
             query = query.Where(c => c.Name.ToUpper().Contains(term) || c.Code.Contains(term));
         }
 
-        query = sort switch
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
         {
-            "code" => query.OrderBy(c => c.Code),
-            "code_desc" => query.OrderByDescending(c => c.Code),
-            "status" => query.OrderBy(c => c.Status).ThenBy(c => c.Name),
+            "name" => query.OrderByDir(desc, c => c.Name),
+            "code" => query.OrderByDir(desc, c => c.Code),
+            "status" => query.OrderByDir(desc, c => c.Status).ThenBy(c => c.Name),
+            "active" => query.OrderByDir(desc, c => c.IsActive),
             _ => query.OrderBy(c => c.Name)
         };
 

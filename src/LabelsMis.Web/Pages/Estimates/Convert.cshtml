@@ -27,9 +27,14 @@ else
                 <input asp-for="RequestedShipDate" type="date" class="form-control" required />
                 <span asp-validation-for="RequestedShipDate" class="text-danger"></span>
             </div>
-            <div class="col-12">
+            <div class="col-md-6">
                 <label class="form-label">Order notes</label>
                 <textarea asp-for="Notes" class="form-control" rows="2"></textarea>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Billing notes</label>
+                <textarea asp-for="BillingNotes" class="form-control" rows="2"></textarea>
+                <div class="form-text">Internal — shows on the invoice page.</div>
             </div>
         </div>
 
@@ -78,6 +83,42 @@ else
                             <input asp-for="Lines[i].LineNotes" class="form-control" />
                         </div>
                     </div>
+                </div>
+            </div>
+        }
+
+        @if (Model.Charges.Count > 0)
+        {
+            <div class="card mb-3">
+                <div class="card-header"><strong>Additional charges</strong> — billed with the order, not produced as jobs</div>
+                <div class="card-body">
+                    @for (var c = 0; c < Model.Charges.Count; c++)
+                    {
+                        var charge = Model.Charges[c];
+                        <div class="row g-2 align-items-end mb-2">
+                            <input type="hidden" asp-for="Charges[c].EstimateChargeId" />
+                            <div class="col-auto pb-2">
+                                <div class="form-check">
+                                    <input asp-for="Charges[c].Include" class="form-check-input" title="Uncheck to leave this charge off the order" />
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label">Description</label>
+                                <input asp-for="Charges[c].Description" class="form-control" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Qty</label>
+                                <input asp-for="Charges[c].Quantity" class="form-control" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Unit price</label>
+                                <input asp-for="Charges[c].UnitPrice" class="form-control" step="0.01" />
+                            </div>
+                            <div class="col-md-2 pb-2">
+                                <span class="fw-semibold">@((charge.UnitPrice * charge.Quantity).ToString("C2"))</span>
+                            </div>
+                        </div>
+                    }
                 </div>
             </div>
         }

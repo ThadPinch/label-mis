@@ -3,6 +3,9 @@
 @{
     ViewData["Title"] = "Invoices";
     var showCheckboxes = !Model.OnExportedTab && Model.CanEdit;
+    var route = Model.FilterRouteValues()
+        .Where(kv => kv.Key != "pageNumber")
+        .ToDictionary(kv => kv.Key, kv => (string?)kv.Value);
 }
 
 <div class="d-flex justify-content-between mb-3">
@@ -38,6 +41,7 @@
 
 <form method="get" class="row g-2 mb-3">
     <input type="hidden" asp-for="Tab" />
+    <input type="hidden" asp-for="Sort" />
     <div class="col-md-2"><input asp-for="Search" class="form-control" placeholder="Search" /></div>
     <div class="col-md-2">
         <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.InvoiceStatus>()"><option value="">All statuses</option></select>
@@ -80,10 +84,18 @@
         {
             <th style="width: 2rem"><input type="checkbox" id="select-all-invoices" class="form-check-input" aria-label="Select all invoices on this page" /></th>
         }
-        <th>Invoice #</th><th>Customer</th><th>Order</th><th>Date</th><th>Due</th><th>Status</th><th>Order status</th><th>Total</th><th>Balance</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Invoice #", "number", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer", "customer", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Order", "order", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Date", "date", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Due", "due", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Status", "status", Model.Sort, route))</th>
+        <th>Order status</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Total", "total", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Balance", "balance", Model.Sort, route))</th>
         @if (Model.OnExportedTab)
         {
-            <th>Exported</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Exported", "exported", Model.Sort, route))</th>
         }
         <th></th>
     </tr>
@@ -150,7 +162,10 @@
 @await Html.PartialAsync("Shared/_Pager", new PagerModel(
     Model.Result.Page,
     Model.Result.TotalPages,
-    Model.Result.TotalCount))
+    Model.Result.TotalCount)
+{
+    Extra = route
+})
 
 @if (showCheckboxes)
 {

@@ -1,6 +1,17 @@
 @page "/purchase-orders"
 @model LabelsMis.Web.Pages.PurchaseOrders.IndexModel
-@{ ViewData["Title"] = "Purchase orders"; }
+@{
+    ViewData["Title"] = "Purchase orders";
+    var route = new Dictionary<string, string?>
+    {
+        ["Search"] = Model.Search,
+        ["Status"] = Model.Status?.ToString(),
+        ["SupplierId"] = Model.SupplierId?.ToString(),
+        ["ExpectedFrom"] = Model.ExpectedFrom?.ToString("yyyy-MM-dd"),
+        ["ExpectedTo"] = Model.ExpectedTo?.ToString("yyyy-MM-dd"),
+        ["Sort"] = Model.Sort
+    };
+}
 
 <div class="d-flex justify-content-between mb-3">
     <h1 class="h3 mb-0">Purchase orders</h1>
@@ -8,6 +19,7 @@
 </div>
 
 <form method="get" class="row g-2 mb-3">
+    <input type="hidden" asp-for="Sort" />
     <div class="col-md-3"><input asp-for="Search" class="form-control" placeholder="Search PO or supplier" /></div>
     <div class="col-md-2">
         <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.PurchaseOrderStatus>()">
@@ -23,7 +35,17 @@
 </form>
 
 <table class="table table-striped">
-    <thead><tr><th>PO #</th><th>Supplier</th><th>Status</th><th>Ordered</th><th>Expected</th><th>Total</th><th></th></tr></thead>
+    <thead>
+    <tr>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("PO #", "number", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Supplier", "supplier", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Status", "status", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Ordered", "ordered", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Expected", "expected", Model.Sort, route))</th>
+        <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Total", "total", Model.Sort, route))</th>
+        <th></th>
+    </tr>
+    </thead>
     <tbody>
     @foreach (var item in Model.Result.Items)
     {
@@ -47,4 +69,7 @@
 @await Html.PartialAsync("Shared/_Pager", new PagerModel(
     Model.Result.Page,
     Model.Result.TotalPages,
-    Model.Result.TotalCount))
+    Model.Result.TotalCount)
+{
+    Extra = route
+})

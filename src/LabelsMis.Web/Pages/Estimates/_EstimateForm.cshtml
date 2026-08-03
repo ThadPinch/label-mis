@@ -8,6 +8,8 @@
     var finishingStocks = (IReadOnlyList<Stock>?)ViewData["FinishingStocks"] ?? Array.Empty<Stock>();
     var substrates = (IEnumerable<SelectListItem>?)ViewData["Substrates"] ?? Enumerable.Empty<SelectListItem>();
     var spotInks = (IReadOnlyList<Ink>?)ViewData["SpotInks"] ?? Array.Empty<Ink>();
+    var dies = (IReadOnlyList<Die>?)ViewData["Dies"] ?? Array.Empty<Die>();
+    var shrinkStocks = (IReadOnlyDictionary<Guid, decimal?>?)ViewData["ShrinkStocks"] ?? new Dictionary<Guid, decimal?>();
     var shippingMethods = (IReadOnlyList<ShippingMethodListItem>?)ViewData["ShippingMethods"] ?? Array.Empty<ShippingMethodListItem>();
 }
 
@@ -17,42 +19,55 @@
 }
 @if (!isReadOnly)
 {
-    <script type="application/json" id="finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString() })))</script>
+    <script type="application/json" id="finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString(), dieId = o.DieId, setupMinutes = o.DefaultSetupMinutes, runSpeedFpm = o.DefaultRunSpeedFpm })))</script>
     <script type="application/json" id="spot-inks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(spotInks.Select(s => new { id = s.Id, code = s.Code, description = s.Description })))</script>
     <script type="application/json" id="finishing-stocks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingStocks.Select(s => new { id = s.Id, code = s.Code, description = s.Description })))</script>
+    <script type="application/json" id="dies-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(dies.Select(d => new { id = d.Id, description = d.Description, setupRating = d.SetupRating, speedRating = d.SpeedRating })))</script>
+    <script type="application/json" id="shrink-stocks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(shrinkStocks))</script>
 }
 <div class="estimate-workspace">
     <div class="estimate-workspace-main">
-<div class="row g-3">
-    <div class="col-md-6">
-        <label asp-for="CustomerId" class="form-label">Customer</label>
-        <select asp-for="CustomerId" id="customer-select" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)" disabled="@isReadOnly">
-            <option value="">Select customer</option>
-        </select>
-        @if (!isReadOnly)
-        {
-            <div class="form-text"><a asp-page="/Customers/Create" target="_blank">+ Add new customer</a></div>
-        }
-    </div>
-    <div class="col-md-3">
-        <label asp-for="SalesRepId" class="form-label">Sales rep</label>
-        <select asp-for="SalesRepId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["SalesRepOptions"]!)" disabled="@isReadOnly">
-            <option value="">Unassigned</option>
-        </select>
-    </div>
-    <div class="col-md-3">
-        <label asp-for="ValidUntilDate" class="form-label">Valid until</label>
-        <input asp-for="ValidUntilDate" class="form-control" type="date" readonly="@isReadOnly" />
-    </div>
-    <div class="col-12">
-        <label asp-for="Notes" class="form-label">Header notes</label>
-        <textarea asp-for="Notes" class="form-control" rows="2" readonly="@isReadOnly"></textarea>
+<div class="card mb-2">
+    <div class="card-header py-1 small fw-semibold">Estimate</div>
+    <div class="card-body py-2">
+        <div class="row g-2">
+            <div class="col-md-6">
+                <label asp-for="CustomerId" class="form-label">Customer</label>
+                <select asp-for="CustomerId" id="customer-select" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["Customers"]!)" disabled="@isReadOnly">
+                    <option value="">Select customer</option>
+                </select>
+                @if (!isReadOnly)
+                {
+                    <div class="form-text"><a asp-page="/Customers/Create" target="_blank">+ Add new customer</a></div>
+                }
+            </div>
+            <div class="col-md-3">
+                <label asp-for="SalesRepId" class="form-label">Sales rep</label>
+                <select asp-for="SalesRepId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["SalesRepOptions"]!)" disabled="@isReadOnly">
+                    <option value="">Unassigned</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="ValidUntilDate" class="form-label">Valid until</label>
+                <input asp-for="ValidUntilDate" class="form-control" type="date" readonly="@isReadOnly" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="Notes" class="form-label">Header notes</label>
+                <textarea asp-for="Notes" class="form-control" rows="2" readonly="@isReadOnly"></textarea>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="BillingNotes" class="form-label">Billing notes</label>
+                <textarea asp-for="BillingNotes" class="form-control" rows="2" readonly="@isReadOnly"></textarea>
+                <div class="form-text">Internal — carries to the sales order and shows on the invoice.</div>
+            </div>
+        </div>
     </div>
 </div>
 
-<fieldset class="border rounded p-3 mt-4 estimate-shipping" id="estimate-shipping">
-    <legend class="float-none w-auto px-2 h6 mb-0">Shipping</legend>
-    <div class="row g-3">
+<div class="card mb-2 estimate-shipping" id="estimate-shipping">
+    <div class="card-header py-1 small fw-semibold">Shipping</div>
+    <div class="card-body py-2">
+    <div class="row g-2">
         <div class="col-md-3">
             <label asp-for="ShippingMethodId" class="form-label">Method</label>
             <select asp-for="ShippingMethodId" id="shipping-method-select" class="form-select" disabled="@isReadOnly">
@@ -114,15 +129,17 @@
             <input asp-for="ShipToCountry" class="form-control shipto-field" readonly="@isReadOnly" placeholder="US" />
         </div>
     </div>
-</fieldset>
+    </div>
+</div>
 
-<h2 class="h5 mt-4 mb-2">Lines</h2>
-@if (!isReadOnly)
-{
-    <div class="row g-3 mb-3">
-        <div class="col-md-6">
-            <label for="product-filter-customer" class="form-label">Pull from existing product — customer</label>
-            <select id="product-filter-customer" class="form-select">
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mt-3 mb-2">
+    <h2 class="h5 mb-0">Lines</h2>
+    @if (!isReadOnly)
+    {
+        <div class="d-flex align-items-center gap-2">
+            <label for="product-filter-customer" class="form-label small mb-0 text-muted text-nowrap"
+                   title="Filter product choices on each line. Defaults to the estimate customer when selected.">Product filter</label>
+            <select id="product-filter-customer" class="form-select form-select-sm" style="min-width: 16rem;">
                 <option value="">All products</option>
                 <option value="house">House products (no customer)</option>
                 @foreach (var customer in (IEnumerable<SelectListItem>)ViewData["Customers"]!)
@@ -130,15 +147,14 @@
                     <option value="@customer.Value">@customer.Text</option>
                 }
             </select>
-            <div class="form-text">Filter product choices on each line. Defaults to the estimate customer when selected.</div>
         </div>
-    </div>
-}
+    }
+</div>
 <div id="estimate-lines">
     @for (var i = 0; i < Model.Lines.Count; i++)
     {
         var line = Model.Lines[i];
-        <div class="card mb-3 estimate-line" data-line-index="@i">
+        <div class="card mb-2 estimate-line" data-line-index="@i">
             <details class="estimate-line-details">
                 <summary class="estimate-line-summary card-header">
                     <span class="estimate-line-chevron" aria-hidden="true"></span>
@@ -156,7 +172,7 @@
                     <input type="hidden" name="Input.Lines[@i].Id" value="@line.Id" />
                 }
                 <div class="estimate-line-grid">
-                <div class="row g-3">
+                <div class="row g-2">
                     <div class="col-md-6">
                         <label class="form-label">Pull from existing product</label>
                         <select name="Input.Lines[@i].SourceProductId" class="form-select source-product" disabled="@isReadOnly">
@@ -176,7 +192,7 @@
 
                 <div class="estimate-line-section">
                     <div class="estimate-line-section-title">Dimensions <span class="text-muted text-lowercase fw-normal">(in)</span></div>
-                    <div class="row g-3">
+                    <div class="row g-2">
                         <div class="col-6 col-md-2">
                             <label class="form-label">Across</label>
                             <input name="Input.Lines[@i].LabelAcrossIn" value="@line.LabelAcrossIn" class="form-control calc-trigger" readonly="@isReadOnly" />
@@ -206,7 +222,7 @@
 
                 <div class="estimate-line-section">
                     <div class="estimate-line-section-title">Material &amp; ink</div>
-                    <div class="row g-3">
+                    <div class="row g-2">
                         <div class="col-md-6">
                             <label class="form-label">Substrate</label>
                             <select name="Input.Lines[@i].SubstrateId" class="form-select calc-immediate substrate-select" disabled="@isReadOnly">
@@ -226,8 +242,12 @@
                                 }
                             </select>
                         </div>
-                        <div class="col-12 white-ink-group @(line.InkSet is InkSet.CMYKW or InkSet.CMYKW_PlusSpot ? "" : "d-none")">
-                            <div class="row g-3">
+                        <div class="col-6 col-md-3 shrink-layflat-group @(line.SubstrateId is { } shrinkSubId && shrinkStocks.ContainsKey(shrinkSubId) ? "" : "d-none")">
+                            <label class="form-label">Shrink layflat (in)</label>
+                            <input name="Input.Lines[@i].ShrinkLayflatIn" value="@(line.ShrinkLayflatIn?.ToString("0.0000", System.Globalization.CultureInfo.InvariantCulture))" class="form-control calc-trigger shrink-layflat-input" readonly="@isReadOnly" />
+                        </div>
+                        <div class="col-12 white-ink-group @(line.InkSet is InkSet.CMYKW or InkSet.CMYKW_PlusSpot or InkSet.EPMW ? "" : "d-none")">
+                            <div class="row g-2">
                                 <div class="col-6 col-md-3">
                                     <label class="form-label">White hits</label>
                                     <select name="Input.Lines[@i].WhiteHits" class="form-select calc-immediate special-hits-select" data-coverage-group="white-coverage-group" disabled="@isReadOnly">
@@ -301,7 +321,7 @@
 
                 <div class="estimate-line-section">
                     <div class="estimate-line-section-title">Imposition &amp; waste</div>
-                    <div class="row g-3">
+                    <div class="row g-2">
                         <div class="col-6 col-md-3">
                             <label class="form-label" for="line-@(i)-max-across">Labels across <span class="form-text d-inline labels-across-max">(auto)</span></label>
                             <select id="line-@(i)-max-across" name="Input.Lines[@i].MaxLabelsAcrossOverride" class="form-select calc-immediate labels-across-select" disabled="@isReadOnly">
@@ -371,35 +391,53 @@
                                     var sel = line.FinishingOperations[j];
                                     var op = finishingOps.FirstOrDefault(o => o.Id == sel.OperationId);
                                     <div class="finishing-item border rounded p-2 mb-2" data-op-id="@sel.OperationId">
-                                        <div class="d-flex flex-wrap gap-2 align-items-end">
-                                            <div class="flex-grow-1">
-                                                <div class="fw-semibold">@(op is null ? sel.OperationId.ToString() : $"{op.Code} — {op.Description}")</div>
+                                        <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].OperationId" value="@sel.OperationId" class="finishing-op-id" />
+                                        <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].SortOrder" value="@j" class="finishing-sort" />
+                                        <div class="d-flex justify-content-between align-items-center gap-2">
+                                            <div class="text-truncate">
+                                                <span class="fw-semibold">@(op is null ? sel.OperationId.ToString() : $"{op.Code} — {op.Description}")</span>
                                                 @if (op is not null)
                                                 {
-                                                    <span class="text-muted small">@op.OperationType</span>
+                                                    <span class="badge text-bg-secondary ms-1">@op.OperationType</span>
                                                 }
-                                                <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].OperationId" value="@sel.OperationId" class="finishing-op-id" />
-                                                <input type="hidden" name="Input.Lines[@i].FinishingOperations[@j].SortOrder" value="@j" class="finishing-sort" />
                                             </div>
-                                            <div>
-                                                <label class="form-label small mb-0">Setup min override</label>
-                                                <input name="Input.Lines[@i].FinishingOperations[@j].SetupMinutesOverride" value="@(sel.SetupMinutesOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" class="form-control form-control-sm calc-trigger" style="max-width: 8rem;" />
+                                            <button type="button" class="btn btn-sm btn-link text-danger p-0 finishing-remove">Remove</button>
+                                        </div>
+                                        <div class="row g-2 mt-0">
+                                            @if (op?.OperationType is FinishingOperationType.DieCut)
+                                            {
+                                                <div class="col-md-4 finishing-die-group">
+                                                    <label class="form-label small mb-0">Die</label>
+                                                    <select name="Input.Lines[@i].FinishingOperations[@j].DieId" class="form-select form-select-sm finishing-die-select">
+                                                        <option value="">No die</option>
+                                                        @foreach (var d in dies)
+                                                        {
+                                                            <option value="@d.Id" selected="@(d.Id == sel.DieId)">@d.Description</option>
+                                                        }
+                                                    </select>
+                                                </div>
+                                            }
+                                            <div class="col-6 col-md-2">
+                                                <label class="form-label small mb-0">Setup (min)</label>
+                                                <input name="Input.Lines[@i].FinishingOperations[@j].SetupMinutesOverride" value="@(sel.SetupMinutesOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" placeholder="@op?.DefaultSetupMinutes.ToString("0.##")" class="form-control form-control-sm calc-trigger" />
                                             </div>
-                                            <div>
-                                                <label class="form-label small mb-0">Run speed fpm override</label>
-                                                <input name="Input.Lines[@i].FinishingOperations[@j].RunSpeedFpmOverride" value="@(sel.RunSpeedFpmOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" class="form-control form-control-sm calc-trigger" style="max-width: 8rem;" />
+                                            <div class="col-6 col-md-2">
+                                                <label class="form-label small mb-0">Speed (fpm)</label>
+                                                <input name="Input.Lines[@i].FinishingOperations[@j].RunSpeedFpmOverride" value="@(sel.RunSpeedFpmOverride?.ToString(System.Globalization.CultureInfo.InvariantCulture))" placeholder="@op?.DefaultRunSpeedFpm.ToString("0.##")" class="form-control form-control-sm calc-trigger" />
                                             </div>
-                                            <div class="finishing-stock-group @(op?.OperationType is FinishingOperationType.Laminate or FinishingOperationType.Foil ? "" : "d-none")">
-                                                <label class="form-label small mb-0">Material stock</label>
-                                                <select name="Input.Lines[@i].FinishingOperations[@j].StockId" class="form-select form-select-sm finishing-stock-select" style="max-width: 14rem;">
-                                                    <option value="">Select stock</option>
-                                                    @foreach (var fs in finishingStocks)
-                                                    {
-                                                        <option value="@fs.Id" selected="@(fs.Id == sel.StockId)">@fs.Code — @fs.Description</option>
-                                                    }
-                                                </select>
-                                            </div>
-                                            <button type="button" class="btn btn-sm btn-outline-danger finishing-remove">Remove</button>
+                                            @if (op?.OperationType is FinishingOperationType.Laminate or FinishingOperationType.Foil)
+                                            {
+                                                <div class="col-md-4 finishing-stock-group">
+                                                    <label class="form-label small mb-0">Material stock</label>
+                                                    <select name="Input.Lines[@i].FinishingOperations[@j].StockId" class="form-select form-select-sm finishing-stock-select">
+                                                        <option value="">Select stock</option>
+                                                        @foreach (var fs in finishingStocks)
+                                                        {
+                                                            <option value="@fs.Id" selected="@(fs.Id == sel.StockId)">@fs.Code — @fs.Description</option>
+                                                        }
+                                                    </select>
+                                                </div>
+                                            }
                                         </div>
                                     </div>
                                 }
@@ -504,6 +542,91 @@
 @if (!isReadOnly)
 {
     <button type="button" id="add-line" class="btn btn-outline-secondary">+ Add line</button>
+}
+
+@if (!isReadOnly || Model.Charges.Count > 0)
+{
+    <div class="card mb-2 mt-3" id="estimate-charges-card">
+        <div class="card-header py-1 small fw-semibold">Additional charges</div>
+        <div class="card-body py-2">
+            @if (!isReadOnly)
+            {
+                <div class="form-text mb-2">One-time, non-label charges (die creation, design time). Billed with the order — they never become production jobs.</div>
+            }
+            <div id="estimate-charges">
+                @for (var c = 0; c < Model.Charges.Count; c++)
+                {
+                    var charge = Model.Charges[c];
+                    <div class="row g-2 align-items-end mb-2 estimate-charge-row">
+                        @if (charge.Id.HasValue)
+                        {
+                            <input type="hidden" name="Input.Charges[@c].Id" value="@charge.Id" />
+                        }
+                        <div class="col-md-6">
+                            <label class="form-label small mb-0">Description</label>
+                            <input name="Input.Charges[@c].Description" value="@charge.Description" list="charge-presets"
+                                   class="form-control form-control-sm charge-desc" placeholder="e.g. Die charge — 3.5&quot; × 2&quot; rotary die" readonly="@isReadOnly" />
+                        </div>
+                        <div class="col-4 col-md-2">
+                            <label class="form-label small mb-0">Qty</label>
+                            <input name="Input.Charges[@c].Quantity" value="@charge.Quantity" class="form-control form-control-sm charge-qty" readonly="@isReadOnly" />
+                        </div>
+                        <div class="col-4 col-md-2">
+                            <label class="form-label small mb-0">Unit price</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input name="Input.Charges[@c].UnitPrice" value="@charge.UnitPrice.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" class="form-control charge-price" readonly="@isReadOnly" />
+                            </div>
+                        </div>
+                        <div class="col-4 col-md-2 d-flex align-items-center justify-content-between gap-2 pb-1">
+                            <span class="small fw-semibold charge-total">@((charge.UnitPrice * charge.Quantity).ToString("C2"))</span>
+                            @if (!isReadOnly)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-danger charge-remove" aria-label="Remove charge">×</button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+            @if (!isReadOnly)
+            {
+                <button type="button" id="add-charge" class="btn btn-sm btn-outline-secondary">+ Add charge</button>
+                <datalist id="charge-presets">
+                    <option value="Die charge"></option>
+                    <option value="Design charge"></option>
+                    <option value="Plate charge"></option>
+                    <option value="Setup charge"></option>
+                </datalist>
+            }
+        </div>
+    </div>
+}
+
+@if (!isReadOnly)
+{
+    <script type="text/template" id="charge-row-template">
+        <div class="row g-2 align-items-end mb-2 estimate-charge-row">
+            <div class="col-md-6">
+                <label class="form-label small mb-0">Description</label>
+                <input name="Input.Charges[__CHARGE__].Description" list="charge-presets" class="form-control form-control-sm charge-desc" placeholder="e.g. Die charge — 3.5&quot; × 2&quot; rotary die" />
+            </div>
+            <div class="col-4 col-md-2">
+                <label class="form-label small mb-0">Qty</label>
+                <input name="Input.Charges[__CHARGE__].Quantity" value="1" class="form-control form-control-sm charge-qty" />
+            </div>
+            <div class="col-4 col-md-2">
+                <label class="form-label small mb-0">Unit price</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text">$</span>
+                    <input name="Input.Charges[__CHARGE__].UnitPrice" value="" class="form-control charge-price" />
+                </div>
+            </div>
+            <div class="col-4 col-md-2 d-flex align-items-center justify-content-between gap-2 pb-1">
+                <span class="small fw-semibold charge-total">—</span>
+                <button type="button" class="btn btn-sm btn-outline-danger charge-remove" aria-label="Remove charge">×</button>
+            </div>
+        </div>
+    </script>
 }
     </div>
     <aside class="estimate-workspace-panel" aria-label="Estimate summary">

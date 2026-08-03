@@ -2,6 +2,16 @@
 @model LabelsMis.Web.Pages.Estimates.IndexModel
 @{
     ViewData["Title"] = "Estimates";
+    var route = new Dictionary<string, string?>
+    {
+        ["Search"] = Model.Search,
+        ["Status"] = Model.Status?.ToString(),
+        ["CustomerId"] = Model.CustomerId?.ToString(),
+        ["SalesRepId"] = Model.SalesRepId?.ToString(),
+        ["FromDate"] = Model.FromDate?.ToString("yyyy-MM-dd"),
+        ["ToDate"] = Model.ToDate?.ToString("yyyy-MM-dd"),
+        ["Sort"] = Model.Sort
+    };
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -13,6 +23,7 @@
 </div>
 
 <form method="get" class="row g-2 mb-3">
+    <input type="hidden" asp-for="Sort" />
     <div class="col-md-3">
         <input asp-for="Search" class="form-control" placeholder="Search number, customer, product" />
     </div>
@@ -45,13 +56,13 @@
 <table class="table table-striped">
     <thead>
         <tr>
-            <th>Number</th>
-            <th>Customer</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Number", "number", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer", "customer", Model.Sort, route))</th>
             <th>Product</th>
-            <th>Status</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Status", "status", Model.Sort, route))</th>
             <th>Total (max qty)</th>
-            <th>Created</th>
-            <th>Valid until</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Created", "created", Model.Sort, route))</th>
+            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Valid until", "valid", Model.Sort, route))</th>
             <th></th>
         </tr>
     </thead>
@@ -77,16 +88,7 @@
 @await Html.PartialAsync("Shared/_Pager", new PagerModel(
     Model.Result.Page,
     Model.Result.TotalPages,
-    Model.Result.TotalCount,
-    Model.Search,
-    Model.Sort)
+    Model.Result.TotalCount)
 {
-    Extra = new Dictionary<string, string?>
-    {
-        ["status"] = Model.Status?.ToString(),
-        ["customerId"] = Model.CustomerId?.ToString(),
-        ["salesRepId"] = Model.SalesRepId?.ToString(),
-        ["fromDate"] = Model.FromDate?.ToString("yyyy-MM-dd"),
-        ["toDate"] = Model.ToDate?.ToString("yyyy-MM-dd")
-    }
+    Extra = route
 })

@@ -2,6 +2,7 @@ using LabelsMis.Domain.Enums;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Services.Invoices;
+using LabelsMis.Web.Services.SalesOrders;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -9,7 +10,9 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace LabelsMis.Web.Pages.Invoices;
 
 [Authorize(Policy = TransactionPolicies.InvoicesRead)]
-public class DetailModel(InvoiceService invoiceService) : PageModel
+public class DetailModel(
+    InvoiceService invoiceService,
+    SalesOrderDocumentService documentService) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
     [BindProperty] public PaymentInput Payment { get; set; } = new(DateOnly.FromDateTime(DateTime.UtcNow), 0, PaymentMethod.Check, null, null);
@@ -23,6 +26,17 @@ public class DetailModel(InvoiceService invoiceService) : PageModel
         CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting);
         Detail = await invoiceService.GetDetailAsync(Id, cancellationToken);
         return Detail is null ? NotFound() : Page();
+    }
+
+    public async Task<IActionResult> OnGetDocumentAsync(Guid documentId, CancellationToken cancellationToken)
+    {
+        var detail = await invoiceService.GetDetailAsync(Id, cancellationToken);
+        if (detail is null) return NotFound();
+
+        var file = await documentService.OpenAsync(detail.SalesOrderId, documentId, cancellationToken);
+        if (file is null) return NotFound();
+
+        return File(file.Value.Stream, file.Value.ContentType, file.Value.FileName);
     }
 
     public async Task<IActionResult> OnPostRecordPaymentAsync(CancellationToken cancellationToken)

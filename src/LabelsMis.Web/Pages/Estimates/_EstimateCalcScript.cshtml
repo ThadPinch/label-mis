@@ -428,6 +428,30 @@
         previewEl.textContent = fmtMoney(top.totalPrice);
     };
 
+    // Non-label charge rows (die creation, design time) included in the totals panel.
+    const chargesContainer = document.getElementById('estimate-charges');
+
+    const collectCharges = () => [...(chargesContainer?.querySelectorAll('.estimate-charge-row') ?? [])]
+        .map(row => {
+            const description = row.querySelector('.charge-desc')?.value?.trim() || '';
+            const qtyRaw = Number(row.querySelector('.charge-qty')?.value);
+            const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
+            const priceRaw = Number(row.querySelector('.charge-price')?.value);
+            const price = Number.isFinite(priceRaw) ? priceRaw : 0;
+            return { description, qty, total: qty * price };
+        })
+        .filter(c => c.description);
+
+    const updateChargeRowTotals = () => {
+        chargesContainer?.querySelectorAll('.estimate-charge-row').forEach(row => {
+            const qtyRaw = Number(row.querySelector('.charge-qty')?.value);
+            const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
+            const priceRaw = Number(row.querySelector('.charge-price')?.value);
+            const totalEl = row.querySelector('.charge-total');
+            if (totalEl) totalEl.textContent = Number.isFinite(priceRaw) ? fmtMoney(qty * priceRaw) : '—';
+        });
+    };
+
     const updateEstimateTotals = () => {
         if (!totalsPanel) return;
 
@@ -467,6 +491,24 @@
             </div>`;
         }).join('');
 
+        const charges = collectCharges();
+        let chargesBlock = '';
+        if (charges.length > 0) {
+            const rows = charges.map(c => `<div class="d-flex justify-content-between">
+                <span class="small">${escapeHtml(c.description)}${c.qty > 1 ? ` ×${c.qty}` : ''}</span>
+                <span class="small">${fmtMoney(c.total)}</span>
+            </div>`).join('');
+            const total = charges.reduce((sum, c) => sum + c.total, 0);
+            chargesBlock = `<div class="estimate-total-line mb-3">
+                <div class="estimate-total-line-title fw-semibold">Additional charges</div>
+                ${rows}
+                <div class="d-flex justify-content-between border-top mt-1 pt-1">
+                    <span class="fw-semibold small">Charges total</span>
+                    <span class="fw-semibold small">${fmtMoney(total)}</span>
+                </div>
+            </div>`;
+        }
+
         const shipping = getShippingCost();
         let shippingBlock = '';
         if (shipping > 0) {
@@ -477,8 +519,44 @@
             </div>`;
         }
 
-        totalsPanel.innerHTML = blocks + shippingBlock;
+        totalsPanel.innerHTML = blocks + chargesBlock + shippingBlock;
     };
+
+    // Charge row add/remove + totals refresh. The template and rows live in the form partial.
+    const addChargeBtn = document.getElementById('add-charge');
+    const chargeTemplateEl = document.getElementById('charge-row-template');
+
+    const reindexCharges = () => {
+        chargesContainer?.querySelectorAll('.estimate-charge-row').forEach((row, index) => {
+            row.querySelectorAll('[name]').forEach(input => {
+                input.name = input.name.replace(/Charges\[\d+\]|Charges\[__CHARGE__\]/, `Charges[${index}]`);
+            });
+        });
+    };
+
+    addChargeBtn?.addEventListener('click', () => {
+        if (!chargesContainer || !chargeTemplateEl) return;
+        const holder = document.createElement('div');
+        holder.innerHTML = chargeTemplateEl.textContent.trim();
+        chargesContainer.appendChild(holder.firstElementChild);
+        reindexCharges();
+        updateEstimateTotals();
+    });
+
+    chargesContainer?.addEventListener('click', e => {
+        if (e.target.closest('.charge-remove')) {
+            e.target.closest('.estimate-charge-row')?.remove();
+            reindexCharges();
+            updateEstimateTotals();
+        }
+    });
+
+    chargesContainer?.addEventListener('input', () => {
+        updateChargeRowTotals();
+        updateEstimateTotals();
+    });
+
+    updateChargeRowTotals();
 
     const getShippingCost = () => {
         const value = Number(shippingCostInput?.value);
@@ -729,7 +807,7 @@
     } catch { SPOT_INKS = []; }
     const spotInkById = new Map(SPOT_INKS.map(s => [String(s.id), s]));
 
-    const WHITE_INK_SETS = new Set([3, 4]);
+    const WHITE_INK_SETS = new Set([3, 4, 5]);
     const SPOT_INK_SETS = new Set([2, 4]);
 
     const toggleInkGroups = (lineEl) => {
@@ -821,10 +899,66 @@
     // Only these finishing categories consume a material stock.
     const MATERIAL_FINISHING_CATEGORIES = new Set(['Laminate', 'Foil']);
 
+    let DIES = [];
+    try {
+        const diesEl = document.getElementById('dies-data');
+        if (diesEl) DIES = JSON.parse(diesEl.textContent || '[]');
+    } catch { DIES = []; }
+    const dieById = new Map(DIES.map(d => [String(d.id), d]));
+
+    // Shrink stock id → default layflat (in); presence marks the substrate as shrink film.
+    let SHRINK_STOCKS = {};
+    try {
+        const shrinkEl = document.getElementById('shrink-stocks-data');
+        if (shrinkEl) SHRINK_STOCKS = JSON.parse(shrinkEl.textContent || '{}');
+    } catch { SHRINK_STOCKS = {}; }
+
+    // Shows the layflat input only for shrink substrates; repopulate seeds it from the
+    // stock's default (still adjustable per line afterwards).
+    const syncShrinkLayflat = (lineEl, repopulate) => {
+        const substrateSel = lineEl?.querySelector('.substrate-select');
+        const group = lineEl?.querySelector('.shrink-layflat-group');
+        const input = lineEl?.querySelector('.shrink-layflat-input');
+        if (!substrateSel || !group || !input) return;
+        const isShrink = Object.prototype.hasOwnProperty.call(SHRINK_STOCKS, substrateSel.value);
+        group.classList.toggle('d-none', !isShrink);
+        if (!isShrink) {
+            input.value = '';
+        } else if (repopulate) {
+            const layflat = SHRINK_STOCKS[substrateSel.value];
+            input.value = layflat != null ? String(layflat) : '';
+        }
+    };
+
     const buildFinishingStockOptions = (selectedId) => ['<option value="">Select stock</option>']
         .concat(FINISHING_STOCKS.map(s =>
             `<option value="${escapeHtml(s.id)}"${String(s.id) === String(selectedId || '') ? ' selected' : ''}>${escapeHtml(s.code)} — ${escapeHtml(s.description)}</option>`))
         .join('');
+
+    const buildFinishingDieOptions = (selectedId) => ['<option value="">No die</option>']
+        .concat(DIES.map(d =>
+            `<option value="${escapeHtml(d.id)}"${String(d.id) === String(selectedId || '') ? ' selected' : ''}>${escapeHtml(d.description)}</option>`))
+        .join('');
+
+    // The die's setup/speed ratings take priority over the finishing task's defaults: picking a
+    // die writes them into the override inputs. A die without ratings falls back to blank
+    // (= the task's own defaults).
+    const applyDieRatingsToFinishingItem = (item) => {
+        const die = dieById.get(item.querySelector('.finishing-die-select')?.value);
+        const setupInput = item.querySelector('[name$=".SetupMinutesOverride"]');
+        const speedInput = item.querySelector('[name$=".RunSpeedFpmOverride"]');
+        if (setupInput) setupInput.value = die?.setupRating != null ? String(die.setupRating) : '';
+        if (speedInput) speedInput.value = die?.speedRating != null ? String(die.speedRating) : '';
+    };
+
+    const wireFinishingDieSelect = (sel) => {
+        if (!sel) return;
+        sel.addEventListener('change', () => {
+            const item = sel.closest('.finishing-item');
+            if (item) applyDieRatingsToFinishingItem(item);
+            calculate();
+        });
+    };
 
     const populateFinishingOperations = (categorySel) => {
         const builder = categorySel.closest('.finishing-builder');
@@ -864,44 +998,57 @@
         });
     };
 
-    const buildFinishingItem = (lineEl, op, setupOverride, runOverride, stockId) => {
+    const buildFinishingItem = (lineEl, op, setupOverride, runOverride, stockId, dieId) => {
         const lineIdx = lineEl.dataset.lineIndex;
         const item = document.createElement('div');
         item.className = 'finishing-item border rounded p-2 mb-2';
         item.dataset.opId = op.id;
         const stockBlock = MATERIAL_FINISHING_CATEGORIES.has(op.category)
-            ? `<div class="finishing-stock-group">
+            ? `<div class="col-md-4 finishing-stock-group">
                     <label class="form-label small mb-0">Material stock</label>
-                    <select name="Input.Lines[${lineIdx}].FinishingOperations[0].StockId" class="form-select form-select-sm finishing-stock-select" style="max-width: 14rem;">${buildFinishingStockOptions(stockId)}</select>
+                    <select name="Input.Lines[${lineIdx}].FinishingOperations[0].StockId" class="form-select form-select-sm finishing-stock-select">${buildFinishingStockOptions(stockId)}</select>
+                </div>`
+            : '';
+        const dieBlock = op.category === 'DieCut'
+            ? `<div class="col-md-4 finishing-die-group">
+                    <label class="form-label small mb-0">Die</label>
+                    <select name="Input.Lines[${lineIdx}].FinishingOperations[0].DieId" class="form-select form-select-sm finishing-die-select">${buildFinishingDieOptions(dieId)}</select>
                 </div>`
             : '';
         item.innerHTML = `
-            <div class="d-flex flex-wrap gap-2 align-items-end">
-                <div class="flex-grow-1">
-                    <div class="fw-semibold">${escapeHtml(op.code)} — ${escapeHtml(op.description)}</div>
-                    <span class="text-muted small">${escapeHtml(op.category)}</span>
-                    <input type="hidden" name="Input.Lines[${lineIdx}].FinishingOperations[0].OperationId" value="${escapeHtml(op.id)}" class="finishing-op-id" />
-                    <input type="hidden" name="Input.Lines[${lineIdx}].FinishingOperations[0].SortOrder" value="0" class="finishing-sort" />
+            <input type="hidden" name="Input.Lines[${lineIdx}].FinishingOperations[0].OperationId" value="${escapeHtml(op.id)}" class="finishing-op-id" />
+            <input type="hidden" name="Input.Lines[${lineIdx}].FinishingOperations[0].SortOrder" value="0" class="finishing-sort" />
+            <div class="d-flex justify-content-between align-items-center gap-2">
+                <div class="text-truncate">
+                    <span class="fw-semibold">${escapeHtml(op.code)} — ${escapeHtml(op.description)}</span>
+                    <span class="badge text-bg-secondary ms-1">${escapeHtml(op.category)}</span>
                 </div>
-                <div>
-                    <label class="form-label small mb-0">Setup min override</label>
-                    <input name="Input.Lines[${lineIdx}].FinishingOperations[0].SetupMinutesOverride" value="${escapeHtml(setupOverride || '')}" class="form-control form-control-sm calc-trigger" style="max-width: 8rem;" />
+                <button type="button" class="btn btn-sm btn-link text-danger p-0 finishing-remove">Remove</button>
+            </div>
+            <div class="row g-2 mt-0">
+                ${dieBlock}
+                <div class="col-6 col-md-2">
+                    <label class="form-label small mb-0">Setup (min)</label>
+                    <input name="Input.Lines[${lineIdx}].FinishingOperations[0].SetupMinutesOverride" value="${escapeHtml(setupOverride || '')}" placeholder="${op.setupMinutes ?? ''}" class="form-control form-control-sm calc-trigger" />
                 </div>
-                <div>
-                    <label class="form-label small mb-0">Run speed fpm override</label>
-                    <input name="Input.Lines[${lineIdx}].FinishingOperations[0].RunSpeedFpmOverride" value="${escapeHtml(runOverride || '')}" class="form-control form-control-sm calc-trigger" style="max-width: 8rem;" />
+                <div class="col-6 col-md-2">
+                    <label class="form-label small mb-0">Speed (fpm)</label>
+                    <input name="Input.Lines[${lineIdx}].FinishingOperations[0].RunSpeedFpmOverride" value="${escapeHtml(runOverride || '')}" placeholder="${op.runSpeedFpm ?? ''}" class="form-control form-control-sm calc-trigger" />
                 </div>
                 ${stockBlock}
-                <button type="button" class="btn btn-sm btn-outline-danger finishing-remove">Remove</button>
             </div>`;
         return item;
     };
 
-    const addFinishingToLine = (lineEl, op, setupOverride, runOverride, stockId) => {
+    const addFinishingToLine = (lineEl, op, setupOverride, runOverride, stockId, dieId) => {
         const list = lineEl?.querySelector('.finishing-selected');
         if (!list || !op) return false;
         if (list.querySelector(`.finishing-item[data-op-id="${op.id}"]`)) return false;
-        const item = buildFinishingItem(lineEl, op, setupOverride, runOverride, stockId);
+        // A die-cut operation's configured die is the default when none was passed in.
+        if (!dieId && op.category === 'DieCut' && op.dieId) {
+            dieId = String(op.dieId);
+        }
+        const item = buildFinishingItem(lineEl, op, setupOverride, runOverride, stockId, dieId);
         list.appendChild(item);
         renumberFinishing(lineEl);
         wireFinishingRemove(item.querySelector('.finishing-remove'));
@@ -910,6 +1057,11 @@
             el.addEventListener('blur', calculate);
         });
         item.querySelector('.finishing-stock-select')?.addEventListener('change', calculate);
+        wireFinishingDieSelect(item.querySelector('.finishing-die-select'));
+        // A die attached at add time (e.g. pulled from a product) wins over any carried overrides.
+        if (dieId && dieById.has(String(dieId))) {
+            applyDieRatingsToFinishingItem(item);
+        }
         return true;
     };
 
@@ -927,6 +1079,7 @@
         set('[name$=".CornerRadiusIn"]', product.cornerRadiusIn);
         const substrateSel = lineEl.querySelector('.substrate-select');
         if (substrateSel) substrateSel.value = product.substrateId;
+        syncShrinkLayflat(lineEl, true);
         const inkSetSel = lineEl.querySelector('[name$=".InkSet"]');
         if (inkSetSel) inkSetSel.value = product.inkSet;
         toggleInkGroups(lineEl);
@@ -934,6 +1087,8 @@
         if (acrossSel) acrossSel.value = '';
         const orientationSel = lineEl.querySelector('.orientation-select');
         if (orientationSel) orientationSel.value = '';
+        const unwindSel = lineEl.querySelector('.unwind-select');
+        if (unwindSel) unwindSel.value = product.unwindPosition != null ? String(product.unwindPosition) : '';
 
         try {
             const finishing = JSON.parse(product.finishingOperationsJson || '[]');
@@ -947,7 +1102,9 @@
                     const setup = f.SetupMinutesOverride ?? f.setupMinutesOverride;
                     const run = f.RunSpeedFpmOverride ?? f.runSpeedFpmOverride;
                     const stock = f.StockId ?? f.stockId;
-                    addFinishingToLine(lineEl, op, setup == null ? '' : String(setup), run == null ? '' : String(run), stock == null ? '' : String(stock));
+                    // The product's own die seeds die-cut operations that don't carry one.
+                    const die = f.DieId ?? f.dieId ?? (op.category === 'DieCut' ? product.dieId : null);
+                    addFinishingToLine(lineEl, op, setup == null ? '' : String(setup), run == null ? '' : String(run), stock == null ? '' : String(stock), die == null ? '' : String(die));
                 });
             }
         } catch { /* ignore */ }
@@ -1297,6 +1454,11 @@
             el.addEventListener('input', scheduleCalculate);
             el.addEventListener('blur', calculate);
         });
+        root.querySelectorAll('.substrate-select').forEach(sel => {
+            // Registered before the calc-immediate handler so the layflat value is in
+            // place when the recalculation serializes the form.
+            sel.addEventListener('change', () => syncShrinkLayflat(sel.closest('.estimate-line'), true));
+        });
         root.querySelectorAll('.calc-immediate').forEach(el => {
             el.addEventListener('change', calculate);
         });
@@ -1328,7 +1490,7 @@
                 const opSel = builder?.querySelector('.finishing-operation-select');
                 const op = finishingById.get(opSel?.value);
                 const lineEl = btn.closest('.estimate-line');
-                if (op && lineEl && addFinishingToLine(lineEl, op, '', '', '')) {
+                if (op && lineEl && addFinishingToLine(lineEl, op, '', '', '', '')) {
                     calculate();
                 }
                 if (opSel) opSel.value = '';
@@ -1339,6 +1501,7 @@
         root.querySelectorAll('.finishing-stock-select').forEach(sel => {
             sel.addEventListener('change', calculate);
         });
+        root.querySelectorAll('.finishing-die-select').forEach(wireFinishingDieSelect);
         root.querySelectorAll('.spot-ink-select').forEach(sel => {
             sel.addEventListener('change', () => {
                 const addBtn = sel.closest('.spot-builder')?.querySelector('.spot-add');

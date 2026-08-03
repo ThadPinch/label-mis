@@ -13,10 +13,10 @@ public class SalesOrderTests
     public void UpdateOpen_WhenInProduction_Throws()
     {
         var order = SalesOrder.CreateOpen(Guid.NewGuid(), "SO-2026-00001", Guid.NewGuid(),
-            null, null, null, Now, null, null, null, 0m, ShippingAddress.Empty, UserId, Now);
+            null, null, null, Now, null, null, null, null, 0m, ShippingAddress.Empty, UserId, Now);
         order.AdvanceStatus(SalesOrderStatus.InProduction, UserId, Now);
 
-        var act = () => order.UpdateOpen(null, null, null, null, 0m, ShippingAddress.Empty, UserId, Now);
+        var act = () => order.UpdateOpen(null, null, null, null, null, 0m, ShippingAddress.Empty, UserId, Now);
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*cannot be edited*");

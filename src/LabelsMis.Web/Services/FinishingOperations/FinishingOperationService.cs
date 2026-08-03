@@ -22,7 +22,7 @@ public record FinishingOperationForm(
 public class FinishingOperationService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
     public async Task<PagedResult<FinishingOperationListItem>> ListAsync(
-        string? search, int page, int pageSize, bool includeInactive, CancellationToken ct = default)
+        string? search, string? sort, int page, int pageSize, bool includeInactive, CancellationToken ct = default)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 5, 100);
@@ -33,7 +33,15 @@ public class FinishingOperationService(LabelsMisDbContext db, ICurrentUserServic
             var term = search.Trim().ToUpperInvariant();
             query = query.Where(o => o.Code.Contains(term) || o.Description.ToUpper().Contains(term));
         }
-        query = query.OrderBy(o => o.Code);
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
+        {
+            "code" => query.OrderByDir(desc, o => o.Code),
+            "description" => query.OrderByDir(desc, o => o.Description),
+            "type" => query.OrderByDir(desc, o => o.OperationType),
+            "active" => query.OrderByDir(desc, o => o.IsActive),
+            _ => query.OrderBy(o => o.Code)
+        };
         var total = await query.CountAsync(ct);
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
             .Select(o => new FinishingOperationListItem(o.Id, o.Code, o.Description, o.OperationType, o.IsActive))

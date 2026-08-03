@@ -65,6 +65,7 @@ public class EstimateService(
         var query = db.Estimates.AsNoTracking()
             .Include(e => e.Customer)
             .Include(e => e.Lines).ThenInclude(l => l.QuantityBreaks)
+            .Include(e => e.Charges)
             .AsQueryable();
 
         if (status.HasValue)
@@ -103,13 +104,14 @@ public class EstimateService(
                 || e.Lines.Any(l => l.ProductDescription.ToUpper().Contains(term)));
         }
 
-        query = sort switch
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
         {
-            "number" => query.OrderBy(e => e.EstimateNumber),
-            "number_desc" => query.OrderByDescending(e => e.EstimateNumber),
-            "customer" => query.OrderBy(e => e.Customer.Name),
-            "status" => query.OrderBy(e => e.Status).ThenByDescending(e => e.CreatedAt),
-            "valid" => query.OrderBy(e => e.ValidUntilDate),
+            "number" => query.OrderByDir(desc, e => e.EstimateNumber),
+            "customer" => query.OrderByDir(desc, e => e.Customer.Name),
+            "status" => query.OrderByDir(desc, e => e.Status).ThenByDescending(e => e.CreatedAt),
+            "created" => query.OrderByDir(desc, e => e.CreatedAt),
+            "valid" => query.OrderByDir(desc, e => e.ValidUntilDate),
             _ => query.OrderByDescending(e => e.CreatedAt)
         };
 
@@ -138,7 +140,8 @@ public class EstimateService(
                 decimal? topTotal = e.Lines
                     .Select(l => l.QuantityBreaks.OrderByDescending(q => q.Quantity).Select(q => (decimal?)q.TotalPrice).FirstOrDefault())
                     .Where(t => t.HasValue)
-                    .Sum(t => t!.Value);
+                    .Sum(t => t!.Value)
+                    + e.Charges.Sum(c => c.LineTotal);
 
                 return new EstimateListItem(
                     e.Id,
@@ -165,6 +168,7 @@ public class EstimateService(
             .Include(e => e.ShippingMethod)
             .Include(e => e.Lines).ThenInclude(l => l.Substrate)
             .Include(e => e.Lines).ThenInclude(l => l.QuantityBreaks)
+            .Include(e => e.Charges)
             .Include(e => e.Revisions)
             .SingleOrDefaultAsync(e => e.Id == id, cancellationToken);
 
@@ -274,6 +278,7 @@ public class EstimateService(
             input.CustomerId,
             input.SalesRepId,
             input.Notes,
+            input.BillingNotes,
             input.ValidUntilDate,
             input.ShippingMethodId,
             input.ShippingCost,
@@ -282,6 +287,7 @@ public class EstimateService(
             now);
 
         AddLines(estimate, input.Lines, calc, userId, now);
+        AddCharges(estimate, input.Charges, userId, now);
         db.Estimates.Add(estimate);
         await db.SaveChangesAsync(cancellationToken);
         return estimate;
@@ -296,6 +302,7 @@ public class EstimateService(
         var now = DateTime.UtcNow;
         var estimate = await db.Estimates
             .Include(e => e.Lines).ThenInclude(l => l.QuantityBreaks)
+            .Include(e => e.Charges)
             .SingleAsync(e => e.Id == id, cancellationToken);
 
         var calc = await CalculateAsync(input, cancellationToken);
@@ -305,6 +312,7 @@ public class EstimateService(
         estimate.UpdateDraft(
             input.SalesRepId,
             input.Notes,
+            input.BillingNotes,
             input.ValidUntilDate,
             input.ShippingMethodId,
             input.ShippingCost,
@@ -319,8 +327,11 @@ public class EstimateService(
         }
         db.EstimateLines.RemoveRange(estimate.Lines);
         estimate.ReplaceLines([]);
+        db.EstimateCharges.RemoveRange(estimate.Charges);
+        estimate.ReplaceCharges([]);
 
         AddLines(estimate, input.Lines, calc, userId, now);
+        AddCharges(estimate, input.Charges, userId, now);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -478,7 +489,12 @@ public class EstimateService(
             input.ShippingCost,
             (input.ShippingMethodId is { } m && m != Guid.Empty) || input.ShippingCost > 0,
             input.Notes,
-            salesRepName);
+            salesRepName,
+            (input.Charges ?? [])
+                .Where(c => !string.IsNullOrWhiteSpace(c.Description))
+                .Select(c => new EstimatePdfCharge(
+                    c.Description, Math.Max(1, c.Quantity), c.UnitPrice, c.UnitPrice * Math.Max(1, c.Quantity)))
+                .ToList());
 
         return await pdfGenerator.GenerateBytesAsync(model, cancellationToken);
     }
@@ -505,6 +521,7 @@ public class EstimateService(
         var now = DateTime.UtcNow;
         var estimate = await db.Estimates
             .Include(e => e.Lines).ThenInclude(l => l.QuantityBreaks)
+            .Include(e => e.Charges)
             .Include(e => e.Revisions)
             .SingleAsync(e => e.Id == id, cancellationToken);
 
@@ -514,6 +531,7 @@ public class EstimateService(
             estimate.RevisionNumber,
             estimate.Status,
             estimate.Notes,
+            estimate.BillingNotes,
             estimate.ValidUntilDate,
             Lines = estimate.Lines.OrderBy(l => l.LineNumber).Select(l => new
             {
@@ -543,6 +561,14 @@ public class EstimateService(
                     q.MarginPct,
                     q.MarkupPctOverride
                 })
+            }),
+            Charges = estimate.Charges.OrderBy(c => c.LineNumber).Select(c => new
+            {
+                c.LineNumber,
+                c.Description,
+                c.Quantity,
+                c.UnitPrice,
+                c.LineTotal
             })
         });
 
@@ -623,6 +649,7 @@ public class EstimateService(
                 input.MaxLabelsAcrossOverride,
                 input.LabelOrientationOverride,
                 input.Unwind,
+                input.ShrinkLayflatIn,
                 userId,
                 now);
 
@@ -657,6 +684,32 @@ public class EstimateService(
         }
 
         estimate.ReplaceLines(lines);
+    }
+
+    private void AddCharges(
+        Estimate estimate,
+        IReadOnlyList<EstimateChargeFormInput>? inputs,
+        Guid userId,
+        DateTime now)
+    {
+        var charges = new List<EstimateCharge>();
+        var lineNumber = 1;
+        foreach (var input in (inputs ?? []).Where(c => !string.IsNullOrWhiteSpace(c.Description)))
+        {
+            var charge = EstimateCharge.Create(
+                Guid.NewGuid(),
+                estimate.Id,
+                lineNumber++,
+                input.Description,
+                Math.Max(1, input.Quantity),
+                input.UnitPrice,
+                userId,
+                now);
+            charges.Add(charge);
+            db.EstimateCharges.Add(charge);
+        }
+
+        estimate.ReplaceCharges(charges);
     }
 
     private static void EnsureNoCalculationErrors(EstimateCalculationResponse calc)

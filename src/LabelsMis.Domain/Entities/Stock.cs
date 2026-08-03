@@ -25,6 +25,9 @@ public class Stock : MasterDataEntity
     public decimal MinOrderQtyLf { get; private set; }
     public StockType StockType { get; private set; } = StockType.Substrate;
 
+    /// <summary>Layflat width (in) for shrink film stocks; null for other stock types.</summary>
+    public decimal? ShrinkLayflatIn { get; private set; }
+
     public IReadOnlyCollection<StockCostHistory> CostHistory => _costHistory;
 
     public static Stock Create(
@@ -42,13 +45,15 @@ public class Stock : MasterDataEntity
         decimal minOrderQtyLf,
         Guid createdById,
         DateTime createdAt,
-        StockType stockType = StockType.Substrate)
+        StockType stockType = StockType.Substrate,
+        decimal? shrinkLayflatIn = null)
     {
         Validate(code, description, widthIn, costPerMsi, minOrderQtyLf);
 
         var stock = new Stock
         {
             StockType = stockType,
+            ShrinkLayflatIn = stockType == StockType.Shrink ? shrinkLayflatIn : null,
             Code = code.Trim().ToUpperInvariant(),
             Description = description.Trim(),
             FaceMaterial = faceMaterial.Trim(),
@@ -79,11 +84,13 @@ public class Stock : MasterDataEntity
         decimal minOrderQtyLf,
         Guid modifiedById,
         DateTime modifiedAt,
-        StockType stockType = StockType.Substrate)
+        StockType stockType = StockType.Substrate,
+        decimal? shrinkLayflatIn = null)
     {
         Validate(code, description, widthIn, costPerMsi, minOrderQtyLf);
 
         StockType = stockType;
+        ShrinkLayflatIn = stockType == StockType.Shrink ? shrinkLayflatIn : null;
         Code = code.Trim().ToUpperInvariant();
         Description = description.Trim();
         FaceMaterial = faceMaterial.Trim();

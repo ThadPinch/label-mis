@@ -75,7 +75,9 @@ public record JobTicketDetail(
     RollSpec? RollSpec,
     IReadOnlyList<JobTicketRouteStep> Route,
     string? OrderNotes = null,
-    string? LineNotes = null);
+    string? LineNotes = null,
+    IReadOnlyList<string>? OrderCharges = null,
+    Die? Die = null);
 
 public record OperatorJobView(
     Job Job,
@@ -181,12 +183,18 @@ public class JobService(
                 || (j.Product.PrimaryCustomer != null && j.Product.PrimaryCustomer.Name.ToUpper().Contains(term)));
         }
 
-        query = sort switch
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
         {
-            "due" => query.OrderBy(j => j.DueDate).ThenBy(j => j.Priority),
-            "priority" => query.OrderBy(j => j.Priority).ThenBy(j => j.DueDate),
-            "status" => query.OrderBy(j => j.Status).ThenByDescending(j => j.CreatedAt),
-            "number" => query.OrderBy(j => j.JobNumber),
+            "number" => query.OrderByDir(desc, j => j.JobNumber),
+            "order" => query.OrderByDir(desc, j => j.SalesOrderLine.SalesOrder.OrderNumber),
+            "customer" => query.OrderByDir(desc, j => j.Product.PrimaryCustomer != null ? j.Product.PrimaryCustomer.Name : ""),
+            "product" => query.OrderByDir(desc, j => j.SalesOrderLine.Description ?? j.Product.Description),
+            "status" => query.OrderByDir(desc, j => j.Status).ThenByDescending(j => j.CreatedAt),
+            "due" => query.OrderByDir(desc, j => j.DueDate).ThenBy(j => j.Priority),
+            "scheduled" => query.OrderByDir(desc, j => j.ScheduledForDate),
+            "qty" => query.OrderByDir(desc, j => j.QuantityOrdered),
+            "priority" => query.OrderByDir(desc, j => j.Priority).ThenBy(j => j.DueDate),
             _ => query.OrderBy(j => j.Priority).ThenBy(j => j.DueDate)
         };
 
@@ -368,13 +376,13 @@ public class JobService(
             .FirstOrDefaultAsync(cancellationToken)
             ?? job.Product.Substrate.Description;
 
-        string? dieDescription = null;
+        Die? die = null;
         if (spec.DieId is { } dieId)
         {
-            dieDescription = await db.Dies.AsNoTracking()
-                .Where(d => d.Id == dieId)
-                .Select(d => d.Description)
-                .FirstOrDefaultAsync(cancellationToken);
+            die = await db.Dies.AsNoTracking()
+                .Include(d => d.Customer)
+                .Include(d => d.Supplier)
+                .FirstOrDefaultAsync(d => d.Id == dieId, cancellationToken);
         }
 
         var inkParts = new List<string>();
@@ -403,6 +411,15 @@ public class JobService(
         }
 
         var order = job.SalesOrderLine.SalesOrder;
+
+        // Non-label charges on the order (die creation, design) — surfaced on the ticket so the
+        // floor knows e.g. a new die is being made, without a job existing for it.
+        var orderCharges = await db.SalesOrderCharges.AsNoTracking()
+            .Where(c => c.SalesOrderId == order.Id)
+            .OrderBy(c => c.LineNumber)
+            .Select(c => new { c.Description, c.Quantity })
+            .ToListAsync(cancellationToken);
+
         return new JobTicketDetail(
             job,
             job.Product.PrimaryCustomer != null ? job.Product.PrimaryCustomer.Name : "",
@@ -416,12 +433,14 @@ public class JobService(
             substrateDescription,
             spec.InkSet,
             inkParts.Count > 0 ? string.Join(", ", inkParts) : null,
-            dieDescription,
+            die?.Description,
             scheduledPressName,
             job.Product.RollSpec,
             route,
             order.Notes,
-            job.SalesOrderLine.LineNotes);
+            job.SalesOrderLine.LineNotes,
+            orderCharges.Select(c => c.Quantity > 1 ? $"{c.Description} (×{c.Quantity})" : c.Description).ToList(),
+            die);
     }
 
     public async Task<OperatorJobView?> GetOperatorViewAsync(

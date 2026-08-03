@@ -77,6 +77,9 @@ public class EstimateLinePageInput
 
     public UnwindDirection? Unwind { get; set; }
 
+    [Range(0.0001, 1000)]
+    public decimal? ShrinkLayflatIn { get; set; }
+
     public List<FinishingOperationSelectionInput> FinishingOperations { get; set; } = [];
 
     public List<int?> Quantities { get; set; } = [];
@@ -110,7 +113,8 @@ public class EstimateLinePageInput
         MaxLabelsAcrossOverride,
         LabelOrientationOverride,
         ParseQuantityMarkupOverrides(QuantityMarkupOverridesJson),
-        Unwind);
+        Unwind,
+        ShrinkLayflatIn);
 
     private static IReadOnlyDictionary<int, decimal>? ParseQuantityMarkupOverrides(string? json)
     {
@@ -159,6 +163,7 @@ public class EstimateLinePageInput
             SetupWasteImpressions = line.SetupWasteImpressions,
             RunningWastePct = line.RunningWastePct,
             LineNotes = line.LineNotes,
+            ShrinkLayflatIn = line.ShrinkLayflatIn,
             MarkupPctOverride = line.MarkupPctOverride,
             MaxLabelsAcrossOverride = line.MaxLabelsAcrossOverride,
             LabelOrientationOverride = line.LabelOrientationOverride,
@@ -179,6 +184,31 @@ public class EstimateLinePageInput
     }
 }
 
+/// <summary>A flat, non-label charge row (die creation, design time) on the estimate form.</summary>
+public class EstimateChargePageInput
+{
+    public Guid? Id { get; set; }
+
+    [StringLength(500)]
+    public string? Description { get; set; }
+
+    [Range(1, 1000000)]
+    public int Quantity { get; set; } = 1;
+
+    [Range(0, 1000000)]
+    public decimal UnitPrice { get; set; }
+
+    public EstimateChargeFormInput ToForm() => new(Id, Description ?? string.Empty, Quantity, UnitPrice);
+
+    public static EstimateChargePageInput FromCharge(Domain.Entities.EstimateCharge charge) => new()
+    {
+        Id = charge.Id,
+        Description = charge.Description,
+        Quantity = charge.Quantity,
+        UnitPrice = charge.UnitPrice
+    };
+}
+
 public class EstimatePageInput
 {
     [Required]
@@ -188,6 +218,9 @@ public class EstimatePageInput
 
     [StringLength(4000)]
     public string? Notes { get; set; }
+
+    [StringLength(4000)]
+    public string? BillingNotes { get; set; }
 
     [DataType(DataType.Date)]
     public DateOnly? ValidUntilDate { get; set; }
@@ -220,6 +253,8 @@ public class EstimatePageInput
 
     public List<EstimateLinePageInput> Lines { get; set; } = [new()];
 
+    public List<EstimateChargePageInput> Charges { get; set; } = [];
+
     private ShippingAddress ToShippingAddress() => new(
         ShipToName, ShipToStreet1, ShipToStreet2, ShipToCity, ShipToState, ShipToZip, ShipToCountry);
 
@@ -231,7 +266,9 @@ public class EstimatePageInput
         Lines.Select(l => l.ToForm()).ToList(),
         ShippingMethodId,
         ShippingCost,
-        ToShippingAddress());
+        ToShippingAddress(),
+        BillingNotes,
+        Charges.Where(c => !string.IsNullOrWhiteSpace(c.Description)).Select(c => c.ToForm()).ToList());
 
     public static EstimatePageInput FromEstimate(Domain.Entities.Estimate estimate)
     {
@@ -240,6 +277,7 @@ public class EstimatePageInput
             CustomerId = estimate.CustomerId,
             SalesRepId = estimate.SalesRepId,
             Notes = estimate.Notes,
+            BillingNotes = estimate.BillingNotes,
             ValidUntilDate = estimate.ValidUntilDate,
             ShippingMethodId = estimate.ShippingMethodId,
             ShippingCost = estimate.ShippingCost,
@@ -250,7 +288,8 @@ public class EstimatePageInput
             ShipToState = estimate.ShipToState,
             ShipToZip = estimate.ShipToZip,
             ShipToCountry = estimate.ShipToCountry,
-            Lines = estimate.Lines.OrderBy(l => l.LineNumber).Select(EstimateLinePageInput.FromLine).ToList()
+            Lines = estimate.Lines.OrderBy(l => l.LineNumber).Select(EstimateLinePageInput.FromLine).ToList(),
+            Charges = estimate.Charges.OrderBy(c => c.LineNumber).Select(EstimateChargePageInput.FromCharge).ToList()
         };
     }
 }
