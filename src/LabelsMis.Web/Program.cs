@@ -1,6 +1,7 @@
 using LabelsMis.Infrastructure;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
+using LabelsMis.Web.Background;
 using LabelsMis.Web.Middleware;
 using LabelsMis.Web.Services;
 using LabelsMis.Web.Pdf;
@@ -27,6 +28,7 @@ builder.Services.Configure<EstimateOptions>(builder.Configuration.GetSection(Est
 builder.Services.Configure<JobOptions>(builder.Configuration.GetSection(JobOptions.SectionName));
 builder.Services.Configure<InvoiceOptions>(builder.Configuration.GetSection(InvoiceOptions.SectionName));
 builder.Services.Configure<PurchaseOrderOptions>(builder.Configuration.GetSection(PurchaseOrderOptions.SectionName));
+builder.Services.Configure<PdfStorageOptions>(builder.Configuration.GetSection(PdfStorageOptions.SectionName));
 builder.Services.AddRazorPages()
     .AddMvcOptions(options =>
     {

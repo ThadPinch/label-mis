@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using LabelsMis.Domain.Email;
 using LabelsMis.Domain.Entities;
+using LabelsMis.Domain.Storage;
 using LabelsMis.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -10,12 +11,13 @@ namespace LabelsMis.Infrastructure.Email;
 
 /// <summary>
 /// Sends email through the Mailgun HTTP API using the settings configured in the
-/// EmailSettings singleton. When Mailgun is not configured the message is logged only,
-/// matching <see cref="LoggingEmailSender"/> behavior so the app keeps working without a key.
+/// EmailSettings singleton. When Mailgun is not configured the send fails with a clear
+/// message so the caller can surface it to the user instead of silently dropping the email.
 /// </summary>
 public class MailgunEmailSender(
     LabelsMisDbContext db,
     HttpClient httpClient,
+    IFileStorageClient fileStorage,
     ILogger<MailgunEmailSender> logger) : IEmailSender
 {
     public async Task SendAsync(
@@ -35,7 +37,8 @@ public class MailgunEmailSender(
                 to,
                 subject,
                 attachmentPaths?.Count ?? 0);
-            return;
+            throw new InvalidOperationException(
+                "Email is not configured. Set up Mailgun under Settings → Email before sending.");
         }
 
         using var form = new MultipartFormDataContent
@@ -53,13 +56,13 @@ public class MailgunEmailSender(
             {
                 foreach (var path in attachmentPaths)
                 {
-                    if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                    var stream = await OpenAttachmentAsync(path, cancellationToken);
+                    if (stream is null)
                     {
                         logger.LogWarning("Skipping missing email attachment {Path}.", path);
                         continue;
                     }
 
-                    var stream = File.OpenRead(path);
                     openStreams.Add(stream);
                     var fileContent = new StreamContent(stream);
                     fileContent.Headers.ContentType =
@@ -104,6 +107,28 @@ public class MailgunEmailSender(
                 await stream.DisposeAsync();
             }
         }
+    }
+
+    /// <summary>Attachments are file-storage keys for generated PDFs (tmp/…) or legacy local
+    /// filesystem paths; missing files return null so the email still goes out without them.</summary>
+    private async Task<Stream?> OpenAttachmentAsync(string path, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        if (File.Exists(path))
+        {
+            return File.OpenRead(path);
+        }
+
+        if (await fileStorage.ExistsAsync(path, cancellationToken))
+        {
+            return await fileStorage.OpenReadAsync(path, cancellationToken);
+        }
+
+        return null;
     }
 
     private static string ResolveContentType(string path) =>

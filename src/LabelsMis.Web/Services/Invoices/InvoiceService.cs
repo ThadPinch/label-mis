@@ -248,6 +248,7 @@ public class InvoiceService(
             .Include(i => i.SalesOrder)
             .Include(i => i.Lines)
             .Include(i => i.Payments)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(i => i.Id == id, cancellationToken);
 
         if (invoice is null)
@@ -293,6 +294,7 @@ public class InvoiceService(
             .Include(o => o.Customer)
             .Include(o => o.Lines).ThenInclude(l => l.Product)
             .Include(o => o.Charges)
+            .AsSplitQuery()
             .SingleAsync(o => o.Id == salesOrderId, cancellationToken);
 
         var invoiceNumber = await documentNumbers.NextInvoiceNumberAsync(cancellationToken);
@@ -378,6 +380,7 @@ public class InvoiceService(
             .Include(s => s.SalesOrder).ThenInclude(o => o.Charges)
             .Include(s => s.Lines).ThenInclude(l => l.SalesOrderLine).ThenInclude(sl => sl.Product)
             .Include(s => s.Packages)
+            .AsSplitQuery()
             .SingleAsync(s => s.Id == shipmentId, cancellationToken);
 
         if (shipment.Status is not ShipmentStatus.InTransit and not ShipmentStatus.Delivered)

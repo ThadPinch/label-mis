@@ -125,6 +125,7 @@ public class PurchaseOrderService(
             .Include(p => p.Supplier).ThenInclude(s => s.Contacts)
             .Include(p => p.Lines).ThenInclude(l => l.Stock)
             .Include(p => p.Lines).ThenInclude(l => l.Receipts)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(p => p.Id == id, cancellationToken);
 
     public async Task<PurchaseOrder> CreateAsync(

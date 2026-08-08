@@ -5,6 +5,15 @@
 <h1 class="h3 mb-1">@Model.Po?.PoNumber</h1>
 <p class="text-muted">@Model.Po?.Status — @Model.Po?.Supplier.Name</p>
 
+@if (TempData["PoStatus"] is string poStatus)
+{
+    <div class="alert alert-success py-2 mb-2">@poStatus</div>
+}
+@if (TempData["PoError"] is string poError)
+{
+    <div class="alert alert-danger py-2 mb-2">@poError</div>
+}
+
 <div class="mb-3">
     <a asp-page-handler="Pdf" asp-route-id="@Model.Id" target="_blank" rel="noopener" class="btn btn-outline-secondary">View PO</a>
 </div>

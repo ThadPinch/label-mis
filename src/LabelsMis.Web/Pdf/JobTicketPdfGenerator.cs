@@ -43,7 +43,6 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
         CancellationToken cancellationToken = default)
     {
         var settings = options.Value;
-        Directory.CreateDirectory(settings.PdfStoragePath);
 
         // Brand the ticket from system settings; fall back to the configured shop name when
         // the company profile hasn't been filled in.

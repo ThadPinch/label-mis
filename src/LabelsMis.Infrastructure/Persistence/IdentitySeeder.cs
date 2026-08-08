@@ -1,3 +1,4 @@
+using LabelsMis.Domain.Common;
 using LabelsMis.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,6 +58,32 @@ public static class IdentitySeeder
             }
 
             logger.LogInformation("Seeded default admin user {Email}", DefaultAdminEmail);
+        }
+
+        var systemUser = await userManager.FindByIdAsync(TenantConstants.SystemUserId.ToString());
+        if (systemUser is null)
+        {
+            systemUser = new ApplicationUser
+            {
+                Id = TenantConstants.SystemUserId,
+                UserName = "system@labels-mis.local",
+                Email = "system@labels-mis.local",
+                EmailConfirmed = true,
+                MustChangePassword = false,
+                LockoutEnabled = true,
+                LockoutEnd = DateTimeOffset.MaxValue
+            };
+
+            // No password: the account exists only so background services can satisfy
+            // the audit-column foreign keys, and the permanent lockout keeps it non-interactive.
+            var systemResult = await userManager.CreateAsync(systemUser);
+            if (!systemResult.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to create system user: {string.Join(", ", systemResult.Errors.Select(e => e.Description))}");
+            }
+
+            logger.LogInformation("Seeded system user for background services");
         }
     }
 }

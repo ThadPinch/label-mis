@@ -49,7 +49,17 @@ public class EditModel(PurchaseOrderService purchaseOrderService, LabelsMisDbCon
     public async Task<IActionResult> OnPostSendAsync(CancellationToken cancellationToken)
     {
         if (!User.IsInRole("Admin") && !User.IsInRole("Scheduler")) return Forbid();
-        await purchaseOrderService.SendAsync(Id, SendEmail, EmailTo, cancellationToken);
+        try
+        {
+            await purchaseOrderService.SendAsync(Id, SendEmail, EmailTo, cancellationToken);
+            TempData["PoStatus"] = SendEmail && !string.IsNullOrWhiteSpace(EmailTo)
+                ? $"Purchase order emailed to {EmailTo}."
+                : "Purchase order marked sent.";
+        }
+        catch (Exception ex)
+        {
+            TempData["PoError"] = $"Purchase order marked sent, but the email could not be delivered: {ex.Message}";
+        }
         return RedirectToPage(new { id = Id });
     }
 

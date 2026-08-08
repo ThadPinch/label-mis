@@ -41,6 +41,12 @@ public class FileStorageService(
         return await client.ExistsAsync(key, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<StoredObjectInfo>> ListAsync(string prefix, CancellationToken cancellationToken = default)
+    {
+        var client = await ResolveClientAsync(cancellationToken);
+        return await client.ListAsync(prefix, cancellationToken);
+    }
+
     private async Task<IFileStorageClient> ResolveClientAsync(CancellationToken cancellationToken)
     {
         var settings = await db.StorageSettings.AsNoTracking()
@@ -91,6 +97,25 @@ public class LocalFileStorageClient(IHostEnvironment environment) : IFileStorage
 
     public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default) =>
         Task.FromResult(File.Exists(GetPath(key)));
+
+    public Task<IReadOnlyList<StoredObjectInfo>> ListAsync(string prefix, CancellationToken cancellationToken = default)
+    {
+        var root = GetPath(prefix);
+        if (!Directory.Exists(root))
+        {
+            return Task.FromResult<IReadOnlyList<StoredObjectInfo>>([]);
+        }
+
+        var items = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+            .Select(path =>
+            {
+                var info = new FileInfo(path);
+                var key = Path.GetRelativePath(RootPath, path).Replace(Path.DirectorySeparatorChar, '/');
+                return new StoredObjectInfo(key, info.LastWriteTimeUtc, info.Length);
+            })
+            .ToList();
+        return Task.FromResult<IReadOnlyList<StoredObjectInfo>>(items);
+    }
 
     private string GetPath(string key) =>
         Path.Combine(RootPath, key.Replace('/', Path.DirectorySeparatorChar));
@@ -153,6 +178,25 @@ public class SpacesFileStorageClient(LabelsMisDbContext db) : IFileStorageClient
         {
             return false;
         }
+    }
+
+    public async Task<IReadOnlyList<StoredObjectInfo>> ListAsync(string prefix, CancellationToken cancellationToken = default)
+    {
+        var (client, bucket) = await CreateClientAsync(cancellationToken);
+        var items = new List<StoredObjectInfo>();
+        var request = new ListObjectsV2Request { BucketName = bucket, Prefix = prefix };
+
+        ListObjectsV2Response response;
+        do
+        {
+            response = await client.ListObjectsV2Async(request, cancellationToken);
+            items.AddRange(response.S3Objects.Select(o =>
+                new StoredObjectInfo(o.Key, o.LastModified.ToUniversalTime(), o.Size)));
+            request.ContinuationToken = response.NextContinuationToken;
+        }
+        while (response.IsTruncated);
+
+        return items;
     }
 
     private async Task<(AmazonS3Client Client, string Bucket)> CreateClientAsync(CancellationToken cancellationToken)

@@ -29,7 +29,8 @@ public class PdfGeneratorSmokeTests
     {
         var generator = new EstimatePdfGenerator(
             Options.Create(new EstimateOptions()),
-            new StubGeneralSettingsService(BrandedSettings()));
+            new StubGeneralSettingsService(BrandedSettings()),
+            UnusedPdfStorage());
 
         var lines = Enumerable.Range(1, 8).Select(i => new EstimatePdfLine(
             i,
@@ -66,7 +67,8 @@ public class PdfGeneratorSmokeTests
     {
         var generator = new PurchaseOrderPdfGenerator(
             Options.Create(new PurchaseOrderOptions()),
-            new StubGeneralSettingsService(BrandedSettings()));
+            new StubGeneralSettingsService(BrandedSettings()),
+            UnusedPdfStorage());
 
         var supplier = Supplier.Create(Guid.NewGuid(), "Great Rolls Inc", "GRI", "Net 30", 7, "ACCT-42", UserId, Now);
         var po = PurchaseOrder.CreateDraft(
@@ -160,8 +162,8 @@ public class PdfGeneratorSmokeTests
     public async Task InvoicePdf_renders()
     {
         var generator = new InvoicePdfGenerator(
-            Options.Create(new LabelsMis.Web.Services.Invoices.InvoiceOptions()),
-            new StubGeneralSettingsService(BrandedSettings()));
+            new StubGeneralSettingsService(BrandedSettings()),
+            UnusedPdfStorage());
 
         var customer = Customer.Create(
             Guid.NewGuid(), "Acme Foods", "ACME", PaymentTerms.Prepay, false, 0.4m,
@@ -233,6 +235,9 @@ public class PdfGeneratorSmokeTests
 
     private static void SetNavigation(object entity, string propertyName, object value) =>
         entity.GetType().GetProperty(propertyName)!.SetValue(entity, value);
+
+    /// <summary>These tests render bytes only and never persist, so the storage is never touched.</summary>
+    private static LabelsMis.Web.Services.Pdfs.TempPdfStorage UnusedPdfStorage() => new(null!);
 
     /// <summary>Bypasses the DbContext so generators can run against fixed branding.</summary>
     private sealed class StubGeneralSettingsService(GeneralSettings? settings) : GeneralSettingsService(null!, null!)

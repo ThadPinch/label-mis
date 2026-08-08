@@ -4,24 +4,23 @@ using FrontEndSuite.PdfPlatform.Geometry;
 using FrontEndSuite.PdfPlatform.Layout;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Web.Services.Invoices;
+using LabelsMis.Web.Services.Pdfs;
 using LabelsMis.Web.Services.Settings;
 using Microsoft.Extensions.Options;
 
 namespace LabelsMis.Web.Pdf;
 
-public class InvoicePdfGenerator(IOptions<InvoiceOptions> options, GeneralSettingsService generalSettings)
+public class InvoicePdfGenerator(
+    GeneralSettingsService generalSettings,
+    TempPdfStorage pdfStorage)
 {
-    /// <summary>Generates the PDF for an invoice, writes it to disk, and returns the path.</summary>
+    /// <summary>Generates the PDF for an invoice, stores it under the temp PDF prefix,
+    /// and returns the storage key.</summary>
     public async Task<string> GenerateAsync(InvoiceDetail detail, CancellationToken cancellationToken = default)
     {
-        var settings = options.Value;
-        Directory.CreateDirectory(settings.PdfStoragePath);
-
         var bytes = await GenerateBytesAsync(detail, cancellationToken);
         var fileName = $"{detail.Invoice.InvoiceNumber.Replace('/', '-')}.pdf";
-        var fullPath = Path.Combine(settings.PdfStoragePath, fileName);
-        await File.WriteAllBytesAsync(fullPath, bytes, cancellationToken);
-        return fullPath;
+        return await pdfStorage.SaveAsync("invoices", fileName, bytes, cancellationToken);
     }
 
     /// <summary>Renders the invoice PDF to a byte array without persisting.</summary>

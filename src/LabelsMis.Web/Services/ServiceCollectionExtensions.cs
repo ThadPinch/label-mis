@@ -60,10 +60,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EmailSettingsService>();
         services.AddScoped<GeneralSettingsService>();
         services.AddScoped<ArtworkService>();
+        services.AddScoped<Pdfs.TempPdfStorage>();
         services.AddScoped<Dashboard.DashboardService>();
         services.AddScoped<Reports.ReportService>();
         services.AddScoped<Reports.EvaService>();
         services.AddHostedService<ShipmentTrackingPoller>();
+        services.AddHostedService<TempPdfPurgeService>();
         return services;
     }
 

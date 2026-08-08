@@ -6,6 +6,7 @@ using LabelsMis.Domain.Estimating;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Pdf;
 using LabelsMis.Web.Services.Models;
+using LabelsMis.Web.Services.Pdfs;
 using Microsoft.EntityFrameworkCore;
 
 namespace LabelsMis.Web.Services.Estimates;
@@ -45,6 +46,7 @@ public class EstimateService(
     EstimateCalculationMapper calculationMapper,
     EstimatingService estimatingService,
     EstimatePdfGenerator pdfGenerator,
+    TempPdfStorage pdfStorage,
     IEmailSender emailSender)
 {
     public async Task<PagedResult<EstimateListItem>> ListAsync(
@@ -66,6 +68,7 @@ public class EstimateService(
             .Include(e => e.Customer)
             .Include(e => e.Lines).ThenInclude(l => l.QuantityBreaks)
             .Include(e => e.Charges)
+            .AsSplitQuery()
             .AsQueryable();
 
         if (status.HasValue)
@@ -170,6 +173,7 @@ public class EstimateService(
             .Include(e => e.Lines).ThenInclude(l => l.QuantityBreaks)
             .Include(e => e.Charges)
             .Include(e => e.Revisions)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(e => e.Id == id, cancellationToken);
 
         if (estimate is null)
@@ -303,6 +307,7 @@ public class EstimateService(
         var estimate = await db.Estimates
             .Include(e => e.Lines).ThenInclude(l => l.QuantityBreaks)
             .Include(e => e.Charges)
+            .AsSplitQuery()
             .SingleAsync(e => e.Id == id, cancellationToken);
 
         var calc = await CalculateAsync(input, cancellationToken);
@@ -389,8 +394,9 @@ public class EstimateService(
         IReadOnlyList<string>? attachments = null;
         if (includePdf)
         {
-            // Reuse the existing PDF when it is still on disk; otherwise regenerate it.
-            var pdfPath = !string.IsNullOrWhiteSpace(tracked.PdfFilePath) && File.Exists(tracked.PdfFilePath)
+            // Reuse the existing PDF when it is still in storage; otherwise regenerate it.
+            var pdfPath = !string.IsNullOrWhiteSpace(tracked.PdfFilePath)
+                    && await pdfStorage.ExistsAsync(tracked.PdfFilePath, cancellationToken)
                 ? tracked.PdfFilePath!
                 : await pdfGenerator.GenerateAsync(detail, cancellationToken);
             attachments = [pdfPath];
@@ -523,6 +529,7 @@ public class EstimateService(
             .Include(e => e.Lines).ThenInclude(l => l.QuantityBreaks)
             .Include(e => e.Charges)
             .Include(e => e.Revisions)
+            .AsSplitQuery()
             .SingleAsync(e => e.Id == id, cancellationToken);
 
         var snapshot = JsonSerializer.Serialize(new
@@ -582,6 +589,7 @@ public class EstimateService(
         var estimate = await db.Estimates
             .Include(e => e.Lines).ThenInclude(l => l.QuantityBreaks)
             .Include(e => e.Revisions)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(e => e.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("Estimate not found.");
 
@@ -599,9 +607,9 @@ public class EstimateService(
 
         estimate.EnsureCanDelete();
 
-        if (!string.IsNullOrWhiteSpace(estimate.PdfFilePath) && File.Exists(estimate.PdfFilePath))
+        if (!string.IsNullOrWhiteSpace(estimate.PdfFilePath))
         {
-            File.Delete(estimate.PdfFilePath);
+            await pdfStorage.DeleteAsync(estimate.PdfFilePath, cancellationToken);
         }
 
         db.Estimates.Remove(estimate);

@@ -163,6 +163,7 @@ public class SalesOrderService(
             .Include(o => o.ShippingMethod)
             .Include(o => o.Lines).ThenInclude(l => l.Product)
             .Include(o => o.Charges)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(o => o.Id == id, cancellationToken);
 
     public async Task<SalesOrder> CreateAsync(SalesOrderFormInput input, CancellationToken cancellationToken = default)
@@ -329,6 +330,7 @@ public class SalesOrderService(
         var order = await db.SalesOrders
             .Include(o => o.Lines)
             .Include(o => o.Charges)
+            .AsSplitQuery()
             .SingleAsync(o => o.Id == id, cancellationToken);
 
         if (order.Status is not SalesOrderStatus.Open && !adminOverride)
@@ -379,6 +381,7 @@ public class SalesOrderService(
         var order = await db.SalesOrders
             .Include(o => o.Lines)
             .Include(o => o.Charges)
+            .AsSplitQuery()
             .SingleAsync(o => o.Id == id, cancellationToken);
 
         if (order.Status is SalesOrderStatus.Cancelled or SalesOrderStatus.Closed)
@@ -496,6 +499,7 @@ public class SalesOrderService(
         var order = await db.SalesOrders
             .Include(o => o.Lines)
             .Include(o => o.Charges)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(o => o.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("Sales order not found.");
 

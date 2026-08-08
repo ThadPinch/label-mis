@@ -268,6 +268,7 @@ public class JobService(
             .Include(j => j.Operations).ThenInclude(o => o.TimeEntries)
             .Include(j => j.MaterialUsages).ThenInclude(m => m.Stock)
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(j => j.Id == id, cancellationToken);
 
         if (job is null)
@@ -627,6 +628,7 @@ public class JobService(
         var operation = await db.JobOperations
             .Include(o => o.TimeEntries)
             .Include(o => o.Job).ThenInclude(j => j.MaterialUsages)
+            .AsSplitQuery()
             .SingleAsync(o => o.Id == operationId, cancellationToken);
 
         operation.ClockOff(userId, now, goodCount, wasteCount, downtimeMinutes, downtimeReason, userId, now);

@@ -104,6 +104,7 @@ public class CustomerService(LabelsMisDbContext db, ICurrentUserService currentU
         db.Customers
             .Include(c => c.Addresses)
             .Include(c => c.Contacts)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
     /// <summary>Addresses for a customer, default-first within each type, for ship-to pickers.</summary>

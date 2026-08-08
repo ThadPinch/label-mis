@@ -1,3 +1,4 @@
+using LabelsMis.Domain.Common;
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Fedex;
@@ -57,7 +58,7 @@ public class ShipmentTrackingPoller(
             return;
         }
 
-        var systemUserId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var systemUserId = TenantConstants.SystemUserId;
         var now = DateTime.UtcNow;
         var updated = false;
 

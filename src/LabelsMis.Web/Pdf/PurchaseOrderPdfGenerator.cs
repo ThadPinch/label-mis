@@ -3,6 +3,7 @@ using FrontEndSuite.PdfPlatform.Fonts;
 using FrontEndSuite.PdfPlatform.Geometry;
 using FrontEndSuite.PdfPlatform.Layout;
 using LabelsMis.Domain.Entities;
+using LabelsMis.Web.Services.Pdfs;
 using LabelsMis.Web.Services.Settings;
 using Microsoft.Extensions.Options;
 
@@ -16,19 +17,18 @@ public class PurchaseOrderOptions
     public string ShopName { get; set; } = "Labels MIS Print Shop";
 }
 
-public class PurchaseOrderPdfGenerator(IOptions<PurchaseOrderOptions> options, GeneralSettingsService generalSettings)
+public class PurchaseOrderPdfGenerator(
+    IOptions<PurchaseOrderOptions> options,
+    GeneralSettingsService generalSettings,
+    TempPdfStorage pdfStorage)
 {
-    /// <summary>Generates the PO PDF, writes it to disk, and returns the path (used for email attachments).</summary>
+    /// <summary>Generates the PO PDF, stores it under the temp PDF prefix, and returns the
+    /// storage key (used for email attachments).</summary>
     public async Task<string> GenerateAsync(PurchaseOrder po, CancellationToken cancellationToken = default)
     {
-        var settings = options.Value;
-        Directory.CreateDirectory(settings.PdfStoragePath);
-
         var bytes = await GenerateBytesAsync(po, cancellationToken);
         var fileName = $"{po.PoNumber.Replace('/', '-')}.pdf";
-        var fullPath = Path.Combine(settings.PdfStoragePath, fileName);
-        await File.WriteAllBytesAsync(fullPath, bytes, cancellationToken);
-        return fullPath;
+        return await pdfStorage.SaveAsync("purchase-orders", fileName, bytes, cancellationToken);
     }
 
     /// <summary>Renders the PO PDF to a byte array without persisting (used for the in-browser view).</summary>

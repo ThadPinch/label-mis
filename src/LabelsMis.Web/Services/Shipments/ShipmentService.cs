@@ -180,6 +180,7 @@ public class ShipmentService(
             .Include(s => s.ShipFromAddress)
             .Include(s => s.Lines).ThenInclude(l => l.SalesOrderLine).ThenInclude(sl => sl.Product)
             .Include(s => s.Packages).ThenInclude(p => p.TrackingEvents)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(s => s.Id == id, cancellationToken);
 
         if (shipment is null)
@@ -204,6 +205,7 @@ public class ShipmentService(
         await db.SalesOrders.AsNoTracking()
             .Include(o => o.Customer).ThenInclude(c => c.Addresses)
             .Include(o => o.Lines).ThenInclude(l => l.Product)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(o => o.Id == salesOrderId, cancellationToken);
 
     /// <summary>Sales orders that have at least one job sitting at the Rewound (ready-to-ship) stage.</summary>
@@ -262,6 +264,7 @@ public class ShipmentService(
             .Include(o => o.Customer).ThenInclude(c => c.Addresses)
             .Include(o => o.ShippingMethod)
             .Include(o => o.Lines).ThenInclude(l => l.Product)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(o => o.Id == salesOrderId, cancellationToken);
 
         if (order is null)
@@ -617,6 +620,7 @@ public class ShipmentService(
             .Include(s => s.ShipFromAddress)
             .Include(s => s.ShipToAddress)
             .Include(s => s.Packages)
+            .AsSplitQuery()
             .SingleAsync(s => s.Id == shipmentId, cancellationToken);
 
         if (shipment.Status is not ShipmentStatus.Pending)

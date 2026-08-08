@@ -3,26 +3,26 @@ using FrontEndSuite.PdfPlatform.Fonts;
 using FrontEndSuite.PdfPlatform.Geometry;
 using FrontEndSuite.PdfPlatform.Layout;
 using LabelsMis.Web.Services.Estimates;
+using LabelsMis.Web.Services.Pdfs;
 using LabelsMis.Web.Services.Settings;
 using Microsoft.Extensions.Options;
 
 namespace LabelsMis.Web.Pdf;
 
-public class EstimatePdfGenerator(IOptions<EstimateOptions> options, GeneralSettingsService generalSettings)
+public class EstimatePdfGenerator(
+    IOptions<EstimateOptions> options,
+    GeneralSettingsService generalSettings,
+    TempPdfStorage pdfStorage)
 {
-    /// <summary>Generates the PDF for a saved estimate, writes it to disk, and returns the path.</summary>
+    /// <summary>Generates the PDF for a saved estimate, stores it under the temp PDF prefix,
+    /// and returns the storage key.</summary>
     public async Task<string> GenerateAsync(EstimateDetail detail, CancellationToken cancellationToken = default)
     {
-        var settings = options.Value;
-        Directory.CreateDirectory(settings.PdfStoragePath);
-
         var model = MapDetail(detail);
         var bytes = await GenerateBytesAsync(model, cancellationToken);
 
         var fileName = $"{model.EstimateNumber.Replace('/', '-')}_rev{model.RevisionNumber}.pdf";
-        var fullPath = Path.Combine(settings.PdfStoragePath, fileName);
-        await File.WriteAllBytesAsync(fullPath, bytes, cancellationToken);
-        return fullPath;
+        return await pdfStorage.SaveAsync("estimates", fileName, bytes, cancellationToken);
     }
 
     /// <summary>Renders the PDF to a byte array without persisting (used for the in-browser preview).</summary>
