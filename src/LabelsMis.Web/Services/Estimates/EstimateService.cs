@@ -47,7 +47,8 @@ public class EstimateService(
     EstimatingService estimatingService,
     EstimatePdfGenerator pdfGenerator,
     TempPdfStorage pdfStorage,
-    IEmailSender emailSender)
+    IEmailSender emailSender,
+    SalesOrders.SalesOrderService salesOrderService)
 {
     public async Task<PagedResult<EstimateListItem>> ListAsync(
         string? search,
@@ -181,8 +182,10 @@ public class EstimateService(
             return null;
         }
 
+        // Cancelled orders don't count as the estimate's linked order — a won estimate whose
+        // misentered order was cancelled can be converted again.
         var salesOrder = await db.SalesOrders.AsNoTracking()
-            .Where(o => o.SourceEstimateId == id)
+            .Where(o => o.SourceEstimateId == id && o.Status != SalesOrderStatus.Cancelled)
             .Select(o => new { o.Id, o.OrderNumber })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -518,6 +521,31 @@ public class EstimateService(
         var userId = RequireUserId();
         var estimate = await db.Estimates.SingleAsync(e => e.Id == id, cancellationToken);
         estimate.MarkLost(reason, userId, DateTime.UtcNow);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Admin cleanup for a misentered estimate (typically one already marked won): cancels the
+    /// estimate and cascades to every sales order created from it — each order is cancelled, its
+    /// jobs are closed, and its unpaid invoices are voided.
+    /// </summary>
+    public async Task CancelAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var estimate = await db.Estimates.SingleOrDefaultAsync(e => e.Id == id, cancellationToken)
+            ?? throw new InvalidOperationException("Estimate not found.");
+
+        estimate.Cancel(userId, DateTime.UtcNow);
+
+        var orderIds = await db.SalesOrders
+            .Where(o => o.SourceEstimateId == id && o.Status != SalesOrderStatus.Cancelled)
+            .Select(o => o.Id)
+            .ToListAsync(cancellationToken);
+        foreach (var orderId in orderIds)
+        {
+            await salesOrderService.CancelAsync(orderId, cancellationToken);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
     }
 

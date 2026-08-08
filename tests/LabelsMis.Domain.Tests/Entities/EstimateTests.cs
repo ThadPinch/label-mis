@@ -23,6 +23,41 @@ public class EstimateTests
     }
 
     [Fact]
+    public void Cancel_WhenWon_SetsCancelled()
+    {
+        var estimate = CreateDraftWithLine();
+        estimate.MarkSent("/tmp/test.pdf", UserId, Now);
+        estimate.MarkWon(UserId, Now);
+
+        estimate.Cancel(UserId, Now);
+
+        estimate.Status.Should().Be(EstimateStatus.Cancelled);
+    }
+
+    [Fact]
+    public void Cancel_WhenAlreadyCancelled_Throws()
+    {
+        var estimate = CreateDraftWithLine();
+        estimate.Cancel(UserId, Now);
+
+        var act = () => estimate.Cancel(UserId, Now);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*already cancelled*");
+    }
+
+    [Fact]
+    public void MarkLost_WhenCancelled_Throws()
+    {
+        var estimate = CreateDraftWithLine();
+        estimate.Cancel(UserId, Now);
+
+        var act = () => estimate.MarkLost("reason", UserId, Now);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
     public void BeginRevision_AfterSent_ResetsToDraftAndIncrementsRevision()
     {
         var estimate = CreateDraftWithLine();

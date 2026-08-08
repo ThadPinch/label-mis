@@ -42,8 +42,15 @@
         @if (Model.CanCancel)
         {
             <form method="post" asp-page-handler="Cancel"
-                  onsubmit="return confirm('Cancel this order? Its jobs will be closed and unpaid invoices voided.');">
+                  onsubmit="return confirm('Cancel this order? Its jobs will be closed and unpaid invoices voided. The source estimate keeps its status.');">
                 <button type="submit" class="btn btn-sm btn-outline-warning">Cancel order</button>
+            </form>
+        }
+        @if (Model.CanCancelEstimate)
+        {
+            <form method="post" asp-page-handler="CancelEstimate"
+                  onsubmit="return confirm('Cancel estimate @Model.SourceEstimateNumber AND this order? This cascades: the estimate is marked Cancelled, the order is cancelled, its jobs are closed, and unpaid invoices are voided.');">
+                <button type="submit" class="btn btn-sm btn-outline-danger">Cancel order &amp; estimate</button>
             </form>
         }
     </div>

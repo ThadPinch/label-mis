@@ -173,9 +173,9 @@ public class Estimate : EntityBase
 
     public void MarkLost(string? reason, Guid modifiedById, DateTime modifiedAt)
     {
-        if (Status is EstimateStatus.Won)
+        if (Status is EstimateStatus.Won or EstimateStatus.Cancelled)
         {
-            throw new InvalidOperationException("Won estimates cannot be marked lost.");
+            throw new InvalidOperationException("Won or cancelled estimates cannot be marked lost.");
         }
 
         Status = EstimateStatus.Lost;
@@ -186,12 +186,25 @@ public class Estimate : EntityBase
 
     public void MarkExpired(Guid modifiedById, DateTime modifiedAt)
     {
-        if (Status is EstimateStatus.Won or EstimateStatus.Lost)
+        if (Status is EstimateStatus.Won or EstimateStatus.Lost or EstimateStatus.Cancelled)
         {
             throw new InvalidOperationException("Closed estimates cannot be marked expired.");
         }
 
         Status = EstimateStatus.Expired;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>Admin escape hatch for a misentered estimate — allowed from any status, including
+    /// Won, unlike MarkLost. The caller cascades the cancellation to any linked sales order.</summary>
+    public void Cancel(Guid modifiedById, DateTime modifiedAt)
+    {
+        if (Status is EstimateStatus.Cancelled)
+        {
+            throw new InvalidOperationException("Estimate is already cancelled.");
+        }
+
+        Status = EstimateStatus.Cancelled;
         SetModified(modifiedById, modifiedAt);
     }
 

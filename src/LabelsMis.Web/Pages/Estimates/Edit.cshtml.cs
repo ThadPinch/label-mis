@@ -195,6 +195,28 @@ public class EditModel(
         return RedirectToPage(new { id = Id });
     }
 
+    /// <summary>Admin escape hatch for a misentered estimate that was marked won: cancels the
+    /// estimate and cascades to any sales order created from it (jobs closed, unpaid invoices voided).</summary>
+    public async Task<IActionResult> OnPostCancelAsync(CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin))
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            await estimateService.CancelAsync(Id, cancellationToken);
+            TempData["EstimateStatus"] = "Estimate cancelled.";
+        }
+        catch (Exception ex)
+        {
+            TempData["EstimateError"] = $"Could not cancel the estimate: {ex.Message}";
+        }
+
+        return RedirectToPage(new { id = Id });
+    }
+
     public async Task<IActionResult> OnPostCreateRevisionAsync(CancellationToken cancellationToken)
     {
         if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.Estimator))

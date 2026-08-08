@@ -83,11 +83,21 @@ else
                     <button type="submit" class="btn btn-outline-success">Mark won</button>
                 </form>
             }
-            @if (Model.CanAdmin && Model.Detail.Estimate.Status is not EstimateStatus.Won and not EstimateStatus.Lost)
+            @if (Model.CanAdmin && Model.Detail.Estimate.Status is not EstimateStatus.Won and not EstimateStatus.Lost and not EstimateStatus.Cancelled)
             {
                 <form method="post" asp-page-handler="MarkLost" class="d-inline">
                     <input type="hidden" asp-for="LostReason" value="" />
                     <button type="submit" class="btn btn-outline-danger">Mark lost</button>
+                </form>
+            }
+            @if (Model.CanAdmin && Model.Detail.Estimate.Status == EstimateStatus.Won)
+            {
+                var cancelConfirm = Model.Detail.SalesOrderId is null
+                    ? "Cancel this estimate? It was marked won — cancelling clears it from the pipeline."
+                    : $"Cancel this estimate AND sales order {Model.Detail.SalesOrderNumber}? This cascades: the order is cancelled, its jobs are closed, and unpaid invoices are voided.";
+                <form method="post" asp-page-handler="Cancel" class="d-inline"
+                      onsubmit="return confirm('@cancelConfirm');">
+                    <button type="submit" class="btn btn-outline-danger">Cancel estimate</button>
                 </form>
             }
         </div>

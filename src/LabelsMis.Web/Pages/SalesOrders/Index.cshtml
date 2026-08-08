@@ -83,7 +83,7 @@
                         <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                     </form>
                 }
-                @if (item.Status != SalesOrderStatus.Open
+                @if (Model.CanCancel
                     && item.Status != SalesOrderStatus.Cancelled
                     && item.Status != SalesOrderStatus.Closed)
                 {

@@ -25,6 +25,7 @@ public class IndexModel(SalesOrderService salesOrderService, LabelsMisDbContext 
     public Services.Models.PagedResult<SalesOrderListItem> Result { get; private set; } = null!;
     public bool CanEdit { get; private set; }
     public bool CanDelete { get; private set; }
+    public bool CanCancel { get; private set; }
     public string? ErrorMessage { get; private set; }
 
     public async Task OnGetAsync(CancellationToken cancellationToken) =>
@@ -53,6 +54,11 @@ public class IndexModel(SalesOrderService salesOrderService, LabelsMisDbContext 
 
     public async Task<IActionResult> OnPostCancelAsync(Guid id, CancellationToken cancellationToken)
     {
+        if (!User.IsInRole(AppRoles.Admin))
+        {
+            return Forbid();
+        }
+
         try
         {
             await salesOrderService.CancelAsync(id, cancellationToken);
@@ -87,6 +93,7 @@ public class IndexModel(SalesOrderService salesOrderService, LabelsMisDbContext 
             || User.IsInRole(AppRoles.Csr)
             || User.IsInRole(AppRoles.Estimator);
         CanDelete = User.IsInRole(AppRoles.Admin);
+        CanCancel = User.IsInRole(AppRoles.Admin);
         Result = await salesOrderService.ListAsync(Search, Status, CustomerId, ShipFrom, ShipTo, Sort, PageNumber, 25, cancellationToken);
         ViewData["CustomerOptions"] = await db.Customers.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.Name)
             .Select(c => new SelectListItem(c.Name, c.Id.ToString())).ToListAsync(cancellationToken);

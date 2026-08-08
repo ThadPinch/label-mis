@@ -232,7 +232,10 @@ public class SalesOrderService(
             throw new InvalidOperationException("Only won estimates can be converted to a sales order.");
         }
 
-        var existing = await db.SalesOrders.AnyAsync(o => o.SourceEstimateId == input.EstimateId, cancellationToken);
+        // Cancelled orders don't block a re-convert — that's the recovery path for a misentered order.
+        var existing = await db.SalesOrders.AnyAsync(
+            o => o.SourceEstimateId == input.EstimateId && o.Status != SalesOrderStatus.Cancelled,
+            cancellationToken);
         if (existing)
         {
             throw new InvalidOperationException("A sales order already exists for this estimate.");

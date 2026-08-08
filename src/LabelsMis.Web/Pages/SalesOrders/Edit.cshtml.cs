@@ -32,6 +32,7 @@ public record SalesOrderLineDetail(
 [Authorize(Policy = TransactionPolicies.SalesOrdersRead)]
 public class EditModel(
     SalesOrderService salesOrderService,
+    EstimateService estimateService,
     JobService jobService,
     ArtworkService artworkService,
     SalesOrderDocumentService documentService,
@@ -87,6 +88,14 @@ public class EditModel(
     public IReadOnlyList<SalesOrderLineDetail> LineDetails { get; private set; } = [];
     public Guid? SourceEstimateId { get; private set; }
     public string? SourceEstimateNumber { get; private set; }
+    public EstimateStatus? SourceEstimateStatus { get; private set; }
+
+    /// <summary>Admins may cancel the source estimate too — the escape hatch for a misentered
+    /// estimate that was marked won and converted. Cascades to this order, its jobs, and invoices.</summary>
+    public bool CanCancelEstimate =>
+        User.IsInRole(AppRoles.Admin)
+        && SourceEstimateId is not null
+        && SourceEstimateStatus is not (null or EstimateStatus.Cancelled);
     public string? SalesRepName { get; private set; }
 
     public record LineJobInfo(
@@ -127,15 +136,18 @@ public class EditModel(
         CanSchedule = Order.Status == SalesOrderStatus.Open
             && (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler) || User.IsInRole(AppRoles.Csr));
         CanDelete = Order.Status == SalesOrderStatus.Open && User.IsInRole(AppRoles.Admin);
-        CanCancel = Order.Status is not (SalesOrderStatus.Open or SalesOrderStatus.Cancelled or SalesOrderStatus.Closed);
+        CanCancel = User.IsInRole(AppRoles.Admin)
+            && Order.Status is not (SalesOrderStatus.Cancelled or SalesOrderStatus.Closed);
         Input = ToPageInput(Order);
         SourceEstimateId = Order.SourceEstimateId;
         if (Order.SourceEstimateId is Guid sourceEstimateId)
         {
-            SourceEstimateNumber = await db.Estimates.AsNoTracking()
+            var sourceEstimate = await db.Estimates.AsNoTracking()
                 .Where(e => e.Id == sourceEstimateId)
-                .Select(e => e.EstimateNumber)
+                .Select(e => new { e.EstimateNumber, e.Status })
                 .FirstOrDefaultAsync(cancellationToken);
+            SourceEstimateNumber = sourceEstimate?.EstimateNumber;
+            SourceEstimateStatus = sourceEstimate?.Status;
         }
         if (Order.SalesRepId is Guid salesRepId)
         {
@@ -310,26 +322,44 @@ public class EditModel(
 
     public async Task<IActionResult> OnPostCancelAsync(CancellationToken cancellationToken)
     {
+        if (!User.IsInRole(AppRoles.Admin)) return Forbid();
+
         try
         {
             await salesOrderService.CancelAsync(Id, cancellationToken);
-            return RedirectToPage(new { id = Id });
+            TempData["OrderStatus"] = "Order cancelled. Its jobs were closed and unpaid invoices voided.";
         }
         catch (Exception ex)
         {
-            ModelState.AddModelError(string.Empty, ex.Message);
-            Order = await salesOrderService.GetAsync(Id, cancellationToken);
-            if (Order is null) return NotFound();
-            IsLocked = Order.Status != SalesOrderStatus.Open;
-            CanEdit = !IsLocked && (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Csr) || User.IsInRole(AppRoles.Estimator));
-            CanSchedule = Order.Status == SalesOrderStatus.Open
-                && (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler) || User.IsInRole(AppRoles.Csr));
-            CanDelete = Order.Status == SalesOrderStatus.Open && User.IsInRole(AppRoles.Admin);
-            CanCancel = Order.Status is not (SalesOrderStatus.Open or SalesOrderStatus.Cancelled or SalesOrderStatus.Closed);
-            Input = ToPageInput(Order);
-            await LoadLookupsAsync(Order.CustomerId, cancellationToken);
-            return Page();
+            TempData["OrderError"] = $"Could not cancel the order: {ex.Message}";
         }
+
+        return RedirectToPage(new { id = Id });
+    }
+
+    /// <summary>Cancels the source estimate, which cascades to this order (jobs closed, unpaid
+    /// invoices voided). The escape hatch for an estimate misentered and marked won.</summary>
+    public async Task<IActionResult> OnPostCancelEstimateAsync(CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin)) return Forbid();
+
+        try
+        {
+            var sourceEstimateId = await db.SalesOrders.AsNoTracking()
+                .Where(o => o.Id == Id)
+                .Select(o => o.SourceEstimateId)
+                .SingleOrDefaultAsync(cancellationToken)
+                ?? throw new InvalidOperationException("This order was not created from an estimate.");
+
+            await estimateService.CancelAsync(sourceEstimateId, cancellationToken);
+            TempData["OrderStatus"] = "Estimate and order cancelled. Jobs were closed and unpaid invoices voided.";
+        }
+        catch (Exception ex)
+        {
+            TempData["OrderError"] = $"Could not cancel the estimate: {ex.Message}";
+        }
+
+        return RedirectToPage(new { id = Id });
     }
 
     private static SalesOrderPageInput ToPageInput(Domain.Entities.SalesOrder order) => new()
@@ -466,6 +496,8 @@ public class EditModel(
             CanSchedule = Order.Status == SalesOrderStatus.Open
                 && (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler) || User.IsInRole(AppRoles.Csr));
             CanDelete = Order.Status == SalesOrderStatus.Open && User.IsInRole(AppRoles.Admin);
+            CanCancel = User.IsInRole(AppRoles.Admin)
+                && Order.Status is not (SalesOrderStatus.Cancelled or SalesOrderStatus.Closed);
             Input = ToPageInput(Order);
             await LoadLookupsAsync(Order.CustomerId, cancellationToken);
             return Page();

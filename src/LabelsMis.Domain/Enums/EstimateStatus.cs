@@ -6,5 +6,6 @@ public enum EstimateStatus
     Sent = 1,
     Won = 2,
     Lost = 3,
-    Expired = 4
+    Expired = 4,
+    Cancelled = 5
 }
