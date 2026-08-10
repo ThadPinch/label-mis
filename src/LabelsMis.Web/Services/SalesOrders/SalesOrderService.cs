@@ -71,13 +71,16 @@ public record SalesOrderListItem(
     decimal OrderTotal,
     DateTime OrderedAt);
 
+public record SalesOrderPackingListPdf(string OrderNumber, byte[] Bytes);
+
 public class SalesOrderService(
     LabelsMisDbContext db,
     ICurrentUserService currentUser,
     DocumentNumberService documentNumbers,
     ProductService productService,
     Invoices.InvoiceService invoiceService,
-    Jobs.JobService jobService)
+    Jobs.JobService jobService,
+    Pdf.PackingListPdfGenerator packingListPdfGenerator)
 {
     public async Task<PagedResult<SalesOrderListItem>> ListAsync(
         string? search,
@@ -165,6 +168,29 @@ public class SalesOrderService(
             .Include(o => o.Charges)
             .AsSplitQuery()
             .SingleOrDefaultAsync(o => o.Id == id, cancellationToken);
+
+    /// <summary>Renders the packing-list PDF for an order; null when the order doesn't exist.
+    /// The date and box count come from recorded shipments when any exist.</summary>
+    public async Task<SalesOrderPackingListPdf?> RenderPackingListPdfAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var order = await GetAsync(id, cancellationToken);
+        if (order is null)
+        {
+            return null;
+        }
+
+        var shipments = await db.Shipments.AsNoTracking()
+            .Where(s => s.SalesOrderId == id)
+            .Select(s => new { s.ShipDate, PackageCount = s.Packages.Count })
+            .ToListAsync(cancellationToken);
+        var boxCount = shipments.Sum(s => s.PackageCount);
+        var shipDate = shipments.Count > 0
+            ? shipments.Max(s => s.ShipDate)
+            : order.RequestedShipDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var bytes = await packingListPdfGenerator.GenerateBytesAsync(order, shipDate, boxCount, cancellationToken);
+        return new SalesOrderPackingListPdf(order.OrderNumber, bytes);
+    }
 
     public async Task<SalesOrder> CreateAsync(SalesOrderFormInput input, CancellationToken cancellationToken = default)
     {
@@ -578,6 +604,11 @@ public class SalesOrderService(
         if (lines.Count == 0)
         {
             throw new InvalidOperationException("At least one line item is required.");
+        }
+
+        if (lines.Any(l => l.ProductId == Guid.Empty))
+        {
+            throw new InvalidOperationException("Select a product on every line item.");
         }
     }
 

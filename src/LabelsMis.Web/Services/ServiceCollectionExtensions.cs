@@ -55,6 +55,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ShipmentService>();
         services.AddScoped<InvoiceService>();
         services.AddScoped<InvoicePdfGenerator>();
+        services.AddScoped<PackingListPdfGenerator>();
         services.AddScoped<UserAdminService>();
         services.AddScoped<StorageSettingsService>();
         services.AddScoped<EmailSettingsService>();

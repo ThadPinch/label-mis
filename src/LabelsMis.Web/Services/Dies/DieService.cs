@@ -51,13 +51,20 @@ public class DieService(LabelsMisDbContext db, ICurrentUserService currentUser)
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToUpperInvariant();
-            query = query.Where(d => d.Description.ToUpper().Contains(term));
+            query = query.Where(d =>
+                d.Description.ToUpper().Contains(term)
+                || (d.Customer != null && d.Customer.Name.ToUpper().Contains(term))
+                || (d.Location != null && d.Location.ToUpper().Contains(term)));
         }
         var (sortKey, desc) = QueryExtensions.ParseSort(sort);
         query = sortKey switch
         {
             "description" => query.OrderByDir(desc, d => d.Description),
             "customer" => query.OrderByDir(desc, d => d.Customer != null ? d.Customer.Name : ""),
+            "size" => query.OrderByDir(desc, d => d.LabelAcrossIn).ThenByDir(desc, d => d.LabelAroundIn),
+            "layout" => query.OrderByDir(desc, d => d.LabelsAcross).ThenByDir(desc, d => d.LabelsAround),
+            "repeat" => query.OrderByDir(desc, d => d.DieRepeatIn),
+            "location" => query.OrderByDir(desc, d => d.Location),
             "active" => query.OrderByDir(desc, d => d.IsActive),
             _ => query.OrderBy(d => d.Description)
         };

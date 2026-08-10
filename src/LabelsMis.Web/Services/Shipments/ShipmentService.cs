@@ -10,6 +10,7 @@ namespace LabelsMis.Web.Services.Shipments;
 
 public record ShipmentListItem(
     Guid Id,
+    Guid SalesOrderId,
     string ShipmentNumber,
     string CustomerName,
     ShipmentStatus Status,
@@ -161,6 +162,7 @@ public class ShipmentService(
             .Take(pageSize)
             .Select(s => new ShipmentListItem(
                 s.Id,
+                s.SalesOrderId,
                 s.ShipmentNumber,
                 s.SalesOrder.Customer.Name,
                 s.Status,

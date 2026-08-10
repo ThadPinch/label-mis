@@ -120,7 +120,8 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
         var rows = new List<(string, string, string, string)>
         {
             ("Customer", detail.CustomerName, "Sales order", detail.OrderNumber),
-            ("Customer PO", detail.CustomerPoNumber ?? "—", "Ship date", detail.RequestedShipDate?.ToString("MMM d, yyyy") ?? "—")
+            ("Customer PO", detail.CustomerPoNumber ?? "—", "Ship date", detail.RequestedShipDate?.ToString("MMM d, yyyy") ?? "—"),
+            ("Ship via", detail.ShippingMethodName ?? "—", "", "")
         };
 
         return SectionShell("ORDER", PairGridBody(rows));
@@ -128,7 +129,7 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
 
     private static FlowTable JobBlock(JobTicketDetail job)
     {
-        var qty = $"{job.Job.QuantityPlanned:N0} planned of {job.Job.QuantityOrdered:N0} ordered{OverrunSuffix(job)}";
+        var qty = $"{job.Job.QuantityOrdered:N0}";
         var status = $"{job.Job.Status} · {ScheduleText(job)}";
         var ink = job.InkSet.ToString();
         if (!string.IsNullOrWhiteSpace(job.SpecialInksSummary))
@@ -149,8 +150,7 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
             .Where(s => s.Type == JobOperationType.Finishing)
             .Select(s => s.Description)
             .ToList();
-        rows.Add(("Finishing", finishing.Count > 0 ? string.Join(" · ", finishing) : "None",
-            "Packaging", PackagingSummary(job.RollSpec) ?? "—"));
+        rows.Add(("Finishing", finishing.Count > 0 ? string.Join(" · ", finishing) : "None", "", ""));
 
         rows.Add(("Unwind", job.Job.Spec?.Unwind?.Label() ?? "—",
             "Shrink layflat", job.Job.Spec?.ShrinkLayflatIn is { } shrinkLayflat ? $"{shrinkLayflat:0.0000}\"" : "—"));
@@ -216,22 +216,6 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
         table.AddCell(body);
         table.AddCell(routeBody);
         return table;
-    }
-
-    private static string? PackagingSummary(LabelsMis.Domain.Entities.RollSpec? roll)
-    {
-        if (roll is null)
-        {
-            return null;
-        }
-
-        var text = $"{roll.LabelsPerRoll:N0}/roll · {roll.CoreSizeIn:0.###}\" core · {roll.MaxOdIn:0.###}\" max OD · unwind #{roll.UnwindPosition} · {roll.RollsPerCase:N0} rolls/case";
-        if (!string.IsNullOrWhiteSpace(roll.CaseLabelFormat))
-        {
-            text += $" · case: {roll.CaseLabelFormat}";
-        }
-
-        return text;
     }
 
     private static string? SpecSummary(JobTicketDetail job)
@@ -354,17 +338,6 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
         };
     }
 
-    private static string OverrunSuffix(JobTicketDetail detail)
-    {
-        if (detail.Job.QuantityOrdered <= 0 || detail.Job.QuantityPlanned <= detail.Job.QuantityOrdered)
-        {
-            return string.Empty;
-        }
-
-        var overrunPct = (detail.Job.QuantityPlanned - detail.Job.QuantityOrdered) * 100m / detail.Job.QuantityOrdered;
-        return $" (+{overrunPct:0.#}%)";
-    }
-
     private static string ScheduleText(JobTicketDetail detail)
     {
         var date = detail.Job.ScheduledForDate?.ToString("MMM d, yyyy");
@@ -449,7 +422,8 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
         {
             ("DUE DATE", dueDates.Count > 0 ? dueDates.Min().ToString("MMM d, yyyy") : "—"),
             ("SHIP DATE", detail.RequestedShipDate?.ToString("MMM d, yyyy") ?? "—"),
-            ("TOTAL QTY", orderJobs.Sum(j => j.Job.QuantityPlanned).ToString("N0")),
+            ("SHIP VIA", detail.ShippingMethodName ?? "—"),
+            ("TOTAL QTY", orderJobs.Sum(j => j.Job.QuantityOrdered).ToString("N0")),
             ("JOBS", orderJobs.Count.ToString()),
             ("CUSTOMER PO", detail.CustomerPoNumber ?? "—")
         };

@@ -121,46 +121,44 @@ else if (Model.IsLocked)
             var sendableInvoices = Model.Invoices.Where(i => i.Status != LabelsMis.Domain.Enums.InvoiceStatus.Void).ToList();
             var prepayBlocked = Model.RequiresPrepay && !Model.PrepaySatisfied;
         }
-        @if (Model.CanSchedule || (Model.CanSendInvoice && firstSendableInvoice is not null))
-        {
-            <div class="card">
-                <div class="card-header py-1 small fw-semibold">Actions</div>
-                <div class="card-body py-2 d-flex flex-column gap-2">
-                    @if (Model.CanSchedule)
+        <div class="card">
+            <div class="card-header py-1 small fw-semibold">Actions</div>
+            <div class="card-body py-2 d-flex flex-column gap-2">
+                @if (Model.CanSchedule)
+                {
+                    @if (prepayBlocked)
                     {
-                        @if (prepayBlocked)
-                        {
-                            <button type="button" class="btn btn-sm btn-success w-100" disabled
-                                    title="Prepay customer — the order must be paid in full before scheduling.">
-                                Schedule for production
-                            </button>
-                            <div class="small text-muted lh-sm">
-                                Prepay customer — @((Model.OrderTotal - Model.AmountPaid).ToString("C2")) still due before this
-                                order can be scheduled.
-                            </div>
-                            <form method="post" asp-page-handler="ScheduleForProduction"
-                                  onsubmit="return confirm('This prepay order is not paid in full. Force it into production anyway?');">
-                                <input type="hidden" name="force" value="true" />
-                                <button type="submit" class="btn btn-sm btn-outline-danger w-100">Force to production</button>
-                            </form>
-                        }
-                        else
-                        {
-                            <form method="post" asp-page-handler="ScheduleForProduction">
-                                <input type="hidden" name="force" value="false" />
-                                <button type="submit" class="btn btn-sm btn-success w-100">Schedule for production</button>
-                            </form>
-                        }
-                    }
-                    @if (Model.CanSendInvoice && firstSendableInvoice is not null)
-                    {
-                        <button type="button" class="btn btn-sm btn-outline-primary w-100" data-bs-toggle="modal" data-bs-target="#invoiceEmailModal">
-                            Email invoice to customer
+                        <button type="button" class="btn btn-sm btn-success w-100" disabled
+                                title="Prepay customer — the order must be paid in full before scheduling.">
+                            Schedule for production
                         </button>
+                        <div class="small text-muted lh-sm">
+                            Prepay customer — @((Model.OrderTotal - Model.AmountPaid).ToString("C2")) still due before this
+                            order can be scheduled.
+                        </div>
+                        <form method="post" asp-page-handler="ScheduleForProduction"
+                              onsubmit="return confirm('This prepay order is not paid in full. Force it into production anyway?');">
+                            <input type="hidden" name="force" value="true" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger w-100">Force to production</button>
+                        </form>
                     }
-                </div>
+                    else
+                    {
+                        <form method="post" asp-page-handler="ScheduleForProduction">
+                            <input type="hidden" name="force" value="false" />
+                            <button type="submit" class="btn btn-sm btn-success w-100">Schedule for production</button>
+                        </form>
+                    }
+                }
+                @if (Model.CanSendInvoice && firstSendableInvoice is not null)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-primary w-100" data-bs-toggle="modal" data-bs-target="#invoiceEmailModal">
+                        Email invoice to customer
+                    </button>
+                }
+                <a asp-page-handler="PackingList" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-secondary w-100">Download packing list</a>
             </div>
-        }
+        </div>
 
         <div class="card">
             <div class="card-header py-1 small fw-semibold d-flex justify-content-between align-items-center">

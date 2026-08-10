@@ -98,34 +98,36 @@ window.LabelsMis = window.LabelsMis || {};
     };
 
     LabelsMis.initSalesOrderArtworkUploads = function initSalesOrderArtworkUploads(root) {
-        root?.querySelectorAll('.artwork-file-input').forEach((input) => {
-            input.addEventListener('change', () => {
-                const row = input.closest('.order-line');
-                const productId = row?.querySelector('.product-select')?.value;
-                const file = input.files?.[0];
-                const container = row?.querySelector('.artwork-upload-cell') || row;
+        // Delegated so line rows added after page load are covered too.
+        root?.addEventListener('change', (event) => {
+            const input = event.target.closest('.artwork-file-input');
+            if (!input) return;
 
-                if (!file) return;
-                if (!productId) {
-                    setProgress(container, 0, 'Select a product before uploading artwork.', 'danger');
-                    input.value = '';
-                    return;
+            const row = input.closest('.order-line');
+            const productId = row?.querySelector('.product-select')?.value;
+            const file = input.files?.[0];
+            const container = row?.querySelector('.artwork-upload-cell') || row;
+
+            if (!file) return;
+            if (!productId) {
+                setProgress(container, 0, 'Select a product before uploading artwork.', 'danger');
+                input.value = '';
+                return;
+            }
+
+            setProgress(container, 0, 'Starting upload…', 'muted');
+            uploadArtwork(productId, file, container, () => {
+                input.value = '';
+                let link = container.querySelector('.artwork-download-link');
+                if (!link) {
+                    link = document.createElement('a');
+                    link.className = 'small d-block mb-1 artwork-download-link';
+                    link.target = '_blank';
+                    link.textContent = 'Download';
+                    container.insertBefore(link, container.firstChild);
                 }
-
-                setProgress(container, 0, 'Starting upload…', 'muted');
-                uploadArtwork(productId, file, container, () => {
-                    input.value = '';
-                    let link = container.querySelector('.artwork-download-link');
-                    if (!link) {
-                        link = document.createElement('a');
-                        link.className = 'small d-block mb-1 artwork-download-link';
-                        link.target = '_blank';
-                        link.textContent = 'Download';
-                        container.insertBefore(link, container.firstChild);
-                    }
-                    link.href = `/artwork/download?productId=${encodeURIComponent(productId)}`;
-                }).catch(() => { /* message already shown */ });
-            });
+                link.href = `/artwork/download?productId=${encodeURIComponent(productId)}`;
+            }).catch(() => { /* message already shown */ });
         });
     };
 })(window.LabelsMis);

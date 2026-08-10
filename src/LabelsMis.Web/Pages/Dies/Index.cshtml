@@ -21,7 +21,7 @@
 <form method="get" class="row g-2 align-items-center mb-2">
     <input type="hidden" asp-for="Sort" />
     <div class="col-md-4 col-lg-3">
-        <input asp-for="Search" class="form-control form-control-sm" placeholder="Search description" />
+        <input asp-for="Search" class="form-control form-control-sm" placeholder="Search description, customer, location" />
     </div>
     <div class="col-auto">
         <div class="form-check small mb-0">
@@ -40,10 +40,10 @@
             <tr>
                 <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Description", "description", Model.Sort, route))</th>
                 <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer", "customer", Model.Sort, route))</th>
-                <th class="text-end">Label size</th>
-                <th class="text-end">Layout</th>
-                <th class="text-end">Die repeat</th>
-                <th>Location</th>
+                <th class="text-end">@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Label size", "size", Model.Sort, route))</th>
+                <th class="text-end">@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Layout", "layout", Model.Sort, route))</th>
+                <th class="text-end">@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Die repeat", "repeat", Model.Sort, route))</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Location", "location", Model.Sort, route))</th>
                 <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Active", "active", Model.Sort, route))</th>
                 <th></th>
             </tr>

@@ -54,13 +54,15 @@
         {
             <table class="table table-striped align-middle">
                 <thead>
-                    <tr><th>Order #</th><th>Customer</th><th>Customer PO</th><th>Requested ship</th><th>Ship method</th><th>Ready</th><th>Jobs</th><th></th></tr>
+                    <tr><th class="text-nowrap">Order #</th><th>Customer</th><th class="text-nowrap">Customer PO</th><th class="text-nowrap">Requested ship</th><th class="text-nowrap">Ship method</th><th>Ready</th><th>Jobs</th><th></th></tr>
                 </thead>
                 <tbody>
                 @foreach (var order in Model.ReadyResult.Items)
                 {
                     <tr>
-                        <td>@order.OrderNumber</td>
+                        <td class="text-nowrap">
+                            <a asp-page="/SalesOrders/Edit" asp-route-id="@order.SalesOrderId">@order.OrderNumber</a>
+                        </td>
                         <td>@order.CustomerName</td>
                         <td>@(order.CustomerPoNumber ?? "—")</td>
                         <td>@(order.RequestedShipDate?.ToString("yyyy-MM-dd") ?? "—")</td>
@@ -73,35 +75,37 @@
                         <td>
                             @foreach (var job in order.ReadyJobs)
                             {
-                                <a asp-page="/Jobs/Detail" asp-route-id="@job.JobId" class="d-inline-block me-2">@job.JobNumber</a>
+                                <a asp-page="/Jobs/Detail" asp-route-id="@job.JobId" class="d-inline-block me-2 text-nowrap">@job.JobNumber</a>
                             }
                         </td>
                         <td class="text-end">
-                            @if (Model.CanShip)
-                            {
-                                <a asp-page="/Shipments/Record" asp-route-salesOrderId="@order.SalesOrderId" class="btn btn-sm btn-success">Record shipment</a>
-                                var markLabel = order.IsPickup ? "Mark picked up" : "Mark shipped";
-                                var markConfirm = order.IsPickup
-                                    ? "Are you sure you want to mark this order picked up without a package?"
-                                    : "Are you sure you want to mark this order shipped without a package?";
-                                <form method="post" asp-page-handler="MarkShipped" class="d-inline"
-                                      onsubmit="return confirm('@markConfirm');">
-                                    <input type="hidden" name="salesOrderId" value="@order.SalesOrderId" />
-                                    <input type="hidden" name="isPickup" value="@order.IsPickup" />
-                                    <input type="hidden" name="ReadySearch" value="@Model.ReadySearch" />
-                                    <input type="hidden" name="readyPage" value="@Model.ReadyPage" />
-                                    @if (order.ReadyItemCount < order.TotalItemCount)
-                                    {
-                                        <button type="submit" class="btn btn-sm btn-outline-success" disabled
-                                                title="All items must be ready before the order can be marked @(order.IsPickup ? "picked up" : "shipped")">@markLabel</button>
-                                    }
-                                    else
-                                    {
-                                        <button type="submit" class="btn btn-sm btn-outline-success">@markLabel</button>
-                                    }
-                                </form>
-                            }
-                            <a asp-page="/SalesOrders/Edit" asp-route-id="@order.SalesOrderId" class="btn btn-sm btn-outline-primary">View order</a>
+                            <div class="d-flex justify-content-end align-items-center gap-2 flex-nowrap">
+                                @if (Model.CanShip)
+                                {
+                                    <a asp-page="/Shipments/Record" asp-route-salesOrderId="@order.SalesOrderId" class="btn btn-sm btn-success text-nowrap">Record shipment</a>
+                                    var markLabel = order.IsPickup ? "Mark picked up" : "Mark shipped";
+                                    var markConfirm = order.IsPickup
+                                        ? "Are you sure you want to mark this order picked up without a package?"
+                                        : "Are you sure you want to mark this order shipped without a package?";
+                                    <form method="post" asp-page-handler="MarkShipped" class="m-0"
+                                          onsubmit="return confirm('@markConfirm');">
+                                        <input type="hidden" name="salesOrderId" value="@order.SalesOrderId" />
+                                        <input type="hidden" name="isPickup" value="@order.IsPickup" />
+                                        <input type="hidden" name="ReadySearch" value="@Model.ReadySearch" />
+                                        <input type="hidden" name="readyPage" value="@Model.ReadyPage" />
+                                        @if (order.ReadyItemCount < order.TotalItemCount)
+                                        {
+                                            <button type="submit" class="btn btn-sm btn-outline-success text-nowrap" disabled
+                                                    title="All items must be ready before the order can be marked @(order.IsPickup ? "picked up" : "shipped")">@markLabel</button>
+                                        }
+                                        else
+                                        {
+                                            <button type="submit" class="btn btn-sm btn-outline-success text-nowrap">@markLabel</button>
+                                        }
+                                    </form>
+                                }
+                                <a asp-page="PackingList" asp-route-salesOrderId="@order.SalesOrderId" class="btn btn-sm btn-outline-secondary text-nowrap">Packing list</a>
+                            </div>
                         </td>
                     </tr>
                 }
@@ -131,14 +135,20 @@
         </form>
 
         <table class="table table-striped">
-            <thead><tr><th>Shipment #</th><th>Customer</th><th>Ship date</th><th>Status</th><th>Carrier</th><th>Tracking</th><th></th></tr></thead>
+            <thead><tr><th class="text-nowrap">Shipment #</th><th>Customer</th><th class="text-nowrap">Ship date</th><th>Status</th><th>Carrier</th><th>Tracking</th><th></th></tr></thead>
             <tbody>
             @foreach (var item in Model.Result.Items)
             {
                 <tr>
-                    <td>@item.ShipmentNumber</td><td>@item.CustomerName</td><td>@item.ShipDate.ToString("yyyy-MM-dd")</td>
+                    <td class="text-nowrap"><a asp-page="Detail" asp-route-id="@item.Id">@item.ShipmentNumber</a></td>
+                    <td>@item.CustomerName</td><td>@item.ShipDate.ToString("yyyy-MM-dd")</td>
                     <td>@item.Status</td><td>@item.Carrier</td><td>@(item.PrimaryTrackingNumber ?? "—")</td>
-                    <td class="text-end"><a asp-page="Detail" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a></td>
+                    <td class="text-end">
+                        <div class="d-flex justify-content-end align-items-center gap-2 flex-nowrap">
+                            <a asp-page="PackingList" asp-route-salesOrderId="@item.SalesOrderId" class="btn btn-sm btn-outline-secondary text-nowrap">Packing list</a>
+                            <a asp-page="Detail" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary text-nowrap">Open</a>
+                        </div>
+                    </td>
                 </tr>
             }
             </tbody>

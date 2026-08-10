@@ -92,9 +92,15 @@
         loadProducts();
     });
 
-    document.querySelectorAll('.line-qty, .product-select').forEach(el => {
-        el.addEventListener('change', () => updateSuggestedPrice(el.closest('.order-line')));
+    document.addEventListener('change', e => {
+        if (e.target.matches('.line-qty, .product-select')) {
+            const row = e.target.closest('.order-line');
+            if (row) updateSuggestedPrice(row);
+        }
     });
+
+    // Newly added line rows need their product dropdown filled from the loaded list.
+    document.addEventListener('order-line-added', () => populateProductSelects());
 
     syncProductFilterToOrderCustomer();
     loadProducts();

@@ -77,7 +77,8 @@ public record JobTicketDetail(
     string? OrderNotes = null,
     string? LineNotes = null,
     IReadOnlyList<string>? OrderCharges = null,
-    Die? Die = null);
+    Die? Die = null,
+    string? ShippingMethodName = null);
 
 public record OperatorJobView(
     Job Job,
@@ -322,7 +323,7 @@ public class JobService(
             .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
             .Include(j => j.Product).ThenInclude(p => p.Substrate)
             .Include(j => j.Product).ThenInclude(p => p.RollSpec)
-            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.ShippingMethod)
             .Include(j => j.Operations)
             .SingleOrDefaultAsync(j => j.Id == id, cancellationToken);
 
@@ -441,7 +442,8 @@ public class JobService(
             order.Notes,
             job.SalesOrderLine.LineNotes,
             orderCharges.Select(c => c.Quantity > 1 ? $"{c.Description} (×{c.Quantity})" : c.Description).ToList(),
-            die);
+            die,
+            order.ShippingMethod?.Name);
     }
 
     public async Task<OperatorJobView?> GetOperatorViewAsync(

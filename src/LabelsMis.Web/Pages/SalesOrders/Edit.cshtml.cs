@@ -621,6 +621,14 @@ public class EditModel(
         return File(file.Value.Stream, file.Value.ContentType, file.Value.FileName);
     }
 
+    public async Task<IActionResult> OnGetPackingListAsync(CancellationToken cancellationToken)
+    {
+        var pdf = await salesOrderService.RenderPackingListPdfAsync(Id, cancellationToken);
+        return pdf is null
+            ? NotFound()
+            : File(pdf.Bytes, "application/pdf", $"{pdf.OrderNumber.Replace('/', '-')}-packing-list.pdf");
+    }
+
     public async Task<IActionResult> OnPostDeleteDocumentAsync(Guid documentId, CancellationToken cancellationToken)
     {
         if (!CanManageDocuments) return Forbid();
