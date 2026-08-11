@@ -174,7 +174,7 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
         }
 
         var customerId = line.Estimate.CustomerId;
-        var internalSku = await NextInternalSkuAsync(customerId, line.Estimate.Customer.Code, cancellationToken);
+        var internalSku = await NextInternalSkuAsync(line.Estimate.Customer.Code, cancellationToken);
         var product = Product.Create(
             Guid.NewGuid(),
             customerId,
@@ -232,7 +232,7 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
             skuPrefix = "STK";
         }
 
-        var internalSku = await NextInternalSkuAsync(primaryCustomerId, skuPrefix, cancellationToken);
+        var internalSku = await NextInternalSkuAsync(skuPrefix, cancellationToken);
         var product = Product.Create(
             Guid.NewGuid(),
             primaryCustomerId,
@@ -427,14 +427,26 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
             .OrderBy(name => name));
 
     private async Task<string> NextInternalSkuAsync(
-        Guid? customerId,
         string customerCode,
         CancellationToken cancellationToken)
     {
-        var count = customerId is { } cid
-            ? await db.Products.CountAsync(p => p.PrimaryCustomerId == cid, cancellationToken)
-            : await db.Products.CountAsync(p => p.PrimaryCustomerId == null, cancellationToken);
-        return $"{customerCode.Trim().ToUpperInvariant()}-{(count + 1):D4}";
+        var prefix = $"{customerCode.Trim().ToUpperInvariant()}-";
+        var existingSkus = await db.Products
+            .Where(p => p.InternalSku.StartsWith(prefix))
+            .Select(p => p.InternalSku)
+            .ToListAsync(cancellationToken);
+
+        // Number from the highest existing suffix, not a row count: counts drift after
+        // deletes or primary-customer reassignment and then collide with the unique index.
+        // Local (unsaved) products are included so a multi-line conversion that creates
+        // several products before one SaveChanges numbers each of them uniquely.
+        var next = existingSkus
+            .Concat(db.Products.Local.Select(p => p.InternalSku))
+            .Where(sku => sku.StartsWith(prefix, StringComparison.Ordinal))
+            .Select(sku => int.TryParse(sku.AsSpan(prefix.Length), out var n) ? n : 0)
+            .DefaultIfEmpty(0)
+            .Max() + 1;
+        return $"{prefix}{next:D4}";
     }
 
     private static RollSpec CreateRollSpec(Guid productId, RollSpecInput input, Guid userId, DateTime now) =>

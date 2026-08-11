@@ -28,6 +28,14 @@ public class DetailModel(
         return Detail is null ? NotFound() : Page();
     }
 
+    public async Task<IActionResult> OnGetPdfAsync(CancellationToken cancellationToken)
+    {
+        var pdf = await invoiceService.RenderPdfAsync(Id, cancellationToken);
+        return pdf is null
+            ? NotFound()
+            : File(pdf.Bytes, "application/pdf", $"{pdf.InvoiceNumber.Replace('/', '-')}.pdf");
+    }
+
     public async Task<IActionResult> OnGetDocumentAsync(Guid documentId, CancellationToken cancellationToken)
     {
         var detail = await invoiceService.GetDetailAsync(Id, cancellationToken);

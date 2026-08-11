@@ -621,6 +621,19 @@ public class EditModel(
         return File(file.Value.Stream, file.Value.ContentType, file.Value.FileName);
     }
 
+    public async Task<IActionResult> OnGetInvoicePdfAsync(Guid invoiceId, CancellationToken cancellationToken)
+    {
+        if (!CanSendInvoice)
+        {
+            return Forbid();
+        }
+
+        var pdf = await invoiceService.RenderPdfAsync(invoiceId, cancellationToken);
+        return pdf is null || pdf.SalesOrderId != Id
+            ? NotFound()
+            : File(pdf.Bytes, "application/pdf", $"{pdf.InvoiceNumber.Replace('/', '-')}.pdf");
+    }
+
     public async Task<IActionResult> OnGetPackingListAsync(CancellationToken cancellationToken)
     {
         var pdf = await salesOrderService.RenderPackingListPdfAsync(Id, cancellationToken);

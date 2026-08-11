@@ -155,6 +155,8 @@ else if (Model.IsLocked)
                     <button type="button" class="btn btn-sm btn-outline-primary w-100" data-bs-toggle="modal" data-bs-target="#invoiceEmailModal">
                         Email invoice to customer
                     </button>
+                    <a asp-page-handler="InvoicePdf" asp-route-id="@Model.Id" asp-route-invoiceId="@firstSendableInvoice.Id"
+                       class="btn btn-sm btn-outline-secondary w-100">Download invoice</a>
                 }
                 <a asp-page-handler="PackingList" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-secondary w-100">Download packing list</a>
             </div>

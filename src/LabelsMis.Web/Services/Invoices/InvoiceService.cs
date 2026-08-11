@@ -49,6 +49,8 @@ public record InvoiceDetail(
     string? BillingNotes = null,
     IReadOnlyList<InvoiceDocumentInfo>? Documents = null);
 
+public record InvoicePdfResult(string InvoiceNumber, Guid SalesOrderId, byte[] Bytes);
+
 public record ArAgingRow(
     string CustomerName,
     decimal Current,
@@ -239,6 +241,19 @@ public class InvoiceService(
         }).ToList();
 
         return new PagedResult<InvoiceListItem>(items, page, pageSize, total);
+    }
+
+    /// <summary>Renders the invoice PDF for download; null when the invoice doesn't exist.</summary>
+    public async Task<InvoicePdfResult?> RenderPdfAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var detail = await GetDetailAsync(id, cancellationToken);
+        if (detail is null)
+        {
+            return null;
+        }
+
+        var bytes = await pdfGenerator.GenerateBytesAsync(detail, cancellationToken);
+        return new InvoicePdfResult(detail.Invoice.InvoiceNumber, detail.SalesOrderId, bytes);
     }
 
     public async Task<InvoiceDetail?> GetDetailAsync(Guid id, CancellationToken cancellationToken = default)
