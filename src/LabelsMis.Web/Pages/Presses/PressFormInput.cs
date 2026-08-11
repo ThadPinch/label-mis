@@ -47,6 +47,10 @@ public class PressFormInput
     [Display(Name = "Min repeat (in)")]
     public decimal MinRepeatIn { get; set; }
 
+    [Range(1, 10)]
+    [Display(Name = "Frame factor (clicks per impression)")]
+    public int FrameFactor { get; set; } = 2;
+
     [Range(1, 20)]
     [Display(Name = "Max colors")]
     public int MaxColors { get; set; } = 4;
@@ -78,6 +82,7 @@ public class PressFormInput
         MaxImageLengthIn,
         MaxRepeatIn,
         MinRepeatIn,
+        FrameFactor,
         MaxColors,
         SpeedFpm,
         SetupMinutes,
@@ -97,6 +102,7 @@ public class PressFormInput
         MaxImageLengthIn = press.MaxImageLengthIn,
         MaxRepeatIn = press.MaxRepeatIn,
         MinRepeatIn = press.MinRepeatIn,
+        FrameFactor = press.FrameFactor,
         MaxColors = press.MaxColors,
         SpeedFpm = press.SpeedFpm,
         SetupMinutes = press.SetupMinutes,

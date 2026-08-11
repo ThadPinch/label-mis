@@ -22,6 +22,10 @@ public class Press : MasterDataEntity
     public decimal MaxImageLengthIn { get; private set; }
     public decimal MaxRepeatIn { get; private set; }
     public decimal MinRepeatIn { get; private set; }
+
+    /// <summary>Click charge units per impression (HP frame factor — a full Indigo frame bills as this many clicks per separation).</summary>
+    public int FrameFactor { get; private set; }
+
     public int MaxColors { get; private set; }
     public decimal SpeedFpm { get; private set; }
     public decimal SetupMinutes { get; private set; }
@@ -41,6 +45,7 @@ public class Press : MasterDataEntity
         decimal maxImageLengthIn,
         decimal maxRepeatIn,
         decimal minRepeatIn,
+        int frameFactor,
         int maxColors,
         decimal speedFpm,
         decimal setupMinutes,
@@ -60,6 +65,7 @@ public class Press : MasterDataEntity
             maxImageLengthIn,
             maxRepeatIn,
             minRepeatIn,
+            frameFactor,
             maxColors,
             speedFpm,
             setupMinutes,
@@ -78,6 +84,7 @@ public class Press : MasterDataEntity
             MaxImageLengthIn = maxImageLengthIn,
             MaxRepeatIn = maxRepeatIn,
             MinRepeatIn = minRepeatIn,
+            FrameFactor = frameFactor,
             MaxColors = maxColors,
             SpeedFpm = speedFpm,
             SetupMinutes = setupMinutes,
@@ -102,6 +109,7 @@ public class Press : MasterDataEntity
             maxImageLengthIn: 38.58m,
             maxRepeatIn: 38.58m,
             minRepeatIn: 18.9m,
+            frameFactor: 2,
             maxColors: 7,
             speedFpm: 100m,
             setupMinutes: 20m,
@@ -122,6 +130,7 @@ public class Press : MasterDataEntity
         decimal maxImageLengthIn,
         decimal maxRepeatIn,
         decimal minRepeatIn,
+        int frameFactor,
         int maxColors,
         decimal speedFpm,
         decimal setupMinutes,
@@ -141,6 +150,7 @@ public class Press : MasterDataEntity
             maxImageLengthIn,
             maxRepeatIn,
             minRepeatIn,
+            frameFactor,
             maxColors,
             speedFpm,
             setupMinutes,
@@ -157,6 +167,7 @@ public class Press : MasterDataEntity
         MaxImageLengthIn = maxImageLengthIn;
         MaxRepeatIn = maxRepeatIn;
         MinRepeatIn = minRepeatIn;
+        FrameFactor = frameFactor;
         MaxColors = maxColors;
         SpeedFpm = speedFpm;
         SetupMinutes = setupMinutes;
@@ -176,6 +187,7 @@ public class Press : MasterDataEntity
         decimal maxImageLengthIn,
         decimal maxRepeatIn,
         decimal minRepeatIn,
+        int frameFactor,
         int maxColors,
         decimal speedFpm,
         decimal setupMinutes,
@@ -219,6 +231,11 @@ public class Press : MasterDataEntity
         if (minRepeatIn <= 0 || maxRepeatIn <= 0 || minRepeatIn > maxRepeatIn)
         {
             throw new ArgumentOutOfRangeException(nameof(minRepeatIn), "Repeat range is invalid.");
+        }
+
+        if (frameFactor < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(frameFactor), "Frame factor must be at least one.");
         }
 
         if (maxColors <= 0)

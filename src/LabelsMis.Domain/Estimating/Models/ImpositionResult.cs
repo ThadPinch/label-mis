@@ -6,8 +6,6 @@ public record ImpositionResult(
     int LabelsAcross,
     int LabelsAround,
     int LabelsPerImpression,
-    int FramesPerImpression,
-    decimal FrameRepeatIn,
     decimal LayoutRepeatIn,
     decimal RepeatLengthIn,
     decimal UtilizationPct,

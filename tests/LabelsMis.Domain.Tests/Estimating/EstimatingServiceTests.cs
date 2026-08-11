@@ -17,46 +17,42 @@ public class EstimatingServiceTests
         result.Errors.Should().BeEmpty();
         result.Imposition.Should().NotBeNull();
         result.Imposition!.LabelsAcross.Should().Be(3);
-        result.Imposition.LabelsAround.Should().Be(6);
-        result.Imposition.LabelsPerImpression.Should().Be(18);
-        result.Imposition.FramesPerImpression.Should().Be(1);
-        result.Imposition.FrameRepeatIn.Should().Be(18.9m);
-        result.Imposition.LayoutRepeatIn.Should().Be(18.375m);
-        result.Imposition.RepeatLengthIn.Should().Be(18.9m);
+        result.Imposition.LabelsAround.Should().Be(12);
+        result.Imposition.LabelsPerImpression.Should().Be(36);
+        result.Imposition.LayoutRepeatIn.Should().Be(36.75m);
+        result.Imposition.RepeatLengthIn.Should().Be(36.75m);
         result.Imposition.UtilizationPct.Should().BeApproximately(0.8962m, 0.0001m);
 
         result.QuantityBreaks.Should().HaveCount(3);
 
         var break25k = result.QuantityBreaks.Single(q => q.Quantity == 25000);
-        break25k.Impressions.Should().Be(1461);
-        break25k.TotalCost.Should().Be(740.59m);
-        break25k.TotalPrice.Should().Be(1073.86m);
+        break25k.Impressions.Should().Be(746);
+        break25k.TotalCost.Should().Be(742.06m);
+        break25k.TotalPrice.Should().Be(1075.99m);
         break25k.UnitPrice.Should().Be(0.0430m);
-        break25k.PricePerThousand.Should().Be(42.95m);
+        break25k.PricePerThousand.Should().Be(43.04m);
         break25k.MarginPct.Should().BeApproximately(0.3103m, 0.0001m);
         break25k.BelowMinimumMargin.Should().BeFalse();
         break25k.CostBreakdown.Should().Contain(item =>
-            item.Category == "Press click" && item.LineCost == 204.54m);
+            item.Category == "Press click" && item.LineCost == 208.88m);
         break25k.CostBreakdown.Should().Contain(item =>
-            item.Category == "Substrate" && item.LineCost == 316.88m);
+            item.Category == "Substrate" && item.LineCost == 314.67m);
         break25k.CostBreakdown.Should().Contain(item =>
             item.Category == "Press setup" && item.LineCost == 50.00m);
         break25k.CostBreakdown.Should().Contain(item =>
-            item.Category == "Press run" && item.LineCost == 57.53m);
+            item.Category == "Press run" && item.LineCost == 57.12m);
         break25k.CostBreakdown.Should().Contain(item =>
-            item.Description == "Gloss laminate" && item.LineCost == 39.76m);
+            item.Description == "Gloss laminate" && item.LineCost == 39.63m);
         break25k.CostBreakdown.Should().Contain(item =>
-            item.Description == "Rotary die-cut / matrix strip" && item.LineCost == 71.87m);
+            item.Description == "Rotary die-cut / matrix strip" && item.LineCost == 71.76m);
 
         var break5k = result.QuantityBreaks.Single(q => q.Quantity == 5000);
-        break5k.Impressions.Should().Be(317);
-        break5k.TotalCost.Should().Be(260.55m);
-        break5k.TotalPrice.Should().Be(377.80m);
+        break5k.Impressions.Should().Be(174);
 
         var break10k = result.QuantityBreaks.Single(q => q.Quantity == 10000);
-        break10k.Impressions.Should().Be(603);
-        break10k.TotalCost.Should().Be(380.59m);
-        break10k.TotalPrice.Should().Be(551.86m);
+        break10k.Impressions.Should().Be(317);
+        break10k.TotalCost.Should().BeGreaterThan(break5k.TotalCost);
+        break25k.TotalCost.Should().BeGreaterThan(break10k.TotalCost);
     }
 
     [Fact]
@@ -97,7 +93,7 @@ public class EstimatingServiceTests
 
         result.Errors.Should().BeEmpty();
         result.QuantityBreaks[0].CostBreakdown.Should().Contain(item =>
-            item.Description.Contains("White", StringComparison.Ordinal) && item.LineCost == 17.53m);
+            item.Description.Contains("White", StringComparison.Ordinal) && item.LineCost == 17.90m);
     }
 
     [Fact]
@@ -210,7 +206,7 @@ public class EstimatingServiceTests
 
         result.Errors.Should().BeEmpty();
         result.QuantityBreaks[0].CostBreakdown.Should().NotContain(item => item.Category == "Finishing");
-        result.QuantityBreaks[0].TotalCost.Should().Be(628.95m);
+        result.QuantityBreaks[0].TotalCost.Should().Be(630.67m);
     }
 
     [Fact]
@@ -226,7 +222,7 @@ public class EstimatingServiceTests
         breakdown.Should().Contain(item => item.Description == "Gloss laminate");
         breakdown.Should().Contain(item => item.Description == "Rotary die-cut / matrix strip");
         breakdown.Should().Contain(item => item.Description == "Slit to width");
-        result.QuantityBreaks[0].TotalCost.Should().Be(765.61m);
+        result.QuantityBreaks[0].TotalCost.Should().Be(767.02m);
     }
 
     [Fact]
@@ -306,7 +302,8 @@ public class EstimatingServiceTests
     [Fact]
     public void Calculate_AutoRotation_PicksOrientationWithMostLabelsPerImpression()
     {
-        // 4×3" on WS6800: rotated fits more across, but as-entered gangs 6 around in one frame (18 labels/impression).
+        // 4×3" on WS6800 packed to the 38.58" max repeat: both orientations yield 36
+        // labels per impression (3×12 vs 4×9) — the tie-break prefers more across.
         var request = EstimatingTestData.CreateWorkedExampleRequest(
             quantities: [25000],
             labelOrientationOverride: null);
@@ -314,18 +311,19 @@ public class EstimatingServiceTests
         var result = _sut.Calculate(request);
 
         result.Imposition.Should().NotBeNull();
-        result.Imposition!.Orientation.Should().Be(LabelOrientation.AsEntered);
-        result.Imposition.LabelsAcross.Should().Be(3);
-        result.Imposition.LabelsAround.Should().Be(6);
-        result.Imposition.LabelsPerImpression.Should().Be(18);
-        result.Imposition.MaxLabelsAcross.Should().Be(3);
-        result.Imposition.EffectiveLabelAcrossIn.Should().Be(4.0m);
-        result.Imposition.EffectiveLabelAroundIn.Should().Be(3.0m);
+        result.Imposition!.Orientation.Should().Be(LabelOrientation.Rotated);
+        result.Imposition.LabelsAcross.Should().Be(4);
+        result.Imposition.LabelsAround.Should().Be(9);
+        result.Imposition.LabelsPerImpression.Should().Be(36);
+        result.Imposition.MaxLabelsAcross.Should().Be(4);
+        result.Imposition.EffectiveLabelAcrossIn.Should().Be(3.0m);
+        result.Imposition.EffectiveLabelAroundIn.Should().Be(4.0m);
     }
 
     [Fact]
-    public void Calculate_LabelLongerThanHalfFrame_LimitsToOneAroundPerFrame()
+    public void Calculate_LongLabel_PacksAsManyAroundAsMaxRepeatAllows()
     {
+        // 10.0625" pitch into a 38.58" max repeat → 3 around, no half-frame cap.
         var request = EstimatingTestData.CreateWorkedExampleRequest(
             quantities: [1000],
             labelAcrossIn: 4.0m,
@@ -334,12 +332,13 @@ public class EstimatingServiceTests
         var result = _sut.Calculate(request);
 
         result.Errors.Should().BeEmpty();
-        result.Imposition!.LabelsAround.Should().Be(1);
-        result.Warnings.Should().Contain("Label length exceeds half a frame repeat — limited to one around per frame");
+        result.Imposition!.LabelsAround.Should().Be(3);
+        result.Imposition.LayoutRepeatIn.Should().Be(30.1875m);
+        result.Imposition.RepeatLengthIn.Should().Be(30.1875m);
     }
 
     [Fact]
-    public void Calculate_LayoutExceedingOneFrame_UsesMultipleFrameSlots()
+    public void Calculate_LabelLongerThanHalfMaxRepeat_BillsActualRepeatNotWholeFrames()
     {
         var request = EstimatingTestData.CreateWorkedExampleRequest(
             quantities: [1000],
@@ -350,8 +349,60 @@ public class EstimatingServiceTests
 
         result.Errors.Should().BeEmpty();
         result.Imposition!.LabelsAround.Should().Be(1);
-        result.Imposition.FramesPerImpression.Should().Be(2);
-        result.Imposition.RepeatLengthIn.Should().Be(37.8m);
+        result.Imposition.RepeatLengthIn.Should().Be(20.0625m);
+    }
+
+    [Fact]
+    public void Calculate_LayoutShorterThanMinRepeat_BillsMinRepeat()
+    {
+        // 6.2625" pitch into a 12" max repeat → one around at 6.2625" layout,
+        // floored to the 10" minimum billable repeat.
+        var request = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [1000],
+            labelAcrossIn: 4.0m,
+            labelAroundIn: 6.2m,
+            pressMinRepeatIn: 10.0m,
+            pressMaxRepeatIn: 12.0m);
+
+        var result = _sut.Calculate(request);
+
+        result.Errors.Should().BeEmpty();
+        result.Imposition!.LabelsAround.Should().Be(1);
+        result.Imposition.LayoutRepeatIn.Should().Be(6.2625m);
+        result.Imposition.RepeatLengthIn.Should().Be(10.0m);
+    }
+
+    [Fact]
+    public void Calculate_LabelLongerThanMaxRepeat_ReturnsError()
+    {
+        var request = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [1000],
+            labelAcrossIn: 4.0m,
+            labelAroundIn: 40.0m);
+
+        var result = _sut.Calculate(request);
+
+        result.Errors.Should().Contain("Label repeat exceeds maximum press repeat");
+        result.QuantityBreaks.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Calculate_FrameFactor_ScalesClickCostPerImpression()
+    {
+        var doubleFactor = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [25000],
+            pressFrameFactor: 2);
+        var quadFactor = EstimatingTestData.CreateWorkedExampleRequest(
+            quantities: [25000],
+            pressFrameFactor: 4);
+
+        var doubleClick = _sut.Calculate(doubleFactor).QuantityBreaks[0].CostBreakdown
+            .Single(item => item.Category == "Press click");
+        var quadClick = _sut.Calculate(quadFactor).QuantityBreaks[0].CostBreakdown
+            .Single(item => item.Category == "Press click");
+
+        quadClick.Quantity.Should().Be(doubleClick.Quantity * 2);
+        quadClick.LineCost.Should().Be(doubleClick.LineCost * 2);
     }
 
     [Fact]
@@ -394,12 +445,13 @@ public class EstimatingServiceTests
     }
 
     [Fact]
-    public void Calculate_TieOnLabelsAcross_PicksShorterRepeatOrientation()
+    public void Calculate_OrientationChoice_PicksMostLabelsPerImpression()
     {
-        // 2.0 across × 1.5 around on a 4.5" web with 0.25" edge margin and no gutter:
-        //   as-entered: floor((4.5 - 0.5) / 2.0) = 2 across, around = 1.5
-        //   rotated:    floor((4.5 - 0.5) / 1.5) = 2 across, around = 2.0
-        // Tie at 2 across — tie-break picks the orientation with the shorter repeat.
+        // 2.0 across × 1.5 around on a 4.5" web with 0.25" edge margin and no gutter,
+        // packed to the 38.58" max repeat:
+        //   as-entered: 2 across × floor(38.58 / 1.5) = 25 around → 50 per impression
+        //   rotated:    2 across × floor(38.58 / 2.0) = 19 around → 38 per impression
+        // As-entered wins on labels per impression.
         var request = new EstimateRequest(
             LabelAcrossIn: 2.0m,
             LabelAroundIn: 1.5m,
@@ -410,7 +462,9 @@ public class EstimatingServiceTests
             PressId: EstimatingTestData.Indigo6800PressId,
             PressWebWidthIn: 4.5m,
             PressMaxImageWidthIn: 4.0m,
-            PressFrameRepeatIn: EstimatingTestData.IndigoFrameRepeatIn,
+            PressMinRepeatIn: EstimatingTestData.IndigoMinRepeatIn,
+            PressMaxRepeatIn: EstimatingTestData.IndigoMaxRepeatIn,
+            PressFrameFactor: EstimatingTestData.IndigoFrameFactor,
             PressMaxImageLengthIn: EstimatingTestData.IndigoMaxImageLengthIn,
             PressEdgeMarginIn: 0.25m,
             PressSetupMinutes: 20m,

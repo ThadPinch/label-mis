@@ -195,6 +195,7 @@ public class MasterDataPersistenceTests : IAsyncLifetime
             maxImageLengthIn: 38.58m,
             maxRepeatIn: 38.58m,
             minRepeatIn: 18.9m,
+            frameFactor: 2,
             maxColors: 7,
             speedFpm: 100m,
             setupMinutes: 20m,

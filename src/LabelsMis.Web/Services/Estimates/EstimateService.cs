@@ -235,7 +235,6 @@ public class EstimateService(
                 var layout = new ImpositionLayoutView(
                     request.PressWebWidthIn,
                     request.PressMaxImageWidthIn,
-                    request.PressFrameRepeatIn,
                     request.PressMaxImageLengthIn,
                     request.PressEdgeMarginIn,
                     request.StockWidthIn,

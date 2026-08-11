@@ -12,7 +12,9 @@ internal static class EstimatingTestData
     internal static readonly Guid SlitOpId = Guid.Parse("55555555-5555-5555-5555-555555555555");
 
     internal const decimal IndigoMaxImageWidthIn = 12.59m;
-    internal const decimal IndigoFrameRepeatIn = 18.9m;
+    internal const decimal IndigoMinRepeatIn = 18.9m;
+    internal const decimal IndigoMaxRepeatIn = 38.58m;
+    internal const int IndigoFrameFactor = 2;
     internal const decimal IndigoMaxImageLengthIn = 38.58m;
 
     internal static EstimateRequest CreateWorkedExampleRequest(
@@ -34,7 +36,9 @@ internal static class EstimatingTestData
         decimal? labelAroundIn = null,
         decimal? pressWebWidthIn = null,
         decimal? pressMaxImageWidthIn = null,
-        decimal? pressFrameRepeatIn = null,
+        decimal? pressMinRepeatIn = null,
+        decimal? pressMaxRepeatIn = null,
+        int? pressFrameFactor = null,
         decimal? pressMaxImageLengthIn = null,
         decimal? pressEdgeMarginIn = null,
         decimal? setupWasteImpressions = null,
@@ -60,7 +64,9 @@ internal static class EstimatingTestData
             PressId: Indigo6800PressId,
             PressWebWidthIn: pressWebWidthIn ?? 13.39m,
             PressMaxImageWidthIn: pressMaxImageWidthIn ?? IndigoMaxImageWidthIn,
-            PressFrameRepeatIn: pressFrameRepeatIn ?? IndigoFrameRepeatIn,
+            PressMinRepeatIn: pressMinRepeatIn ?? IndigoMinRepeatIn,
+            PressMaxRepeatIn: pressMaxRepeatIn ?? IndigoMaxRepeatIn,
+            PressFrameFactor: pressFrameFactor ?? IndigoFrameFactor,
             PressMaxImageLengthIn: pressMaxImageLengthIn ?? IndigoMaxImageLengthIn,
             PressEdgeMarginIn: pressEdgeMarginIn ?? 0.25m,
             PressSetupMinutes: 20m,

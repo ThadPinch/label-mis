@@ -17,7 +17,7 @@
         <select asp-for="PressType" asp-items="Html.GetEnumSelectList<PressType>()" class="form-select"></select>
     </div>
     <div class="col-12">
-        <p class="text-muted small mb-0">Web and frame dimensions drive estimate imposition and Indigo click slots (~one frame repeat per drum revolution).</p>
+        <p class="text-muted small mb-0">Web and repeat dimensions drive estimate imposition — labels gang around the web up to the max repeat, and material bills at the actual repeat used (floored at min repeat). Clicks bill flat per impression × frame factor.</p>
     </div>
     <div class="col-md-3">
         <label asp-for="WebWidthIn" class="form-label"></label>
@@ -52,6 +52,12 @@
     <div class="col-md-3">
         <label asp-for="MinRepeatIn" class="form-label"></label>
         <input asp-for="MinRepeatIn" class="form-control" />
+        <span class="form-text">Shortest billable repeat — shorter layouts bill this length.</span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="FrameFactor" class="form-label"></label>
+        <input asp-for="FrameFactor" class="form-control" />
+        <span class="form-text">Clicks charged per separation per impression (HP frame factor, typically 2).</span>
     </div>
     <div class="col-md-3">
         <label asp-for="MaxColors" class="form-label"></label>

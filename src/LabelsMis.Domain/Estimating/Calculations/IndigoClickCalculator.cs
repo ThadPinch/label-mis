@@ -22,7 +22,10 @@ internal static class IndigoClickCalculator
             return new ClickCostResult(0m, lineItems, warnings);
         }
 
-        var frameSlots = impressions * Math.Max(1, imposition.FramesPerImpression);
+        // HP bills a flat frame factor's worth of clicks per impression per separation,
+        // regardless of how much of the frame the layout occupies.
+        var frameFactor = Math.Max(1, request.PressFrameFactor);
+        var frameSlots = impressions * frameFactor;
         var colorSeparations = IndigoInkSeparations.ColorSeparationsPerFrame(request.InkSet);
         var colorClicks = frameSlots * colorSeparations;
 
@@ -31,7 +34,7 @@ internal static class IndigoClickCalculator
 
         lineItems.Add(new EstimateLineItem(
             "Press click",
-            $"Indigo {request.InkSet} ({colorSeparations} colors × {frameSlots} frame slots)",
+            $"Indigo {request.InkSet} ({colorSeparations} colors × {impressions} impressions × {frameFactor} frame factor)",
             colorClicks,
             "clicks",
             EstimatingMath.RoundMoney(request.ClickRatePer1000 / 1000m),
@@ -71,7 +74,7 @@ internal static class IndigoClickCalculator
         var clickCost = EstimatingMath.RoundCurrency((clicks / 1000m) * spec.ClickRatePer1000);
         lineItems.Add(new EstimateLineItem(
             "Press click",
-            $"{spec.Label} ({spec.Hits} hit{(spec.Hits == 1 ? "" : "s")} × {frameSlots} frame slots)",
+            $"{spec.Label} ({spec.Hits} hit{(spec.Hits == 1 ? "" : "s")} × {frameSlots} click frames)",
             clicks,
             "clicks",
             EstimatingMath.RoundMoney(spec.ClickRatePer1000 / 1000m),
