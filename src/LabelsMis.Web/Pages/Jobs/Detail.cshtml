@@ -161,18 +161,22 @@ else
                 <table class="table table-sm table-striped small mb-0">
                     <thead>
                         <tr>
-                            <th>#</th><th>Step</th><th>Equipment</th><th>Status</th><th class="text-end">Plan min</th><th class="text-end">Good</th><th class="text-end">Waste</th><th class="text-end">Downtime</th>
+                            <th>#</th><th>Step</th><th>Equipment</th><th>Status</th><th class="text-end">Plan min</th><th class="text-end">Actual min</th><th class="text-end">Good</th><th class="text-end">Waste</th><th class="text-end">Downtime</th>
                         </tr>
                     </thead>
                     <tbody>
                     @foreach (var op in Model.Detail.Operations)
                     {
+                        var actualMinutes = Math.Round(op.Operation.ActualHours * 60m, 0);
                         <tr>
                             <td>@op.Operation.Sequence</td>
                             <td>@op.TypeLabel</td>
                             <td>@(op.EquipmentName ?? "—")</td>
                             <td>@op.Operation.Status</td>
                             <td class="text-end">@op.Operation.PlannedMinutes.ToString("N0")</td>
+                            <td class="text-end @(actualMinutes == 0 ? "" : actualMinutes <= op.Operation.PlannedMinutes ? "text-success" : "text-danger")">
+                                @(actualMinutes > 0 ? actualMinutes.ToString("N0") : "—")
+                            </td>
                             <td class="text-end">@op.Operation.GoodCount.ToString("N0")</td>
                             <td class="text-end">@op.Operation.WasteCount.ToString("N0")</td>
                             <td class="text-end">@op.Operation.DowntimeMinutes.ToString("N0")</td>

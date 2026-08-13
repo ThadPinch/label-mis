@@ -30,11 +30,17 @@ public abstract class ProductionStageModel(JobService jobService) : PageModel, I
 
     [BindProperty(SupportsGet = true)] public string? Search { get; set; }
 
+    [BindProperty(SupportsGet = true)] public string? Sort { get; set; }
+
     [BindProperty(SupportsGet = true, Name = "pageNumber")] public int PageNumber { get; set; } = 1;
 
     public PagedResult<JobListItem> Result { get; private set; } = null!;
 
     public bool CanAdvance { get; private set; }
+
+    /// <summary>Whether the advance button opens the record popup. Stages with nothing to
+    /// record (pre-press) override this to keep the instant one-click advance.</summary>
+    public virtual bool UseActionModal => true;
 
     public IReadOnlyDictionary<JobStatus, int> StageCounts { get; private set; } =
         new Dictionary<JobStatus, int>();
@@ -44,7 +50,7 @@ public abstract class ProductionStageModel(JobService jobService) : PageModel, I
         CanAdvance = CanUserAdvance();
         await LoadStageCountsAsync(cancellationToken);
         Result = await jobService.ListAsync(
-            Search, Stage, null, null, null, null, null, "due", PageNumber, 50, cancellationToken);
+            Search, Stage, null, null, null, null, null, Sort ?? "due", PageNumber, 50, cancellationToken);
     }
 
     public async Task<IActionResult> OnPostAdvanceAsync(Guid jobId, CancellationToken cancellationToken)
@@ -61,6 +67,84 @@ public abstract class ProductionStageModel(JobService jobService) : PageModel, I
 
         return RedirectToStage();
     }
+
+    /// <summary>Serves the job action popup body, fetched into the shared modal shell.</summary>
+    public async Task<IActionResult> OnGetActionPanelAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        if (!CanUserAdvance())
+        {
+            return Forbid();
+        }
+
+        var panel = await jobService.GetActionPanelAsync(jobId, cancellationToken);
+        return panel is null ? NotFound() : Partial("_JobActionPanel", panel);
+    }
+
+    /// <summary>The popup's main submit: roll claim + counts/time, then advance the job.</summary>
+    public async Task<IActionResult> OnPostRecordAdvanceAsync(
+        Guid jobId,
+        Guid operationId,
+        int goodCount,
+        int wasteCount,
+        decimal actualMinutes,
+        decimal downtimeMinutes,
+        DowntimeReasonCode? downtimeReason,
+        string? rollBarcode,
+        decimal? consumedLf,
+        string? returnUrl,
+        CancellationToken cancellationToken)
+    {
+        if (!CanUserAdvance())
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            await jobService.RecordAndAdvanceAsync(
+                jobId, operationId, goodCount, wasteCount, downtimeMinutes, downtimeReason,
+                actualMinutes, rollBarcode, consumedLf, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            TempData["JobActionError"] = ex.Message;
+        }
+
+        return RedirectToReturnUrl(returnUrl);
+    }
+
+    /// <summary>Completes one finishing task from the popup (time + optional laminate claim).</summary>
+    public async Task<IActionResult> OnPostCompleteTaskAsync(
+        Guid operationId,
+        decimal actualMinutes,
+        string? rollBarcode,
+        decimal? consumedLf,
+        string? returnUrl,
+        CancellationToken cancellationToken)
+    {
+        if (!CanUserAdvance())
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            await jobService.CompleteFinishingTaskAsync(
+                operationId, actualMinutes, rollBarcode, consumedLf, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            TempData["JobActionError"] = ex.Message;
+        }
+
+        return RedirectToReturnUrl(returnUrl);
+    }
+
+    /// <summary>Back to the list the popup was opened from, so filters/sort/page survive.</summary>
+    protected IActionResult RedirectToReturnUrl(string? returnUrl) =>
+        !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl)
+            ? Redirect(returnUrl)
+            : RedirectToStage();
 
     protected async Task LoadStageCountsAsync(CancellationToken cancellationToken)
     {
@@ -80,9 +164,13 @@ public abstract class ProductionStageModel(JobService jobService) : PageModel, I
         {
             query = query.Add("Search", Search);
         }
+        if (!string.IsNullOrWhiteSpace(Sort))
+        {
+            query = query.Add("Sort", Sort);
+        }
         if (PageNumber > 1)
         {
-            query = query.Add("page", PageNumber.ToString());
+            query = query.Add("pageNumber", PageNumber.ToString());
         }
 
         return Redirect($"{Request.Path}{query}");

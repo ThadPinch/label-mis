@@ -24,6 +24,7 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
     [BindProperty] public int WasteCount { get; set; }
     [BindProperty] public decimal DowntimeMinutes { get; set; }
     [BindProperty] public DowntimeReasonCode? DowntimeReason { get; set; }
+    [BindProperty] public decimal ActualMinutes { get; set; }
     [BindProperty] public decimal? ConsumedLf { get; set; }
     [BindProperty] public string? RollBarcode { get; set; }
     [BindProperty] public string? OrderNotes { get; set; }
@@ -60,6 +61,8 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
         int PrefillWaste,
         decimal PrefillDowntime,
         DowntimeReasonCode? Reason,
+        decimal PlannedMinutes,
+        decimal PrefillActualMinutes,
         bool HasRecorded);
 
     public IReadOnlyList<OperationCountsView> CountOperations { get; private set; } = [];
@@ -192,12 +195,13 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
         }
     }
 
-    public async Task<IActionResult> OnPostCompleteFinishingTaskAsync(Guid operationId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostCompleteFinishingTaskAsync(
+        Guid operationId, decimal actualMinutes, CancellationToken cancellationToken)
     {
         if (!CanOperateForUser() && !CanChangeStatusForUser()) return Forbid();
         try
         {
-            await jobService.CompleteFinishingTaskAsync(operationId, cancellationToken);
+            await jobService.CompleteFinishingTaskAsync(operationId, actualMinutes, cancellationToken: cancellationToken);
             return RedirectToPage(new { id = Id });
         }
         catch (Exception ex)
@@ -282,6 +286,8 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
                 o.Operation.Id,
                 o.TypeLabel,
                 o.Operation.Status,
+                o.Operation.PlannedMinutes,
+                o.Operation.ActualMinutes,
                 o.Operation.EquipmentId is Guid eid && laminationOpIds.Contains(eid)))
             .ToList();
 
@@ -361,6 +367,17 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
         {
             var operation = o.Operation;
             var hasRecorded = operation.GoodCount > 0 || operation.WasteCount > 0 || operation.DowntimeMinutes > 0;
+
+            // Time prefills from what's been recorded (stated minutes, then clocked time), and
+            // otherwise from the plan — so an untouched entry records "took as long as planned"
+            // and typing a smaller number reports the step ran faster.
+            var clockedMinutes = Math.Round(operation.TimeEntries
+                .Where(t => t.ClockedOutAt.HasValue)
+                .Sum(t => t.DurationHours) * 60m, 0);
+            var prefillActual = operation.ActualMinutes > 0
+                ? operation.ActualMinutes
+                : clockedMinutes > 0 ? clockedMinutes : operation.PlannedMinutes;
+
             return new OperationCountsView(
                 operation.Id,
                 $"{operation.Sequence}. {o.TypeLabel}{(o.EquipmentName is null ? "" : $" — {o.EquipmentName}")}",
@@ -369,6 +386,8 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
                 hasRecorded ? operation.WasteCount : expectedWaste,
                 operation.DowntimeMinutes,
                 operation.DowntimeReasonCode,
+                operation.PlannedMinutes,
+                prefillActual,
                 hasRecorded);
         }).ToList();
 
@@ -399,7 +418,8 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
         {
             if (OperationId != Guid.Empty)
             {
-                await jobService.RecordCountsAsync(OperationId, GoodCount, WasteCount, DowntimeMinutes, DowntimeReason, cancellationToken);
+                await jobService.RecordCountsAsync(
+                    OperationId, GoodCount, WasteCount, DowntimeMinutes, DowntimeReason, ActualMinutes, cancellationToken);
             }
 
             var detail = await jobService.GetDetailAsync(Id, cancellationToken);

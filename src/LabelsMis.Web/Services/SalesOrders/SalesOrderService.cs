@@ -346,7 +346,7 @@ public class SalesOrderService(
         return order;
     }
 
-    public async Task UpdateAsync(
+    public async Task<Invoices.InvoiceSyncResult> UpdateAsync(
         Guid id,
         SalesOrderFormInput input,
         bool adminOverride,
@@ -389,6 +389,10 @@ public class SalesOrderService(
 
         ReplaceCharges(order, input.Charges, userId, now);
         await db.SaveChangesAsync(cancellationToken);
+
+        // Keep the order's draft invoice in step with the edited prices; sent or exported
+        // invoices are left alone and reported back to the caller.
+        return await invoiceService.SyncDraftFromSalesOrderAsync(id, cancellationToken);
     }
 
     /// <summary>
@@ -398,7 +402,7 @@ public class SalesOrderService(
     /// <see cref="Job.UpdateOrderedQuantity"/>. Lines can be added; a line can only be removed
     /// while no job references it. Products on job-linked lines cannot change.
     /// </summary>
-    public async Task UpdateInProductionAsync(
+    public async Task<Invoices.InvoiceSyncResult> UpdateInProductionAsync(
         Guid id,
         SalesOrderFormInput input,
         CancellationToken cancellationToken = default)
@@ -521,6 +525,10 @@ public class SalesOrderService(
         }
 
         await db.SaveChangesAsync(cancellationToken);
+
+        // Keep the order's draft invoice in step with the edited prices; sent or exported
+        // invoices are left alone and reported back to the caller.
+        return await invoiceService.SyncDraftFromSalesOrderAsync(id, cancellationToken);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)

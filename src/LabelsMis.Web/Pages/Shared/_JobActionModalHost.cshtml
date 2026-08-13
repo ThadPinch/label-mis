@@ -1,0 +1,10 @@
+@* Empty shell for the job action popup; job-action-modal.js fetches the stage-appropriate
+   panel (?handler=ActionPanel&jobId=…) into it when a [data-action-panel] button is clicked. *@
+<div class="modal fade" id="job-action-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" id="job-action-modal-content">
+            <div class="modal-body text-center text-muted py-4">Loading…</div>
+        </div>
+    </div>
+</div>
+<script src="~/js/job-action-modal.js" asp-append-version="true"></script>

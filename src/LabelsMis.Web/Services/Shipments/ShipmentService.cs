@@ -215,7 +215,8 @@ public class ShipmentService(
         string? search,
         int page,
         int pageSize,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? sort = null)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 5, 100);
@@ -231,7 +232,16 @@ public class ShipmentService(
                 || o.Customer.Name.ToUpper().Contains(term));
         }
 
-        query = query.OrderBy(o => o.RequestedShipDate ?? DateOnly.MaxValue).ThenBy(o => o.OrderNumber);
+        var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        query = sortKey switch
+        {
+            "order" => query.OrderByDir(desc, o => o.OrderNumber),
+            "customer" => query.OrderByDir(desc, o => o.Customer.Name),
+            "po" => query.OrderByDir(desc, o => o.CustomerPoNumber),
+            "method" => query.OrderByDir(desc, o => o.ShippingMethod != null ? o.ShippingMethod.Name : ""),
+            "shipdate" => query.OrderByDir(desc, o => o.RequestedShipDate),
+            _ => query.OrderBy(o => o.RequestedShipDate ?? DateOnly.MaxValue).ThenBy(o => o.OrderNumber)
+        };
 
         var total = await query.CountAsync(cancellationToken);
         var items = await query

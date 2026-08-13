@@ -27,9 +27,23 @@ public class JobOperation : EntityBase
     public int WasteCount { get; private set; }
     public decimal DowntimeMinutes { get; private set; }
     public DowntimeReasonCode? DowntimeReasonCode { get; private set; }
+
+    /// <summary>Operator-recorded time the step actually took, in minutes. Zero means "not
+    /// recorded" — costing then falls back to clock-on/off time entries.</summary>
+    public decimal ActualMinutes { get; private set; }
     public Guid? ScannedRollId { get; private set; }
 
     public IReadOnlyCollection<JobTimeEntry> TimeEntries => _timeEntries;
+
+    /// <summary>
+    /// Hours actually spent on this operation: the recorded actual minutes when present,
+    /// otherwise the sum of closed clock-on/off entries. Recorded minutes win so an operator's
+    /// stated time replaces (rather than stacks on) any clocked time for the same step.
+    /// </summary>
+    public decimal ActualHours =>
+        ActualMinutes > 0
+            ? ActualMinutes / 60m
+            : _timeEntries.Where(t => t.ClockedOutAt.HasValue).Sum(t => t.DurationHours);
 
     public static JobOperation Create(
         Guid id,
@@ -127,10 +141,11 @@ public class JobOperation : EntityBase
         int wasteCount,
         decimal downtimeMinutes,
         DowntimeReasonCode? downtimeReason,
+        decimal actualMinutes,
         Guid modifiedById,
         DateTime modifiedAt)
     {
-        if (goodCount < 0 || wasteCount < 0 || downtimeMinutes < 0)
+        if (goodCount < 0 || wasteCount < 0 || downtimeMinutes < 0 || actualMinutes < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(goodCount), "Counts cannot be negative.");
         }
@@ -139,6 +154,23 @@ public class JobOperation : EntityBase
         WasteCount = wasteCount;
         DowntimeMinutes = downtimeMinutes;
         DowntimeReasonCode = downtimeMinutes > 0 ? downtimeReason : null;
+        ActualMinutes = actualMinutes;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>
+    /// Records how long the step actually took as an absolute value, replacing any earlier
+    /// recording. An entry below the planned time is how operators report a step ran faster
+    /// than estimated (a favorable variance).
+    /// </summary>
+    public void RecordActualMinutes(decimal actualMinutes, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (actualMinutes < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(actualMinutes), "Time cannot be negative.");
+        }
+
+        ActualMinutes = actualMinutes;
         SetModified(modifiedById, modifiedAt);
     }
 

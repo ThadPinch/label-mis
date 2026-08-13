@@ -56,6 +56,10 @@ public class EditModel(
 
     public bool CanSendInvoice => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Csr) || User.IsInRole(AppRoles.Accounting);
 
+    /// <summary>A replacement invoice can be generated once every prior invoice is void — the
+    /// recovery path after voiding a bad invoice on an order that still needs billing.</summary>
+    public bool CanGenerateInvoice { get; private set; }
+
     /// <summary>Supporting documents may be added/removed in any order status — they arrive throughout the order's life.</summary>
     public bool CanManageDocuments => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Csr) || User.IsInRole(AppRoles.Estimator);
 
@@ -276,6 +280,11 @@ public class EditModel(
             .Select(d => new OrderDocumentInfo(d.Id, d.OriginalFileName, d.FileSizeBytes, d.CreatedAt))
             .ToListAsync(cancellationToken);
 
+        CanGenerateInvoice = (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting))
+            && Order is not null
+            && Order.Status != SalesOrderStatus.Cancelled
+            && Invoices.All(i => i.Status == InvoiceStatus.Void);
+
         AmountPaid = Invoices
             .Where(i => i.Status != InvoiceStatus.Void)
             .Sum(i => i.Total - i.BalanceDue);
@@ -456,15 +465,34 @@ public class EditModel(
                 .Select(o => o.Status)
                 .SingleAsync(cancellationToken);
 
+            InvoiceSyncResult syncResult;
             if (status == SalesOrderStatus.Open)
             {
-                await salesOrderService.UpdateAsync(Id, Input.ToForm(), admin, cancellationToken);
+                syncResult = await salesOrderService.UpdateAsync(Id, Input.ToForm(), admin, cancellationToken);
             }
             else
             {
                 // Unlocked edit of an in-production order: in-place line updates + job propagation.
                 if (!CanUnlock) return Forbid();
-                await salesOrderService.UpdateInProductionAsync(Id, Input.ToForm(), cancellationToken);
+                syncResult = await salesOrderService.UpdateInProductionAsync(Id, Input.ToForm(), cancellationToken);
+            }
+
+            switch (syncResult.Outcome)
+            {
+                case InvoiceSyncOutcome.Updated:
+                    TempData["OrderStatus"] = $"Order saved. Draft invoice {syncResult.InvoiceNumber} was updated to match.";
+                    break;
+                case InvoiceSyncOutcome.SkippedSent:
+                    TempData["OrderWarning"] = $"Order saved, but invoice {syncResult.InvoiceNumber} has already been sent "
+                        + "and was not changed. Void it and generate a new invoice to bill the current prices.";
+                    break;
+                case InvoiceSyncOutcome.SkippedExported:
+                    TempData["OrderWarning"] = $"Order saved, but invoice {syncResult.InvoiceNumber} was exported to QuickBooks "
+                        + "and was not changed. Adjust it in QuickBooks, or unmark the export and re-export it.";
+                    break;
+                default:
+                    TempData["OrderStatus"] = "Order saved.";
+                    break;
             }
 
             await UploadLineArtworkAsync(cancellationToken);
@@ -585,6 +613,25 @@ public class EditModel(
             TempData["OrderError"] = $"Could not send the invoice: {ex.Message}";
             return RedirectToPage(new { id = Id });
         }
+    }
+
+    /// <summary>Generates a fresh draft invoice at the order's current prices. The service
+    /// refuses while a non-void invoice exists, so this is only reachable after a void.</summary>
+    public async Task<IActionResult> OnPostGenerateInvoiceAsync(CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.Accounting)) return Forbid();
+
+        try
+        {
+            var invoice = await invoiceService.CreateFromSalesOrderAsync(Id, cancellationToken);
+            TempData["OrderStatus"] = $"Invoice {invoice.InvoiceNumber} generated at the order's current prices.";
+        }
+        catch (Exception ex)
+        {
+            TempData["OrderError"] = $"Could not generate the invoice: {ex.Message}";
+        }
+
+        return RedirectToPage(new { id = Id });
     }
 
     public async Task<IActionResult> OnPostUploadDocumentAsync(CancellationToken cancellationToken)

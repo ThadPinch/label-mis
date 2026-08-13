@@ -32,7 +32,8 @@
         {
             var remaining = Model.FinishingTasks.Count(t => !t.IsDone);
             <p class="form-text mb-2">
-                Complete each finishing task. The job moves to Rewinding once all are done (@remaining remaining).
+                Complete each finishing task, entering how long it took (less than planned if it ran
+                faster). The job moves to Rewinding once all are done (@remaining remaining).
             </p>
             <ul class="list-group list-group-flush mb-0">
                 @foreach (var task in Model.FinishingTasks)
@@ -45,16 +46,23 @@
                                 {
                                     <span class="badge text-bg-info ms-1">Laminate</span>
                                 }
+                                <span class="text-muted small ms-1">planned @task.PlannedMinutes.ToString("N0") min</span>
                             </span>
                             @if (task.IsDone)
                             {
-                                <span class="badge text-bg-success">Done</span>
+                                <span class="badge text-bg-success">Done@(task.ActualMinutes > 0 ? $" — {task.ActualMinutes:N0} min" : "")</span>
                             }
                             else if (Model.CanAdvanceStage)
                             {
-                                <form method="post" asp-page-handler="CompleteFinishingTask" class="d-inline">
+                                <form method="post" asp-page-handler="CompleteFinishingTask" class="d-flex align-items-center gap-1">
                                     <input type="hidden" name="operationId" value="@task.OperationId" />
-                                    <button type="submit" class="btn btn-sm btn-outline-primary">Complete</button>
+                                    <div class="input-group input-group-sm" style="width: 11rem;">
+                                        <input name="actualMinutes" type="number" min="0" step="0.5" class="form-control"
+                                               value="@task.PlannedMinutes.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)"
+                                               aria-label="Time taken in minutes" />
+                                        <span class="input-group-text">min</span>
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap">Complete</button>
                                 </form>
                             }
                             else
@@ -114,15 +122,19 @@
                         <div class="col-12 small fw-semibold">
                             Production counts — @countsView.Label
                         </div>
-                        <div class="col-4">
+                        <div class="col-3">
                             <label class="form-label small mb-0">Good</label>
                             <input name="GoodCount" type="number" min="0" value="@countsView.PrefillGood" class="form-control form-control-sm" />
                         </div>
-                        <div class="col-4">
+                        <div class="col-3">
                             <label class="form-label small mb-0">Waste</label>
                             <input name="WasteCount" type="number" min="0" value="@countsView.PrefillWaste" class="form-control form-control-sm" />
                         </div>
-                        <div class="col-4">
+                        <div class="col-3">
+                            <label class="form-label small mb-0">Time taken (min)</label>
+                            <input name="ActualMinutes" type="number" min="0" step="0.5" value="@countsView.PrefillActualMinutes.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-3">
                             <label class="form-label small mb-0">Downtime (min)</label>
                             <input name="DowntimeMinutes" type="number" min="0" step="0.5" value="@countsView.PrefillDowntime.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" class="form-control form-control-sm" />
                         </div>
@@ -143,7 +155,7 @@
                             <div class="form-text mt-0">
                                 @(countsView.HasRecorded
                                     ? "Adjusting previously recorded values — saving replaces them."
-                                    : "Prefilled with the expected counts (planned quantity and spec waste).")
+                                    : $"Prefilled with the expected counts and the planned {countsView.PlannedMinutes:N0} min — enter less time if the step ran faster.")
                             </div>
                         </div>
                     }

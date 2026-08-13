@@ -51,6 +51,16 @@ public record InvoiceDetail(
 
 public record InvoicePdfResult(string InvoiceNumber, Guid SalesOrderId, byte[] Bytes);
 
+public enum InvoiceSyncOutcome
+{
+    NoInvoice,
+    Updated,
+    SkippedSent,
+    SkippedExported
+}
+
+public record InvoiceSyncResult(InvoiceSyncOutcome Outcome, string? InvoiceNumber = null);
+
 public record ArAgingRow(
     string CustomerName,
     decimal Current,
@@ -312,17 +322,23 @@ public class InvoiceService(
             .AsSplitQuery()
             .SingleAsync(o => o.Id == salesOrderId, cancellationToken);
 
+        if (order.Status is SalesOrderStatus.Cancelled)
+        {
+            throw new InvalidOperationException("Cancelled orders cannot be invoiced.");
+        }
+
         var invoiceNumber = await documentNumbers.NextInvoiceNumberAsync(cancellationToken);
         var dueDate = today.AddDays(order.Customer.Terms.ToDueDays());
-        var subtotal = order.Lines.Sum(l => l.Quantity * l.UnitPrice)
-            + order.Charges.Sum(c => c.Quantity * c.UnitPrice);
+        var invoiceId = Guid.NewGuid();
+        var lines = BuildLinesFromOrder(invoiceId, order, userId, now);
+        var subtotal = lines.Sum(l => l.LineTotal);
         var taxAmount = order.Customer.TaxExempt
             ? 0m
             : Math.Round(subtotal * await GetTaxRateAsync(cancellationToken), 4, MidpointRounding.AwayFromZero);
         var shippingAmount = order.ShippingCost;
 
         var invoice = Invoice.CreateDraft(
-            Guid.NewGuid(),
+            invoiceId,
             invoiceNumber,
             order.CustomerId,
             order.Id,
@@ -336,12 +352,100 @@ public class InvoiceService(
             userId,
             now);
 
+        foreach (var line in lines)
+        {
+            invoice.AddLine(line);
+            db.InvoiceLines.Add(line);
+        }
+
+        db.Invoices.Add(invoice);
+        await db.SaveChangesAsync(cancellationToken);
+        return invoice;
+    }
+
+    /// <summary>
+    /// Rebuilds the order's draft invoice from the order's current lines, charges, and shipping
+    /// cost so price edits made before billing flow through. Sent, paid, or QB-exported invoices
+    /// are left untouched — void them and generate a new invoice to rebill at the current prices.
+    /// An invoice generated from a shipment keeps its shipped quantities and only picks up the
+    /// new prices.
+    /// </summary>
+    public async Task<InvoiceSyncResult> SyncDraftFromSalesOrderAsync(
+        Guid salesOrderId,
+        CancellationToken cancellationToken = default)
+    {
+        var invoice = await db.Invoices
+            .Include(i => i.Lines)
+            .Where(i => i.SalesOrderId == salesOrderId && i.Status != InvoiceStatus.Void)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (invoice is null)
+        {
+            return new InvoiceSyncResult(InvoiceSyncOutcome.NoInvoice);
+        }
+
+        if (invoice.QbExportedAt is not null)
+        {
+            return new InvoiceSyncResult(InvoiceSyncOutcome.SkippedExported, invoice.InvoiceNumber);
+        }
+
+        if (invoice.Status is not InvoiceStatus.Draft)
+        {
+            return new InvoiceSyncResult(InvoiceSyncOutcome.SkippedSent, invoice.InvoiceNumber);
+        }
+
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+
+        var order = await db.SalesOrders
+            .Include(o => o.Customer)
+            .Include(o => o.Lines).ThenInclude(l => l.Product)
+            .Include(o => o.Charges)
+            .AsSplitQuery()
+            .SingleAsync(o => o.Id == salesOrderId, cancellationToken);
+
+        List<InvoiceLine> lines;
+        decimal shippingAmount;
+        if (invoice.ShipmentId is Guid shipmentId)
+        {
+            var shipment = await db.Shipments
+                .Include(s => s.Lines).ThenInclude(l => l.SalesOrderLine).ThenInclude(sl => sl.Product)
+                .Include(s => s.Packages)
+                .AsSplitQuery()
+                .SingleAsync(s => s.Id == shipmentId, cancellationToken);
+            lines = BuildLinesFromShipment(invoice.Id, shipment, order, userId, now);
+            shippingAmount = shipment.TotalShippingCost > 0
+                ? shipment.TotalShippingCost
+                : shipment.Packages.Sum(p => p.ShippingCost);
+        }
+        else
+        {
+            lines = BuildLinesFromOrder(invoice.Id, order, userId, now);
+            shippingAmount = order.ShippingCost;
+        }
+
+        var subtotal = lines.Sum(l => l.LineTotal);
+        var taxAmount = order.Customer.TaxExempt
+            ? 0m
+            : Math.Round(subtotal * await GetTaxRateAsync(cancellationToken), 4, MidpointRounding.AwayFromZero);
+
+        db.InvoiceLines.RemoveRange(invoice.Lines);
+        invoice.ReplaceLines(lines, taxAmount, shippingAmount, userId, now);
+        db.InvoiceLines.AddRange(lines);
+        await db.SaveChangesAsync(cancellationToken);
+        return new InvoiceSyncResult(InvoiceSyncOutcome.Updated, invoice.InvoiceNumber);
+    }
+
+    /// <summary>Builds the invoice lines for a full-order invoice: one per label line, then the
+    /// order's non-label charges (die creation, design time).</summary>
+    private static List<InvoiceLine> BuildLinesFromOrder(Guid invoiceId, SalesOrder order, Guid userId, DateTime now)
+    {
+        var lines = new List<InvoiceLine>();
         var lineNumber = 1;
         foreach (var orderLine in order.Lines.OrderBy(l => l.LineNumber))
         {
-            var line = InvoiceLine.Create(
+            lines.Add(InvoiceLine.Create(
                 Guid.NewGuid(),
-                invoice.Id,
+                invoiceId,
                 lineNumber++,
                 orderLine.Id,
                 null,
@@ -350,26 +454,58 @@ public class InvoiceService(
                 orderLine.UnitPrice,
                 order.Customer.TaxExempt ? "NON" : "TAX",
                 userId,
-                now);
-            invoice.AddLine(line);
-            db.InvoiceLines.Add(line);
+                now));
         }
 
-        AddChargeLines(invoice, order, ref lineNumber, userId, now);
+        AppendChargeLines(lines, invoiceId, order, ref lineNumber, userId, now);
+        return lines;
+    }
 
-        db.Invoices.Add(invoice);
-        await db.SaveChangesAsync(cancellationToken);
-        return invoice;
+    /// <summary>Builds the invoice lines for a shipment-born invoice: shipped quantities at the
+    /// order's current prices, then the order's non-label charges.</summary>
+    private static List<InvoiceLine> BuildLinesFromShipment(
+        Guid invoiceId,
+        Shipment shipment,
+        SalesOrder order,
+        Guid userId,
+        DateTime now)
+    {
+        var lines = new List<InvoiceLine>();
+        var lineNumber = 1;
+        foreach (var shipmentLine in shipment.Lines.OrderBy(l => l.SalesOrderLine.LineNumber))
+        {
+            lines.Add(InvoiceLine.Create(
+                Guid.NewGuid(),
+                invoiceId,
+                lineNumber++,
+                shipmentLine.SalesOrderLineId,
+                shipmentLine.JobId,
+                shipmentLine.SalesOrderLine.Description ?? shipmentLine.SalesOrderLine.Product.Description,
+                shipmentLine.QuantityShipped,
+                shipmentLine.SalesOrderLine.UnitPrice,
+                order.Customer.TaxExempt ? "NON" : "TAX",
+                userId,
+                now));
+        }
+
+        AppendChargeLines(lines, invoiceId, order, ref lineNumber, userId, now);
+        return lines;
     }
 
     /// <summary>Appends the order's non-label charges (die creation, design time) as invoice lines.</summary>
-    private void AddChargeLines(Invoice invoice, SalesOrder order, ref int lineNumber, Guid userId, DateTime now)
+    private static void AppendChargeLines(
+        List<InvoiceLine> lines,
+        Guid invoiceId,
+        SalesOrder order,
+        ref int lineNumber,
+        Guid userId,
+        DateTime now)
     {
         foreach (var charge in order.Charges.OrderBy(c => c.LineNumber))
         {
-            var line = InvoiceLine.Create(
+            lines.Add(InvoiceLine.Create(
                 Guid.NewGuid(),
-                invoice.Id,
+                invoiceId,
                 lineNumber++,
                 null,
                 null,
@@ -378,9 +514,7 @@ public class InvoiceService(
                 charge.UnitPrice,
                 order.Customer.TaxExempt ? "NON" : "TAX",
                 userId,
-                now);
-            invoice.AddLine(line);
-            db.InvoiceLines.Add(line);
+                now));
         }
     }
 
@@ -415,8 +549,9 @@ public class InvoiceService(
         var dueDate = today.AddDays(shipment.SalesOrder.Customer.Terms.ToDueDays());
         // Order-level charges (die, design) are billed on the order's single invoice, so they
         // ride along whichever path creates it first.
-        var subtotal = shipment.Lines.Sum(l => l.QuantityShipped * l.SalesOrderLine.UnitPrice)
-            + shipment.SalesOrder.Charges.Sum(c => c.Quantity * c.UnitPrice);
+        var invoiceId = Guid.NewGuid();
+        var lines = BuildLinesFromShipment(invoiceId, shipment, shipment.SalesOrder, userId, now);
+        var subtotal = lines.Sum(l => l.LineTotal);
         var taxAmount = shipment.SalesOrder.Customer.TaxExempt
             ? 0m
             : Math.Round(subtotal * await GetTaxRateAsync(cancellationToken), 4, MidpointRounding.AwayFromZero);
@@ -425,7 +560,7 @@ public class InvoiceService(
             : shipment.Packages.Sum(p => p.ShippingCost);
 
         var invoice = Invoice.CreateDraft(
-            Guid.NewGuid(),
+            invoiceId,
             invoiceNumber,
             shipment.SalesOrder.CustomerId,
             shipment.SalesOrderId,
@@ -439,26 +574,11 @@ public class InvoiceService(
             userId,
             now);
 
-        var lineNumber = 1;
-        foreach (var shipmentLine in shipment.Lines.OrderBy(l => l.SalesOrderLine.LineNumber))
+        foreach (var line in lines)
         {
-            var line = InvoiceLine.Create(
-                Guid.NewGuid(),
-                invoice.Id,
-                lineNumber++,
-                shipmentLine.SalesOrderLineId,
-                shipmentLine.JobId,
-                shipmentLine.SalesOrderLine.Description ?? shipmentLine.SalesOrderLine.Product.Description,
-                shipmentLine.QuantityShipped,
-                shipmentLine.SalesOrderLine.UnitPrice,
-                shipment.SalesOrder.Customer.TaxExempt ? "NON" : "TAX",
-                userId,
-                now);
             invoice.AddLine(line);
             db.InvoiceLines.Add(line);
         }
-
-        AddChargeLines(invoice, shipment.SalesOrder, ref lineNumber, userId, now);
 
         db.Invoices.Add(invoice);
         await db.SaveChangesAsync(cancellationToken);

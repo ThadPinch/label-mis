@@ -175,5 +175,20 @@
                 </div>
             </div>
         }
+
+        @if (Model.CanGenerateReplacement)
+        {
+            <div class="card">
+                <div class="card-header py-1 small fw-semibold">Rebill order</div>
+                <div class="card-body py-2">
+                    <form method="post" asp-page-handler="GenerateReplacement">
+                        <button type="submit" class="btn btn-sm btn-outline-primary w-100">Generate replacement invoice</button>
+                    </form>
+                    <div class="form-text lh-sm">
+                        Creates a new draft invoice for @Model.Detail.OrderNumber at the order's current prices.
+                    </div>
+                </div>
+            </div>
+        }
     </div>
 </div>

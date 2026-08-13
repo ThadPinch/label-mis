@@ -1,5 +1,8 @@
 @using LabelsMis.Web.Pages.Shared
 @model LabelsMis.Web.Pages.Production.ProductionStageModel
+@{
+    var sortRoute = new Dictionary<string, string?> { ["Search"] = Model.Search };
+}
 
 <partial name="_ProductionStageNav" model="Model" />
 
@@ -8,7 +11,13 @@
     <span class="text-muted">@Model.Result.TotalCount job(s)</span>
 </div>
 
+@if (TempData["JobActionError"] is string actionError)
+{
+    <div class="alert alert-danger">@actionError</div>
+}
+
 <form method="get" class="row g-2 mb-3">
+    <input type="hidden" asp-for="Sort" />
     <div class="col-md-4">
         <input asp-for="Search" class="form-control" placeholder="Search job, product, or customer" />
     </div>
@@ -26,11 +35,11 @@ else
     <table class="table table-striped align-middle">
         <thead>
             <tr>
-                <th>Job</th>
-                <th>Customer</th>
-                <th>Product</th>
-                <th class="text-end">Qty</th>
-                <th>Due</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Job", "number", Model.Sort, sortRoute))</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer", "customer", Model.Sort, sortRoute))</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Product", "product", Model.Sort, sortRoute))</th>
+                <th class="text-end">@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Qty", "qty", Model.Sort, sortRoute))</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Due", "due", Model.Sort, sortRoute))</th>
                 <th></th>
             </tr>
         </thead>
@@ -46,12 +55,23 @@ else
                 <td class="text-end">
                     @if (Model.CanAdvance && Model.NextStatus is not null)
                     {
-                        <form method="post" asp-page-handler="Advance" class="d-inline">
-                            <input type="hidden" name="jobId" value="@item.Id" />
-                            <input type="hidden" name="Search" value="@Model.Search" />
-                            <input type="hidden" name="pageNumber" value="@Model.Result.Page" />
-                            <button type="submit" class="btn btn-sm btn-primary">@Model.AdvanceLabel</button>
-                        </form>
+                        @if (Model.UseActionModal)
+                        {
+                            <button type="button" class="btn btn-sm btn-primary"
+                                    data-action-panel="?handler=ActionPanel&jobId=@item.Id">
+                                @Model.AdvanceLabel…
+                            </button>
+                        }
+                        else
+                        {
+                            <form method="post" asp-page-handler="Advance" class="d-inline">
+                                <input type="hidden" name="jobId" value="@item.Id" />
+                                <input type="hidden" name="Search" value="@Model.Search" />
+                                <input type="hidden" name="Sort" value="@Model.Sort" />
+                                <input type="hidden" name="pageNumber" value="@Model.Result.Page" />
+                                <button type="submit" class="btn btn-sm btn-primary">@Model.AdvanceLabel</button>
+                            </form>
+                        }
                     }
                 </td>
             </tr>
@@ -60,5 +80,7 @@ else
     </table>
 
     @await Html.PartialAsync("Shared/_Pager", new PagerModel(
-        Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, Model.Search))
+        Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, Model.Search, Model.Sort))
 }
+
+<partial name="_JobActionModalHost" />

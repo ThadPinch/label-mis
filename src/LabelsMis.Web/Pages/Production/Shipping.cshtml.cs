@@ -14,6 +14,7 @@ namespace LabelsMis.Web.Pages.Production;
 public class ShippingModel(ShipmentService shipmentService, JobService jobService) : PageModel, IProductionStageNav
 {
     [BindProperty(SupportsGet = true)] public string? Search { get; set; }
+    [BindProperty(SupportsGet = true)] public string? Sort { get; set; }
     [BindProperty(SupportsGet = true, Name = "pageNumber")] public int PageNumber { get; set; } = 1;
 
     public PagedResult<ReadyToShipOrder> Result { get; private set; } = null!;
@@ -28,6 +29,6 @@ public class ShippingModel(ShipmentService shipmentService, JobService jobServic
     {
         StageCounts = await jobService.GetStatusCountsAsync(
             ProductionStages.All.Select(s => s.Status), cancellationToken);
-        Result = await shipmentService.GetReadyToShipAsync(Search, PageNumber, 25, cancellationToken);
+        Result = await shipmentService.GetReadyToShipAsync(Search, PageNumber, 25, cancellationToken, Sort);
     }
 }

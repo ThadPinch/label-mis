@@ -26,10 +26,12 @@ public class IndexModel(JobService jobService, LabelsMisDbContext db) : PageMode
 
     public Services.Models.PagedResult<JobListItem> Result { get; private set; } = null!;
     public bool CanEdit { get; private set; }
+    public bool CanAdvance { get; private set; }
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler);
+        CanAdvance = CanUserAdvance();
 
         JobStatus? singleStatus = null;
         IReadOnlyCollection<JobStatus>? includeStatuses = null;
@@ -59,4 +61,84 @@ public class IndexModel(JobService jobService, LabelsMisDbContext db) : PageMode
             .Where(p => p.IsActive).OrderBy(p => p.Name)
             .Select(p => new SelectListItem(p.Name, p.Id.ToString())).ToListAsync(cancellationToken);
     }
+
+    /// <summary>Serves the job action popup body, fetched into the shared modal shell.</summary>
+    public async Task<IActionResult> OnGetActionPanelAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        if (!CanUserAdvance())
+        {
+            return Forbid();
+        }
+
+        var panel = await jobService.GetActionPanelAsync(jobId, cancellationToken);
+        return panel is null ? NotFound() : Partial("_JobActionPanel", panel);
+    }
+
+    /// <summary>The popup's main submit: roll claim + counts/time, then advance the job.</summary>
+    public async Task<IActionResult> OnPostRecordAdvanceAsync(
+        Guid jobId,
+        Guid operationId,
+        int goodCount,
+        int wasteCount,
+        decimal actualMinutes,
+        decimal downtimeMinutes,
+        DowntimeReasonCode? downtimeReason,
+        string? rollBarcode,
+        decimal? consumedLf,
+        string? returnUrl,
+        CancellationToken cancellationToken)
+    {
+        if (!CanUserAdvance())
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            await jobService.RecordAndAdvanceAsync(
+                jobId, operationId, goodCount, wasteCount, downtimeMinutes, downtimeReason,
+                actualMinutes, rollBarcode, consumedLf, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            TempData["JobActionError"] = ex.Message;
+        }
+
+        return RedirectToReturnUrl(returnUrl);
+    }
+
+    /// <summary>Completes one finishing task from the popup (time + optional laminate claim).</summary>
+    public async Task<IActionResult> OnPostCompleteTaskAsync(
+        Guid operationId,
+        decimal actualMinutes,
+        string? rollBarcode,
+        decimal? consumedLf,
+        string? returnUrl,
+        CancellationToken cancellationToken)
+    {
+        if (!CanUserAdvance())
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            await jobService.CompleteFinishingTaskAsync(
+                operationId, actualMinutes, rollBarcode, consumedLf, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            TempData["JobActionError"] = ex.Message;
+        }
+
+        return RedirectToReturnUrl(returnUrl);
+    }
+
+    private IActionResult RedirectToReturnUrl(string? returnUrl) =>
+        !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl)
+            ? Redirect(returnUrl)
+            : RedirectToPage();
+
+    private bool CanUserAdvance() =>
+        User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler) || User.IsInRole(AppRoles.Operator);
 }

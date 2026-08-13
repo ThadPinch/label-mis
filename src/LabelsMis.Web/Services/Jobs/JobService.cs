@@ -91,19 +91,56 @@ public record OperatorJobView(
 
 public record ScheduleJobInput(DateOnly ScheduledForDate, Guid? PressId);
 
-public record FinishingTaskView(Guid OperationId, string Label, JobOperationStatus Status, bool IsLamination = false)
+public record FinishingTaskView(
+    Guid OperationId,
+    string Label,
+    JobOperationStatus Status,
+    decimal PlannedMinutes,
+    decimal ActualMinutes,
+    bool IsLamination = false)
 {
     public bool IsDone => Status is JobOperationStatus.Complete or JobOperationStatus.Skipped;
 }
 
-public record FinishingJobView(
+/// <summary>A finishing task row inside the job action popup, with its material claim context.</summary>
+public record JobActionTask(
+    Guid OperationId,
+    string Label,
+    JobOperationStatus Status,
+    decimal PlannedMinutes,
+    decimal ActualMinutes,
+    bool IsLamination,
+    string? MaterialLabel)
+{
+    public bool IsDone => Status is JobOperationStatus.Complete or JobOperationStatus.Skipped;
+}
+
+/// <summary>Prefilled counts/time for the stage operation the action popup records.</summary>
+public record JobActionCounts(
+    Guid OperationId,
+    string Label,
+    int Good,
+    int Waste,
+    decimal Downtime,
+    DowntimeReasonCode? Reason,
+    decimal PlannedMinutes,
+    decimal ActualMinutes,
+    bool HasRecorded);
+
+/// <summary>Everything the job action popup needs to render the stage-appropriate form.</summary>
+public record JobActionPanel(
     Guid JobId,
     string JobNumber,
     string CustomerName,
     string ProductDescription,
-    DateOnly? DueDate,
+    JobStatus Status,
+    JobStatus? NextStatus,
+    string? NextLabel,
     int QuantityOrdered,
-    IReadOnlyList<FinishingTaskView> Tasks);
+    string SubstrateLabel,
+    bool ShowRollClaim,
+    JobActionCounts? Counts,
+    IReadOnlyList<JobActionTask> FinishingTasks);
 
 public class JobService(
     LabelsMisDbContext db,
@@ -117,6 +154,19 @@ public class JobService(
     [
         JobStatus.PrePress, JobStatus.Queued, JobStatus.Printed, JobStatus.Finished, JobStatus.Rewound
     ];
+
+    /// <summary>The next production status and its action label for a job in the given status,
+    /// or null if there is none.</summary>
+    public static (JobStatus Next, string Label)? NextStep(JobStatus status) => status switch
+    {
+        JobStatus.PrePress => (JobStatus.Queued, "Send to press"),
+        JobStatus.Queued => (JobStatus.Printed, "Mark printed"),
+        JobStatus.Printed => (JobStatus.Finished, "Mark finished"),
+        JobStatus.Finished => (JobStatus.Rewound, "Mark rewound"),
+        JobStatus.Rewound => (JobStatus.Shipped, "Mark shipped"),
+        JobStatus.Shipped => (JobStatus.Closed, "Close job"),
+        _ => null
+    };
 
     public async Task<PagedResult<JobListItem>> ListAsync(
         string? search,
@@ -585,19 +635,20 @@ public class JobService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>Records or adjusts an operation's production counts as absolute values.</summary>
+    /// <summary>Records or adjusts an operation's production counts and time taken as absolute values.</summary>
     public async Task RecordCountsAsync(
         Guid operationId,
         int goodCount,
         int wasteCount,
         decimal downtimeMinutes,
         DowntimeReasonCode? downtimeReason,
+        decimal actualMinutes,
         CancellationToken cancellationToken = default)
     {
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
         var operation = await db.JobOperations.SingleAsync(o => o.Id == operationId, cancellationToken);
-        operation.SetCounts(goodCount, wasteCount, downtimeMinutes, downtimeReason, userId, now);
+        operation.SetCounts(goodCount, wasteCount, downtimeMinutes, downtimeReason, actualMinutes, userId, now);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -775,43 +826,151 @@ public class JobService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>Jobs currently in the Printed (finishing) stage, with their finishing tasks.</summary>
-    public async Task<IReadOnlyList<FinishingJobView>> ListFinishingJobsAsync(
-        string? search,
-        CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Builds the job action popup for a job's current stage: the finishing task list when the
+    /// job is in Finishing, otherwise the stage operation's counts/time prefills, plus the roll
+    /// claim context for stages that consume material.
+    /// </summary>
+    public async Task<JobActionPanel?> GetActionPanelAsync(Guid jobId, CancellationToken cancellationToken = default)
     {
-        var query = db.Jobs.AsNoTracking()
+        var job = await db.Jobs.AsNoTracking()
             .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
+            .Include(j => j.Product).ThenInclude(p => p.Substrate)
             .Include(j => j.SalesOrderLine)
-            .Include(j => j.Operations)
-            .Where(j => j.Status == JobStatus.Printed);
-
-        if (!string.IsNullOrWhiteSpace(search))
+            .Include(j => j.Operations).ThenInclude(o => o.TimeEntries)
+            .AsSplitQuery()
+            .SingleOrDefaultAsync(j => j.Id == jobId, cancellationToken);
+        if (job is null)
         {
-            var term = search.Trim().ToUpperInvariant();
-            query = query.Where(j =>
-                j.JobNumber.ToUpper().Contains(term)
-                || j.Product.Description.ToUpper().Contains(term)
-                || (j.SalesOrderLine.Description != null && j.SalesOrderLine.Description.ToUpper().Contains(term))
-                || (j.Product.PrimaryCustomer != null && j.Product.PrimaryCustomer.Name.ToUpper().Contains(term)));
+            return null;
         }
 
-        var jobs = await query.OrderBy(j => j.DueDate).ThenBy(j => j.Priority).ToListAsync(cancellationToken);
         var finishing = await db.FinishingOperations.AsNoTracking().ToDictionaryAsync(f => f.Id, cancellationToken);
+        var next = NextStep(job.Status);
 
-        return jobs.Select(j => new FinishingJobView(
-            j.Id,
-            j.JobNumber,
-            j.Product.PrimaryCustomer?.Name ?? "",
-            j.SalesOrderLine.Description ?? j.Product.Description,
-            j.DueDate,
-            j.QuantityOrdered,
-            j.Operations
+        // Finishing-task mode: Printed jobs complete their tasks one by one (the job advances
+        // itself when the last one is done), so the popup lists tasks instead of one counts form.
+        var tasks = new List<JobActionTask>();
+        if (job.Status == JobStatus.Printed)
+        {
+            var materialByOperation = EstimateCalculationMapper
+                .DeserializeFinishingOperations(job.Spec?.FinishingOperationsJson ?? "[]")
+                .Where(f => f.StockId is { } sid && sid != Guid.Empty)
+                .GroupBy(f => f.OperationId)
+                .ToDictionary(g => g.Key, g => g.First().StockId!.Value);
+            var stockIds = materialByOperation.Values.Distinct().ToList();
+            var stockLabels = await db.Stocks.AsNoTracking()
+                .Where(s => stockIds.Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id, s => $"{s.Code} — {s.Description}", cancellationToken);
+
+            tasks = job.Operations
                 .Where(o => o.OperationType == JobOperationType.Finishing)
                 .OrderBy(o => o.Sequence)
-                .Select(o => new FinishingTaskView(o.Id, GetOperationTypeLabel(o, finishing), o.Status))
-                .ToList()))
-            .ToList();
+                .Select(o => new JobActionTask(
+                    o.Id,
+                    GetOperationTypeLabel(o, finishing),
+                    o.Status,
+                    o.PlannedMinutes,
+                    o.ActualMinutes,
+                    o.EquipmentId is Guid finId
+                        && finishing.TryGetValue(finId, out var fin)
+                        && fin.OperationType == FinishingOperationType.Laminate,
+                    o.EquipmentId is Guid eid && materialByOperation.TryGetValue(eid, out var mid)
+                        ? stockLabels.GetValueOrDefault(mid)
+                        : null))
+                .ToList();
+        }
+
+        // Counts mode: the operation belonging to the job's current stage, prefilled with the
+        // recorded values or the expected defaults (mirrors the jobs/{id} counts recorder).
+        JobActionCounts? counts = null;
+        if (job.Status != JobStatus.PrePress && tasks.Count == 0 && next is not null)
+        {
+            var operations = job.Operations.OrderBy(o => o.Sequence).ToList();
+            var stageOperation = job.Status switch
+            {
+                JobStatus.Queued => operations.FirstOrDefault(o => o.OperationType == JobOperationType.Press),
+                JobStatus.Finished => operations.FirstOrDefault(o => o.OperationType == JobOperationType.Inspection),
+                JobStatus.Rewound => operations.FirstOrDefault(o => o.OperationType == JobOperationType.Pack)
+                    ?? operations.FirstOrDefault(o => o.OperationType == JobOperationType.Ship),
+                _ => null
+            } ?? operations.FirstOrDefault(o => o.Status is JobOperationStatus.Pending or JobOperationStatus.InProgress);
+
+            if (stageOperation is not null)
+            {
+                var presses = await db.Presses.AsNoTracking().ToDictionaryAsync(p => p.Id, cancellationToken);
+                var hasRecorded = stageOperation.GoodCount > 0 || stageOperation.WasteCount > 0 || stageOperation.DowntimeMinutes > 0;
+                var expectedWaste = (int)Math.Ceiling(job.QuantityPlanned * (job.Spec?.RunningWastePct ?? 0m));
+                var clockedMinutes = Math.Round(stageOperation.TimeEntries
+                    .Where(t => t.ClockedOutAt.HasValue)
+                    .Sum(t => t.DurationHours) * 60m, 0);
+
+                counts = new JobActionCounts(
+                    stageOperation.Id,
+                    $"{GetOperationTypeLabel(stageOperation, finishing)}{(GetEquipmentName(stageOperation, presses, finishing) is { } eq ? $" — {eq}" : "")}",
+                    hasRecorded ? stageOperation.GoodCount : job.QuantityPlanned,
+                    hasRecorded ? stageOperation.WasteCount : expectedWaste,
+                    stageOperation.DowntimeMinutes,
+                    stageOperation.DowntimeReasonCode,
+                    stageOperation.PlannedMinutes,
+                    stageOperation.ActualMinutes > 0
+                        ? stageOperation.ActualMinutes
+                        : clockedMinutes > 0 ? clockedMinutes : stageOperation.PlannedMinutes,
+                    hasRecorded);
+            }
+        }
+
+        return new JobActionPanel(
+            job.Id,
+            job.JobNumber,
+            job.Product.PrimaryCustomer?.Name ?? "",
+            job.SalesOrderLine.Description ?? job.Product.Description,
+            job.Status,
+            next?.Next,
+            next?.Label,
+            job.QuantityOrdered,
+            $"{job.Product.Substrate.Code} — {job.Product.Substrate.Description}",
+            ShowRollClaim: job.Status == JobStatus.Queued,
+            counts,
+            tasks);
+    }
+
+    /// <summary>
+    /// The action popup's submit: claims roll usage when entered, records the stage operation's
+    /// counts/time, then advances the job to its next status.
+    /// </summary>
+    public async Task RecordAndAdvanceAsync(
+        Guid jobId,
+        Guid operationId,
+        int goodCount,
+        int wasteCount,
+        decimal downtimeMinutes,
+        DowntimeReasonCode? downtimeReason,
+        decimal actualMinutes,
+        string? rollBarcode,
+        decimal? consumedLf,
+        CancellationToken cancellationToken = default)
+    {
+        // A half-filled claim should error (inside RecordRollUsageAsync), not silently skip.
+        if (!string.IsNullOrWhiteSpace(rollBarcode) || consumedLf is > 0)
+        {
+            await RecordRollUsageAsync(jobId, rollBarcode ?? string.Empty, consumedLf ?? 0m, cancellationToken);
+        }
+
+        if (operationId != Guid.Empty)
+        {
+            await RecordCountsAsync(
+                operationId, goodCount, wasteCount, downtimeMinutes, downtimeReason, actualMinutes, cancellationToken);
+        }
+
+        var status = await db.Jobs.AsNoTracking()
+            .Where(j => j.Id == jobId)
+            .Select(j => j.Status)
+            .SingleAsync(cancellationToken);
+        if (NextStep(status) is { } step)
+        {
+            await AdvanceJobStatusAsync(jobId, step.Next, cancellationToken);
+        }
     }
 
     /// <summary>
@@ -860,10 +1019,17 @@ public class JobService(
     }
 
     /// <summary>
-    /// Marks a finishing task complete. When the last finishing task on a Printed job is done,
-    /// the job auto-advances to Finished so it moves on to the Rewinding stage.
+    /// Marks a finishing task complete, recording how long it took (an entry under the planned
+    /// minutes reports a favorable variance) and any material claimed from a roll (lamination).
+    /// When the last finishing task on a Printed job is done, the job auto-advances to Finished
+    /// so it moves on to the Rewinding stage.
     /// </summary>
-    public async Task CompleteFinishingTaskAsync(Guid operationId, CancellationToken cancellationToken = default)
+    public async Task CompleteFinishingTaskAsync(
+        Guid operationId,
+        decimal actualMinutes = 0m,
+        string? rollBarcode = null,
+        decimal? consumedLf = null,
+        CancellationToken cancellationToken = default)
     {
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
@@ -874,6 +1040,17 @@ public class JobService(
         if (operation.OperationType != JobOperationType.Finishing)
         {
             throw new InvalidOperationException("Only finishing tasks can be completed here.");
+        }
+
+        // A half-filled claim should error (inside RecordRollUsageAsync), not silently skip.
+        if (!string.IsNullOrWhiteSpace(rollBarcode) || consumedLf is > 0)
+        {
+            await RecordRollUsageAsync(operation.JobId, rollBarcode ?? string.Empty, consumedLf ?? 0m, cancellationToken);
+        }
+
+        if (actualMinutes > 0)
+        {
+            operation.RecordActualMinutes(actualMinutes, userId, now);
         }
 
         if (operation.Status is not (JobOperationStatus.Complete or JobOperationStatus.Skipped))
@@ -1146,10 +1323,10 @@ public class JobService(
         var laborEntries = new List<(decimal Hours, decimal CostPerHour)>();
         foreach (var operation in job.Operations)
         {
-            var costPerHour = GetCostPerHour(operation, presses, finishing);
-            foreach (var entry in operation.TimeEntries.Where(t => t.ClockedOutAt.HasValue))
+            var hours = operation.ActualHours;
+            if (hours > 0)
             {
-                laborEntries.Add((entry.DurationHours, costPerHour));
+                laborEntries.Add((hours, GetCostPerHour(operation, presses, finishing)));
             }
         }
 

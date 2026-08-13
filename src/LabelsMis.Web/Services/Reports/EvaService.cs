@@ -158,6 +158,14 @@ public class EvaService(LabelsMisDbContext db)
         var laborEntries = new List<(decimal Hours, decimal CostPerHour)>();
         foreach (var operation in job.Operations)
         {
+            // ActualHours prefers the operator-recorded time (which can be under plan — a
+            // favorable variance) and falls back to clocked time entries.
+            var hours = operation.ActualHours;
+            if (hours <= 0)
+            {
+                continue;
+            }
+
             var costPerHour = operation.EquipmentType switch
             {
                 EquipmentType.Press when operation.EquipmentId is Guid pressId && presses.TryGetValue(pressId, out var press)
@@ -166,10 +174,7 @@ public class EvaService(LabelsMisDbContext db)
                     => fin.CostPerHour,
                 _ => 0m
             };
-            foreach (var entry in operation.TimeEntries.Where(t => t.ClockedOutAt.HasValue))
-            {
-                laborEntries.Add((entry.DurationHours, costPerHour));
-            }
+            laborEntries.Add((hours, costPerHour));
         }
 
         var materialEntries = job.MaterialUsages

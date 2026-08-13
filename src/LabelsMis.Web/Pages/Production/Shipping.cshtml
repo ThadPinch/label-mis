@@ -1,6 +1,10 @@
 @page "/production/shipping"
+@using LabelsMis.Web.Pages.Shared
 @model LabelsMis.Web.Pages.Production.ShippingModel
-@{ ViewData["Title"] = "Shipping"; }
+@{
+    ViewData["Title"] = "Shipping";
+    var sortRoute = new Dictionary<string, string?> { ["Search"] = Model.Search };
+}
 
 <partial name="_ProductionStageNav" model="Model" />
 
@@ -12,6 +16,7 @@
 <p class="text-muted">Orders with items finished and ready to ship. Record a shipment to capture packages and tracking.</p>
 
 <form method="get" class="row g-2 mb-3">
+    <input type="hidden" asp-for="Sort" />
     <div class="col-md-4"><input asp-for="Search" class="form-control" placeholder="Search order or customer" /></div>
     <div class="col-md-2"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
 </form>
@@ -24,7 +29,16 @@ else
 {
     <table class="table table-striped align-middle">
         <thead>
-            <tr><th>Order #</th><th>Customer</th><th>Customer PO</th><th>Requested ship</th><th>Ship method</th><th>Ready</th><th>Jobs</th><th></th></tr>
+            <tr>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Order #", "order", Model.Sort, sortRoute))</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer", "customer", Model.Sort, sortRoute))</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer PO", "po", Model.Sort, sortRoute))</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Requested ship", "shipdate", Model.Sort, sortRoute))</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Ship method", "method", Model.Sort, sortRoute))</th>
+                <th>Ready</th>
+                <th>Jobs</th>
+                <th></th>
+            </tr>
         </thead>
         <tbody>
         @foreach (var order in Model.Result.Items)
@@ -61,5 +75,7 @@ else
     @await Html.PartialAsync("Shared/_Pager", new PagerModel(
         Model.Result.Page,
         Model.Result.TotalPages,
-        Model.Result.TotalCount))
+        Model.Result.TotalCount,
+        Model.Search,
+        Model.Sort))
 }

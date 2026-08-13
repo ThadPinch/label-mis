@@ -20,6 +20,7 @@ public class JobOperationConfiguration : IEntityTypeConfiguration<JobOperation>
         builder.Property(o => o.GoodCount).IsRequired();
         builder.Property(o => o.WasteCount).IsRequired();
         builder.Property(o => o.DowntimeMinutes).HasDimensionPrecision();
+        builder.Property(o => o.ActualMinutes).HasDimensionPrecision();
 
         builder.HasIndex(o => new { o.JobId, o.Sequence }).IsUnique();
 

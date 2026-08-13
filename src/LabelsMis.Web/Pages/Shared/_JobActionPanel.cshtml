@@ -1,0 +1,162 @@
+@using LabelsMis.Domain.Enums
+@using System.Globalization
+@model LabelsMis.Web.Services.Jobs.JobActionPanel
+@{
+    // Rendered into the shared job-action modal (fetched on demand). Forms post back to the page
+    // that served the partial, so each list returns to itself; returnUrl is filled in by the
+    // modal script with the caller's current URL (filters, sort, and page intact).
+    string Min(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+}
+<div class="modal-header">
+    <div>
+        <h5 class="modal-title">@(Model.NextLabel ?? "Job") — @Model.JobNumber</h5>
+        <div class="small text-muted">@Model.CustomerName — @Model.ProductDescription · Qty @Model.QuantityOrdered.ToString("N0")</div>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body">
+    @if (Model.FinishingTasks.Count > 0)
+    {
+        var remaining = Model.FinishingTasks.Count(t => !t.IsDone);
+        <p class="form-text mt-0 mb-2">
+            Complete each task with the time it took (less than planned if it ran faster) and any
+            laminate used. The job moves to Rewinding once all are done (@remaining remaining).
+        </p>
+        <ul class="list-group list-group-flush">
+            @foreach (var task in Model.FinishingTasks)
+            {
+                <li class="list-group-item px-0">
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        <span>
+                            @task.Label
+                            @if (task.IsLamination)
+                            {
+                                <span class="badge text-bg-info ms-1">Laminate</span>
+                            }
+                            <span class="text-muted small ms-1">
+                                planned @task.PlannedMinutes.ToString("N0") min@(task.MaterialLabel is not null ? $" · {task.MaterialLabel}" : "")
+                            </span>
+                        </span>
+                        @if (task.IsDone)
+                        {
+                            <span class="badge text-bg-success">Done@(task.ActualMinutes > 0 ? $" — {task.ActualMinutes:N0} min" : "")</span>
+                        }
+                    </div>
+                    @if (!task.IsDone)
+                    {
+                        <form method="post" asp-page-handler="CompleteTask" class="row g-2 align-items-end mt-1">
+                            <input type="hidden" name="jobId" value="@Model.JobId" />
+                            <input type="hidden" name="operationId" value="@task.OperationId" />
+                            <input type="hidden" name="returnUrl" value="" />
+                            @if (task.IsLamination)
+                            {
+                                <div class="col-md-4">
+                                    <label class="form-label small mb-0">Laminate roll barcode</label>
+                                    <input name="rollBarcode" class="form-control form-control-sm" autocomplete="off"
+                                           placeholder="Scan or enter" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small mb-0">Linear feet used</label>
+                                    <input name="consumedLf" class="form-control form-control-sm" type="number" min="0" step="0.01" />
+                                </div>
+                            }
+                            <div class="col-md-3">
+                                <label class="form-label small mb-0">Time taken (min)</label>
+                                <input name="actualMinutes" class="form-control form-control-sm" type="number" min="0" step="0.5"
+                                       value="@Min(task.PlannedMinutes)" />
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-sm btn-primary w-100">Complete</button>
+                            </div>
+                        </form>
+                    }
+                </li>
+            }
+        </ul>
+    }
+    else
+    {
+        <form method="post" asp-page-handler="RecordAdvance" id="job-action-advance-form">
+            <input type="hidden" name="jobId" value="@Model.JobId" />
+            <input type="hidden" name="returnUrl" value="" />
+            @if (Model.Counts is { } counts)
+            {
+                <input type="hidden" name="operationId" value="@counts.OperationId" />
+
+                @if (Model.ShowRollClaim)
+                {
+                    <div class="fw-semibold small mb-1">Material used</div>
+                    <div class="row g-2 mb-1">
+                        <div class="col-md-7">
+                            <label class="form-label small mb-0">Roll barcode</label>
+                            <input name="rollBarcode" class="form-control form-control-sm" autocomplete="off"
+                                   placeholder="Scan or enter barcode" />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small mb-0">Linear feet used</label>
+                            <input name="consumedLf" class="form-control form-control-sm" type="number" min="0" step="0.01" />
+                        </div>
+                    </div>
+                    <div class="form-text mt-0 mb-2">Substrate: @Model.SubstrateLabel. Leave blank to record usage later.</div>
+                    <hr class="my-2" />
+                }
+
+                <div class="fw-semibold small mb-1">Production counts — @counts.Label</div>
+                <div class="row g-2">
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-0">Good</label>
+                        <input name="goodCount" type="number" min="0" value="@counts.Good" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-0">Waste</label>
+                        <input name="wasteCount" type="number" min="0" value="@counts.Waste" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-0">Time taken (min)</label>
+                        <input name="actualMinutes" type="number" min="0" step="0.5" value="@Min(counts.ActualMinutes)" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-0">Downtime (min)</label>
+                        <input name="downtimeMinutes" type="number" min="0" step="0.5" value="@Min(counts.Downtime)" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-0">Downtime reason</label>
+                        <select name="downtimeReason" class="form-select form-select-sm">
+                            <option value="">—</option>
+                            @foreach (var reason in Enum.GetValues<DowntimeReasonCode>())
+                            {
+                                <option value="@((int)reason)" selected="@(counts.Reason == reason)">@reason</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="form-text">
+                    @(counts.HasRecorded
+                        ? "Adjusting previously recorded values — saving replaces them."
+                        : $"Prefilled with the expected counts and the planned {counts.PlannedMinutes:N0} min — enter less time if the step ran faster.")
+                </div>
+            }
+            else
+            {
+                <p class="mb-0">Move <strong>@Model.JobNumber</strong> to <strong>@(Model.NextStatus?.ToString() ?? "the next step")</strong>?</p>
+            }
+        </form>
+    }
+</div>
+<div class="modal-footer py-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+    @if (Model.FinishingTasks.Count == 0 && Model.NextLabel is { } nextLabel)
+    {
+        <button type="submit" form="job-action-advance-form" class="btn btn-primary btn-sm">
+            @(Model.Counts is not null ? $"Record & {char.ToLowerInvariant(nextLabel[0])}{nextLabel[1..]}" : nextLabel)
+        </button>
+    }
+    else if (Model.FinishingTasks.Count > 0 && Model.FinishingTasks.All(t => t.IsDone) && Model.NextLabel is { } doneLabel)
+    {
+        <form method="post" asp-page-handler="RecordAdvance" class="d-inline">
+            <input type="hidden" name="jobId" value="@Model.JobId" />
+            <input type="hidden" name="returnUrl" value="" />
+            <button type="submit" class="btn btn-primary btn-sm">@doneLabel</button>
+        </form>
+    }
+</div>

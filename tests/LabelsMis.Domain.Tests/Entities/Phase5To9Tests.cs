@@ -26,6 +26,56 @@ public class JobTests
     }
 
     [Fact]
+    public void ActualHours_FallsBackToClockedEntries_WhenNoMinutesRecorded()
+    {
+        var op = JobOperation.Create(Guid.NewGuid(), Guid.NewGuid(), 1, JobOperationType.Press,
+            EquipmentType.Press, Press.Indigo6800Id, 30, UserId, Now);
+        op.ClockOn(Guid.NewGuid(), UserId, Now);
+        op.ClockOff(UserId, Now.AddMinutes(90), 100, 5, 0, null, UserId, Now.AddMinutes(90));
+
+        op.ActualHours.Should().Be(1.5m);
+    }
+
+    [Fact]
+    public void ActualHours_PrefersRecordedMinutes_OverClockedEntries()
+    {
+        var op = JobOperation.Create(Guid.NewGuid(), Guid.NewGuid(), 1, JobOperationType.Press,
+            EquipmentType.Press, Press.Indigo6800Id, 30, UserId, Now);
+        op.ClockOn(Guid.NewGuid(), UserId, Now);
+        op.ClockOff(UserId, Now.AddMinutes(90), 100, 5, 0, null, UserId, Now.AddMinutes(90));
+
+        // The operator states the step really took 15 minutes — under plan (a favorable
+        // variance); the stated time replaces the clocked time rather than adding to it.
+        op.RecordActualMinutes(15m, UserId, Now.AddMinutes(91));
+
+        op.ActualHours.Should().Be(0.25m);
+    }
+
+    [Fact]
+    public void SetCounts_RecordsActualMinutes_AsAbsoluteValue()
+    {
+        var op = JobOperation.Create(Guid.NewGuid(), Guid.NewGuid(), 1, JobOperationType.Press,
+            EquipmentType.Press, Press.Indigo6800Id, 30, UserId, Now);
+
+        op.SetCounts(100, 5, 10, DowntimeReasonCode.Setup, 20m, UserId, Now);
+        op.SetCounts(100, 5, 10, DowntimeReasonCode.Setup, 25m, UserId, Now);
+
+        op.ActualMinutes.Should().Be(25m);
+        op.ActualHours.Should().Be(25m / 60m);
+    }
+
+    [Fact]
+    public void RecordActualMinutes_Negative_Throws()
+    {
+        var op = JobOperation.Create(Guid.NewGuid(), Guid.NewGuid(), 1, JobOperationType.Press,
+            EquipmentType.Press, Press.Indigo6800Id, 30, UserId, Now);
+
+        var act = () => op.RecordActualMinutes(-1m, UserId, Now);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
     public void JobCostCalculator_SumsLaborAndMaterial()
     {
         var result = JobCostCalculator.Calculate(

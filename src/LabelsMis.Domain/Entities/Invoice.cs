@@ -73,12 +73,20 @@ public class Invoice : EntityBase
         return invoice;
     }
 
-    public void ReplaceLines(IEnumerable<InvoiceLine> lines)
+    public void ReplaceLines(
+        IEnumerable<InvoiceLine> lines,
+        decimal taxAmount,
+        decimal shippingAmount,
+        Guid modifiedById,
+        DateTime modifiedAt)
     {
         EnsureDraft();
         _lines.Clear();
         _lines.AddRange(lines);
+        TaxAmount = taxAmount;
+        ShippingAmount = shippingAmount;
         RecalculateTotals();
+        SetModified(modifiedById, modifiedAt);
     }
 
     public void MarkSent(string? pdfFilePath, Guid modifiedById, DateTime modifiedAt)

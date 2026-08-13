@@ -9,4 +9,7 @@ public class PrePressModel(JobService jobService) : ProductionStageModel(jobServ
     public override JobStatus? NextStatus => JobStatus.Queued;
     public override string StageTitle => "Pre-press";
     public override string AdvanceLabel => "Send to press";
+
+    // Nothing to record when leaving pre-press, so the advance stays a one-click button.
+    public override bool UseActionModal => false;
 }

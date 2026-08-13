@@ -24,14 +24,6 @@ public static class ProductionStages
     ];
 
     /// <summary>The next stage and its action label for a job in the given status, or null if there is none.</summary>
-    public static (JobStatus Next, string Label)? NextStep(JobStatus status) => status switch
-    {
-        JobStatus.PrePress => (JobStatus.Queued, "Send to press"),
-        JobStatus.Queued => (JobStatus.Printed, "Mark printed"),
-        JobStatus.Printed => (JobStatus.Finished, "Mark finished"),
-        JobStatus.Finished => (JobStatus.Rewound, "Mark rewound"),
-        JobStatus.Rewound => (JobStatus.Shipped, "Mark shipped"),
-        JobStatus.Shipped => (JobStatus.Closed, "Close job"),
-        _ => null
-    };
+    public static (JobStatus Next, string Label)? NextStep(JobStatus status) =>
+        Services.Jobs.JobService.NextStep(status);
 }

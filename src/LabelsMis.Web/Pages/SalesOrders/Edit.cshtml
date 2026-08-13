@@ -64,6 +64,10 @@
 {
     <div class="alert alert-success py-2 mb-2">@orderStatus</div>
 }
+@if (TempData["OrderWarning"] is string orderWarning)
+{
+    <div class="alert alert-warning py-2 mb-2">@orderWarning</div>
+}
 @if (TempData["OrderError"] is string orderError)
 {
     <div class="alert alert-danger py-2 mb-2">@orderError</div>
@@ -157,6 +161,18 @@ else if (Model.IsLocked)
                     </button>
                     <a asp-page-handler="InvoicePdf" asp-route-id="@Model.Id" asp-route-invoiceId="@firstSendableInvoice.Id"
                        class="btn btn-sm btn-outline-secondary w-100">Download invoice</a>
+                }
+                @if (Model.CanGenerateInvoice)
+                {
+                    <form method="post" asp-page-handler="GenerateInvoice">
+                        <button type="submit" class="btn btn-sm btn-outline-primary w-100">Generate invoice</button>
+                    </form>
+                    @if (Model.Invoices.Any())
+                    {
+                        <div class="small text-muted lh-sm">
+                            All invoices on this order are void — generate a replacement at the current prices.
+                        </div>
+                    }
                 }
                 <a asp-page-handler="PackingList" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-secondary w-100">Download packing list</a>
             </div>
