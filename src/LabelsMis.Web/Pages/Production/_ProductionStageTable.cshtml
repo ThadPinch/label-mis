@@ -36,6 +36,7 @@ else
         <thead>
             <tr>
                 <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Job", "number", Model.Sort, sortRoute))</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Order", "order", Model.Sort, sortRoute))</th>
                 <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer", "customer", Model.Sort, sortRoute))</th>
                 <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Product", "product", Model.Sort, sortRoute))</th>
                 <th class="text-end">@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Qty", "qty", Model.Sort, sortRoute))</th>
@@ -47,11 +48,12 @@ else
         @foreach (var item in Model.Result.Items)
         {
             <tr>
-                <td><a asp-page="/Jobs/Detail" asp-route-id="@item.Id">@item.JobNumber</a></td>
+                <td class="text-nowrap"><a asp-page="/Jobs/Detail" asp-route-id="@item.Id">@item.JobNumber</a></td>
+                <td class="text-nowrap"><a asp-page="/SalesOrders/Edit" asp-route-id="@item.SalesOrderId">@item.OrderNumber</a></td>
                 <td>@item.CustomerName</td>
                 <td>@item.ProductDescription</td>
                 <td class="text-end">@item.QuantityOrdered.ToString("N0")</td>
-                <td>@(item.DueDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                <td class="text-nowrap">@(item.DueDate?.ToString("yyyy-MM-dd") ?? "—")</td>
                 <td class="text-end">
                     @if (Model.CanAdvance && Model.NextStatus is not null)
                     {

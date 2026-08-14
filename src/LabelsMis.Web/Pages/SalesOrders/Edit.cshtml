@@ -175,6 +175,13 @@ else if (Model.IsLocked)
                     }
                 }
                 <a asp-page-handler="PackingList" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-secondary w-100">Download packing list</a>
+                @if (Model.CanCopy)
+                {
+                    <form method="post" asp-page-handler="Copy"
+                          onsubmit="return confirm('Copy @Model.Order?.OrderNumber to a new order? Lines, charges, and shipping details are carried over; the PO number and ship date start blank.');">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Copy to new order</button>
+                    </form>
+                }
             </div>
         </div>
 

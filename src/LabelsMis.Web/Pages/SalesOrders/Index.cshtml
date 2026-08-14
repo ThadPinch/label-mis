@@ -75,6 +75,14 @@
             <td>@item.OrderTotal.ToString("C2")</td>
             <td class="text-end text-nowrap">
                 <a asp-page="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a>
+                @if (Model.CanEdit)
+                {
+                    <form method="post" asp-page-handler="Copy" class="d-inline"
+                          onsubmit="return confirm('Copy order @item.OrderNumber to a new order? Lines, charges, and shipping details are carried over; the PO number and ship date start blank.');">
+                        <input type="hidden" name="id" value="@item.Id" />
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">Copy</button>
+                    </form>
+                }
                 @if (Model.CanDelete && item.Status == SalesOrderStatus.Open)
                 {
                     <form method="post" asp-page-handler="Delete" class="d-inline"

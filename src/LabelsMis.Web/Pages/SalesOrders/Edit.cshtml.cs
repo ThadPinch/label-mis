@@ -60,6 +60,9 @@ public class EditModel(
     /// recovery path after voiding a bad invoice on an order that still needs billing.</summary>
     public bool CanGenerateInvoice { get; private set; }
 
+    /// <summary>Anyone who can create orders can copy one into a fresh order (reorder).</summary>
+    public bool CanCopy => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Csr) || User.IsInRole(AppRoles.Estimator);
+
     /// <summary>Supporting documents may be added/removed in any order status — they arrive throughout the order's life.</summary>
     public bool CanManageDocuments => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Csr) || User.IsInRole(AppRoles.Estimator);
 
@@ -611,6 +614,29 @@ public class EditModel(
         catch (Exception ex)
         {
             TempData["OrderError"] = $"Could not send the invoice: {ex.Message}";
+            return RedirectToPage(new { id = Id });
+        }
+    }
+
+    /// <summary>Copies this order into a fresh Open order (a reorder) and lands on it.</summary>
+    public async Task<IActionResult> OnPostCopyAsync(CancellationToken cancellationToken)
+    {
+        if (!CanCopy) return Forbid();
+
+        try
+        {
+            var sourceNumber = await db.SalesOrders.AsNoTracking()
+                .Where(o => o.Id == Id)
+                .Select(o => o.OrderNumber)
+                .SingleAsync(cancellationToken);
+            var copy = await salesOrderService.CopyAsync(Id, cancellationToken);
+            TempData["OrderStatus"] = $"{copy.OrderNumber} created as a copy of {sourceNumber}. "
+                + "Review the PO number and requested ship date before scheduling.";
+            return RedirectToPage(new { id = copy.Id });
+        }
+        catch (Exception ex)
+        {
+            TempData["OrderError"] = $"Could not copy the order: {ex.Message}";
             return RedirectToPage(new { id = Id });
         }
     }

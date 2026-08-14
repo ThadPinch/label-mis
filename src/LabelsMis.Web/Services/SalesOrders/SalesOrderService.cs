@@ -531,6 +531,86 @@ public class SalesOrderService(
         return await invoiceService.SyncDraftFromSalesOrderAsync(id, cancellationToken);
     }
 
+    /// <summary>
+    /// Copies an order into a fresh Open order for reordering: same customer, sales rep, lines
+    /// (product, spec, quantity, price), charges, shipping, and notes. The PO number, requested
+    /// ship date, and estimate references are deliberately not carried over — they belong to the
+    /// original transaction. A draft invoice is generated like on any new order.
+    /// </summary>
+    public async Task<SalesOrder> CopyAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+
+        var source = await db.SalesOrders
+            .Include(o => o.Lines)
+            .Include(o => o.Charges)
+            .AsSplitQuery()
+            .SingleOrDefaultAsync(o => o.Id == id, cancellationToken)
+            ?? throw new InvalidOperationException("Sales order not found.");
+
+        var orderNumber = await documentNumbers.NextSalesOrderNumberAsync(cancellationToken);
+        var order = SalesOrder.CreateOpen(
+            Guid.NewGuid(),
+            orderNumber,
+            source.CustomerId,
+            sourceEstimateId: null,
+            source.SalesRepId,
+            customerPoNumber: null,
+            now,
+            requestedShipDate: null,
+            source.Notes,
+            source.BillingNotes,
+            source.ShippingMethodId,
+            source.ShippingCost,
+            source.ShippingAddress,
+            userId,
+            now);
+        db.SalesOrders.Add(order);
+
+        var lines = source.Lines.OrderBy(l => l.LineNumber).Select((line, index) =>
+            SalesOrderLine.Create(
+                Guid.NewGuid(),
+                order.Id,
+                index + 1,
+                line.ProductId,
+                line.Description,
+                sourceEstimateLineId: null,
+                line.Quantity,
+                line.UnitPrice,
+                line.LineNotes,
+                // Spec is an owned entity, so each line needs its own instance.
+                line.Spec is null ? null : line.Spec with { },
+                userId,
+                now)).ToList();
+        order.ReplaceLines(lines);
+        foreach (var line in lines)
+        {
+            db.SalesOrderLines.Add(line);
+        }
+
+        var charges = source.Charges.OrderBy(c => c.LineNumber).Select((charge, index) =>
+            SalesOrderCharge.Create(
+                Guid.NewGuid(),
+                order.Id,
+                index + 1,
+                charge.Description,
+                sourceEstimateChargeId: null,
+                charge.Quantity,
+                charge.UnitPrice,
+                userId,
+                now)).ToList();
+        order.ReplaceCharges(charges);
+        foreach (var charge in charges)
+        {
+            db.SalesOrderCharges.Add(charge);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        await invoiceService.CreateFromSalesOrderAsync(order.Id, cancellationToken);
+        return order;
+    }
+
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var order = await db.SalesOrders

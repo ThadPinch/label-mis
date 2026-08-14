@@ -44,12 +44,12 @@ else
         @foreach (var order in Model.Result.Items)
         {
             <tr>
-                <td>@order.OrderNumber</td>
+                <td class="text-nowrap"><a asp-page="/SalesOrders/Edit" asp-route-id="@order.SalesOrderId">@order.OrderNumber</a></td>
                 <td>@order.CustomerName</td>
                 <td>@(order.CustomerPoNumber ?? "—")</td>
-                <td>@(order.RequestedShipDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                <td class="text-nowrap">@(order.RequestedShipDate?.ToString("yyyy-MM-dd") ?? "—")</td>
                 <td>@(order.ShippingMethodName ?? "—")</td>
-                <td>
+                <td class="text-nowrap">
                     <span class="badge @(order.ReadyItemCount == order.TotalItemCount ? "bg-success" : "bg-warning text-dark")">
                         @order.ReadyItemCount of @order.TotalItemCount items
                     </span>
@@ -57,15 +57,14 @@ else
                 <td>
                     @foreach (var job in order.ReadyJobs)
                     {
-                        <a asp-page="/Jobs/Detail" asp-route-id="@job.JobId" class="d-inline-block me-2">@job.JobNumber</a>
+                        <a asp-page="/Jobs/Detail" asp-route-id="@job.JobId" class="d-inline-block me-2 text-nowrap">@job.JobNumber</a>
                     }
                 </td>
-                <td class="text-end">
+                <td class="text-end text-nowrap">
                     @if (Model.CanShip)
                     {
                         <a asp-page="/Shipments/Record" asp-route-salesOrderId="@order.SalesOrderId" class="btn btn-sm btn-success">Record shipment</a>
                     }
-                    <a asp-page="/SalesOrders/Edit" asp-route-id="@order.SalesOrderId" class="btn btn-sm btn-outline-primary">View order</a>
                 </td>
             </tr>
         }

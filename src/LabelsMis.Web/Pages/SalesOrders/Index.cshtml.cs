@@ -52,6 +52,33 @@ public class IndexModel(SalesOrderService salesOrderService, LabelsMisDbContext 
         return RedirectPreservingFilters();
     }
 
+    /// <summary>Copies the order into a fresh Open order (a reorder) and lands on it.</summary>
+    public async Task<IActionResult> OnPostCopyAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.Csr) && !User.IsInRole(AppRoles.Estimator))
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var sourceNumber = await db.SalesOrders.AsNoTracking()
+                .Where(o => o.Id == id)
+                .Select(o => o.OrderNumber)
+                .SingleAsync(cancellationToken);
+            var copy = await salesOrderService.CopyAsync(id, cancellationToken);
+            TempData["OrderStatus"] = $"{copy.OrderNumber} created as a copy of {sourceNumber}. "
+                + "Review the PO number and requested ship date before scheduling.";
+            return RedirectToPage("Edit", new { id = copy.Id });
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            await LoadAsync(cancellationToken);
+            return Page();
+        }
+    }
+
     public async Task<IActionResult> OnPostCancelAsync(Guid id, CancellationToken cancellationToken)
     {
         if (!User.IsInRole(AppRoles.Admin))

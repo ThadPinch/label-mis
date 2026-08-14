@@ -141,7 +141,55 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
         (await _invoiceService.CreateFromSalesOrderAsync(order.Id)).Id.Should().Be(replacement.Id);
     }
 
-    private async Task<SalesOrder> SeedOrderAsync(int quantity, decimal unitPrice, decimal? chargeAmount)
+    [Fact]
+    public async Task CopyAsync_ClonesLinesChargesAndSpec_IntoNewOpenOrderWithDraftInvoice()
+    {
+        var source = await SeedOrderAsync(quantity: 2000, unitPrice: 0.25m, chargeAmount: 50m, withSpec: true);
+
+        // CopyAsync only touches db, documentNumbers, and invoiceService — the other
+        // collaborators may be null in this test and would fail loudly if that changed.
+        var salesOrderService = new LabelsMis.Web.Services.SalesOrders.SalesOrderService(
+            _db,
+            new StubCurrentUserService(TestUserId),
+            new DocumentNumberService(_db),
+            null!,
+            _invoiceService,
+            null!,
+            null!);
+
+        var copy = await salesOrderService.CopyAsync(source.Id);
+
+        copy.Id.Should().NotBe(source.Id);
+        copy.OrderNumber.Should().NotBe(source.OrderNumber);
+        copy.Status.Should().Be(SalesOrderStatus.Open);
+        copy.CustomerId.Should().Be(source.CustomerId);
+        copy.CustomerPoNumber.Should().BeNull();
+        copy.RequestedShipDate.Should().BeNull();
+        copy.SourceEstimateId.Should().BeNull();
+
+        var copiedLines = await _db.SalesOrderLines.AsNoTracking()
+            .Where(l => l.SalesOrderId == copy.Id)
+            .ToListAsync();
+        copiedLines.Should().HaveCount(1);
+        copiedLines[0].Quantity.Should().Be(2000);
+        copiedLines[0].UnitPrice.Should().Be(0.25m);
+        copiedLines[0].ProductId.Should().Be(source.Lines.First().ProductId);
+        copiedLines[0].Spec.Should().NotBeNull("the label spec is carried to the copy");
+        copiedLines[0].Spec!.LabelAcrossIn.Should().Be(4m);
+
+        var copiedCharges = await _db.SalesOrderCharges.AsNoTracking()
+            .Where(c => c.SalesOrderId == copy.Id)
+            .ToListAsync();
+        copiedCharges.Should().HaveCount(1);
+        copiedCharges[0].UnitPrice.Should().Be(50m);
+
+        var invoice = await _db.Invoices.AsNoTracking()
+            .SingleAsync(i => i.SalesOrderId == copy.Id);
+        invoice.Status.Should().Be(InvoiceStatus.Draft);
+        invoice.Subtotal.Should().Be(2000 * 0.25m + 50m);
+    }
+
+    private async Task<SalesOrder> SeedOrderAsync(int quantity, decimal unitPrice, decimal? chargeAmount, bool withSpec = false)
     {
         var now = DateTime.UtcNow;
         var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
@@ -164,12 +212,17 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
             _db.ProductCustomers.Add(assignment);
         }
 
+        var spec = withSpec
+            ? LabelSpec.Create(4m, 3m, 0.125m, 0.0625m, 0.0625m, 0.0625m, stockId, null,
+                InkSet.CMYK, 0, 1m, "[]", "[]", 250m, 0.04m, null, null, null)
+            : null;
+
         var order = SalesOrder.CreateOpen(
             Guid.NewGuid(), $"SO-{suffix}", customerId, null, null, null, now, null, null, null,
             null, 0m, ShippingAddress.Empty, TestUserId, now);
         var orderLine = SalesOrderLine.Create(
             Guid.NewGuid(), order.Id, 1, product.Id, "Sync test labels", null, quantity, unitPrice, null,
-            null, TestUserId, now);
+            spec, TestUserId, now);
         order.AddLine(orderLine);
         _db.SalesOrders.Add(order);
         _db.SalesOrderLines.Add(orderLine);

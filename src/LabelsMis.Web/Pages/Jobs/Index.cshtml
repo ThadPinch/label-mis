@@ -63,7 +63,7 @@
     </div>
 </form>
 
-<table class="table table-striped">
+<table class="table table-striped align-middle">
     <thead>
         <tr>
             <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Job #", "number", Model.Sort, route))</th>
@@ -73,7 +73,7 @@
             <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Status", "status", Model.Sort, route))</th>
             <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Due", "due", Model.Sort, route))</th>
             <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Scheduled", "scheduled", Model.Sort, route))</th>
-            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Qty", "qty", Model.Sort, route))</th>
+            <th class="text-end">@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Qty", "qty", Model.Sort, route))</th>
             <th></th>
         </tr>
     </thead>
@@ -81,14 +81,14 @@
     @foreach (var item in Model.Result.Items)
     {
         <tr>
-            <td>@item.JobNumber</td>
-            <td><a asp-page="/SalesOrders/Edit" asp-route-id="@item.SalesOrderId">@item.OrderNumber</a></td>
+            <td class="text-nowrap"><a asp-page="Detail" asp-route-id="@item.Id">@item.JobNumber</a></td>
+            <td class="text-nowrap"><a asp-page="/SalesOrders/Edit" asp-route-id="@item.SalesOrderId">@item.OrderNumber</a></td>
             <td>@item.CustomerName</td>
             <td>@item.ProductDescription</td>
-            <td>@item.Status</td>
-            <td>@(item.DueDate?.ToString("yyyy-MM-dd") ?? "—")</td>
-            <td>@(item.ScheduledForDate?.ToString("yyyy-MM-dd") ?? "—")</td>
-            <td>@item.QuantityOrdered.ToString("N0")</td>
+            <td class="text-nowrap">@item.Status</td>
+            <td class="text-nowrap">@(item.DueDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+            <td class="text-nowrap">@(item.ScheduledForDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+            <td class="text-end">@item.QuantityOrdered.ToString("N0")</td>
             <td class="text-end text-nowrap">
                 @if (Model.CanAdvance && LabelsMis.Web.Services.Jobs.JobService.NextStep(item.Status) is { } step)
                 {
@@ -97,7 +97,6 @@
                         @step.Label…
                     </button>
                 }
-                <a asp-page="Detail" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a>
                 <a asp-page="Ticket" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary">Ticket</a>
             </td>
         </tr>
