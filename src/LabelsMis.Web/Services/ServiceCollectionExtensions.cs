@@ -48,6 +48,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SalesOrderService>();
         services.AddScoped<SalesOrderDocumentService>();
         services.AddScoped<JobService>();
+        services.AddScoped<JobImpositionService>();
+        services.AddSingleton<ImpositionPdfGenerator>();
         services.AddScoped<JobTicketPdfGenerator>();
         services.AddScoped<Outsourcing.OutsourceService>();
         services.AddScoped<PurchaseOrderService>();

@@ -19,7 +19,8 @@ public class EstimateQuantityBreakConfiguration : IEntityTypeConfiguration<Estim
         builder.Property(q => q.CalculatedTotalPrice).HasMoneyPrecision();
         builder.Property(q => q.OutsourceCost).HasPrecision(18, 4);
         builder.Property(q => q.MarginPct).HasMoneyPrecision();
-        builder.Property(q => q.MarkupPctOverride).HasPrecision(18, 4);
+        // 8 decimals so a typed final price round-trips exactly through the derived markup (total / cost - 1).
+        builder.Property(q => q.MarkupPctOverride).HasPrecision(18, 8);
         builder.Property(q => q.CostBreakdownJson).HasColumnType("jsonb").IsRequired();
 
         builder.HasIndex(q => new { q.EstimateLineId, q.Quantity }).IsUnique();

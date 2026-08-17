@@ -15,7 +15,12 @@ using Microsoft.EntityFrameworkCore;
 namespace LabelsMis.Web.Pages.Jobs;
 
 [Authorize(Policy = TransactionPolicies.JobsRead)]
-public class DetailModel(JobService jobService, ArtworkService artworkService, RollService rollService, LabelsMisDbContext db) : PageModel
+public class DetailModel(
+    JobService jobService,
+    ArtworkService artworkService,
+    RollService rollService,
+    JobImpositionService impositionService,
+    LabelsMisDbContext db) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
     [BindProperty] public ScheduleJobInput ScheduleInput { get; set; } = new(DateOnly.FromDateTime(DateTime.UtcNow), null);
@@ -30,6 +35,7 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, R
     [BindProperty] public string? RollBarcode { get; set; }
     [BindProperty] public string? OrderNotes { get; set; }
     [BindProperty] public IFormFile? ArtworkFile { get; set; }
+    [BindProperty] public ImpositionForm ImpositionForm { get; set; } = new();
 
     public JobDetail? Detail { get; private set; }
     public JobTicketDetail? TicketDetail { get; private set; }
@@ -54,6 +60,14 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, R
 
     /// <summary>The substrate the job runs on (spec, else product default) — heads the roll picker.</summary>
     public Guid SubstrateStockId { get; private set; }
+    /// <summary>The job's imposition template (stored, or the computed default) and imposed-PDF state.</summary>
+    public JobImpositionView? Imposition { get; private set; }
+    public string? ImpositionMessage { get; private set; }
+    public string? ImpositionError { get; private set; }
+    public IReadOnlyList<string> ImpositionWarnings { get; private set; } = [];
+
+    /// <summary>Prepress runs the imposition: operators and schedulers (and admins).</summary>
+    public bool CanImpose => CanOperate || CanChangeStatus;
     public bool CanAdvanceStage => CanOperate || CanChangeStatus;
     public bool CanEditOrderNotes => CanOperate || CanChangeStatus;
     public bool CanRecordCounts => CanOperate || CanChangeStatus;
@@ -244,6 +258,74 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, R
         }
     }
 
+    public async Task<IActionResult> OnPostSaveImpositionAsync(CancellationToken cancellationToken) =>
+        await RunImpositionAction(async () =>
+        {
+            await impositionService.SaveTemplateAsync(Id, ImpositionForm.ToInput(), cancellationToken);
+            TempData["ImpositionMessage"] = "Imposition template saved on this job.";
+        }, cancellationToken);
+
+    public async Task<IActionResult> OnPostRunImpositionAsync(CancellationToken cancellationToken) =>
+        await RunImpositionAction(async () =>
+        {
+            var outcome = await impositionService.RunAsync(Id, ImpositionForm.ToInput(), cancellationToken);
+            var t = outcome.Template;
+            TempData["ImpositionMessage"] =
+                $"Imposed {t.LabelsAcross} × {t.LabelsAround} ({t.LabelsPerFrame} per frame) on a {t.WebWidthIn:0.###}\" × {t.RepeatLengthIn:0.###}\" frame"
+                + (outcome.Source.RotatedToFit ? " — artwork rotated 90° to fit the label." : ".");
+            TempData["ImpositionWarnings"] = string.Join("\n", outcome.Warnings);
+        }, cancellationToken);
+
+    public async Task<IActionResult> OnPostResetImpositionAsync(CancellationToken cancellationToken)
+    {
+        if (!CanOperateForUser() && !CanChangeStatusForUser()) return Forbid();
+        try
+        {
+            await impositionService.ResetTemplateAsync(Id, cancellationToken);
+            TempData["ImpositionMessage"] = "Imposition template reset to the job's default layout.";
+            return RedirectToImposition();
+        }
+        catch (Exception ex)
+        {
+            ImpositionError = ex.Message;
+            await LoadPageAsync(cancellationToken);
+            return Page();
+        }
+    }
+
+    /// <summary>Validates the posted template, runs the action, and re-renders (keeping the operator's
+    /// edits) when the template is invalid or the action fails.</summary>
+    private async Task<IActionResult> RunImpositionAction(Func<Task> action, CancellationToken cancellationToken)
+    {
+        if (!CanOperateForUser() && !CanChangeStatusForUser()) return Forbid();
+        var templateErrors = ModelState
+            .Where(kv => kv.Key.StartsWith(nameof(ImpositionForm) + ".", StringComparison.Ordinal))
+            .SelectMany(kv => kv.Value?.Errors.Select(e => e.ErrorMessage) ?? [])
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .ToList();
+        if (templateErrors.Count > 0)
+        {
+            ImpositionError = string.Join(" ", templateErrors);
+            await LoadPageAsync(cancellationToken, keepImpositionForm: true);
+            return Page();
+        }
+
+        try
+        {
+            await action();
+            return RedirectToImposition();
+        }
+        catch (Exception ex)
+        {
+            ImpositionError = ex.Message;
+            await LoadPageAsync(cancellationToken, keepImpositionForm: true);
+            return Page();
+        }
+    }
+
+    private IActionResult RedirectToImposition() =>
+        Redirect(Url.Page("/Jobs/Detail", null, new { id = Id }, null, null, "imposition")!);
+
     private async Task<IActionResult> RunOperatorAction(Func<Task> action, CancellationToken cancellationToken)
     {
         if (!CanOperateForUser()) return Forbid();
@@ -262,7 +344,7 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, R
         }
     }
 
-    private async Task LoadPageAsync(CancellationToken cancellationToken)
+    private async Task LoadPageAsync(CancellationToken cancellationToken, bool keepImpositionForm = false)
     {
         CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler);
         CanOperate = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Operator);
@@ -325,6 +407,18 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, R
 
         StatusInput = Detail.Job.Status;
         OrderNotes = Detail.OrderNotes;
+
+        Imposition = await impositionService.GetAsync(Id, cancellationToken);
+        if (Imposition is not null && !keepImpositionForm)
+        {
+            ImpositionForm = ImpositionForm.From(Imposition.Template);
+        }
+
+        ImpositionMessage ??= TempData["ImpositionMessage"] as string;
+        if (TempData["ImpositionWarnings"] is string warnings && !string.IsNullOrWhiteSpace(warnings))
+        {
+            ImpositionWarnings = warnings.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
 
         ViewData["PressOptions"] = await db.Presses.AsNoTracking()
             .Where(p => p.IsActive).OrderBy(p => p.Name)

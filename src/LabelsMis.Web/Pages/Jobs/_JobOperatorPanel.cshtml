@@ -113,6 +113,22 @@
                 <hr class="my-2" />
             }
 
+            @if (status == JobStatus.PrePress && Model.Imposition is { } prepressImposition)
+            {
+                @if (prepressImposition.ImposedArtworkFilePath is null)
+                {
+                    <div class="small text-warning-emphasis mb-2">Imposition hasn't been run for this job yet — see the Imposition card above.</div>
+                }
+                else if (prepressImposition.ImposedIsStale)
+                {
+                    <div class="small text-warning-emphasis mb-2">The artwork changed since the imposition was run — re-run it before sending to press.</div>
+                }
+                else
+                {
+                    <div class="small text-success mb-2">Imposed @prepressImposition.ImposedAt?.ToLocalTime().ToString("MMM d, HH:mm") — @prepressImposition.Template.LabelsAcross × @prepressImposition.Template.LabelsAround per frame.</div>
+                }
+            }
+
             @if (Model.CanAdvanceStage)
             {
                 var buttonLabel = showCounts

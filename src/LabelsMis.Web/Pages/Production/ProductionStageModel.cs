@@ -42,6 +42,9 @@ public abstract class ProductionStageModel(JobService jobService) : PageModel, I
     /// record (pre-press) override this to keep the instant one-click advance.</summary>
     public virtual bool UseActionModal => true;
 
+    /// <summary>Pre-press shows whether each job's imposition has been run; later stages don't need it.</summary>
+    public virtual bool ShowImpositionColumn => false;
+
     public IReadOnlyDictionary<JobStatus, int> StageCounts { get; private set; } =
         new Dictionary<JobStatus, int>();
 

@@ -490,4 +490,29 @@ public class EstimatingServiceTests
         result.Imposition.Orientation.Should().Be(LabelOrientation.AsEntered);
         result.Imposition.EffectiveLabelAroundIn.Should().Be(1.5m);
     }
+
+    [Fact]
+    public void Calculate_QuantityMarkupOverrideFromTypedTotal_ReproducesThePriceAndReportsNegativeMargin()
+    {
+        // The estimate page prices a row at a typed total by storing markup = total / cost - 1
+        // (8 decimals). Below-cost totals are allowed: the margin goes negative and is flagged.
+        var baseline = _sut.Calculate(EstimatingTestData.CreateWorkedExampleRequest(quantities: [25000]));
+        var cost = baseline.QuantityBreaks.Single().TotalCost;
+        cost.Should().Be(742.06m);
+
+        const decimal typedTotal = 700.00m;
+        var derivedMarkup = decimal.Round(typedTotal / cost - 1, 8);
+        var request = EstimatingTestData.CreateWorkedExampleRequest(quantities: [25000]) with
+        {
+            QuantityMarkupOverrides = new Dictionary<int, decimal> { [25000] = derivedMarkup }
+        };
+
+        var row = _sut.Calculate(request).QuantityBreaks.Single();
+
+        row.TotalPrice.Should().Be(typedTotal);
+        row.MarkupPctUsed.Should().Be(derivedMarkup);
+        row.MarginPct.Should().BeApproximately((typedTotal - cost) / typedTotal, 0.0001m);
+        row.MarginPct.Should().BeNegative();
+        row.BelowMinimumMargin.Should().BeTrue();
+    }
 }

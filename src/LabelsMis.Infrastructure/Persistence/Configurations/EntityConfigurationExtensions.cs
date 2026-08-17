@@ -42,6 +42,35 @@ internal static class EntityConfigurationExtensions
         });
     }
 
+    /// <summary>Maps an <see cref="ImpositionTemplate"/> as an owned type flattened onto the owner's
+    /// table with <c>Imposition*</c> column names. Optional so existing rows stay null until prepress
+    /// first saves a template.</summary>
+    public static void OwnsImpositionTemplate<TOwner>(
+        this EntityTypeBuilder<TOwner> builder,
+        Expression<Func<TOwner, ImpositionTemplate?>> navigation)
+        where TOwner : class
+    {
+        builder.OwnsOne(navigation, t =>
+        {
+            t.Property(x => x.LabelAcrossIn).HasColumnName("ImpositionLabelAcrossIn").HasDimensionPrecision();
+            t.Property(x => x.LabelAroundIn).HasColumnName("ImpositionLabelAroundIn").HasDimensionPrecision();
+            t.Property(x => x.CornerRadiusIn).HasColumnName("ImpositionCornerRadiusIn").HasDimensionPrecision();
+            t.Property(x => x.GutterAcrossIn).HasColumnName("ImpositionGutterAcrossIn").HasDimensionPrecision();
+            t.Property(x => x.GutterAroundIn).HasColumnName("ImpositionGutterAroundIn").HasDimensionPrecision();
+            t.Property(x => x.BleedIn).HasColumnName("ImpositionBleedIn").HasDimensionPrecision();
+            t.Property(x => x.LabelsAcross).HasColumnName("ImpositionLabelsAcross");
+            t.Property(x => x.LabelsAround).HasColumnName("ImpositionLabelsAround");
+            t.Property(x => x.Orientation).HasColumnName("ImpositionOrientation");
+            t.Property(x => x.WebWidthIn).HasColumnName("ImpositionWebWidthIn").HasDimensionPrecision();
+            t.Property(x => x.CrossWebOffsetIn).HasColumnName("ImpositionCrossWebOffsetIn").HasDimensionPrecision();
+            t.Property(x => x.EyeMarks).HasColumnName("ImpositionEyeMarks");
+            t.Property(x => x.EyeMarkWidthIn).HasColumnName("ImpositionEyeMarkWidthIn").HasDimensionPrecision();
+            t.Property(x => x.EyeMarkHeightIn).HasColumnName("ImpositionEyeMarkHeightIn").HasDimensionPrecision();
+            t.Property(x => x.IncludeDieLines).HasColumnName("ImpositionIncludeDieLines");
+            t.Property(x => x.IncludeSlug).HasColumnName("ImpositionIncludeSlug");
+        });
+    }
+
     public static void ConfigureAuditableEntity<TEntity>(this EntityTypeBuilder<TEntity> builder)
         where TEntity : EntityBase
     {

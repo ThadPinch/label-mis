@@ -24,7 +24,11 @@ public record JobListItem(
     int QuantityOrdered,
     Guid SalesOrderId,
     string OrderNumber,
-    bool IsOutsourced = false);
+    bool IsOutsourced = false,
+    /// <summary>An imposed PDF exists for the job (pre-press has run the imposition).</summary>
+    bool IsImposed = false,
+    /// <summary>The imposed PDF predates the product's current artwork.</summary>
+    bool ImposedIsStale = false);
 
 /// <summary>Vendor facts for an outsourced job, shown on the job page and ticket instead of press info.</summary>
 public record JobOutsourceInfo(
@@ -286,7 +290,9 @@ public class JobService(
                 j.QuantityOrdered,
                 j.SalesOrderLine.SalesOrderId,
                 j.SalesOrderLine.SalesOrder.OrderNumber,
-                j.IsOutsourced))
+                j.IsOutsourced,
+                j.ImposedArtworkFilePath != null,
+                j.ImposedArtworkFilePath != null && j.ImposedFromArtworkFilePath != j.Product.ArtworkFilePath))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<JobListItem>(items, page, pageSize, total);
@@ -1304,32 +1310,7 @@ public class JobService(
 
         try
         {
-            var input = new EstimateLineFormInput(
-                null,
-                null,
-                string.Empty,
-                spec.LabelAcrossIn,
-                spec.LabelAroundIn,
-                spec.CornerRadiusIn,
-                spec.GutterAcrossIn,
-                spec.GutterAroundIn,
-                spec.BleedIn,
-                spec.SubstrateId,
-                spec.InkSet,
-                spec.WhiteHits,
-                spec.WhiteCoveragePct,
-                EstimateCalculationMapper.DeserializeSpots(spec.SpotsJson),
-                EstimateCalculationMapper.DeserializeFinishingOperations(spec.FinishingOperationsJson)
-                    .Where(s => s.OperationId != Guid.Empty)
-                    .ToList(),
-                spec.SetupWasteImpressions,
-                spec.RunningWastePct,
-                null,
-                [quantityPlanned],
-                null,
-                spec.MaxLabelsAcrossOverride,
-                spec.LabelOrientationOverride);
-
+            var input = ToEstimateLineInput(spec, quantityPlanned);
             var request = await calculationMapper.BuildRequestAsync(customerId, input, cancellationToken);
             var result = estimatingService.Calculate(request);
             var quantityBreak = result.QuantityBreaks.FirstOrDefault();
@@ -1347,6 +1328,34 @@ public class JobService(
             return null;
         }
     }
+
+    /// <summary>Re-expresses a job/order spec as an estimate line so the estimating engine can be
+    /// run against it (planned times, and the imposition template seed).</summary>
+    internal static EstimateLineFormInput ToEstimateLineInput(LabelSpec spec, int quantity) => new(
+        null,
+        null,
+        string.Empty,
+        spec.LabelAcrossIn,
+        spec.LabelAroundIn,
+        spec.CornerRadiusIn,
+        spec.GutterAcrossIn,
+        spec.GutterAroundIn,
+        spec.BleedIn,
+        spec.SubstrateId,
+        spec.InkSet,
+        spec.WhiteHits,
+        spec.WhiteCoveragePct,
+        EstimateCalculationMapper.DeserializeSpots(spec.SpotsJson),
+        EstimateCalculationMapper.DeserializeFinishingOperations(spec.FinishingOperationsJson)
+            .Where(s => s.OperationId != Guid.Empty)
+            .ToList(),
+        spec.SetupWasteImpressions,
+        spec.RunningWastePct,
+        null,
+        [quantity],
+        null,
+        spec.MaxLabelsAcrossOverride,
+        spec.LabelOrientationOverride);
 
     /// <summary>Setup + run time for one finishing pass, mirroring FinishingCalculator's math.</summary>
     private static decimal FinishingPlannedMinutes(

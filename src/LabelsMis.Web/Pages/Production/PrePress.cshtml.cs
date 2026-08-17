@@ -12,4 +12,6 @@ public class PrePressModel(JobService jobService) : ProductionStageModel(jobServ
 
     // Nothing to record when leaving pre-press, so the advance stays a one-click button.
     public override bool UseActionModal => false;
+
+    public override bool ShowImpositionColumn => true;
 }

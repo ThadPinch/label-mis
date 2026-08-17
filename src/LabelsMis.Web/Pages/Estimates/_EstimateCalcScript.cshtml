@@ -26,6 +26,12 @@
     const MARGIN_STEP = 0.01;
     const MIN_MARGIN = 0;
     const MAX_MARGIN = 0.85;
+    // A quantity row can be priced below cost (a typed total that undercuts the calc, or a negative
+    // margin typed on the row); only the line-level control keeps the 0% floor.
+    const MIN_ROW_MARGIN = Number.NEGATIVE_INFINITY;
+    // Markup overrides carry 8 decimals so a typed final price reproduces exactly from
+    // cost x (1 + markup) after the round-trip through the calc and the saved estimate.
+    const MARKUP_DECIMALS = 8;
 
     const fmtMoney = (value, decimals = 2) => {
         const n = Number(value);
@@ -715,12 +721,27 @@
             : getLineMarkup(lineEl);
     };
 
-    const setQtyMargin = (lineEl, qty, margin) => {
-        const clamped = Math.min(Math.max(margin, MIN_MARGIN), MAX_MARGIN);
+    const setQtyMarkup = (lineEl, qty, markup) => {
         const map = getQtyMarkupMap(lineEl);
-        map[String(qty)] = Number(marginToMarkup(clamped).toFixed(4));
+        map[String(qty)] = Number(markup.toFixed(MARKUP_DECIMALS));
         setQtyMarkupMap(lineEl, map);
         calculate();
+    };
+
+    const setQtyMargin = (lineEl, qty, margin) => {
+        const clamped = Math.min(Math.max(margin, MIN_ROW_MARGIN), MAX_MARGIN);
+        setQtyMarkup(lineEl, qty, marginToMarkup(clamped));
+    };
+
+    // Price a quantity at a typed final total: the row's markup becomes total / cost - 1 so the
+    // calc reproduces the entered price and the margin follows it, negative when below cost.
+    const setQtyTotal = (lineEl, qty, total) => {
+        const row = (lineResultsCache.get(String(lineEl.dataset.lineIndex))?.quantityBreaks || [])
+            .find(b => Number(b.quantity) === qty);
+        const cost = Number(row?.totalCost);
+        if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(cost) || cost <= 0) return false;
+        setQtyMarkup(lineEl, qty, total / cost - 1);
+        return true;
     };
 
     const getLineMarkup = (lineEl) => {
@@ -754,15 +775,23 @@
         input.value = `${(markupToMargin(markup) * 100).toFixed(1)}%`;
     };
 
-    const parseMarginInput = (raw) => {
+    const parseMarginInput = (raw, minMargin = MIN_MARGIN) => {
         if (raw === '' || raw === undefined || raw === null) return null;
         const trimmed = String(raw).trim();
         if (!trimmed) return null;
         const hasPercent = trimmed.endsWith('%');
         const parsed = parseFloat(trimmed.replace(/%$/, ''));
         if (Number.isNaN(parsed)) return null;
-        const asDecimal = hasPercent || parsed > 1 ? parsed / 100 : parsed;
-        return Math.min(Math.max(asDecimal, MIN_MARGIN), MAX_MARGIN);
+        const asDecimal = hasPercent || Math.abs(parsed) > 1 ? parsed / 100 : parsed;
+        return Math.min(Math.max(asDecimal, minMargin), MAX_MARGIN);
+    };
+
+    // A typed money amount ("$1,250.00", "1250") as a number, or null when it isn't one.
+    const parseTotalInput = (raw) => {
+        const trimmed = String(raw ?? '').trim().replace(/^\$/, '').replace(/,/g, '');
+        if (!trimmed) return null;
+        const parsed = Number(trimmed);
+        return Number.isFinite(parsed) ? parsed : null;
     };
 
     const applyMarginInput = (lineEl) => {
@@ -1530,12 +1559,34 @@
     };
 
     const wireRowMarginControls = (lineEl, tbody) => {
+        // Total column: typing a final price sets the row's markup so the margin follows the price.
+        tbody.querySelectorAll('.row-total-control').forEach(ctrl => {
+            const qty = parseInt(ctrl.dataset.qty, 10);
+            const input = ctrl.querySelector('.row-total-input');
+            const currentTotal = () => Number((lineResultsCache.get(String(lineEl.dataset.lineIndex))?.quantityBreaks || [])
+                .find(b => Number(b.quantity) === qty)?.totalPrice);
+            const apply = () => {
+                const total = parseTotalInput(input.value);
+                const current = currentTotal();
+                const unchanged = total !== null && Number.isFinite(current) && Math.abs(total - current) < 0.005;
+                if (total === null || unchanged || !setQtyTotal(lineEl, qty, total)) {
+                    input.value = Number.isFinite(current) ? current.toFixed(2) : '';
+                }
+            };
+            input?.addEventListener('blur', apply);
+            input?.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    input.blur();
+                }
+            });
+        });
         tbody.querySelectorAll('.row-margin-control').forEach(ctrl => {
             const qty = parseInt(ctrl.dataset.qty, 10);
             const input = ctrl.querySelector('.row-margin-input');
             const currentMargin = () => markupToMargin(getEffectiveQtyMarkup(lineEl, qty));
             const apply = () => {
-                const margin = parseMarginInput(input.value);
+                const margin = parseMarginInput(input.value, MIN_ROW_MARGIN);
                 if (margin === null) {
                     input.value = `${(currentMargin() * 100).toFixed(1)}%`;
                     return;
@@ -1685,7 +1736,12 @@
                 const hasOverride = overrides[String(row.quantity)] !== undefined;
                 tr.innerHTML = `<td>${row.quantity.toLocaleString()}</td>
                     <td>${Number(row.unitPrice).toFixed(4)}</td>
-                    <td>${Number(row.totalPrice).toFixed(2)}</td>
+                    <td>
+                        <div class="input-group input-group-sm row-total-control" data-qty="${row.quantity}" style="max-width: 9rem;">
+                            <span class="input-group-text">$</span>
+                            <input type="text" class="form-control row-total-input text-end${hasOverride ? ' fw-semibold' : ''}" inputmode="decimal" value="${Number(row.totalPrice).toFixed(2)}" aria-label="Total price for ${row.quantity}" title="Type a total to price this quantity directly — the margin follows it" />
+                        </div>
+                    </td>
                     <td>
                         <div class="input-group input-group-sm row-margin-control" data-qty="${row.quantity}" style="max-width: 9.5rem;">
                             <button type="button" class="btn btn-outline-secondary row-margin-decrease" aria-label="Decrease margin for ${row.quantity}">−</button>

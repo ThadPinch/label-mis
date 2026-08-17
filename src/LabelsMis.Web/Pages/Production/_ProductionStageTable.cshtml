@@ -41,6 +41,10 @@ else
                 <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Product", "product", Model.Sort, sortRoute))</th>
                 <th class="text-end">@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Qty", "qty", Model.Sort, sortRoute))</th>
                 <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Due", "due", Model.Sort, sortRoute))</th>
+                @if (Model.ShowImpositionColumn)
+                {
+                    <th>Imposition</th>
+                }
                 <th></th>
             </tr>
         </thead>
@@ -54,6 +58,23 @@ else
                 <td>@item.ProductDescription</td>
                 <td class="text-end">@item.QuantityOrdered.ToString("N0")</td>
                 <td class="text-nowrap">@(item.DueDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                @if (Model.ShowImpositionColumn)
+                {
+                    <td class="text-nowrap">
+                        @if (item.IsImposed && item.ImposedIsStale)
+                        {
+                            <a asp-page="/Jobs/Detail" asp-route-id="@item.Id" asp-fragment="imposition" class="badge text-bg-warning text-decoration-none" title="The artwork changed after the imposition was run">Re-run</a>
+                        }
+                        else if (item.IsImposed)
+                        {
+                            <a asp-page="/Jobs/Detail" asp-route-id="@item.Id" asp-fragment="imposition" class="badge text-bg-success text-decoration-none">Imposed</a>
+                        }
+                        else
+                        {
+                            <a asp-page="/Jobs/Detail" asp-route-id="@item.Id" asp-fragment="imposition" class="badge text-bg-secondary text-decoration-none">Impose…</a>
+                        }
+                    </td>
+                }
                 <td class="text-end">
                     @if (Model.CanAdvance && Model.NextStatus is not null)
                     {

@@ -1,5 +1,6 @@
 using LabelsMis.Domain.Enums;
 using LabelsMis.Infrastructure.Persistence;
+using LabelsMis.Web.Services.Outsourcing;
 using Microsoft.EntityFrameworkCore;
 
 namespace LabelsMis.Web.Services.Dashboard;
@@ -244,11 +245,21 @@ public class DashboardService(LabelsMisDbContext db)
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToListAsync(ct);
 
+        // The Outsourced stage tracks open outsourced items (order lines and charges alike) rather
+        // than jobs — a charge never has a job and a line's job only exists once the order is
+        // released — so the pipeline counts the same thing the production stage nav does. An
+        // outsourced job always has exactly one open item behind it, so nothing is double-counted.
+        var openOutsourced = await db.OutsourcedItems
+            .CountAsync(o => o.ReceivedAt == null && OutsourceService.TrackedOrderStatuses.Contains(o.SalesOrder.Status), ct);
+
         var pipeline = WipStatuses
-            .Select(s => new CategoryValue(
-                JobStatusLabel(s),
-                pipelineRaw.FirstOrDefault(p => p.Status == s)?.Count ?? 0,
-                pipelineRaw.FirstOrDefault(p => p.Status == s)?.Count ?? 0))
+            .Select(s =>
+            {
+                var count = s == JobStatus.Outsourced
+                    ? openOutsourced
+                    : pipelineRaw.FirstOrDefault(p => p.Status == s)?.Count ?? 0;
+                return new CategoryValue(JobStatusLabel(s), count, count);
+            })
             .ToList();
 
         var overdueCount = await db.Jobs

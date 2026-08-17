@@ -204,6 +204,16 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
             rows.Add(("Die", job.DieDescription ?? "—", "", ""));
         }
 
+        // Press imposition — the frame prepress built (or will build) for this job.
+        if (job.Job.Imposition is { } imposition)
+        {
+            var orientation = imposition.Orientation == LabelOrientation.Rotated ? " · rotated 90°" : "";
+            var impositionStatus = job.Job.ImposedAt is { } imposedAt ? $"imposed {imposedAt.ToLocalTime():MMM d HH:mm}" : "not yet run";
+            rows.Add(("Imposition",
+                $"{imposition.LabelsAcross} across × {imposition.LabelsAround} around ({imposition.LabelsPerFrame}/frame){orientation}",
+                "Frame", $"{imposition.WebWidthIn:0.###}\" web × {imposition.RepeatLengthIn:0.####}\" repeat · {impositionStatus}"));
+        }
+
         if (!string.IsNullOrWhiteSpace(job.LineNotes))
         {
             rows.Add(("Line notes", job.LineNotes!, "", ""));

@@ -20,6 +20,9 @@ public class JobConfiguration : IEntityTypeConfiguration<Job>
         builder.Property(j => j.IsOutsourced).IsRequired().HasDefaultValue(false);
 
         builder.OwnsLabelSpec(j => j.Spec);
+        builder.OwnsImpositionTemplate(j => j.Imposition);
+        builder.Property(j => j.ImposedArtworkFilePath).HasMaxLength(500);
+        builder.Property(j => j.ImposedFromArtworkFilePath).HasMaxLength(500);
 
         builder.HasIndex(j => j.JobNumber).IsUnique();
         builder.HasIndex(j => j.Status);

@@ -113,64 +113,95 @@ else
 
     <div class="row g-3 mb-3">
         <div class="col-lg-7 d-flex flex-column gap-3">
-            <div class="card">
-                <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                    <span class="text-truncate">
-                        <span class="fw-semibold">Artwork</span>
-                        @if (Model.ArtworkFileName is { } artworkFileName)
-                        {
-                            <span class="text-muted small ms-2">@artworkFileName</span>
-                        }
-                    </span>
-                    <div class="d-flex gap-1">
-                        @if (Model.HasArtwork)
-                        {
-                            @if (Model.ArtworkIsPdf || Model.ArtworkIsImage)
-                            {
-                                <button type="button" id="artwork-expand" class="btn btn-sm btn-outline-secondary">Expand</button>
-                            }
-                            <a href="@artworkInlineUrl" target="_blank" class="btn btn-sm btn-outline-secondary">Open</a>
-                            <a asp-page="/Artwork/Download" asp-route-productId="@Model.Detail.Job.ProductId" class="btn btn-sm btn-outline-secondary">Download</a>
-                        }
-                    </div>
+            @{
+                var impositionStatusClass = Model.Imposition?.ImposedArtworkFilePath is null
+                    ? "text-bg-secondary"
+                    : Model.Imposition.ImposedIsStale ? "text-bg-warning" : "text-bg-success";
+                var impositionStatusText = Model.Imposition?.ImposedArtworkFilePath is null
+                    ? "not run"
+                    : Model.Imposition.ImposedIsStale ? "stale" : "imposed";
+            }
+            <div class="card" id="artwork">
+                <div class="card-header py-2">
+                    <ul class="nav nav-tabs card-header-tabs" role="tablist" id="artwork-tabs">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="artwork-tab-original-btn" data-bs-toggle="tab" data-bs-target="#artwork-tab-original" type="button" role="tab" aria-controls="artwork-tab-original" aria-selected="true">
+                                Original artwork
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="artwork-tab-imposition-btn" data-bs-toggle="tab" data-bs-target="#artwork-tab-imposition" type="button" role="tab" aria-controls="artwork-tab-imposition" aria-selected="false">
+                                Imposition
+                                @if (Model.Imposition is not null)
+                                {
+                                    <span class="badge rounded-pill @impositionStatusClass ms-1 fw-normal">@impositionStatusText</span>
+                                }
+                            </button>
+                        </li>
+                    </ul>
                 </div>
-                @if (Model.HasArtwork && Model.ArtworkIsPdf)
-                {
-                    <div id="artwork-viewer" class="artwork-viewer d-none">
-                        <iframe data-src="@artworkInlineUrl" title="Artwork preview" style="width: 100%; height: 100%; border: 0;"></iframe>
-                    </div>
-                }
-                else if (Model.HasArtwork && Model.ArtworkIsImage)
-                {
-                    <div id="artwork-viewer" class="artwork-viewer d-none overflow-auto d-flex align-items-center justify-content-center bg-light">
-                        <img data-src="@artworkInlineUrl" alt="Artwork preview" style="max-width: 100%; max-height: 100%;" />
-                    </div>
-                }
-                else if (Model.HasArtwork)
-                {
-                    <div class="card-body py-4 text-center text-muted">
-                        No in-browser preview for this file type — use Download to view it.
-                    </div>
-                }
-                else
-                {
-                    <div class="card-body py-4 text-center text-muted">
-                        No artwork on file for this product yet.
-                    </div>
-                }
-                <div class="card-footer py-2">
-                    <form id="artwork-upload-form" method="post" asp-page-handler="UploadArtwork" enctype="multipart/form-data" data-product-id="@Model.Detail.Job.ProductId">
-                        <div class="input-group input-group-sm">
-                            <input asp-for="ArtworkFile" type="file" class="form-control" accept=".pdf,.ai,.eps,.png,.jpg,.jpeg,.tif,.tiff" />
-                            <button type="submit" class="btn btn-outline-primary">Upload</button>
-                        </div>
-                        <div class="artwork-upload-status d-none mt-1">
-                            <div class="progress" style="height: 8px;">
-                                <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="artwork-tab-original" role="tabpanel" aria-labelledby="artwork-tab-original-btn">
+                        <div class="artwork-toolbar py-2 px-3 d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom">
+                            <span class="text-truncate small">
+                                @if (Model.ArtworkFileName is { } artworkFileName)
+                                {
+                                    <span class="fw-semibold">@artworkFileName</span>
+                                    <span class="text-muted ms-1">— the unimposed original on the product</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No artwork on file for this product yet.</span>
+                                }
+                            </span>
+                            <div class="d-flex gap-1">
+                                @if (Model.HasArtwork)
+                                {
+                                    @if (Model.ArtworkIsPdf || Model.ArtworkIsImage)
+                                    {
+                                        <button type="button" id="artwork-expand" class="btn btn-sm btn-outline-secondary">Expand</button>
+                                    }
+                                    <a href="@artworkInlineUrl" target="_blank" class="btn btn-sm btn-outline-secondary">Open</a>
+                                    <a asp-page="/Artwork/Download" asp-route-productId="@Model.Detail.Job.ProductId" class="btn btn-sm btn-outline-secondary">Download</a>
+                                }
                             </div>
-                            <div class="small artwork-upload-message mt-1 text-muted"></div>
                         </div>
-                    </form>
+                        @if (Model.HasArtwork && Model.ArtworkIsPdf)
+                        {
+                            <div id="artwork-viewer" class="artwork-viewer d-none">
+                                <iframe data-src="@artworkInlineUrl" title="Artwork preview" style="width: 100%; height: 100%; border: 0;"></iframe>
+                            </div>
+                        }
+                        else if (Model.HasArtwork && Model.ArtworkIsImage)
+                        {
+                            <div id="artwork-viewer" class="artwork-viewer d-none overflow-auto d-flex align-items-center justify-content-center bg-light">
+                                <img data-src="@artworkInlineUrl" alt="Artwork preview" style="max-width: 100%; max-height: 100%;" />
+                            </div>
+                        }
+                        else if (Model.HasArtwork)
+                        {
+                            <div class="card-body py-4 text-center text-muted">
+                                No in-browser preview for this file type — use Download to view it.
+                            </div>
+                        }
+                        <div class="card-footer py-2">
+                            <form id="artwork-upload-form" method="post" asp-page-handler="UploadArtwork" enctype="multipart/form-data" data-product-id="@Model.Detail.Job.ProductId">
+                                <div class="input-group input-group-sm">
+                                    <input asp-for="ArtworkFile" type="file" class="form-control" accept=".pdf,.ai,.eps,.png,.jpg,.jpeg,.tif,.tiff" />
+                                    <button type="submit" class="btn btn-outline-primary">Upload</button>
+                                </div>
+                                <div class="artwork-upload-status d-none mt-1">
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <div class="small artwork-upload-message mt-1 text-muted"></div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="artwork-tab-imposition" role="tabpanel" aria-labelledby="artwork-tab-imposition-btn">
+                        <partial name="_JobImpositionPanel" model="Model" />
+                    </div>
                 </div>
             </div>
 
@@ -440,6 +471,7 @@ else
 @section Scripts {
     <script src="~/js/artwork-upload.js" asp-append-version="true"></script>
     <script src="~/js/roll-picker.js" asp-append-version="true"></script>
+    <script src="~/js/job-imposition.js" asp-append-version="true"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             LabelsMis.initJobArtworkUpload(document.getElementById('artwork-upload-form'));

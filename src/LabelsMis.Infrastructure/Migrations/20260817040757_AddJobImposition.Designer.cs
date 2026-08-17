@@ -3,6 +3,7 @@ using System;
 using LabelsMis.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LabelsMis.Infrastructure.Migrations
 {
     [DbContext(typeof(LabelsMisDbContext))]
-    partial class LabelsMisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260817040757_AddJobImposition")]
+    partial class AddJobImposition
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -878,8 +881,8 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasColumnType("numeric(18,4)");
 
                     b.Property<decimal?>("MarkupPctOverride")
-                        .HasPrecision(18, 8)
-                        .HasColumnType("numeric(18,8)");
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<DateTime?>("ModifiedAt")
                         .HasColumnType("timestamp with time zone");

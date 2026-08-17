@@ -35,6 +35,17 @@ public class Job : EntityBase
     /// waits in <see cref="JobStatus.Outsourced"/>, and moves to Rewound (ready to ship) on receipt.</summary>
     public bool IsOutsourced { get; private set; }
 
+    /// <summary>How this job's artwork is stepped onto a press frame. Null until prepress first saves
+    /// or runs the imposition — callers seed a default from the spec/estimate layout meanwhile.</summary>
+    public ImpositionTemplate? Imposition { get; private set; }
+
+    /// <summary>Storage key of the last imposed (step-and-repeat) PDF, generated from
+    /// <see cref="ImposedFromArtworkFilePath"/> at <see cref="ImposedAt"/>. The product's own artwork
+    /// stays the unimposed original.</summary>
+    public string? ImposedArtworkFilePath { get; private set; }
+    public DateTime? ImposedAt { get; private set; }
+    public string? ImposedFromArtworkFilePath { get; private set; }
+
     public IReadOnlyCollection<JobOperation> Operations => _operations;
     public IReadOnlyCollection<JobMaterialUsage> MaterialUsages => _materialUsages;
 
@@ -110,6 +121,32 @@ public class Job : EntityBase
         Spec = spec;
         SetModified(modifiedById, modifiedAt);
     }
+
+    /// <summary>Saves the imposition template prepress will run (does not touch the spec).</summary>
+    public void SetImposition(ImpositionTemplate template, Guid modifiedById, DateTime modifiedAt)
+    {
+        Imposition = template;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>Records a freshly generated imposed PDF and the artwork it was built from.</summary>
+    public void RecordImposedArtwork(string storageKey, string sourceArtworkKey, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (string.IsNullOrWhiteSpace(storageKey))
+        {
+            throw new ArgumentException("Imposed artwork storage key is required.", nameof(storageKey));
+        }
+
+        ImposedArtworkFilePath = storageKey.Trim();
+        ImposedFromArtworkFilePath = string.IsNullOrWhiteSpace(sourceArtworkKey) ? null : sourceArtworkKey.Trim();
+        ImposedAt = modifiedAt;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>The imposed PDF was built from a different artwork file than the product now carries.</summary>
+    public bool ImposedArtworkIsStale(string? currentArtworkKey) =>
+        ImposedArtworkFilePath is not null
+        && !string.Equals(ImposedFromArtworkFilePath, currentArtworkKey, StringComparison.Ordinal);
 
     /// <summary>
     /// Follows an unlocked sales-order edit that changed the line quantity. Planned quantity keeps
