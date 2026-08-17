@@ -2,8 +2,10 @@
 @using LabelsMis.Domain.Entities
 @using LabelsMis.Domain.Enums
 @using LabelsMis.Web.Services.Shipping
+@using LabelsMis.Web.Pages.Shared
 @{
     var isReadOnly = (bool)(ViewData["IsReadOnly"] ?? false);
+    var outsourceVendors = (IEnumerable<SelectListItem>?)ViewData["OutsourceVendors"] ?? Enumerable.Empty<SelectListItem>();
     var finishingOps = (IReadOnlyList<FinishingOperation>?)ViewData["FinishingOperations"] ?? Array.Empty<FinishingOperation>();
     var finishingStocks = (IReadOnlyList<Stock>?)ViewData["FinishingStocks"] ?? Array.Empty<Stock>();
     var substrates = (IEnumerable<SelectListItem>?)ViewData["Substrates"] ?? Enumerable.Empty<SelectListItem>();
@@ -22,7 +24,7 @@
     <script type="application/json" id="finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString(), dieId = o.DieId, setupMinutes = o.DefaultSetupMinutes, runSpeedFpm = o.DefaultRunSpeedFpm })))</script>
     <script type="application/json" id="spot-inks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(spotInks.Select(s => new { id = s.Id, code = s.Code, description = s.Description })))</script>
     <script type="application/json" id="finishing-stocks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingStocks.Select(s => new { id = s.Id, code = s.Code, description = s.Description })))</script>
-    <script type="application/json" id="dies-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(dies.Select(d => new { id = d.Id, description = d.Description, setupRating = d.SetupRating, speedRating = d.SpeedRating })))</script>
+    <script type="application/json" id="dies-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(dies.Select(d => new { id = d.Id, description = d.Description, setupRating = d.SetupRating, speedRating = d.SpeedRating, labelAcrossIn = d.LabelAcrossIn, labelAroundIn = d.LabelAroundIn, cornerRadiusIn = d.CornerRadiusIn, gutterAcrossIn = d.GutterAcrossIn, gutterAroundIn = d.GutterAroundIn, labelsAcross = d.LabelsAcross, labelsAround = d.LabelsAround })))</script>
     <script type="application/json" id="shrink-stocks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(shrinkStocks))</script>
 }
 <div class="estimate-workspace">
@@ -321,6 +323,7 @@
 
                 <div class="estimate-line-section">
                     <div class="estimate-line-section-title">Imposition &amp; waste</div>
+                    <div class="form-text die-layout-note d-none"></div>
                     <div class="row g-2">
                         <div class="col-6 col-md-3">
                             <label class="form-label" for="line-@(i)-max-across">Labels across <span class="form-text d-inline labels-across-max">(auto)</span></label>
@@ -474,6 +477,22 @@
                         <div class="estimate-line-section-title">Line notes</div>
                         <textarea name="Input.Lines[@i].LineNotes" class="form-control" rows="2" readonly="@isReadOnly">@line.LineNotes</textarea>
                     </div>
+                    <div class="estimate-line-section estimate-line-outsource">
+                        <div class="estimate-line-section-title">Outsourcing</div>
+                        <partial name="Shared/_OutsourceFields" model="@(new OutsourceFieldsModel($"Input.Lines[{i}]", outsourceVendors)
+                        {
+                            IsOutsourced = line.IsOutsourced,
+                            VendorId = line.OutsourceVendorId,
+                            QuoteNumber = line.OutsourceQuoteNumber,
+                            ExpectedIn = line.OutsourceExpectedIn,
+                            PrivateNotes = line.OutsourcePrivateNotes,
+                            ShowCost = false,
+                            PricingJson = line.OutsourcePricingJson,
+                            ReadOnly = isReadOnly,
+                            ToggleLabel = "Outsource this line",
+                            Hint = "Enter the vendor cost and our final price for each quantity in the pricing table below — the in-house calculation stays alongside for comparison."
+                        })" />
+                    </div>
                 </div>
 
                 @if (!isReadOnly)
@@ -551,7 +570,7 @@
         <div class="card-body py-2">
             @if (!isReadOnly)
             {
-                <div class="form-text mb-2">One-time, non-label charges (die creation, design time). Billed with the order — they never become production jobs.</div>
+                <div class="form-text mb-2">One-time charges (die creation, design time) and <strong>outsourced items</strong> — promo products, printed pieces, wide format — bought from a vendor. Billed with the order; they never become production jobs, and outsourced items are tracked and received on the production Outsourced page.</div>
             }
             <div id="estimate-charges">
                 @for (var c = 0; c < Model.Charges.Count; c++)
@@ -585,6 +604,21 @@
                                 <button type="button" class="btn btn-sm btn-outline-danger charge-remove" aria-label="Remove charge">×</button>
                             }
                         </div>
+                        <div class="col-12">
+                            <partial name="Shared/_OutsourceFields" model="@(new OutsourceFieldsModel($"Input.Charges[{c}]", outsourceVendors)
+                            {
+                                IsOutsourced = charge.IsOutsourced,
+                                VendorId = charge.OutsourceVendorId,
+                                QuoteNumber = charge.OutsourceQuoteNumber,
+                                VendorCost = charge.OutsourceCost,
+                                ExpectedIn = charge.OutsourceExpectedIn,
+                                PrivateNotes = charge.OutsourcePrivateNotes,
+                                ReadOnly = isReadOnly,
+                                ToggleLabel = "Outsourced item (promo, print, wide format)",
+                                CostInputClass = "charge-outsource-cost",
+                                MarginReadoutClass = "charge-outsource-margin"
+                            })" />
+                        </div>
                     </div>
                 }
             </div>
@@ -596,6 +630,9 @@
                     <option value="Design charge"></option>
                     <option value="Plate charge"></option>
                     <option value="Setup charge"></option>
+                    <option value="Promo item"></option>
+                    <option value="Printed piece"></option>
+                    <option value="Wide format print"></option>
                 </datalist>
             }
         </div>
@@ -604,7 +641,7 @@
 
 @if (!isReadOnly)
 {
-    <script type="text/template" id="charge-row-template">
+    <template id="charge-row-template">
         <div class="row g-2 align-items-end mb-2 estimate-charge-row">
             <div class="col-md-6">
                 <label class="form-label small mb-0">Description</label>
@@ -625,8 +662,16 @@
                 <span class="small fw-semibold charge-total">—</span>
                 <button type="button" class="btn btn-sm btn-outline-danger charge-remove" aria-label="Remove charge">×</button>
             </div>
+            <div class="col-12">
+                <partial name="Shared/_OutsourceFields" model="@(new OutsourceFieldsModel("Input.Charges[__CHARGE__]", outsourceVendors)
+                {
+                    ToggleLabel = "Outsourced item (promo, print, wide format)",
+                    CostInputClass = "charge-outsource-cost",
+                    MarginReadoutClass = "charge-outsource-margin"
+                })" />
+            </div>
         </div>
-    </script>
+    </template>
 }
     </div>
     <aside class="estimate-workspace-panel" aria-label="Estimate summary">

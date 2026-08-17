@@ -499,6 +499,18 @@ body {
   margin-bottom: 0.4rem;
 }
 
+/* Layout fields pinned to the line's die: selects stay enabled (their values must post) but
+   read as locked, matching Bootstrap's readonly text inputs. */
+.form-select.die-locked {
+  background-color: var(--bs-secondary-bg);
+  pointer-events: none;
+}
+
+.die-layout-note {
+  margin-top: -0.2rem;
+  margin-bottom: 0.4rem;
+}
+
 /* Compact form chrome across the estimate workspace, matching the tightened
    card style used on the invoice/die pages. */
 .estimate-workspace-main .form-control:not(.form-control-sm),

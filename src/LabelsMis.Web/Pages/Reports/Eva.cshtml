@@ -164,6 +164,7 @@
                         <th class="text-end">Est. cost</th>
                         <th class="text-end">Actual labor</th>
                         <th class="text-end">Actual matl</th>
+                        <th class="text-end">Outside</th>
                         <th class="text-end">Actual total</th>
                         <th class="text-end">Variance</th>
                         <th class="text-end">Est. margin</th>
@@ -185,6 +186,7 @@
                             <td class="text-end">@(row.EstimatedCost?.ToString("C2") ?? "—")</td>
                             <td class="text-end">@row.ActualLaborCost.ToString("C2")</td>
                             <td class="text-end">@row.ActualMaterialCost.ToString("C2")</td>
+                            <td class="text-end">@(row.ActualOutsideCost > 0 ? row.ActualOutsideCost.ToString("C2") : "—")</td>
                             <td class="text-end">@row.ActualTotalCost.ToString("C2")</td>
                             <td class="text-end @VarianceClass(row.CostVariance)">
                                 @(row.CostVariance?.ToString("C2") ?? "—")

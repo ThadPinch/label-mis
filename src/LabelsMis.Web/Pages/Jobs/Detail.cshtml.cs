@@ -5,6 +5,7 @@ using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Pages.Production;
 using LabelsMis.Web.Services.Artwork;
 using LabelsMis.Web.Services.Jobs;
+using LabelsMis.Web.Services.Rolls;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -14,7 +15,7 @@ using Microsoft.EntityFrameworkCore;
 namespace LabelsMis.Web.Pages.Jobs;
 
 [Authorize(Policy = TransactionPolicies.JobsRead)]
-public class DetailModel(JobService jobService, ArtworkService artworkService, LabelsMisDbContext db) : PageModel
+public class DetailModel(JobService jobService, ArtworkService artworkService, RollService rollService, LabelsMisDbContext db) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
     [BindProperty] public ScheduleJobInput ScheduleInput { get; set; } = new(DateOnly.FromDateTime(DateTime.UtcNow), null);
@@ -47,6 +48,12 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
     public string? ErrorMessage { get; private set; }
 
     public IReadOnlyList<FinishingTaskView> FinishingTasks { get; private set; } = [];
+
+    /// <summary>Consumable rolls for the material-usage pickers (loaded only when a picker is shown).</summary>
+    public IReadOnlyList<RollPickerOption> RollOptions { get; private set; } = [];
+
+    /// <summary>The substrate the job runs on (spec, else product default) — heads the roll picker.</summary>
+    public Guid SubstrateStockId { get; private set; }
     public bool CanAdvanceStage => CanOperate || CanChangeStatus;
     public bool CanEditOrderNotes => CanOperate || CanChangeStatus;
     public bool CanRecordCounts => CanOperate || CanChangeStatus;
@@ -280,6 +287,7 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
                 .Select(f => f.Id)
                 .ToListAsync(cancellationToken)).ToHashSet();
 
+        var materialByOperation = JobService.MaterialStockByFinishingOperation(Detail.Job.Spec);
         FinishingTasks = Detail.Operations
             .Where(o => o.Operation.OperationType == JobOperationType.Finishing)
             .Select(o => new FinishingTaskView(
@@ -288,8 +296,20 @@ public class DetailModel(JobService jobService, ArtworkService artworkService, L
                 o.Operation.Status,
                 o.Operation.PlannedMinutes,
                 o.Operation.ActualMinutes,
-                o.Operation.EquipmentId is Guid eid && laminationOpIds.Contains(eid)))
+                o.Operation.EquipmentId is Guid eid && laminationOpIds.Contains(eid),
+                o.Operation.EquipmentId is Guid mid && materialByOperation.TryGetValue(mid, out var stockId) ? stockId : null))
             .ToList();
+
+        SubstrateStockId = Detail.Job.Spec?.SubstrateId is { } specSubstrateId && specSubstrateId != Guid.Empty
+            ? specSubstrateId
+            : Detail.Substrate.Id;
+        var showsRollPicker = CanOperate
+            && (Detail.Job.Status == JobStatus.Queued
+                || (Detail.Job.Status == JobStatus.Printed && FinishingTasks.Any(t => t.IsLamination && !t.IsDone)));
+        if (showsRollPicker)
+        {
+            RollOptions = await rollService.ListPickerOptionsAsync(cancellationToken);
+        }
 
         if (CanOperate)
         {

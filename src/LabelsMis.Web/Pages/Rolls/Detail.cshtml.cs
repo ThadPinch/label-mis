@@ -1,4 +1,5 @@
 using LabelsMis.Web.Authorization;
+using LabelsMis.Web.Pages.Shared;
 using LabelsMis.Web.Services.Rolls;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -52,7 +53,7 @@ public class DetailModel(RollService rollService) : PageModel
         try
         {
             await rollService.SplitAsync(Id, new RollSplitInput([SplitWidth1, SplitWidth2], SplitLocation), cancellationToken);
-            return RedirectToPage("Index");
+            return this.RedirectToListPage();
         }
         catch (Exception ex)
         {

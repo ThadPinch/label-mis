@@ -20,6 +20,7 @@ public record EvaRow(
     decimal? EstimatedCost,
     decimal ActualLaborCost,
     decimal ActualMaterialCost,
+    decimal ActualOutsideCost,
     decimal ActualTotalCost,
     decimal? CostVariance,
     decimal? CostVariancePct,
@@ -57,6 +58,7 @@ public class EvaService(LabelsMisDbContext db)
         var jobs = await db.Jobs.AsNoTracking()
             .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.Customer)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.OutsourcedItem)
             .Include(j => j.Operations).ThenInclude(o => o.TimeEntries)
             .Include(j => j.MaterialUsages).ThenInclude(m => m.Stock)
             .AsSplitQuery()
@@ -104,6 +106,7 @@ public class EvaService(LabelsMisDbContext db)
                 estimated,
                 actual.TotalLaborCost,
                 actual.TotalMaterialCost,
+                actual.TotalOutsideCost,
                 actual.TotalCost,
                 variance,
                 variancePct,
@@ -135,14 +138,14 @@ public class EvaService(LabelsMisDbContext db)
     public static byte[] ToCsv(EvaReport report)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("Job,Customer,Product,Status,Qty ordered,Good,Waste,Revenue,Estimated cost,Actual labor,Actual material,Actual total,Variance,Variance %,Est margin %,Actual margin %");
+        sb.AppendLine("Job,Customer,Product,Status,Qty ordered,Good,Waste,Revenue,Estimated cost,Actual labor,Actual material,Actual outside,Actual total,Variance,Variance %,Est margin %,Actual margin %");
         foreach (var r in report.Rows)
         {
             sb.AppendLine(string.Join(',',
                 Csv(r.JobNumber), Csv(r.CustomerName), Csv(r.ProductDescription), r.Status.ToString(),
                 r.QuantityOrdered.ToString(), r.GoodCount.ToString(), r.WasteCount.ToString(),
                 r.Revenue.ToString(), r.EstimatedCost?.ToString() ?? "", r.ActualLaborCost.ToString(),
-                r.ActualMaterialCost.ToString(), r.ActualTotalCost.ToString(),
+                r.ActualMaterialCost.ToString(), r.ActualOutsideCost.ToString(), r.ActualTotalCost.ToString(),
                 r.CostVariance?.ToString() ?? "", r.CostVariancePct?.ToString() ?? "",
                 r.EstimatedMarginPct?.ToString() ?? "", r.ActualMarginPct?.ToString() ?? ""));
         }
@@ -181,7 +184,8 @@ public class EvaService(LabelsMisDbContext db)
             .Select(m => (m.QuantityUsedLf, m.Stock.CostPerMsi / 1000m * m.Stock.WidthIn))
             .ToList();
 
-        return JobCostCalculator.Calculate(laborEntries, materialEntries);
+        var outsideCost = job.IsOutsourced ? job.SalesOrderLine.OutsourcedItem?.VendorCost ?? 0m : 0m;
+        return JobCostCalculator.Calculate(laborEntries, materialEntries, outsideCost);
     }
 
     private static decimal? EstimateCost(Job job, ILookup<Guid, EstimateQuantityBreak> breaksByLine)
@@ -203,7 +207,8 @@ public class EvaService(LabelsMisDbContext db)
             .FirstOrDefault()
             ?? breaks.OrderByDescending(q => q.Quantity).First();
 
-        return breakRow.CalculatedCost;
+        // An outsourced quote's cost basis is the vendor cost, not the in-house calculation.
+        return breakRow.OutsourceCost ?? breakRow.CalculatedCost;
     }
 
     private static string Csv(string? value)

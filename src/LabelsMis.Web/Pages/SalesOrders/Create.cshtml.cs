@@ -6,6 +6,7 @@ using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Services.Artwork;
 using LabelsMis.Web.Services.Customers;
 using LabelsMis.Web.Services.Products;
+using LabelsMis.Web.Services.Outsourcing;
 using LabelsMis.Web.Services.SalesOrders;
 using LabelsMis.Web.Services.Shipping;
 using Microsoft.AspNetCore.Authorization;
@@ -39,19 +40,40 @@ public class SalesOrderPageInput
     public SalesOrderFormInput ToForm() => new(
         CustomerId, CustomerPoNumber, RequestedShipDate, Notes,
         Lines.Select(l => new SalesOrderLineInput(
-            l.Id, l.ProductId, l.SourceEstimateLineId, l.Quantity, l.UnitPrice, l.LineNotes, l.Description, l.BuildSpec())).ToList(),
+            l.Id, l.ProductId, l.SourceEstimateLineId, l.Quantity, l.UnitPrice, l.LineNotes, l.Description, l.BuildSpec(), l.ToOutsource())).ToList(),
         ShippingMethodId,
         ShippingCost,
         new ShippingAddress(ShipToName, ShipToStreet1, ShipToStreet2, ShipToCity, ShipToState, ShipToZip, ShipToCountry),
         BillingNotes,
         Charges
             .Where(c => !string.IsNullOrWhiteSpace(c.Description))
-            .Select(c => new SalesOrderChargeInput(c.Id, c.Description!, c.Quantity, c.UnitPrice, c.SourceEstimateChargeId))
+            .Select(c => new SalesOrderChargeInput(c.Id, c.Description!, c.Quantity, c.UnitPrice, c.SourceEstimateChargeId, c.ToOutsource()))
             .ToList());
 }
 
-/// <summary>A flat, non-label charge row (die creation, design time) on the order form.</summary>
-public class SalesOrderChargePageInput
+/// <summary>Outsourcing fields shared by order lines and charges on the order form.</summary>
+public interface IOutsourcePageInput
+{
+    bool IsOutsourced { get; }
+    Guid? OutsourceVendorId { get; }
+    string? OutsourceQuoteNumber { get; }
+    decimal? OutsourceCost { get; }
+    DateOnly? OutsourceExpectedIn { get; }
+    string? OutsourcePrivateNotes { get; }
+}
+
+public static class OutsourcePageInputExtensions
+{
+    public static OutsourceItemInput? ToOutsource(this IOutsourcePageInput input) => input.IsOutsourced
+        ? new OutsourceItemInput(
+            new OutsourceDetails(input.OutsourceVendorId, input.OutsourceQuoteNumber, input.OutsourceExpectedIn, input.OutsourcePrivateNotes),
+            input.OutsourceCost)
+        : null;
+}
+
+/// <summary>A flat, non-label row on the order form: a one-time charge (die creation, design time)
+/// or an outsourced item (promo, print, wide format) bought from a vendor.</summary>
+public class SalesOrderChargePageInput : IOutsourcePageInput
 {
     public Guid? Id { get; set; }
     public Guid? SourceEstimateChargeId { get; set; }
@@ -64,6 +86,17 @@ public class SalesOrderChargePageInput
 
     [Range(0, 1000000)]
     public decimal UnitPrice { get; set; }
+
+    public bool IsOutsourced { get; set; }
+    public Guid? OutsourceVendorId { get; set; }
+    [StringLength(100)] public string? OutsourceQuoteNumber { get; set; }
+    [Range(0, 100000000)] public decimal? OutsourceCost { get; set; }
+    [DataType(DataType.Date)] public DateOnly? OutsourceExpectedIn { get; set; }
+    [StringLength(2000)] public string? OutsourcePrivateNotes { get; set; }
+
+    /// <summary>Display-only: vendor tracking on an existing order (sent / received), for the row badge.</summary>
+    public string? OutsourceStatusLabel { get; set; }
+    public bool OutsourceLocked { get; set; }
 }
 
 public class OrderSpotPageInput
@@ -83,10 +116,25 @@ public class OrderFinishingPageInput
     public decimal? RunSpeedFpmOverride { get; set; }
 }
 
-public class SalesOrderLinePageInput
+public class SalesOrderLinePageInput : IOutsourcePageInput
 {
     /// <summary>Existing line id, round-tripped so saves update lines in place (jobs reference them).</summary>
     public Guid? Id { get; set; }
+
+    /// <summary>Bought from an outside vendor instead of run in-house; the job (if any) is routed to
+    /// the vendor and moves to ready-to-ship on receipt.</summary>
+    public bool IsOutsourced { get; set; }
+    public Guid? OutsourceVendorId { get; set; }
+    [StringLength(100)] public string? OutsourceQuoteNumber { get; set; }
+    /// <summary>The vendor's cost for the whole line (all units).</summary>
+    [Range(0, 100000000)] public decimal? OutsourceCost { get; set; }
+    [DataType(DataType.Date)] public DateOnly? OutsourceExpectedIn { get; set; }
+    [StringLength(2000)] public string? OutsourcePrivateNotes { get; set; }
+
+    /// <summary>Display-only: vendor tracking on an existing order (sent / received), for the row badge.</summary>
+    public string? OutsourceStatusLabel { get; set; }
+    /// <summary>Display-only: the outsource switch can no longer be flipped (job exists / vendor involved).</summary>
+    public bool OutsourceLocked { get; set; }
 
     public Guid ProductId { get; set; }
     public Guid? SourceEstimateLineId { get; set; }
@@ -196,6 +244,7 @@ public class CreateModel(
     ArtworkService artworkService,
     ShippingMethodService shippingMethodService,
     CustomerService customerService,
+    OutsourceService outsourceService,
     LabelsMisDbContext db) : PageModel
 {
     [BindProperty] public SalesOrderPageInput Input { get; set; } = new();
@@ -253,6 +302,9 @@ public class CreateModel(
     private async Task LoadLookupsAsync(Guid? customerId, CancellationToken cancellationToken)
     {
         ViewData["ShowProductFilter"] = true;
+        ViewData["OutsourceVendors"] = await outsourceService.GetVendorOptionsAsync(
+            Input.Lines.Select(l => l.OutsourceVendorId).Concat(Input.Charges.Select(c => c.OutsourceVendorId)),
+            cancellationToken);
         ViewData["ShippingMethods"] = await shippingMethodService.GetSelectableAsync(
             Input.ShippingMethodId, cancellationToken);
         ViewData["Customers"] = await db.Customers.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.Name)

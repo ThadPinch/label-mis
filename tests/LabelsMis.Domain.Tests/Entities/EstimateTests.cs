@@ -117,6 +117,55 @@ public class EstimateTests
             .WithMessage("*at least one line*");
     }
 
+    [Fact]
+    public void MarkSent_StampsFirstSendTime()
+    {
+        var estimate = CreateDraftWithLine();
+
+        estimate.MarkSent("/tmp/test.pdf", UserId, Now);
+
+        estimate.SentAt.Should().Be(Now);
+        estimate.IsSentToCustomer.Should().BeTrue();
+    }
+
+    [Fact]
+    public void MarkWon_FromDraft_IsWonButNotSentToCustomer()
+    {
+        var estimate = CreateDraftWithLine();
+
+        estimate.MarkWon(UserId, Now);
+
+        estimate.Status.Should().Be(EstimateStatus.Won);
+        estimate.IsSentToCustomer.Should().BeFalse("it was never emailed");
+    }
+
+    [Fact]
+    public void RecordSentToCustomer_OnWonWithoutSend_MarksSentAndKeepsFirstTime()
+    {
+        var estimate = CreateDraftWithLine();
+        estimate.MarkWon(UserId, Now);
+        var later = Now.AddDays(1);
+
+        estimate.RecordSentToCustomer("/tmp/est.pdf", UserId, later);
+        estimate.RecordSentToCustomer("/tmp/est-2.pdf", UserId, later.AddDays(1));
+
+        estimate.SentAt.Should().Be(later, "the first send time is kept");
+        estimate.PdfFilePath.Should().Be("/tmp/est.pdf");
+        estimate.Status.Should().Be(EstimateStatus.Won, "sending later does not change a won estimate");
+    }
+
+    [Fact]
+    public void BeginRevision_ResetsSentToCustomer()
+    {
+        var estimate = CreateDraftWithLine();
+        estimate.MarkSent("/tmp/test.pdf", UserId, Now);
+
+        estimate.BeginRevision(Guid.NewGuid(), "{}", UserId, Now);
+
+        estimate.IsSentToCustomer.Should().BeFalse("the new revision has not gone to the customer yet");
+        estimate.Status.Should().Be(EstimateStatus.Draft);
+    }
+
     private static Estimate CreateDraftWithLine()
     {
         var estimate = Estimate.CreateDraft(

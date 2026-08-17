@@ -1,6 +1,7 @@
 using LabelsMis.Domain.Enums;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
+using LabelsMis.Web.Pages.Shared;
 using LabelsMis.Web.Services.PurchaseOrders;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -67,7 +68,7 @@ public class EditModel(PurchaseOrderService purchaseOrderService, LabelsMisDbCon
     {
         if (!User.IsInRole("Admin") && !User.IsInRole("Scheduler")) return Forbid();
         await purchaseOrderService.DeleteDraftAsync(Id, cancellationToken);
-        return RedirectToPage("Index");
+        return this.RedirectToListPage();
     }
 
     public async Task<IActionResult> OnGetPdfAsync(CancellationToken cancellationToken)

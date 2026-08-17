@@ -15,6 +15,8 @@ public class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
         builder.Property(s => s.Code).HasMaxLength(50).IsRequired();
         builder.Property(s => s.Terms).HasMaxLength(100).IsRequired();
         builder.Property(s => s.AccountNumber).HasMaxLength(100);
+        builder.Property(s => s.IsOutsourceVendor).IsRequired().HasDefaultValue(false);
+        builder.Property(s => s.OutsourceNotes).HasMaxLength(2000);
 
         builder.HasIndex(s => s.Code).IsUnique();
 

@@ -303,6 +303,45 @@ else if (Model.IsLocked)
             </div>
         }
 
+        @if (Model.OutsourcedItems.Count > 0)
+        {
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            <div class="card">
+                <div class="card-header py-1 small fw-semibold d-flex justify-content-between align-items-center">
+                    <span>Outsourced items</span>
+                    <a asp-page="/Production/Outsourced" asp-route-Search="@Model.Order?.OrderNumber" class="small">Track</a>
+                </div>
+                <ul class="list-group list-group-flush small">
+                    @foreach (var item in Model.OutsourcedItems)
+                    {
+                        <li class="list-group-item py-1">
+                            <div class="d-flex justify-content-between align-items-center gap-1">
+                                <span class="text-truncate" title="@item.Description">
+                                    @if (item.JobId is { } jobId)
+                                    {
+                                        <a asp-page="/Jobs/Detail" asp-route-id="@jobId">@item.JobNumber</a><span class="text-muted"> · </span>
+                                    }
+                                    @item.Description
+                                </span>
+                                <span class="badge @(item.Status == LabelsMis.Web.Services.Outsourcing.OutsourceItemStatus.Received ? "text-bg-success" : item.IsOverdue(today) ? "text-bg-danger" : "text-bg-info")">
+                                    @(item.Status switch
+                                    {
+                                        LabelsMis.Web.Services.Outsourcing.OutsourceItemStatus.Received => "Received",
+                                        LabelsMis.Web.Services.Outsourcing.OutsourceItemStatus.PartiallyReceived => $"{item.QuantityReceived:N0} of {item.Quantity:N0}",
+                                        LabelsMis.Web.Services.Outsourcing.OutsourceItemStatus.AtVendor => "At vendor",
+                                        _ => "Not sent"
+                                    })
+                                </span>
+                            </div>
+                            <div class="text-muted">
+                                @(item.VendorName ?? "No vendor")@(item.ExpectedIn is { } exp ? $" · due in {exp:yyyy-MM-dd}" : "")@(item.VendorCost is { } vc ? $" · cost {vc:C2}" : "")
+                            </div>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+
         @if (Model.Shipments.Any())
         {
             <div class="card">

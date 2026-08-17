@@ -31,6 +31,9 @@ public class EstimateLineConfiguration : IEntityTypeConfiguration<EstimateLine>
         builder.Property(l => l.ShrinkLayflatIn).HasPrecision(10, 4);
         builder.Property(l => l.MaxLabelsAcrossOverride);
         builder.Property(l => l.LabelOrientationOverride);
+        builder.Property(l => l.IsOutsourced).IsRequired().HasDefaultValue(false);
+        builder.Property(l => l.OutsourceQuoteNumber).HasMaxLength(100);
+        builder.Property(l => l.OutsourcePrivateNotes).HasMaxLength(2000);
 
         builder.HasIndex(l => new { l.EstimateId, l.LineNumber }).IsUnique();
         builder.HasIndex(l => l.SourceProductId);
@@ -44,6 +47,11 @@ public class EstimateLineConfiguration : IEntityTypeConfiguration<EstimateLine>
             .WithMany()
             .HasForeignKey(l => l.SourceProductId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(l => l.OutsourceVendor)
+            .WithMany()
+            .HasForeignKey(l => l.OutsourceVendorId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.Navigation(l => l.QuantityBreaks).HasField("_quantityBreaks");
     }

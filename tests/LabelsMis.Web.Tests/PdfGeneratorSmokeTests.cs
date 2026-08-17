@@ -153,7 +153,29 @@ public class PdfGeneratorSmokeTests
             ScheduledPressName = null
         };
 
-        var bytes = await generator.GenerateAsync(detail, new[] { detail, sibling });
+        // An outsourced sibling: routed to the vendor, only the receiving steps, vendor facts on the ticket.
+        var outsourcedJob = Job.CreatePlanned(
+            Guid.NewGuid(), "J-1044", Guid.NewGuid(), Guid.NewGuid(),
+            1000, 1050, new DateOnly(2026, 8, 12), 2, null, null, UserId, Now);
+        outsourcedJob.MarkOutsourced(UserId, Now);
+        var outsourced = detail with
+        {
+            Job = outsourcedJob,
+            ProductDescription = "Vendor-run promo label",
+            ProductSku = "SKU-PROMO",
+            ScheduledPressName = null,
+            Route = new[]
+            {
+                new JobTicketRouteStep(1, JobOperationType.Inspection, "QC inspection", 15m),
+                new JobTicketRouteStep(2, JobOperationType.Pack, "Pack", 15m),
+                new JobTicketRouteStep(3, JobOperationType.Ship, "Ship", 10m)
+            },
+            Outsource = new JobOutsourceInfo(
+                Guid.NewGuid(), "Promo Vendor Co", "VQ-77", 120m, new DateOnly(2026, 8, 9),
+                new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc), null, 400, "internal only — must not print")
+        };
+
+        var bytes = await generator.GenerateAsync(detail, new[] { detail, sibling, outsourced });
 
         AssertLoadablePdf(bytes, minPages: 1, "job-ticket.pdf");
     }
@@ -202,6 +224,39 @@ public class PdfGeneratorSmokeTests
         var bytes = await generator.GenerateBytesAsync(detail);
 
         AssertLoadablePdf(bytes, minPages: 1, "invoice.pdf");
+    }
+
+    [Fact]
+    public async Task RollLabelPdf_renders_single_label_page()
+    {
+        var generator = new RollLabelPdfGenerator(new StubGeneralSettingsService(BrandedSettings()));
+
+        var model = new RollLabelModel(
+            "R-2026-0042-A",
+            "BOPP-WM-26",
+            "White matte BOPP 2.6 mil, permanent acrylic adhesive, 40# semi-gloss liner — premium grade",
+            "Substrate",
+            "White matte BOPP",
+            "Permanent acrylic",
+            "40# SCK",
+            2.6m,
+            "Great Rolls Inc",
+            "GRI-77812",
+            "LOT-2026-0815-B",
+            "PO-2026-0042",
+            6.5m,
+            5000m,
+            4250m,
+            Now,
+            "Rack A3 / Shelf 2",
+            "Available");
+
+        var bytes = await generator.GenerateBytesAsync(model);
+
+        AssertLoadablePdf(bytes, minPages: 1, "roll-label.pdf");
+        using var pdf = PdfDocument.Load(bytes);
+        pdf.PageCount.Should().Be(1);
+        pdf.Pages[0].Size.Should().Be(RollLabelPdfGenerator.LabelSize);
     }
 
     private static GeneralSettings BrandedSettings()

@@ -2,11 +2,13 @@ using LabelsMis.Domain.Enums;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
+using LabelsMis.Web.Pages.Shared;
 using LabelsMis.Web.Services.Artwork;
 using LabelsMis.Web.Services.Customers;
 using LabelsMis.Web.Services.Estimates;
 using LabelsMis.Web.Services.Invoices;
 using LabelsMis.Web.Services.Jobs;
+using LabelsMis.Web.Services.Outsourcing;
 using LabelsMis.Web.Services.SalesOrders;
 using LabelsMis.Web.Services.Shipping;
 using Microsoft.AspNetCore.Authorization;
@@ -39,6 +41,7 @@ public class EditModel(
     ShippingMethodService shippingMethodService,
     CustomerService customerService,
     InvoiceService invoiceService,
+    OutsourceService outsourceService,
     LabelsMisDbContext db) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
@@ -88,6 +91,7 @@ public class EditModel(
     public string? DefaultInvoiceEmail { get; private set; }
 
     public IReadOnlyList<LineJobInfo> LineJobs { get; private set; } = [];
+    public IReadOnlyList<OutsourcedItemRow> OutsourcedItems { get; private set; } = [];
     public IReadOnlyList<OrderShipmentInfo> Shipments { get; private set; } = [];
     public IReadOnlyList<OrderInvoiceInfo> Invoices { get; private set; } = [];
     public IReadOnlyList<OrderDocumentInfo> Documents { get; private set; } = [];
@@ -164,6 +168,7 @@ public class EditModel(
                 .FirstOrDefaultAsync(cancellationToken);
         }
         await LoadLineJobsAsync(cancellationToken);
+        OutsourcedItems = await outsourceService.ListForOrderAsync(Id, cancellationToken);
         ApplyLineJobsToInput();
         await LoadLineDetailsAsync(cancellationToken);
         await LoadRelatedDocumentsAsync(cancellationToken);
@@ -172,7 +177,8 @@ public class EditModel(
         return Page();
     }
 
-    /// <summary>Marks each line input with its existing job so the form can pin the product select.</summary>
+    /// <summary>Marks each line input with its existing job so the form can pin the product select
+    /// (and lock the outsource switch — a job is already routed one way or the other).</summary>
     private void ApplyLineJobsToInput()
     {
         foreach (var lineJob in LineJobs)
@@ -182,9 +188,19 @@ public class EditModel(
             {
                 line.HasJob = true;
                 line.JobNumber = lineJob.JobNumber;
+                line.OutsourceLocked = true;
             }
         }
     }
+
+    private static string? OutsourceStatusLabel(Domain.Entities.OutsourcedItem? item) => item switch
+    {
+        null => null,
+        { IsComplete: true } => "Received",
+        { QuantityReceived: > 0 } => $"Received {item.QuantityReceived:N0} so far",
+        { IsSent: true } => "At vendor",
+        _ => "Not yet sent"
+    };
 
     private async Task LoadLineDetailsAsync(CancellationToken cancellationToken)
     {
@@ -396,7 +412,15 @@ public class EditModel(
             SourceEstimateChargeId = c.SourceEstimateChargeId,
             Description = c.Description,
             Quantity = c.Quantity,
-            UnitPrice = c.UnitPrice
+            UnitPrice = c.UnitPrice,
+            IsOutsourced = c.OutsourcedItem is not null,
+            OutsourceVendorId = c.OutsourcedItem?.VendorId,
+            OutsourceQuoteNumber = c.OutsourcedItem?.QuoteNumber,
+            OutsourceCost = c.OutsourcedItem?.VendorCost,
+            OutsourceExpectedIn = c.OutsourcedItem?.ExpectedIn,
+            OutsourcePrivateNotes = c.OutsourcedItem?.PrivateNotes,
+            OutsourceStatusLabel = OutsourceStatusLabel(c.OutsourcedItem),
+            OutsourceLocked = c.OutsourcedItem is { CanBeRemoved: false }
         }).ToList(),
         Lines = order.Lines.OrderBy(l => l.LineNumber).Select(l =>
         {
@@ -410,6 +434,14 @@ public class EditModel(
                 UnitPrice = l.UnitPrice,
                 LineNotes = l.LineNotes,
                 Description = l.Description,
+                IsOutsourced = l.OutsourcedItem is not null,
+                OutsourceVendorId = l.OutsourcedItem?.VendorId,
+                OutsourceQuoteNumber = l.OutsourcedItem?.QuoteNumber,
+                OutsourceCost = l.OutsourcedItem?.VendorCost,
+                OutsourceExpectedIn = l.OutsourcedItem?.ExpectedIn,
+                OutsourcePrivateNotes = l.OutsourcedItem?.PrivateNotes,
+                OutsourceStatusLabel = OutsourceStatusLabel(l.OutsourcedItem),
+                OutsourceLocked = l.OutsourcedItem is { CanBeRemoved: false },
                 Unwind = spec?.Unwind,
                 HasArtwork = !string.IsNullOrWhiteSpace(l.Product.ArtworkFilePath),
                 ArtworkFileName = string.IsNullOrWhiteSpace(l.Product.ArtworkFilePath)
@@ -515,7 +547,7 @@ public class EditModel(
         try
         {
             await salesOrderService.DeleteAsync(Id, cancellationToken);
-            return RedirectToPage("Index");
+            return this.RedirectToListPage();
         }
         catch (Exception ex)
         {
@@ -737,6 +769,9 @@ public class EditModel(
 
     private async Task LoadLookupsAsync(Guid customerId, CancellationToken cancellationToken)
     {
+        ViewData["OutsourceVendors"] = await outsourceService.GetVendorOptionsAsync(
+            Input.Lines.Select(l => l.OutsourceVendorId).Concat(Input.Charges.Select(c => c.OutsourceVendorId)),
+            cancellationToken);
         ViewData["ShippingMethods"] = await shippingMethodService.GetSelectableAsync(
             Input.ShippingMethodId, cancellationToken);
         ViewData["Customers"] = await db.Customers.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.Name)

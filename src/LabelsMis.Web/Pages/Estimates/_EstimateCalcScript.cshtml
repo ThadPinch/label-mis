@@ -54,6 +54,49 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 
+    // ---- Outsourced lines: per-quantity vendor cost + final price live in a hidden JSON field
+    // ({"1000":{"cost":120,"price":250}}) next to the line's outsource toggle; the calculator still
+    // runs and its price is shown beside the entered one for comparison.
+    const readOnlyMode = !form;
+    const isLineOutsourced = (lineEl) => !!lineEl.querySelector('.outsource-toggle')?.checked;
+
+    const getOutsourcePricing = (lineEl) => {
+        const raw = lineEl.querySelector('.outsource-pricing-json')?.value;
+        if (!raw) return {};
+        try { return JSON.parse(raw) || {}; } catch { return {}; }
+    };
+
+    const setOutsourcePricing = (lineEl, map) => {
+        const input = lineEl.querySelector('.outsource-pricing-json');
+        if (!input) return;
+        const cleaned = {};
+        Object.keys(map).forEach(k => {
+            const e = map[k] || {};
+            if (e.cost !== undefined && e.cost !== null && !Number.isNaN(Number(e.cost))
+                || e.price !== undefined && e.price !== null && !Number.isNaN(Number(e.price))) {
+                cleaned[k] = { cost: e.cost ?? null, price: e.price ?? null };
+            }
+        });
+        input.value = Object.keys(cleaned).length ? JSON.stringify(cleaned) : '';
+    };
+
+    // The quantities an outsourced line prices: the calculator's breaks when it ran, otherwise the
+    // entered quantity slots (a label the press can't run is a classic reason to outsource).
+    const outsourcedQuantities = (lineEl, lineResult) => {
+        const fromCalc = (lineResult?.quantityBreaks || []).map(b => Number(b.quantity));
+        if (fromCalc.length) return fromCalc;
+        const qtys = [...lineEl.querySelectorAll('.quantity-input')]
+            .map(i => parseInt(i.value, 10)).filter(q => Number.isFinite(q) && q > 0);
+        return [...new Set(qtys)].sort((a, b) => a - b);
+    };
+
+    // Final (total) price for a quantity on an outsourced line, or null when not entered yet.
+    const outsourcedTotalPrice = (lineEl, qty) => {
+        const e = getOutsourcePricing(lineEl)[String(qty)];
+        const price = e ? Number(e.price) : NaN;
+        return Number.isFinite(price) ? price : null;
+    };
+
     const renderCostLineRows = (items) => (items || []).map(item => {
         const qty = fmtQty(item.quantity, item.unit === 'MSI' || item.unit === 'minutes' ? 1 : 0);
         const unitCost = fmtMoney(item.unitCost, item.unitCost < 1 ? 4 : 2);
@@ -402,6 +445,12 @@
             descEl.textContent = (descInput?.value || '').trim() || 'Untitled line';
         }
         if (!previewEl) return;
+        if (isLineOutsourced(lineEl)) {
+            const qtys = outsourcedQuantities(lineEl, lineResult);
+            const topPrice = qtys.length ? outsourcedTotalPrice(lineEl, qtys[qtys.length - 1]) : null;
+            previewEl.textContent = topPrice === null ? 'Outsourced — price?' : `${fmtMoney(topPrice)} · outsourced`;
+            return;
+        }
         const breaks = lineResult?.quantityBreaks || [];
         if (breaks.length === 0) {
             previewEl.textContent = '—';
@@ -432,6 +481,17 @@
             const priceRaw = Number(row.querySelector('.charge-price')?.value);
             const totalEl = row.querySelector('.charge-total');
             if (totalEl) totalEl.textContent = Number.isFinite(priceRaw) ? fmtMoney(qty * priceRaw) : '—';
+
+            // Outsourced charge: margin on our price against the vendor's cost for the line.
+            const marginEl = row.querySelector('.charge-outsource-margin');
+            if (marginEl) {
+                const cost = Number(row.querySelector('.charge-outsource-cost')?.value);
+                const total = Number.isFinite(priceRaw) ? qty * priceRaw : NaN;
+                marginEl.textContent = Number.isFinite(cost) && Number.isFinite(total) && total > 0
+                    ? fmtPct((total - cost) / total)
+                    : '—';
+                marginEl.classList.toggle('text-danger', Number.isFinite(cost) && Number.isFinite(total) && total > 0 && total < cost);
+            }
         });
     };
 
@@ -451,6 +511,31 @@
             const lineNum = idx + 1;
             const desc = lineEl.querySelector('input[name$=".ProductDescription"]')?.value?.trim();
             const title = desc ? `Line ${lineNum}: ${escapeHtml(desc)}` : `Line ${lineNum}`;
+
+            if (isLineOutsourced(lineEl)) {
+                const qtys = outsourcedQuantities(lineEl, result);
+                if (qtys.length === 0) {
+                    return `<div class="estimate-total-line mb-3">
+                        <div class="estimate-total-line-title fw-semibold">${title} <span class="badge text-bg-info">Outsourced</span></div>
+                        <p class="text-muted small mb-0">Enter quantities to price.</p>
+                    </div>`;
+                }
+                const rows = qtys.map(q => {
+                    const price = outsourcedTotalPrice(lineEl, q);
+                    return `<tr>
+                        <td>${fmtQty(q)}</td>
+                        <td class="text-end">${price === null ? '—' : fmtMoney(price / q, 4)}</td>
+                        <td class="text-end">${price === null ? '—' : fmtMoney(price)}</td>
+                    </tr>`;
+                }).join('');
+                return `<div class="estimate-total-line mb-3">
+                    <div class="estimate-total-line-title fw-semibold">${title} <span class="badge text-bg-info">Outsourced</span></div>
+                    <table class="table table-sm align-middle mb-0">
+                        <thead><tr><th>Qty</th><th class="text-end">Unit</th><th class="text-end">Total</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
+            }
 
             if (breaks.length === 0) {
                 return `<div class="estimate-total-line mb-3">
@@ -519,9 +604,11 @@
 
     addChargeBtn?.addEventListener('click', () => {
         if (!chargesContainer || !chargeTemplateEl) return;
-        const holder = document.createElement('div');
-        holder.innerHTML = chargeTemplateEl.textContent.trim();
-        chargesContainer.appendChild(holder.firstElementChild);
+        // <template> element: clone its content (a text/template script would leave Razor partials unrendered).
+        const row = chargeTemplateEl.content
+            ? chargeTemplateEl.content.firstElementChild.cloneNode(true)
+            : (() => { const holder = document.createElement('div'); holder.innerHTML = chargeTemplateEl.textContent.trim(); return holder.firstElementChild; })();
+        chargesContainer.appendChild(row);
         reindexCharges();
         updateEstimateTotals();
     });
@@ -540,6 +627,14 @@
     });
 
     updateChargeRowTotals();
+
+    // Flipping a line's outsource switch swaps its pricing table between calc and vendor pricing.
+    linesContainer.addEventListener('outsource:toggle', event => {
+        const lineEl = event.target.closest('.estimate-line');
+        if (!lineEl) return;
+        const cached = lineResultsCache.get(String(lineEl.dataset.lineIndex));
+        renderLineResults(lineEl, cached || { quantityBreaks: [], warnings: [], errors: [] });
+    });
 
     const getShippingCost = () => {
         const value = Number(shippingCostInput?.value);
@@ -934,11 +1029,113 @@
         if (speedInput) speedInput.value = die?.speedRating != null ? String(die.speedRating) : '';
     };
 
+    // --- Die-locked layout -------------------------------------------------------------
+    // A line whose die-cut row names a die must lay out exactly like that die: its label size,
+    // gutters and corner radius, its labels-across count, and its orientation are all forced
+    // from the die record and locked until the die is changed or removed. The auto-fit tools
+    // (Auto orientation, Auto across) are only for estimating a die we don't have yet.
+    const DIE_DIM_FIELDS = [
+        ['LabelAcrossIn', 'labelAcrossIn'],
+        ['LabelAroundIn', 'labelAroundIn'],
+        ['CornerRadiusIn', 'cornerRadiusIn'],
+        ['GutterAcrossIn', 'gutterAcrossIn'],
+        ['GutterAroundIn', 'gutterAroundIn']
+    ];
+    const ORIENTATION_AS_ENTERED = '0';
+
+    const getLineDie = (lineEl) => {
+        if (!lineEl) return null;
+        for (const sel of lineEl.querySelectorAll('.finishing-die-select')) {
+            const die = dieById.get(sel.value);
+            if (die) return die;
+        }
+        return null;
+    };
+
+    // The across select is rebuilt from the calc's computed max, which can be lower than the
+    // die's cavity count (e.g. a 16-across die on a line still showing 4" defaults) — make sure
+    // the die's count is always selectable.
+    const ensureAcrossOption = (sel, n) => {
+        if (!sel || !(n >= 1)) return;
+        const value = String(n);
+        if ([...sel.options].some(o => o.value === value)) return;
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = `${n} up`;
+        const next = [...sel.options].find(o => o.value !== '' && parseInt(o.value, 10) > n);
+        sel.insertBefore(opt, next ?? null);
+    };
+
+    const setLockedSelect = (sel, locked, keepValue) => {
+        if (!sel) return;
+        [...sel.options].forEach(opt => { opt.disabled = locked && opt.value !== keepValue; });
+        sel.classList.toggle('die-locked', locked);
+        if (locked) sel.setAttribute('tabindex', '-1');
+        else sel.removeAttribute('tabindex');
+    };
+
+    const snapLineToDie = (lineEl, die) => {
+        DIE_DIM_FIELDS.forEach(([field, prop]) => {
+            const input = lineEl.querySelector(`[name$=".${field}"]`);
+            if (input && die[prop] != null) input.value = String(die[prop]);
+        });
+        const acrossSel = lineEl.querySelector('.labels-across-select');
+        if (acrossSel) {
+            ensureAcrossOption(acrossSel, die.labelsAcross);
+            acrossSel.value = String(die.labelsAcross);
+        }
+        const orientationSel = lineEl.querySelector('.orientation-select');
+        if (orientationSel) orientationSel.value = ORIENTATION_AS_ENTERED;
+    };
+
+    // Applies (or clears) the locked state. Selects are never `disabled` — their values must
+    // still post — so the lock is every other option disabled + a readonly look.
+    const syncDieLock = (lineEl, imposition) => {
+        if (!lineEl) return;
+        const die = getLineDie(lineEl);
+        const locked = !!die;
+        DIE_DIM_FIELDS.forEach(([field]) => {
+            const input = lineEl.querySelector(`[name$=".${field}"]`);
+            if (!input) return;
+            input.readOnly = locked;
+            input.classList.toggle('die-locked', locked);
+        });
+        const acrossSel = lineEl.querySelector('.labels-across-select');
+        if (acrossSel && locked) ensureAcrossOption(acrossSel, die.labelsAcross);
+        setLockedSelect(acrossSel, locked, locked ? String(die.labelsAcross) : null);
+        setLockedSelect(lineEl.querySelector('.orientation-select'), locked, locked ? ORIENTATION_AS_ENTERED : null);
+
+        const note = lineEl.querySelector('.die-layout-note');
+        if (note) {
+            note.classList.toggle('d-none', !locked);
+            note.classList.remove('text-warning');
+            if (locked) {
+                const pressMax = Number(imposition?.maxLabelsAcross);
+                if (Number.isFinite(pressMax) && pressMax >= 1 && pressMax < die.labelsAcross) {
+                    note.classList.add('text-warning');
+                    note.textContent = `⚠ Layout locked to die: ${die.description} — ${die.labelsAcross} across, but the press fits only ${pressMax} across. The die may be too wide for the selected press.`;
+                } else {
+                    note.textContent = `Layout locked to die: ${die.description} — ${die.labelsAcross} across. Change or remove the die on the die-cut row to edit.`;
+                }
+            } else {
+                note.textContent = '';
+            }
+        }
+    };
+
+    const applyDieToLine = (lineEl) => {
+        if (!lineEl) return;
+        const die = getLineDie(lineEl);
+        if (die) snapLineToDie(lineEl, die);
+        syncDieLock(lineEl);
+    };
+
     const wireFinishingDieSelect = (sel) => {
         if (!sel) return;
         sel.addEventListener('change', () => {
             const item = sel.closest('.finishing-item');
             if (item) applyDieRatingsToFinishingItem(item);
+            applyDieToLine(sel.closest('.estimate-line'));
             calculate();
         });
     };
@@ -976,7 +1173,10 @@
         btn.addEventListener('click', () => {
             const lineEl = btn.closest('.estimate-line');
             btn.closest('.finishing-item')?.remove();
-            if (lineEl) renumberFinishing(lineEl);
+            if (lineEl) {
+                renumberFinishing(lineEl);
+                syncDieLock(lineEl);
+            }
             calculate();
         });
     };
@@ -1041,9 +1241,11 @@
         });
         item.querySelector('.finishing-stock-select')?.addEventListener('change', calculate);
         wireFinishingDieSelect(item.querySelector('.finishing-die-select'));
-        // A die attached at add time (e.g. pulled from a product) wins over any carried overrides.
+        // A die attached at add time (e.g. pulled from a product) wins over any carried overrides,
+        // and locks the line's layout to the die.
         if (dieId && dieById.has(String(dieId))) {
             applyDieRatingsToFinishingItem(item);
+            applyDieToLine(lineEl);
         }
         return true;
     };
@@ -1091,6 +1293,11 @@
                 });
             }
         } catch { /* ignore */ }
+        // A die-backed product locks the layout to its die (via its die-cut row). A product that
+        // names a die but has no die-cut row still starts from the die's layout, just unlocked.
+        const productDie = dieById.get(String(product.dieId ?? ''));
+        if (productDie && !getLineDie(lineEl)) snapLineToDie(lineEl, productDie);
+        applyDieToLine(lineEl);
     };
 
     const readQuantities = (lineEl) => [...lineEl.querySelectorAll('.quantity-input')]
@@ -1282,17 +1489,20 @@
     const syncImpositionControls = (lineEl, imposition) => {
         const acrossSel = lineEl.querySelector('.labels-across-select');
         const maxLabel = lineEl.querySelector('.labels-across-max');
+        const die = getLineDie(lineEl);
         if (acrossSel) {
             const max = Number(imposition?.maxLabelsAcross ?? 0);
             const current = acrossSel.value;
             if (max >= 1) {
+                // A die-locked line keeps its die count selectable even past the press max.
+                const top = Math.max(max, die?.labelsAcross ?? 0);
                 const options = ['<option value="">Auto</option>'];
-                for (let n = 1; n <= max; n++) {
+                for (let n = 1; n <= top; n++) {
                     const sel = current === String(n) ? ' selected' : '';
                     options.push(`<option value="${n}"${sel}>${n} up</option>`);
                 }
                 acrossSel.innerHTML = options.join('');
-                if (current && parseInt(current, 10) > max) {
+                if (current && parseInt(current, 10) > max && !(die && current === String(die.labelsAcross))) {
                     acrossSel.value = '';
                 }
                 if (maxLabel) maxLabel.textContent = `(max ${max})`;
@@ -1300,6 +1510,8 @@
                 maxLabel.textContent = '(auto)';
             }
         }
+        // Rebuilding the options above dropped the lock state — reapply it (and the warning).
+        syncDieLock(lineEl, imposition);
 
         const orientationSel = lineEl.querySelector('.orientation-select');
         const orientationLabel = orientationSel?.previousElementSibling;
@@ -1345,20 +1557,124 @@
         });
     };
 
+    // Pricing rows for an outsourced line: the calculator's cost/price for reference, and the vendor
+    // cost + final price we quote (margin derived; typing a margin sets the price from the cost).
+    const renderOutsourcedRows = (lineEl, tbody, lineResult) => {
+        tbody.innerHTML = '';
+        const pricing = getOutsourcePricing(lineEl);
+        const calcByQty = new Map((lineResult?.quantityBreaks || []).map(b => [Number(b.quantity), b]));
+        outsourcedQuantities(lineEl, lineResult).forEach(qty => {
+            const entry = pricing[String(qty)] || {};
+            const calc = calcByQty.get(qty);
+            const cost = entry.cost ?? '';
+            const price = entry.price ?? '';
+            const ro = readOnlyMode ? ' readonly' : '';
+            const tr = document.createElement('tr');
+            tr.className = 'outsource-price-row';
+            tr.dataset.qty = String(qty);
+            tr.innerHTML = `<td>${fmtQty(qty)}</td>
+                <td class="text-muted small">${calc ? `${fmtMoney(calc.totalPrice)} <span class="text-nowrap">(cost ${fmtMoney(calc.totalCost)})</span>` : '—'}</td>
+                <td><div class="input-group input-group-sm" style="max-width: 9rem;"><span class="input-group-text">$</span><input type="text" class="form-control outsource-cost-input" inputmode="decimal" value="${escapeHtml(cost)}" placeholder="total" aria-label="Vendor cost for ${qty}"${ro} /></div></td>
+                <td><div class="input-group input-group-sm" style="max-width: 9rem;"><span class="input-group-text">$</span><input type="text" class="form-control outsource-price-input" inputmode="decimal" value="${escapeHtml(price)}" placeholder="total" aria-label="Final price for ${qty}"${ro} /></div></td>
+                <td class="outsource-unit small">—</td>
+                <td><input type="text" class="form-control form-control-sm outsource-margin-input text-center" style="max-width: 5.5rem;" inputmode="decimal" aria-label="Margin percent for ${qty}"${ro} /></td>`;
+            tbody.appendChild(tr);
+        });
+        refreshOutsourcedRowReadouts(lineEl, tbody);
+        if (!readOnlyMode) wireOutsourcedRows(lineEl, tbody);
+    };
+
+    const refreshOutsourcedRowReadouts = (lineEl, tbody) => {
+        tbody.querySelectorAll('.outsource-price-row').forEach(tr => {
+            const qty = Number(tr.dataset.qty);
+            const cost = Number(tr.querySelector('.outsource-cost-input')?.value);
+            const price = Number(tr.querySelector('.outsource-price-input')?.value);
+            const unitEl = tr.querySelector('.outsource-unit');
+            const marginEl = tr.querySelector('.outsource-margin-input');
+            if (unitEl) unitEl.textContent = Number.isFinite(price) && price > 0 && qty > 0 ? fmtMoney(price / qty, 4) : '—';
+            if (marginEl && document.activeElement !== marginEl) {
+                marginEl.value = Number.isFinite(cost) && Number.isFinite(price) && price > 0
+                    ? `${((price - cost) / price * 100).toFixed(1)}%`
+                    : '';
+            }
+            tr.classList.toggle('table-warning', Number.isFinite(cost) && Number.isFinite(price) && price > 0 && price < cost);
+        });
+    };
+
+    const wireOutsourcedRows = (lineEl, tbody) => {
+        const store = () => {
+            const map = {};
+            tbody.querySelectorAll('.outsource-price-row').forEach(tr => {
+                const costRaw = tr.querySelector('.outsource-cost-input')?.value?.trim();
+                const priceRaw = tr.querySelector('.outsource-price-input')?.value?.trim();
+                const cost = costRaw === '' ? null : Number(costRaw);
+                const price = priceRaw === '' ? null : Number(priceRaw);
+                map[tr.dataset.qty] = {
+                    cost: cost !== null && Number.isFinite(cost) ? cost : null,
+                    price: price !== null && Number.isFinite(price) ? price : null
+                };
+            });
+            setOutsourcePricing(lineEl, map);
+            refreshOutsourcedRowReadouts(lineEl, tbody);
+            updateLineSummary(lineEl, lineResultsCache.get(String(lineEl.dataset.lineIndex)));
+            updateEstimateTotals();
+        };
+        tbody.querySelectorAll('.outsource-cost-input, .outsource-price-input').forEach(input => {
+            input.addEventListener('input', store);
+        });
+        tbody.querySelectorAll('.outsource-margin-input').forEach(input => {
+            const apply = () => {
+                const tr = input.closest('.outsource-price-row');
+                const margin = parseMarginInput(input.value);
+                const cost = Number(tr?.querySelector('.outsource-cost-input')?.value);
+                if (margin === null || !Number.isFinite(cost) || margin >= 1) {
+                    refreshOutsourcedRowReadouts(lineEl, tbody);
+                    return;
+                }
+                const priceInput = tr.querySelector('.outsource-price-input');
+                if (priceInput) priceInput.value = (cost / (1 - margin)).toFixed(2);
+                store();
+            };
+            input.addEventListener('blur', apply);
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    apply();
+                    input.blur();
+                }
+            });
+        });
+    };
+
     const renderLineResults = (lineEl, lineResult) => {
         const warnings = lineEl.querySelector('.calc-warnings');
         const errors = lineEl.querySelector('.calc-errors');
         const tbody = lineEl.querySelector('.calc-results tbody');
         syncImpositionControls(lineEl, lineResult.imposition);
+        const outsourced = isLineOutsourced(lineEl);
         if (warnings) {
-            warnings.classList.toggle('d-none', !lineResult.warnings?.length);
-            warnings.textContent = (lineResult.warnings || []).join('; ');
+            const notes = [...(lineResult.warnings || [])];
+            // On an outsourced line the in-house calc is only a comparison, so its errors are notes.
+            if (outsourced && lineResult.errors?.length) notes.push(`In-house calc unavailable: ${lineResult.errors.join('; ')}`);
+            warnings.classList.toggle('d-none', notes.length === 0);
+            warnings.textContent = notes.join('; ');
         }
         if (errors) {
-            errors.classList.toggle('d-none', !lineResult.errors?.length);
-            errors.textContent = (lineResult.errors || []).join('; ');
+            const show = !outsourced && lineResult.errors?.length;
+            errors.classList.toggle('d-none', !show);
+            errors.textContent = show ? lineResult.errors.join('; ') : '';
         }
-        if (tbody) {
+        // The line-level margin control drives the in-house calc only, so it steps aside on outsourced lines.
+        lineEl.querySelector('.margin-control')?.closest('.d-flex')?.classList.toggle('d-none', outsourced);
+        const thead = lineEl.querySelector('.calc-results thead');
+        if (thead) {
+            thead.innerHTML = outsourced
+                ? '<tr><th>Qty</th><th class="text-muted">In-house calc</th><th>Vendor cost</th><th>Final price</th><th>Unit</th><th>Margin %</th></tr>'
+                : '<tr><th>Qty</th><th>Unit price</th><th>Total</th><th>Margin %</th></tr>';
+        }
+        if (tbody && outsourced) {
+            renderOutsourcedRows(lineEl, tbody, lineResult);
+        } else if (tbody) {
             tbody.innerHTML = '';
             const overrides = getQtyMarkupMap(lineEl);
             (lineResult.quantityBreaks || []).forEach(row => {
@@ -1485,6 +1801,8 @@
             sel.addEventListener('change', calculate);
         });
         root.querySelectorAll('.finishing-die-select').forEach(wireFinishingDieSelect);
+        // Lines that already name a die (reopened drafts) come up locked to it.
+        (root.matches?.('.estimate-line') ? [root] : [...root.querySelectorAll('.estimate-line')]).forEach(applyDieToLine);
         root.querySelectorAll('.spot-ink-select').forEach(sel => {
             sel.addEventListener('change', () => {
                 const addBtn = sel.closest('.spot-builder')?.querySelector('.spot-add');

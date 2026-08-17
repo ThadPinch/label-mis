@@ -32,6 +32,10 @@ public class SalesOrderLine : EntityBase
     /// awaiting backfill — new lines always carry it. See docs/labelspec-refactor.md.</summary>
     public LabelSpec? Spec { get; private set; }
 
+    /// <summary>Set when this line is bought from an outside vendor instead of run in-house.</summary>
+    public OutsourcedItem? OutsourcedItem { get; private set; }
+    public bool IsOutsourced => OutsourcedItem is not null;
+
     public static SalesOrderLine Create(
         Guid id,
         Guid salesOrderId,

@@ -45,7 +45,7 @@
     @foreach (var item in Model.Result.Items)
     {
         <tr>
-            <td>@item.Name</td>
+            <td>@item.Name @if (item.IsOutsourceVendor) { <span class="badge text-bg-info ms-1">Outsource vendor</span> }</td>
             <td>@item.Code</td>
             <td>@(item.IsActive ? "Yes" : "No")</td>
             <td class="text-end">

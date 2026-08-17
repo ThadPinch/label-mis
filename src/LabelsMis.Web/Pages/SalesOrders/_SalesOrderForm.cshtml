@@ -2,9 +2,12 @@
 @using LabelsMis.Domain.Enums
 @using LabelsMis.Web.Services.Shipping
 @using LabelsMis.Web.Pages.SalesOrders
+@using LabelsMis.Web.Pages.Shared
 @model LabelsMis.Web.Pages.SalesOrders.SalesOrderPageInput
 @{
     var isLocked = ViewData["IsLocked"] as bool? ?? false;
+    var outsourceVendors = (IEnumerable<SelectListItem>?)ViewData["OutsourceVendors"] ?? Enumerable.Empty<SelectListItem>();
+    const string outsourceLineHint = "The job for this line is routed to the vendor instead of the press and moves to ready-to-ship when received. Track it on Production → Outsourced.";
     var products = (IEnumerable<SelectListItem>?)ViewData["Products"] ?? Enumerable.Empty<SelectListItem>();
     var shippingMethods = (IReadOnlyList<ShippingMethodListItem>?)ViewData["ShippingMethods"] ?? Array.Empty<ShippingMethodListItem>();
     var substrates = (IEnumerable<SelectListItem>?)ViewData["Substrates"] ?? Enumerable.Empty<SelectListItem>();
@@ -148,6 +151,10 @@
             {
                 <span class="badge text-bg-secondary" title="This line has a production job — the product is pinned.">@(line.JobNumber ?? "In production")</span>
             }
+            @if (line.IsOutsourced)
+            {
+                <span class="badge text-bg-info">Outsourced@(line.OutsourceStatusLabel is { } osl ? $" · {osl}" : "")</span>
+            }
             <span class="ms-auto small text-muted">@line.Quantity.ToString("N0") × @line.UnitPrice.ToString("C4")</span>
             <span class="small fw-semibold">@lineTotal.ToString("C2")</span>
             @if (!isLocked && !line.HasJob)
@@ -202,6 +209,25 @@
                     <label class="form-label small mb-0">Line notes</label>
                     <input name="Input.Lines[@i].LineNotes" value="@line.LineNotes" class="form-control form-control-sm" placeholder="Notes" readonly="@isLocked" />
                 </div>
+            </div>
+
+            <div class="mt-2 order-line-outsource">
+                <partial name="Shared/_OutsourceFields" model="@(new OutsourceFieldsModel($"Input.Lines[{i}]", outsourceVendors)
+                {
+                    IsOutsourced = line.IsOutsourced,
+                    VendorId = line.OutsourceVendorId,
+                    QuoteNumber = line.OutsourceQuoteNumber,
+                    VendorCost = line.OutsourceCost,
+                    ExpectedIn = line.OutsourceExpectedIn,
+                    PrivateNotes = line.OutsourcePrivateNotes,
+                    ReadOnly = isLocked,
+                    ToggleLocked = line.OutsourceLocked,
+                    StatusLabel = line.OutsourceStatusLabel,
+                    ToggleLabel = "Outsource this line",
+                    CostInputClass = "order-line-outsource-cost",
+                    MarginReadoutClass = "order-line-outsource-margin",
+                    Hint = outsourceLineHint
+                })" />
             </div>
 
             @if (!hasSpec && !isLocked)
@@ -536,7 +562,7 @@
 {
     <button type="button" id="add-order-line" class="btn btn-sm btn-outline-secondary mb-2">+ Add line</button>
 
-    <script type="text/template" id="order-line-row-template">
+    <template id="order-line-row-template">
         <div class="card mb-2 order-line" data-line-index="__LINE__">
             <div class="card-header py-1 px-2 d-flex align-items-center gap-2">
                 <span class="fw-semibold small order-line-label">Line</span>
@@ -584,10 +610,19 @@
                         <input name="Input.Lines[__LINE__].LineNotes" value="" class="form-control form-control-sm" placeholder="Notes" />
                     </div>
                 </div>
+                <div class="mt-2 order-line-outsource">
+                    <partial name="Shared/_OutsourceFields" model="@(new OutsourceFieldsModel("Input.Lines[__LINE__]", outsourceVendors)
+                    {
+                        ToggleLabel = "Outsource this line",
+                        CostInputClass = "order-line-outsource-cost",
+                        MarginReadoutClass = "order-line-outsource-margin",
+                        Hint = outsourceLineHint
+                    })" />
+                </div>
                 <div class="form-text mt-1">Spec is seeded from the product when the order is saved; reopen the order to edit it.</div>
             </div>
         </div>
-    </script>
+    </template>
     <script>
         (function () {
             const container = document.getElementById('order-lines');
@@ -611,9 +646,7 @@
             };
 
             addBtn.addEventListener('click', () => {
-                const holder = document.createElement('div');
-                holder.innerHTML = template.textContent.trim();
-                const row = holder.firstElementChild;
+                const row = template.content.firstElementChild.cloneNode(true);
                 container.appendChild(row);
                 reindexLines();
                 document.dispatchEvent(new CustomEvent('order-line-added', { detail: { row } }));
@@ -639,7 +672,7 @@
         <div class="card-body py-2">
             @if (!isLocked)
             {
-                <div class="form-text mb-2">One-time, non-label charges (die creation, design time). Billed on the invoice and shown on the job ticket — never scheduled as production jobs.</div>
+                <div class="form-text mb-2">One-time charges (die creation, design time) and <strong>outsourced items</strong> — promo products, printed pieces, wide format — bought from a vendor. Billed on the invoice and shown on the job ticket; never scheduled as production jobs. Outsourced items are tracked and received on Production → Outsourced.</div>
             }
             <div id="order-charges">
                 @for (var c = 0; c < Model.Charges.Count; c++)
@@ -672,10 +705,27 @@
                         </div>
                         <div class="col-4 col-md-2 d-flex align-items-center justify-content-between gap-2 pb-1">
                             <span class="small fw-semibold order-charge-total">@((charge.UnitPrice * charge.Quantity).ToString("C2"))</span>
-                            @if (!isLocked)
+                            @if (!isLocked && !charge.OutsourceLocked)
                             {
                                 <button type="button" class="btn btn-sm btn-outline-danger order-charge-remove" aria-label="Remove charge">×</button>
                             }
+                        </div>
+                        <div class="col-12">
+                            <partial name="Shared/_OutsourceFields" model="@(new OutsourceFieldsModel($"Input.Charges[{c}]", outsourceVendors)
+                            {
+                                IsOutsourced = charge.IsOutsourced,
+                                VendorId = charge.OutsourceVendorId,
+                                QuoteNumber = charge.OutsourceQuoteNumber,
+                                VendorCost = charge.OutsourceCost,
+                                ExpectedIn = charge.OutsourceExpectedIn,
+                                PrivateNotes = charge.OutsourcePrivateNotes,
+                                ReadOnly = isLocked,
+                                ToggleLocked = charge.OutsourceLocked,
+                                StatusLabel = charge.OutsourceStatusLabel,
+                                ToggleLabel = "Outsourced item (promo, print, wide format)",
+                                CostInputClass = "order-charge-outsource-cost",
+                                MarginReadoutClass = "order-charge-outsource-margin"
+                            })" />
                         </div>
                     </div>
                 }
@@ -692,6 +742,9 @@
                     <option value="Design charge"></option>
                     <option value="Plate charge"></option>
                     <option value="Setup charge"></option>
+                    <option value="Promo item"></option>
+                    <option value="Printed piece"></option>
+                    <option value="Wide format print"></option>
                 </datalist>
             }
         </div>
@@ -699,7 +752,7 @@
 
     @if (!isLocked)
     {
-        <script type="text/template" id="order-charge-row-template">
+        <template id="order-charge-row-template">
             <div class="row g-2 align-items-end mb-2 order-charge-row">
                 <div class="col-md-6">
                     <label class="form-label small mb-0">Description</label>
@@ -720,8 +773,16 @@
                     <span class="small fw-semibold order-charge-total">—</span>
                     <button type="button" class="btn btn-sm btn-outline-danger order-charge-remove" aria-label="Remove charge">×</button>
                 </div>
+                <div class="col-12">
+                    <partial name="Shared/_OutsourceFields" model="@(new OutsourceFieldsModel("Input.Charges[__CHARGE__]", outsourceVendors)
+                    {
+                        ToggleLabel = "Outsourced item (promo, print, wide format)",
+                        CostInputClass = "order-charge-outsource-cost",
+                        MarginReadoutClass = "order-charge-outsource-margin"
+                    })" />
+                </div>
             </div>
-        </script>
+        </template>
         <script>
             (function () {
                 const container = document.getElementById('order-charges');
@@ -750,9 +811,7 @@
                 };
 
                 addBtn.addEventListener('click', () => {
-                    const holder = document.createElement('div');
-                    holder.innerHTML = template.textContent.trim();
-                    container.appendChild(holder.firstElementChild);
+                    container.appendChild(template.content.firstElementChild.cloneNode(true));
                     reindex();
                 });
 
@@ -982,5 +1041,39 @@
                 if (lineEl) reindexFinishing(lineEl);
             }
         });
+    })();
+</script>
+<script>
+    // Outsourced lines/charges: live margin readout — our price (qty × unit) against the vendor's cost.
+    (function () {
+        const pct = (total, cost) => Number.isFinite(total) && Number.isFinite(cost) && total > 0
+            ? `${((total - cost) / total * 100).toFixed(1)}%`
+            : '—';
+        const paint = (el, total, cost) => {
+            if (!el) return;
+            el.textContent = pct(total, cost);
+            el.classList.toggle('text-danger', Number.isFinite(total) && Number.isFinite(cost) && total > 0 && total < cost);
+        };
+        const refresh = () => {
+            document.querySelectorAll('#order-lines .order-line').forEach(line => {
+                const qty = Number(line.querySelector('.line-qty')?.value);
+                const price = Number(line.querySelector('.line-price')?.value);
+                const cost = Number(line.querySelector('.order-line-outsource-cost')?.value);
+                paint(line.querySelector('.order-line-outsource-margin'), qty * price, cost);
+            });
+            document.querySelectorAll('#order-charges .order-charge-row').forEach(row => {
+                const qtyRaw = Number(row.querySelector('.order-charge-qty')?.value);
+                const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
+                const price = Number(row.querySelector('.order-charge-price')?.value);
+                const cost = Number(row.querySelector('.order-charge-outsource-cost')?.value);
+                paint(row.querySelector('.order-charge-outsource-margin'), qty * price, cost);
+            });
+        };
+        document.addEventListener('input', e => {
+            if (e.target.closest('#order-lines, #order-charges')) refresh();
+        });
+        document.addEventListener('outsource:toggle', refresh);
+        document.addEventListener('order-line-added', refresh);
+        refresh();
     })();
 </script>

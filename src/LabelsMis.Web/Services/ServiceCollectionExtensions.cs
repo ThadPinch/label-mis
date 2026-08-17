@@ -49,6 +49,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SalesOrderDocumentService>();
         services.AddScoped<JobService>();
         services.AddScoped<JobTicketPdfGenerator>();
+        services.AddScoped<Outsourcing.OutsourceService>();
         services.AddScoped<PurchaseOrderService>();
         services.AddScoped<PurchaseOrderPdfGenerator>();
         services.AddScoped<RollService>();
@@ -56,6 +57,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<InvoiceService>();
         services.AddScoped<InvoicePdfGenerator>();
         services.AddScoped<PackingListPdfGenerator>();
+        services.AddScoped<RollLabelPdfGenerator>();
         services.AddScoped<UserAdminService>();
         services.AddScoped<StorageSettingsService>();
         services.AddScoped<EmailSettingsService>();

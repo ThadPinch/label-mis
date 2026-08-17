@@ -1,4 +1,5 @@
 using LabelsMis.Web.Authorization;
+using LabelsMis.Web.Pages.Shared;
 using LabelsMis.Web.Services;
 using LabelsMis.Web.Services.Stocks;
 using Microsoft.AspNetCore.Authorization;
@@ -65,7 +66,7 @@ public class EditModel(StockService stockService, ICurrentUserService currentUse
         }
 
         await stockService.DeactivateAsync(id, cancellationToken);
-        return RedirectToPage("Index");
+        return this.RedirectToListPage();
     }
 
     private async Task ReloadAsync(Guid id, CancellationToken cancellationToken)

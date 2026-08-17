@@ -41,6 +41,17 @@ public class EstimateLine : EntityBase
     /// <summary>Layflat width (in) for shrink film lines; seeded from the substrate, adjustable per line.</summary>
     public decimal? ShrinkLayflatIn { get; private set; }
 
+    /// <summary>The line is bought from an outside vendor instead of run in-house. The estimator still
+    /// calculates the in-house cost/price for comparison, but each quantity break's quoted price comes
+    /// from the vendor cost + our final price (see <see cref="EstimateQuantityBreak.ApplyOutsourcePricing"/>).</summary>
+    public bool IsOutsourced { get; private set; }
+    public Guid? OutsourceVendorId { get; private set; }
+    public Supplier? OutsourceVendor { get; private set; }
+    public string? OutsourceQuoteNumber { get; private set; }
+    public DateOnly? OutsourceExpectedIn { get; private set; }
+    /// <summary>Internal only — never printed on customer documents.</summary>
+    public string? OutsourcePrivateNotes { get; private set; }
+
     public IReadOnlyCollection<EstimateQuantityBreak> QuantityBreaks => _quantityBreaks;
 
     public static EstimateLine Create(
@@ -167,6 +178,24 @@ public class EstimateLine : EntityBase
         ShrinkLayflatIn = shrinkLayflatIn;
         SetModified(modifiedById, modifiedAt);
     }
+
+    /// <summary>Marks the line as outsourced with the vendor details, or clears outsourcing when
+    /// <paramref name="details"/> is null. Per-quantity vendor cost lives on the breaks.</summary>
+    public void SetOutsource(OutsourceDetails? details, Guid modifiedById, DateTime modifiedAt)
+    {
+        var normalized = details?.Normalize();
+        IsOutsourced = normalized is not null;
+        OutsourceVendorId = normalized?.VendorId;
+        OutsourceQuoteNumber = normalized?.QuoteNumber;
+        OutsourceExpectedIn = normalized?.ExpectedIn;
+        OutsourcePrivateNotes = normalized?.PrivateNotes;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>The vendor details as a value, or null when the line is not outsourced.</summary>
+    public OutsourceDetails? OutsourceDetails => IsOutsourced
+        ? new OutsourceDetails(OutsourceVendorId, OutsourceQuoteNumber, OutsourceExpectedIn, OutsourcePrivateNotes)
+        : null;
 
     public void ReplaceQuantityBreaks(IEnumerable<EstimateQuantityBreak> breaks)
     {

@@ -4,6 +4,7 @@ using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Estimating.Models;
 using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
+using LabelsMis.Web.Services.Outsourcing;
 using Microsoft.EntityFrameworkCore;
 
 namespace LabelsMis.Web.Services.Estimates;
@@ -53,14 +54,17 @@ public record EstimateLineFormInput(
     LabelOrientation? LabelOrientationOverride,
     IReadOnlyDictionary<int, decimal>? QuantityMarkupOverrides = null,
     UnwindDirection? Unwind = null,
-    decimal? ShrinkLayflatIn = null);
+    decimal? ShrinkLayflatIn = null,
+    OutsourceLineQuoteInput? Outsource = null);
 
-/// <summary>A flat, non-label charge (die creation, design time) quoted alongside the label lines.</summary>
+/// <summary>A flat, non-label item (one-time charge, or an outsourced promo/print/wide-format item)
+/// quoted alongside the label lines.</summary>
 public record EstimateChargeFormInput(
     Guid? Id,
     string Description,
     int Quantity,
-    decimal UnitPrice);
+    decimal UnitPrice,
+    OutsourceItemInput? Outsource = null);
 
 public record EstimateFormInput(
     Guid CustomerId,

@@ -2,7 +2,9 @@ using LabelsMis.Domain.Enums;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
+using LabelsMis.Web.Pages.Shared;
 using LabelsMis.Web.Services.Estimates;
+using LabelsMis.Web.Services.Outsourcing;
 using LabelsMis.Web.Services.Shipping;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -18,7 +20,8 @@ public class EditModel(
     EstimateService estimateService,
     LabelsMisDbContext db,
     UserManager<ApplicationUser> userManager,
-    ShippingMethodService shippingMethodService) : PageModel
+    ShippingMethodService shippingMethodService,
+    OutsourceService outsourceService) : PageModel
 {
     [BindProperty(SupportsGet = true)]
     public Guid Id { get; set; }
@@ -184,6 +187,36 @@ public class EditModel(
         return RedirectToPage(new { id = Id });
     }
 
+    /// <summary>Mark won straight from the draft view (no email step): the draft is saved with the
+    /// form's current values first so nothing typed is lost, then won. The page flags it as
+    /// "Not sent to customer" until it is emailed.</summary>
+    public async Task<IActionResult> OnPostSaveAndMarkWonAsync(CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin))
+        {
+            return Forbid();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            await ReloadAsync(cancellationToken);
+            return Page();
+        }
+
+        try
+        {
+            await estimateService.UpdateDraftAsync(Id, Input.ToForm(), cancellationToken);
+            await estimateService.MarkWonAsync(Id, cancellationToken);
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            await ReloadAsync(cancellationToken);
+            return Page();
+        }
+    }
+
     public async Task<IActionResult> OnPostMarkLostAsync(CancellationToken cancellationToken)
     {
         if (!User.IsInRole(AppRoles.Admin))
@@ -238,7 +271,7 @@ public class EditModel(
         try
         {
             await estimateService.DeleteAsync(Id, cancellationToken);
-            return RedirectToPage("./Index");
+            return this.RedirectToListPage();
         }
         catch (Exception ex)
         {
@@ -270,7 +303,7 @@ public class EditModel(
         ViewData["Substrates"] = await db.Stocks.AsNoTracking()
             .Where(s => s.IsActive)
             .OrderBy(s => s.Code)
-            .Select(s => new SelectListItem($"{s.Code} — {s.WidthIn}\" @ {s.CostPerMsi:C4}/MSI", s.Id.ToString()))
+            .Select(s => new SelectListItem($"{s.Code} — {s.Description}", s.Id.ToString()))
             .ToListAsync(cancellationToken);
 
         ViewData["FinishingOperations"] = await db.FinishingOperations.AsNoTracking()
@@ -303,5 +336,9 @@ public class EditModel(
 
         ViewData["ShippingMethods"] = await shippingMethodService.GetSelectableAsync(
             Input.ShippingMethodId, cancellationToken);
+
+        ViewData["OutsourceVendors"] = await outsourceService.GetVendorOptionsAsync(
+            Input.Lines.Select(l => l.OutsourceVendorId).Concat(Input.Charges.Select(c => c.OutsourceVendorId)),
+            cancellationToken);
     }
 }

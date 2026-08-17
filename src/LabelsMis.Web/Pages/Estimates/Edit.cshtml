@@ -36,6 +36,10 @@ else
             }
         </div>
         <div class="text-end">
+            @if (Model.Detail.Estimate.Status is EstimateStatus.Won or EstimateStatus.Sent && !Model.Detail.Estimate.IsSentToCustomer)
+            {
+                <span class="badge text-bg-warning" title="Marked won without being emailed to the customer. Use Send to customer if they still need it.">Not sent to customer</span>
+            }
             @if (Model.Detail.Estimate.PdfFilePath is not null)
             {
                 <span class="badge text-bg-secondary">PDF generated</span>
@@ -62,7 +66,7 @@ else
         <div class="estimate-action-bar">
             @if (Model.CanEdit)
             {
-                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#emailModal">Resend email</button>
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#emailModal">@(Model.Detail.Estimate.IsSentToCustomer ? "Resend email" : "Send to customer")</button>
                 <form method="post" asp-page-handler="CreateRevision" class="d-inline">
                     <input type="hidden" asp-for="Id" />
                     <button type="submit" class="btn btn-primary">Create revision</button>
@@ -153,6 +157,11 @@ else
                 <button type="submit" asp-page-handler="SaveDraft" class="btn btn-primary">Save draft</button>
                 <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#emailModal">Send to customer</button>
                 <button type="submit" asp-page-handler="PreviewPdf" formtarget="_blank" formnovalidate class="btn btn-outline-secondary">Open PDF</button>
+                @if (Model.CanAdmin)
+                {
+                    <button type="submit" asp-page-handler="SaveAndMarkWon" class="btn btn-outline-success"
+                            onclick="return confirm('Save this draft and mark it won without emailing it to the customer? It will show as \'Not sent to customer\' until it is sent.');">Mark won</button>
+                }
             </div>
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <partial name="_EstimateForm" for="Input" />

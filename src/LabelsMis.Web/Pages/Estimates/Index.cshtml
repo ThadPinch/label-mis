@@ -73,7 +73,7 @@
             <td>@item.EstimateNumber <span class="text-muted">Rev @item.RevisionNumber</span></td>
             <td>@item.CustomerName</td>
             <td>@item.SummaryDescription</td>
-            <td>@item.Status</td>
+            <td>@item.Status @if (item.Status is LabelsMis.Domain.Enums.EstimateStatus.Won && !item.IsSentToCustomer) { <span class="badge text-bg-warning" title="Marked won without being emailed to the customer">Not sent</span> }</td>
             <td>@(item.HighestQtyTotal?.ToString("C2") ?? "—")</td>
             <td>@item.CreatedAt.ToString("yyyy-MM-dd")</td>
             <td>@(item.ValidUntilDate?.ToString("yyyy-MM-dd") ?? "—")</td>

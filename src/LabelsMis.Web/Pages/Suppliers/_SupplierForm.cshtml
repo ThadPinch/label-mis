@@ -24,9 +24,22 @@
         <label asp-for="AccountNumber" class="form-label"></label>
         <input asp-for="AccountNumber" class="form-control" />
     </div>
+    <div class="col-md-4">
+        <div class="form-check mt-md-4 pt-md-2">
+            <input asp-for="IsOutsourceVendor" class="form-check-input" />
+            <label asp-for="IsOutsourceVendor" class="form-check-label"></label>
+        </div>
+        <div class="form-text">Shows in the vendor pickers when outsourcing an estimate or order item.</div>
+    </div>
+    <div class="col-12">
+        <label asp-for="OutsourceNotes" class="form-label"></label>
+        <textarea asp-for="OutsourceNotes" class="form-control" rows="2" placeholder="What we send them, lead times, who to contact — internal only"></textarea>
+    </div>
 </div>
 
 <h2 class="h5 mt-4">Contacts</h2>
+<div class="form-text mb-2">At least one contact is required — who we call for quotes, orders, and reorders.</div>
+<span asp-validation-for="Contacts" class="text-danger d-block mb-2"></span>
 <div id="supplier-contacts">
     @for (var i = 0; i < Model.Contacts.Count; i++)
     {
@@ -112,7 +125,10 @@
         if (!container || !template) return;
 
         const reindex = () => {
-            container.querySelectorAll('.contact-row').forEach((row, idx) => {
+            const rows = container.querySelectorAll('.contact-row');
+            rows.forEach((row, idx) => {
+                // At least one contact is required, so the sole remaining row keeps its remove button hidden.
+                row.querySelectorAll('.remove-contact').forEach(btn => btn.classList.toggle('d-none', rows.length === 1));
                 row.querySelectorAll('[name],[id],[for],[data-valmsg-for]').forEach(el => {
                     ['name', 'id', 'for', 'data-valmsg-for'].forEach(attr => {
                         const val = el.getAttribute(attr);
@@ -130,6 +146,7 @@
 
         function wireRemove(btn) {
             btn.addEventListener('click', () => {
+                if (container.querySelectorAll('.contact-row').length <= 1) return;
                 btn.closest('.contact-row')?.remove();
                 reindex();
             });
@@ -145,5 +162,7 @@
             row.querySelectorAll('.remove-contact').forEach(btn => wireRemove(btn));
             reindex();
         });
+
+        reindex();
     })();
 </script>

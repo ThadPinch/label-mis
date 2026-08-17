@@ -3,6 +3,7 @@ using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Services.Models;
+using LabelsMis.Web.Services.Outsourcing;
 using Microsoft.EntityFrameworkCore;
 
 using LabelsMis.Web.Services.Products;
@@ -17,16 +18,19 @@ public record SalesOrderLineInput(
     decimal UnitPrice,
     string? LineNotes,
     string? Description = null,
-    LabelSpec? Spec = null);
+    LabelSpec? Spec = null,
+    OutsourceItemInput? Outsource = null);
 
-/// <summary>A flat, non-label charge on the order (die creation, design time). Invoiced with the
-/// order and shown on the job ticket, but never scheduled as a production job.</summary>
+/// <summary>A flat, non-label item on the order: a one-time charge (die creation, design time) or an
+/// outsourced item (promo, print, wide format). Invoiced with the order and shown on the job ticket;
+/// never scheduled as a production job — outsourced ones are tracked on the production Outsourced page.</summary>
 public record SalesOrderChargeInput(
     Guid? Id,
     string Description,
     int Quantity,
     decimal UnitPrice,
-    Guid? SourceEstimateChargeId = null);
+    Guid? SourceEstimateChargeId = null,
+    OutsourceItemInput? Outsource = null);
 
 public record SalesOrderFormInput(
     Guid CustomerId,
@@ -165,7 +169,10 @@ public class SalesOrderService(
             .Include(o => o.Customer)
             .Include(o => o.ShippingMethod)
             .Include(o => o.Lines).ThenInclude(l => l.Product)
-            .Include(o => o.Charges)
+            .Include(o => o.Lines).ThenInclude(l => l.OutsourcedItem).ThenInclude(i => i!.Vendor)
+            .Include(o => o.Lines).ThenInclude(l => l.OutsourcedItem).ThenInclude(i => i!.Receipts)
+            .Include(o => o.Charges).ThenInclude(c => c.OutsourcedItem).ThenInclude(i => i!.Vendor)
+            .Include(o => o.Charges).ThenInclude(c => c.OutsourcedItem).ThenInclude(i => i!.Receipts)
             .AsSplitQuery()
             .SingleOrDefaultAsync(o => o.Id == id, cancellationToken);
 
@@ -232,7 +239,8 @@ public class SalesOrderService(
             db.SalesOrderLines.Add(line);
         }
 
-        ReplaceCharges(order, input.Charges, userId, now);
+        SyncLineOutsourcing(order, lines, input.Lines, new Dictionary<Guid, OutsourcedItem>(), new HashSet<Guid>(), userId, now);
+        SyncCharges(order, input.Charges, userId, now);
         await db.SaveChangesAsync(cancellationToken);
         await invoiceService.CreateFromSalesOrderAsync(order.Id, cancellationToken);
         return order;
@@ -250,7 +258,9 @@ public class SalesOrderService(
         }
 
         var estimate = await db.Estimates
-            .Include(e => e.Lines)
+            .Include(e => e.Lines).ThenInclude(l => l.QuantityBreaks)
+            .Include(e => e.Charges)
+            .AsSplitQuery()
             .SingleAsync(e => e.Id == input.EstimateId, cancellationToken);
 
         if (estimate.Status is not Domain.Enums.EstimateStatus.Won)
@@ -318,10 +328,20 @@ public class SalesOrderService(
                 now);
             orderLines.Add(orderLine);
             db.SalesOrderLines.Add(orderLine);
+
+            // Carry the outsourcing quote onto the order: vendor details from the line, cost from the
+            // quantity tier that was picked (a different quantity than quoted carries no cost — enter it on the order).
+            if (estimateLine.OutsourceDetails is { } outsourceDetails)
+            {
+                var pickedBreak = estimateLine.QuantityBreaks.FirstOrDefault(q => q.Quantity == lineInput.Quantity);
+                db.OutsourcedItems.Add(OutsourcedItem.CreateForLine(
+                    Guid.NewGuid(), order.Id, orderLine.Id, outsourceDetails, pickedBreak?.OutsourceCost, userId, now));
+            }
         }
 
         order.ReplaceLines(orderLines);
 
+        var estimateCharges = estimate.Charges.ToDictionary(c => c.Id);
         var chargeNumber = 1;
         var orderCharges = new List<SalesOrderCharge>();
         foreach (var chargeInput in (input.Charges ?? []).Where(c => !string.IsNullOrWhiteSpace(c.Description)))
@@ -338,6 +358,14 @@ public class SalesOrderService(
                 now);
             orderCharges.Add(charge);
             db.SalesOrderCharges.Add(charge);
+
+            if (chargeInput.EstimateChargeId is { } estimateChargeId
+                && estimateCharges.TryGetValue(estimateChargeId, out var estimateCharge)
+                && estimateCharge.OutsourceDetails is { } chargeOutsource)
+            {
+                db.OutsourcedItems.Add(OutsourcedItem.CreateForCharge(
+                    Guid.NewGuid(), order.Id, charge.Id, chargeOutsource, estimateCharge.OutsourceCost, userId, now));
+            }
         }
 
         order.ReplaceCharges(orderCharges);
@@ -358,7 +386,7 @@ public class SalesOrderService(
 
         var order = await db.SalesOrders
             .Include(o => o.Lines)
-            .Include(o => o.Charges)
+            .Include(o => o.Charges).ThenInclude(c => c.OutsourcedItem).ThenInclude(i => i!.Receipts)
             .AsSplitQuery()
             .SingleAsync(o => o.Id == id, cancellationToken);
 
@@ -378,6 +406,11 @@ public class SalesOrderService(
             input.ShippingAddress,
             userId,
             now);
+        // Outsourced-item tracking hangs off the line id, which BuildLines preserves (EF folds the
+        // remove + re-add of the same key into an update), so it survives the rebuild below.
+        var existingItemsByLine = await LoadLineItemsAsync(order.Id, cancellationToken);
+        var lineIdsWithJobs = await LoadLineIdsWithJobsAsync(order.Lines.Select(l => l.Id), cancellationToken);
+
         db.SalesOrderLines.RemoveRange(order.Lines);
         var seedSpecs = await LoadProductSeedSpecsAsync(input.Lines, cancellationToken);
         var lines = BuildLines(order.Id, input.Lines, seedSpecs, userId, now);
@@ -387,7 +420,8 @@ public class SalesOrderService(
             db.SalesOrderLines.Add(line);
         }
 
-        ReplaceCharges(order, input.Charges, userId, now);
+        SyncLineOutsourcing(order, lines, input.Lines, existingItemsByLine, lineIdsWithJobs, userId, now);
+        SyncCharges(order, input.Charges, userId, now);
         await db.SaveChangesAsync(cancellationToken);
 
         // Keep the order's draft invoice in step with the edited prices; sent or exported
@@ -413,7 +447,7 @@ public class SalesOrderService(
 
         var order = await db.SalesOrders
             .Include(o => o.Lines)
-            .Include(o => o.Charges)
+            .Include(o => o.Charges).ThenInclude(c => c.OutsourcedItem).ThenInclude(i => i!.Receipts)
             .AsSplitQuery()
             .SingleAsync(o => o.Id == id, cancellationToken);
 
@@ -440,6 +474,7 @@ public class SalesOrderService(
                 .Where(j => lineIds.Contains(j.SalesOrderLineId) && j.Status != JobStatus.Closed)
                 .ToListAsync(cancellationToken))
             .ToLookup(j => j.SalesOrderLineId);
+        var existingItemsByLine = await LoadLineItemsAsync(order.Id, cancellationToken);
 
         var keptIds = new HashSet<Guid>();
         var replanJobIds = new List<Guid>();
@@ -515,8 +550,17 @@ public class SalesOrderService(
             db.SalesOrderLines.Remove(removed);
         }
 
-        // Charges never have jobs, so they can be replaced wholesale even in production.
-        ReplaceCharges(order, input.Charges, userId, now);
+        SyncLineOutsourcing(
+            order,
+            order.Lines.ToList(),
+            input.Lines,
+            existingItemsByLine,
+            jobsByLine.Where(g => g.Any()).Select(g => g.Key).ToHashSet(),
+            userId,
+            now);
+
+        // Charges never have jobs; they are matched by id so outsourced-item tracking survives.
+        SyncCharges(order, input.Charges, userId, now);
 
         // Spec/quantity changes invalidate the plan minutes on pending operations.
         foreach (var jobId in replanJobIds)
@@ -543,8 +587,8 @@ public class SalesOrderService(
         var now = DateTime.UtcNow;
 
         var source = await db.SalesOrders
-            .Include(o => o.Lines)
-            .Include(o => o.Charges)
+            .Include(o => o.Lines).ThenInclude(l => l.OutsourcedItem)
+            .Include(o => o.Charges).ThenInclude(c => c.OutsourcedItem)
             .AsSplitQuery()
             .SingleOrDefaultAsync(o => o.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("Sales order not found.");
@@ -568,7 +612,8 @@ public class SalesOrderService(
             now);
         db.SalesOrders.Add(order);
 
-        var lines = source.Lines.OrderBy(l => l.LineNumber).Select((line, index) =>
+        var sourceLines = source.Lines.OrderBy(l => l.LineNumber).ToList();
+        var lines = sourceLines.Select((line, index) =>
             SalesOrderLine.Create(
                 Guid.NewGuid(),
                 order.Id,
@@ -584,12 +629,19 @@ public class SalesOrderService(
                 userId,
                 now)).ToList();
         order.ReplaceLines(lines);
-        foreach (var line in lines)
+        for (var i = 0; i < lines.Count; i++)
         {
-            db.SalesOrderLines.Add(line);
+            db.SalesOrderLines.Add(lines[i]);
+            // The vendor deal is copied (who/quote/cost/notes); tracking starts fresh on the new order.
+            if (sourceLines[i].OutsourcedItem is { } lineItem)
+            {
+                db.OutsourcedItems.Add(OutsourcedItem.CreateForLine(
+                    Guid.NewGuid(), order.Id, lines[i].Id, lineItem.Details, lineItem.VendorCost, userId, now));
+            }
         }
 
-        var charges = source.Charges.OrderBy(c => c.LineNumber).Select((charge, index) =>
+        var sourceCharges = source.Charges.OrderBy(c => c.LineNumber).ToList();
+        var charges = sourceCharges.Select((charge, index) =>
             SalesOrderCharge.Create(
                 Guid.NewGuid(),
                 order.Id,
@@ -601,9 +653,14 @@ public class SalesOrderService(
                 userId,
                 now)).ToList();
         order.ReplaceCharges(charges);
-        foreach (var charge in charges)
+        for (var i = 0; i < charges.Count; i++)
         {
-            db.SalesOrderCharges.Add(charge);
+            db.SalesOrderCharges.Add(charges[i]);
+            if (sourceCharges[i].OutsourcedItem is { } chargeItem)
+            {
+                db.OutsourcedItems.Add(OutsourcedItem.CreateForCharge(
+                    Guid.NewGuid(), order.Id, charges[i].Id, chargeItem.Details, chargeItem.VendorCost, userId, now));
+            }
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -726,35 +783,173 @@ public class SalesOrderService(
             .ToList();
     }
 
-    /// <summary>Rebuilds the order's charge rows from the form input. Charges have no downstream
-    /// references (no jobs), so a wholesale replace is safe in any editable status.</summary>
-    private void ReplaceCharges(
+    /// <summary>
+    /// Brings the order's charge rows in line with the form: rows are matched by id (so an outsourced
+    /// charge keeps its vendor tracking across saves), missing rows are removed, new rows appended.
+    /// Charges have no jobs, so this is safe in any editable status.
+    /// </summary>
+    private void SyncCharges(
         SalesOrder order,
         IReadOnlyList<SalesOrderChargeInput>? inputs,
         Guid userId,
         DateTime now)
     {
-        db.SalesOrderCharges.RemoveRange(order.Charges);
+        var existing = order.Charges.ToDictionary(c => c.Id);
+        var wanted = (inputs ?? []).Where(c => !string.IsNullOrWhiteSpace(c.Description)).ToList();
+        var keptIds = wanted.Where(c => c.Id.HasValue).Select(c => c.Id!.Value).ToHashSet();
 
-        var charges = new List<SalesOrderCharge>();
-        var lineNumber = 1;
-        foreach (var input in (inputs ?? []).Where(c => !string.IsNullOrWhiteSpace(c.Description)))
+        foreach (var removed in existing.Values.Where(c => !keptIds.Contains(c.Id)).ToList())
         {
-            var charge = SalesOrderCharge.Create(
-                Guid.NewGuid(),
-                order.Id,
-                lineNumber++,
-                input.Description,
-                input.SourceEstimateChargeId,
-                Math.Max(1, input.Quantity),
-                input.UnitPrice,
-                userId,
-                now);
+            if (removed.OutsourcedItem is { CanBeRemoved: false })
+            {
+                throw new InvalidOperationException(
+                    $"\"{removed.Description}\" has already been sent to or received from the vendor and cannot be removed.");
+            }
+
+            db.SalesOrderCharges.Remove(removed);
+        }
+
+        // New rows number after every row that has ever been on the order, so a remove + add in the
+        // same save never collides on the (order, line number) index.
+        var nextNumber = existing.Values.Select(c => c.LineNumber).DefaultIfEmpty(0).Max() + 1;
+        var charges = new List<SalesOrderCharge>();
+        foreach (var input in wanted)
+        {
+            SalesOrderCharge charge;
+            if (input.Id is { } chargeId && existing.TryGetValue(chargeId, out var current))
+            {
+                current.Update(input.Description, Math.Max(1, input.Quantity), input.UnitPrice, userId, now);
+                charge = current;
+            }
+            else
+            {
+                charge = SalesOrderCharge.Create(
+                    Guid.NewGuid(),
+                    order.Id,
+                    nextNumber++,
+                    input.Description,
+                    input.SourceEstimateChargeId,
+                    Math.Max(1, input.Quantity),
+                    input.UnitPrice,
+                    userId,
+                    now);
+                db.SalesOrderCharges.Add(charge);
+            }
+
             charges.Add(charge);
-            db.SalesOrderCharges.Add(charge);
+            SyncOutsourcedItem(order, charge.OutsourcedItem, input.Outsource, hasJob: false, $"\"{charge.Description}\"",
+                () => OutsourcedItem.CreateForCharge(Guid.NewGuid(), order.Id, charge.Id, input.Outsource!.Details, input.Outsource.VendorCost, userId, now),
+                userId, now);
         }
 
         order.ReplaceCharges(charges);
+    }
+
+    /// <summary>
+    /// Creates, updates, or removes the outsourced item for each order line to match the form.
+    /// Lines are matched to their inputs by id (new lines: by position). A line whose item has been
+    /// sent to the vendor, or whose job was routed to the vendor, cannot be switched back in-house.
+    /// </summary>
+    private void SyncLineOutsourcing(
+        SalesOrder order,
+        IReadOnlyList<SalesOrderLine> lines,
+        IReadOnlyList<SalesOrderLineInput> inputs,
+        IReadOnlyDictionary<Guid, OutsourcedItem> existingItemsByLine,
+        IReadOnlySet<Guid> lineIdsWithJobs,
+        Guid userId,
+        DateTime now)
+    {
+        var inputsById = inputs.Where(i => i.Id.HasValue).ToDictionary(i => i.Id!.Value);
+        var newInputs = new Queue<SalesOrderLineInput>(inputs.Where(i => !i.Id.HasValue));
+
+        foreach (var line in lines)
+        {
+            if (!inputsById.TryGetValue(line.Id, out var input))
+            {
+                if (!newInputs.TryDequeue(out input))
+                {
+                    continue;
+                }
+            }
+
+            var existing = line.OutsourcedItem ?? existingItemsByLine.GetValueOrDefault(line.Id);
+            SyncOutsourcedItem(order, existing, input.Outsource, lineIdsWithJobs.Contains(line.Id), $"Line {line.LineNumber}",
+                () => OutsourcedItem.CreateForLine(Guid.NewGuid(), order.Id, line.Id, input.Outsource!.Details, input.Outsource.VendorCost, userId, now),
+                userId, now);
+        }
+
+        // Lines dropped from the order take their item with them (cascade) — unless the vendor is already involved.
+        var keptLineIds = lines.Select(l => l.Id).ToHashSet();
+        foreach (var orphan in existingItemsByLine.Where(kv => !keptLineIds.Contains(kv.Key)).Select(kv => kv.Value))
+        {
+            if (!orphan.CanBeRemoved)
+            {
+                throw new InvalidOperationException(
+                    "An outsourced line that has already been sent to or received from the vendor cannot be removed.");
+            }
+        }
+    }
+
+    private void SyncOutsourcedItem(
+        SalesOrder order,
+        OutsourcedItem? existing,
+        OutsourceItemInput? input,
+        bool hasJob,
+        string label,
+        Func<OutsourcedItem> create,
+        Guid userId,
+        DateTime now)
+    {
+        if (input is not null)
+        {
+            if (existing is null)
+            {
+                if (hasJob)
+                {
+                    throw new InvalidOperationException(
+                        $"{label} already has a production job and cannot be switched to outsourced. Cancel the job first or add a new line.");
+                }
+
+                db.OutsourcedItems.Add(create());
+            }
+            else
+            {
+                existing.UpdateDetails(input.Details, input.VendorCost, userId, now);
+            }
+        }
+        else if (existing is not null)
+        {
+            if (!existing.CanBeRemoved)
+            {
+                throw new InvalidOperationException(
+                    $"{label} has already been sent to or received from the vendor and cannot be switched back to in-house.");
+            }
+
+            if (hasJob)
+            {
+                throw new InvalidOperationException(
+                    $"{label} has a job routed to the vendor and cannot be switched back to in-house. Cancel the job first or add a new line.");
+            }
+
+            db.OutsourcedItems.Remove(existing);
+        }
+    }
+
+    private async Task<Dictionary<Guid, OutsourcedItem>> LoadLineItemsAsync(Guid salesOrderId, CancellationToken cancellationToken) =>
+        await db.OutsourcedItems
+            .Include(o => o.Receipts)
+            .Where(o => o.SalesOrderId == salesOrderId && o.SalesOrderLineId != null)
+            .ToDictionaryAsync(o => o.SalesOrderLineId!.Value, cancellationToken);
+
+    private async Task<HashSet<Guid>> LoadLineIdsWithJobsAsync(IEnumerable<Guid> lineIds, CancellationToken cancellationToken)
+    {
+        var ids = lineIds.ToList();
+        return (await db.Jobs.AsNoTracking()
+                .Where(j => ids.Contains(j.SalesOrderLineId) && j.Status != JobStatus.Closed)
+                .Select(j => j.SalesOrderLineId)
+                .Distinct()
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
     }
 
     private async Task<Dictionary<Guid, LabelSpec>> LoadProductSeedSpecsAsync(

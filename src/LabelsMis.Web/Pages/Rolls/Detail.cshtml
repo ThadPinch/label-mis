@@ -6,8 +6,15 @@
 
 @if (Model.Detail is null) { <p>Not found.</p>; return; }
 
-<h1 class="h3 mb-1">@Model.Detail.Roll.RollBarcode</h1>
-<p class="text-muted">@Model.Detail.StockDescription — @Model.Detail.Roll.Status</p>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-1">
+    <div>
+        <h1 class="h3 mb-1">@Model.Detail.Roll.RollBarcode</h1>
+        <p class="text-muted mb-0">@Model.Detail.StockDescription — @Model.Detail.Roll.Status</p>
+    </div>
+    <a asp-page="/Rolls/Label" asp-route-id="@Model.Id" target="_blank" rel="noopener" class="btn btn-outline-secondary">
+        Print roll label
+    </a>
+</div>
 
 <div class="row g-3 mb-4">
     <div class="col-md-6">

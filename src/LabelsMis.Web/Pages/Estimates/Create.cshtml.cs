@@ -3,6 +3,7 @@ using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Services.Estimates;
+using LabelsMis.Web.Services.Outsourcing;
 using LabelsMis.Web.Services.Shipping;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -18,7 +19,8 @@ public class CreateModel(
     EstimateService estimateService,
     LabelsMisDbContext db,
     UserManager<ApplicationUser> userManager,
-    ShippingMethodService shippingMethodService) : PageModel
+    ShippingMethodService shippingMethodService,
+    OutsourceService outsourceService) : PageModel
 {
     [BindProperty]
     public EstimatePageInput Input { get; set; } = new();
@@ -116,7 +118,7 @@ public class CreateModel(
         ViewData["Substrates"] = await db.Stocks.AsNoTracking()
             .Where(s => s.IsActive)
             .OrderBy(s => s.Code)
-            .Select(s => new SelectListItem($"{s.Code} — {s.WidthIn}\" @ {s.CostPerMsi:C4}/MSI", s.Id.ToString()))
+            .Select(s => new SelectListItem($"{s.Code} — {s.Description}", s.Id.ToString()))
             .ToListAsync(cancellationToken);
 
         ViewData["FinishingOperations"] = await db.FinishingOperations.AsNoTracking()
@@ -149,5 +151,9 @@ public class CreateModel(
 
         ViewData["ShippingMethods"] = await shippingMethodService.GetSelectableAsync(
             Input.ShippingMethodId, cancellationToken);
+
+        ViewData["OutsourceVendors"] = await outsourceService.GetVendorOptionsAsync(
+            Input.Lines.Select(l => l.OutsourceVendorId).Concat(Input.Charges.Select(c => c.OutsourceVendorId)),
+            cancellationToken);
     }
 }

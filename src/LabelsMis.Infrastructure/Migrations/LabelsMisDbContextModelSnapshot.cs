@@ -543,6 +543,9 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<Guid?>("SalesRepId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("ShipToCity")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -629,6 +632,11 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<Guid>("EstimateId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsOutsourced")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("LineNumber")
                         .HasColumnType("integer");
 
@@ -640,6 +648,24 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("ModifiedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("OutsourceCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<DateOnly?>("OutsourceExpectedIn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("OutsourcePrivateNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("OutsourceQuoteNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("OutsourceVendorId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("Quantity")
@@ -659,6 +685,8 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.HasIndex("CreatedById");
 
                     b.HasIndex("ModifiedById");
+
+                    b.HasIndex("OutsourceVendorId");
 
                     b.HasIndex("EstimateId", "LineNumber")
                         .IsUnique();
@@ -704,6 +732,11 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<int>("InkSet")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("IsOutsourced")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<decimal>("LabelAcrossIn")
                         .HasPrecision(10, 4)
                         .HasColumnType("numeric(10,4)");
@@ -733,6 +766,20 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("ModifiedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("OutsourceExpectedIn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("OutsourcePrivateNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("OutsourceQuoteNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("OutsourceVendorId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ProductDescription")
@@ -783,6 +830,8 @@ namespace LabelsMis.Infrastructure.Migrations
 
                     b.HasIndex("ModifiedById");
 
+                    b.HasIndex("OutsourceVendorId");
+
                     b.HasIndex("SourceProductId");
 
                     b.HasIndex("SubstrateId");
@@ -800,6 +849,14 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("CalculatedCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<decimal>("CalculatedTotalPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<decimal>("CalculatedUnitPrice")
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
 
@@ -829,6 +886,10 @@ namespace LabelsMis.Infrastructure.Migrations
 
                     b.Property<Guid?>("ModifiedById")
                         .HasColumnType("uuid");
+
+                    b.Property<decimal?>("OutsourceCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
@@ -1349,6 +1410,11 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<DateOnly?>("DueDate")
                         .HasColumnType("date");
 
+                    b.Property<bool>("IsOutsourced")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("JobNumber")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1610,6 +1676,128 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("JobTimeEntry", "public");
+                });
+
+            modelBuilder.Entity("LabelsMis.Domain.Entities.OutsourceReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ModifiedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("OutsourcedItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("ReceivedOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("TenantId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000001"));
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("ModifiedById");
+
+                    b.HasIndex("OutsourcedItemId");
+
+                    b.ToTable("OutsourceReceipt", "public");
+                });
+
+            modelBuilder.Entity("LabelsMis.Domain.Entities.OutsourcedItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("ExpectedIn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ModifiedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PrivateNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("QuoteNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("SalesOrderChargeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SalesOrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SalesOrderLineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("SentToVendorAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000001"));
+
+                    b.Property<decimal?>("VendorCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<Guid?>("VendorId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("ModifiedById");
+
+                    b.HasIndex("SalesOrderChargeId")
+                        .IsUnique();
+
+                    b.HasIndex("SalesOrderId");
+
+                    b.HasIndex("SalesOrderLineId")
+                        .IsUnique();
+
+                    b.HasIndex("VendorId");
+
+                    b.ToTable("OutsourcedItem", "public");
                 });
 
             modelBuilder.Entity("LabelsMis.Domain.Entities.Payment", b =>
@@ -3153,6 +3341,11 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
+                    b.Property<bool>("IsOutsourceVendor")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<DateTime?>("ModifiedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -3163,6 +3356,10 @@ namespace LabelsMis.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<string>("OutsourceNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<Guid>("TenantId")
                         .ValueGeneratedOnAdd()
@@ -3676,7 +3873,14 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasForeignKey("ModifiedById")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("LabelsMis.Domain.Entities.Supplier", "OutsourceVendor")
+                        .WithMany()
+                        .HasForeignKey("OutsourceVendorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Estimate");
+
+                    b.Navigation("OutsourceVendor");
                 });
 
             modelBuilder.Entity("LabelsMis.Domain.Entities.EstimateLine", b =>
@@ -3698,6 +3902,11 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasForeignKey("ModifiedById")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("LabelsMis.Domain.Entities.Supplier", "OutsourceVendor")
+                        .WithMany()
+                        .HasForeignKey("OutsourceVendorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("LabelsMis.Domain.Entities.Product", null)
                         .WithMany()
                         .HasForeignKey("SourceProductId")
@@ -3710,6 +3919,8 @@ namespace LabelsMis.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Estimate");
+
+                    b.Navigation("OutsourceVendor");
 
                     b.Navigation("Substrate");
                 });
@@ -4112,6 +4323,71 @@ namespace LabelsMis.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("JobOperation");
+                });
+
+            modelBuilder.Entity("LabelsMis.Domain.Entities.OutsourceReceipt", b =>
+                {
+                    b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ModifiedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LabelsMis.Domain.Entities.OutsourcedItem", "OutsourcedItem")
+                        .WithMany("Receipts")
+                        .HasForeignKey("OutsourcedItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("OutsourcedItem");
+                });
+
+            modelBuilder.Entity("LabelsMis.Domain.Entities.OutsourcedItem", b =>
+                {
+                    b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ModifiedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LabelsMis.Domain.Entities.SalesOrderCharge", "SalesOrderCharge")
+                        .WithOne("OutsourcedItem")
+                        .HasForeignKey("LabelsMis.Domain.Entities.OutsourcedItem", "SalesOrderChargeId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("LabelsMis.Domain.Entities.SalesOrder", "SalesOrder")
+                        .WithMany()
+                        .HasForeignKey("SalesOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LabelsMis.Domain.Entities.SalesOrderLine", "SalesOrderLine")
+                        .WithOne("OutsourcedItem")
+                        .HasForeignKey("LabelsMis.Domain.Entities.OutsourcedItem", "SalesOrderLineId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("LabelsMis.Domain.Entities.Supplier", "Vendor")
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("SalesOrder");
+
+                    b.Navigation("SalesOrderCharge");
+
+                    b.Navigation("SalesOrderLine");
+
+                    b.Navigation("Vendor");
                 });
 
             modelBuilder.Entity("LabelsMis.Domain.Entities.Payment", b =>
@@ -4932,6 +5208,11 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Navigation("TimeEntries");
                 });
 
+            modelBuilder.Entity("LabelsMis.Domain.Entities.OutsourcedItem", b =>
+                {
+                    b.Navigation("Receipts");
+                });
+
             modelBuilder.Entity("LabelsMis.Domain.Entities.Product", b =>
                 {
                     b.Navigation("CustomerAssignments");
@@ -4959,6 +5240,16 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Navigation("Charges");
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("LabelsMis.Domain.Entities.SalesOrderCharge", b =>
+                {
+                    b.Navigation("OutsourcedItem");
+                });
+
+            modelBuilder.Entity("LabelsMis.Domain.Entities.SalesOrderLine", b =>
+                {
+                    b.Navigation("OutsourcedItem");
                 });
 
             modelBuilder.Entity("LabelsMis.Domain.Entities.Shipment", b =>

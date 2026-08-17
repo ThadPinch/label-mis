@@ -31,6 +31,10 @@ public class Job : EntityBase
     /// editable on the floor. Nullable only for pre-refactor rows awaiting backfill.</summary>
     public LabelSpec? Spec { get; private set; }
 
+    /// <summary>The line is made by an outside vendor: the job carries no press/finishing operations,
+    /// waits in <see cref="JobStatus.Outsourced"/>, and moves to Rewound (ready to ship) on receipt.</summary>
+    public bool IsOutsourced { get; private set; }
+
     public IReadOnlyCollection<JobOperation> Operations => _operations;
     public IReadOnlyCollection<JobMaterialUsage> MaterialUsages => _materialUsages;
 
@@ -73,6 +77,31 @@ public class Job : EntityBase
         };
         job.SetCreated(id, createdById, createdAt);
         return job;
+    }
+
+    /// <summary>Routes a freshly planned job to the vendor instead of pre-press.</summary>
+    public void MarkOutsourced(Guid modifiedById, DateTime modifiedAt)
+    {
+        if (Status is not JobStatus.PrePress || _operations.Count > 0)
+        {
+            throw new InvalidOperationException("Only a newly planned job with no operations can be marked outsourced.");
+        }
+
+        IsOutsourced = true;
+        Status = JobStatus.Outsourced;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>The outsourced goods are in: the job is ready to ship (Rewound), skipping press and finishing.</summary>
+    public void ReceiveOutsourced(Guid modifiedById, DateTime modifiedAt)
+    {
+        if (Status is not JobStatus.Outsourced)
+        {
+            throw new InvalidOperationException("Only a job that is at the vendor can be received.");
+        }
+
+        Status = JobStatus.Rewound;
+        SetModified(modifiedById, modifiedAt);
     }
 
     /// <summary>Replaces the job's spec — a production edit on the floor, or one-time backfill.</summary>

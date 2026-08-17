@@ -1,0 +1,72 @@
+@model LabelsMis.Web.Pages.Shared.OutsourceFieldsModel
+@{
+    var p = Model.Prefix;
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+}
+<div class="outsource-block" data-outsource-block>
+    <label class="form-check form-switch mb-1 d-inline-flex align-items-center gap-2 small">
+        @if (Model.ToggleLocked)
+        {
+            <input type="checkbox" class="form-check-input outsource-toggle mt-0" checked="@Model.IsOutsourced" disabled />
+            <input type="hidden" name="@(p).IsOutsourced" value="@(Model.IsOutsourced ? "true" : "false")" />
+        }
+        else
+        {
+            <input type="checkbox" class="form-check-input outsource-toggle mt-0" name="@(p).IsOutsourced" value="true" checked="@Model.IsOutsourced" disabled="@Model.ReadOnly" />
+            <input type="hidden" name="@(p).IsOutsourced" value="false" />
+        }
+        <span class="form-check-label fw-semibold">@Model.ToggleLabel</span>
+        @if (Model.IsOutsourced && !string.IsNullOrEmpty(Model.StatusLabel))
+        {
+            <span class="badge text-bg-info ms-1">@Model.StatusLabel</span>
+        }
+    </label>
+    <div class="row g-2 outsource-fields @(Model.IsOutsourced ? "" : "d-none")">
+        <div class="col-md-4">
+            <label class="form-label small mb-0">Vendor</label>
+            <select name="@(p).OutsourceVendorId" class="form-select form-select-sm outsource-vendor" disabled="@Model.ReadOnly">
+                <option value="">— choose vendor —</option>
+                @foreach (var v in Model.Vendors)
+                {
+                    <option value="@v.Value" selected="@(Model.VendorId?.ToString() == v.Value)">@v.Text</option>
+                }
+            </select>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small mb-0">Vendor quote #</label>
+            <input name="@(p).OutsourceQuoteNumber" value="@Model.QuoteNumber" class="form-control form-control-sm" maxlength="100" readonly="@Model.ReadOnly" />
+        </div>
+        @if (Model.ShowCost)
+        {
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-0">Vendor cost</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text">$</span>
+                    <input name="@(p).OutsourceCost" value="@(Model.VendorCost?.ToString("0.####", inv) ?? "")" class="form-control outsource-cost @Model.CostInputClass" inputmode="decimal" placeholder="total" readonly="@Model.ReadOnly" />
+                </div>
+            </div>
+        }
+        <div class="col-6 col-md-3">
+            <label class="form-label small mb-0">Expected in</label>
+            <input type="date" name="@(p).OutsourceExpectedIn" value="@(Model.ExpectedIn?.ToString("yyyy-MM-dd") ?? "")" class="form-control form-control-sm" readonly="@Model.ReadOnly" />
+        </div>
+        @if (Model.MarginReadoutClass is not null)
+        {
+            <div class="col-6 col-md-2 d-flex align-items-end">
+                <div class="small text-muted pb-1">Margin <span class="fw-semibold @Model.MarginReadoutClass">—</span></div>
+            </div>
+        }
+        <div class="col-12">
+            <label class="form-label small mb-0">Private notes <span class="text-muted">(internal — never on customer documents)</span></label>
+            <textarea name="@(p).OutsourcePrivateNotes" class="form-control form-control-sm" rows="2" maxlength="2000" readonly="@Model.ReadOnly">@Model.PrivateNotes</textarea>
+        </div>
+        @if (!Model.ShowCost)
+        {
+            <input type="hidden" name="@(p).OutsourcePricingJson" value="@Model.PricingJson" class="outsource-pricing-json" />
+        }
+        @if (!string.IsNullOrEmpty(Model.Hint))
+        {
+            <div class="col-12"><div class="form-text mt-0">@Model.Hint</div></div>
+        }
+    </div>
+</div>

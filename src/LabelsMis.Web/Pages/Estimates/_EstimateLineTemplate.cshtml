@@ -1,6 +1,8 @@
 @using LabelsMis.Domain.Entities
 @using LabelsMis.Domain.Enums
+@using LabelsMis.Web.Pages.Shared
 @{
+    var outsourceVendors = (IEnumerable<SelectListItem>?)ViewData["OutsourceVendors"] ?? Enumerable.Empty<SelectListItem>();
     var finishingOps = (IReadOnlyList<FinishingOperation>?)ViewData["FinishingOperations"] ?? Array.Empty<FinishingOperation>();
     var substrates = (IEnumerable<SelectListItem>?)ViewData["Substrates"] ?? Enumerable.Empty<SelectListItem>();
     var spotInks = (IReadOnlyList<Ink>?)ViewData["SpotInks"] ?? Array.Empty<Ink>();
@@ -127,6 +129,7 @@
 
             <div class="estimate-line-section">
                 <div class="estimate-line-section-title">Imposition &amp; waste</div>
+                <div class="form-text die-layout-note d-none"></div>
                 <div class="row g-3">
                     <div class="col-6 col-md-3">
                         <label class="form-label">Labels across <span class="form-text d-inline labels-across-max">(auto)</span></label>
@@ -206,6 +209,15 @@
                 <div class="estimate-line-section">
                     <div class="estimate-line-section-title">Line notes</div>
                     <textarea name="Input.Lines[@i].LineNotes" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="estimate-line-section estimate-line-outsource">
+                    <div class="estimate-line-section-title">Outsourcing</div>
+                    <partial name="Shared/_OutsourceFields" model="@(new OutsourceFieldsModel($"Input.Lines[{i}]", outsourceVendors)
+                    {
+                        ShowCost = false,
+                        ToggleLabel = "Outsource this line",
+                        Hint = "Enter the vendor cost and our final price for each quantity in the pricing table below — the in-house calculation stays alongside for comparison."
+                    })" />
                 </div>
             </div>
             <div class="mt-3">

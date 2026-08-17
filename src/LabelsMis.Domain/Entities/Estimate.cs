@@ -26,6 +26,11 @@ public class Estimate : EntityBase
     public string? BillingNotes { get; private set; }
     public DateOnly? ValidUntilDate { get; private set; }
     public DateTime? WonAt { get; private set; }
+
+    /// <summary>When the estimate first went to the customer (email). Null on a draft, and on an
+    /// estimate that was marked won without ever being sent — the page flags that as "not sent".</summary>
+    public DateTime? SentAt { get; private set; }
+    public bool IsSentToCustomer => SentAt.HasValue;
     public DateTime? LostAt { get; private set; }
     public string? LostReason { get; private set; }
     public string? PdfFilePath { get; private set; }
@@ -150,6 +155,16 @@ public class Estimate : EntityBase
         }
         Status = EstimateStatus.Sent;
         PdfFilePath = pdfFilePath;
+        SentAt ??= modifiedAt;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>An email actually went to the customer outside the draft→sent transition (a resend,
+    /// or the first send of an estimate that was marked won directly). Keeps the first send time.</summary>
+    public void RecordSentToCustomer(string? pdfFilePath, Guid modifiedById, DateTime modifiedAt)
+    {
+        SentAt ??= modifiedAt;
+        PdfFilePath ??= pdfFilePath;
         SetModified(modifiedById, modifiedAt);
     }
 
@@ -223,6 +238,7 @@ public class Estimate : EntityBase
         RevisionNumber++;
         Status = EstimateStatus.Draft;
         PdfFilePath = null;
+        SentAt = null;
         WonAt = null;
         LostAt = null;
         LostReason = null;

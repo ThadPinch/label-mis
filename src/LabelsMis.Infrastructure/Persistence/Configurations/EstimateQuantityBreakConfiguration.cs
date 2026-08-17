@@ -15,6 +15,9 @@ public class EstimateQuantityBreakConfiguration : IEntityTypeConfiguration<Estim
         builder.Property(q => q.UnitPrice).HasMoneyPrecision();
         builder.Property(q => q.TotalPrice).HasMoneyPrecision();
         builder.Property(q => q.CalculatedCost).HasMoneyPrecision();
+        builder.Property(q => q.CalculatedUnitPrice).HasMoneyPrecision();
+        builder.Property(q => q.CalculatedTotalPrice).HasMoneyPrecision();
+        builder.Property(q => q.OutsourceCost).HasPrecision(18, 4);
         builder.Property(q => q.MarginPct).HasMoneyPrecision();
         builder.Property(q => q.MarkupPctOverride).HasPrecision(18, 4);
         builder.Property(q => q.CostBreakdownJson).HasColumnType("jsonb").IsRequired();

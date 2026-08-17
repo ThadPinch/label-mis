@@ -17,6 +17,7 @@ public class JobConfiguration : IEntityTypeConfiguration<Job>
         builder.Property(j => j.Status).IsRequired();
         builder.Property(j => j.Priority).IsRequired();
         builder.Property(j => j.Notes).HasMaxLength(4000);
+        builder.Property(j => j.IsOutsourced).IsRequired().HasDefaultValue(false);
 
         builder.OwnsLabelSpec(j => j.Spec);
 

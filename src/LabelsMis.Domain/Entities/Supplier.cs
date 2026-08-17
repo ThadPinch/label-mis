@@ -16,6 +16,13 @@ public class Supplier : MasterDataEntity
     public int DefaultLeadTimeDays { get; private set; }
     public string? AccountNumber { get; private set; }
 
+    /// <summary>Whether this supplier makes outsourced items (promo, print, wide format, or whole
+    /// label runs) — only these appear in the vendor pickers on estimates and orders.</summary>
+    public bool IsOutsourceVendor { get; private set; }
+
+    /// <summary>What we send this vendor, lead times, contacts to use — internal notes.</summary>
+    public string? OutsourceNotes { get; private set; }
+
     public IReadOnlyCollection<SupplierContact> Contacts => _contacts;
 
     public static Supplier Create(
@@ -84,6 +91,13 @@ public class Supplier : MasterDataEntity
         Terms = terms.Trim();
         DefaultLeadTimeDays = defaultLeadTimeDays;
         AccountNumber = string.IsNullOrWhiteSpace(accountNumber) ? null : accountNumber.Trim();
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    public void SetOutsourceVendor(bool isOutsourceVendor, string? outsourceNotes, Guid modifiedById, DateTime modifiedAt)
+    {
+        IsOutsourceVendor = isOutsourceVendor;
+        OutsourceNotes = string.IsNullOrWhiteSpace(outsourceNotes) ? null : outsourceNotes.Trim();
         SetModified(modifiedById, modifiedAt);
     }
 

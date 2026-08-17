@@ -103,7 +103,7 @@ public record DashboardData(
 public class DashboardService(LabelsMisDbContext db)
 {
     private static readonly JobStatus[] WipStatuses =
-        [JobStatus.PrePress, JobStatus.Queued, JobStatus.Printed, JobStatus.Finished, JobStatus.Rewound];
+        [JobStatus.Outsourced, JobStatus.PrePress, JobStatus.Queued, JobStatus.Printed, JobStatus.Finished, JobStatus.Rewound];
 
     public async Task<DashboardData> GetAsync(
         int rangeDays,
@@ -460,6 +460,7 @@ public class DashboardService(LabelsMisDbContext db)
 
     private static string JobStatusLabel(JobStatus status) => status switch
     {
+        JobStatus.Outsourced => "Outsourced",
         JobStatus.PrePress => "Pre-press",
         JobStatus.Queued => "Queued",
         JobStatus.Printed => "Printed",

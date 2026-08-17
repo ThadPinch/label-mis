@@ -1,0 +1,152 @@
+@page "/production/outsourced"
+@using LabelsMis.Web.Pages.Shared
+@using LabelsMis.Web.Services.Outsourcing
+@model LabelsMis.Web.Pages.Production.OutsourcedModel
+@{
+    ViewData["Title"] = "Outsourced";
+    var sortRoute = Model.FilterRoute;
+    string StatusBadge(OutsourcedItemRow item) => item.Status switch
+    {
+        OutsourceItemStatus.Received => "text-bg-success",
+        OutsourceItemStatus.PartiallyReceived => "text-bg-warning",
+        OutsourceItemStatus.AtVendor => item.IsOverdue(Model.Today) ? "text-bg-danger" : "text-bg-primary",
+        _ => item.IsOverdue(Model.Today) ? "text-bg-danger" : "text-bg-secondary"
+    };
+    string StatusText(OutsourcedItemRow item) => item.Status switch
+    {
+        OutsourceItemStatus.Received => "Received",
+        OutsourceItemStatus.PartiallyReceived => $"{item.QuantityReceived:N0} of {item.Quantity:N0}",
+        OutsourceItemStatus.AtVendor => "At vendor",
+        _ => "Not sent"
+    };
+}
+
+<partial name="_ProductionStageNav" model="Model" />
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Outsourced</h1>
+    <span class="text-muted">@Model.Result.TotalCount item(s)</span>
+</div>
+
+<p class="text-muted">Order lines and additional charges an outside vendor is making for us. Mark them sent, then receive them in as they arrive — a received order line goes straight to Shipping.</p>
+
+@if (TempData["JobActionError"] is string actionError)
+{
+    <div class="alert alert-danger">@actionError</div>
+}
+
+<form method="get" class="row g-2 mb-3 align-items-end">
+    <input type="hidden" asp-for="Sort" />
+    <div class="col-md-3">
+        <label class="form-label small mb-0">Search</label>
+        <input asp-for="Search" class="form-control" placeholder="Order, customer, item, vendor, quote #, job" />
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small mb-0">Vendor</label>
+        <select asp-for="VendorId" class="form-select">
+            <option value="">All vendors</option>
+            @foreach (var v in Model.VendorOptions)
+            {
+                <option value="@v.Value" selected="@(Model.VendorId?.ToString() == v.Value)">@v.Text</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Status</label>
+        <select asp-for="Status" class="form-select">
+            <option value="open">Open (not received)</option>
+            <option value="pending">Not yet sent</option>
+            <option value="atvendor">At vendor</option>
+            <option value="partial">Partially received</option>
+            <option value="received">Received</option>
+            <option value="all">All</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <div class="form-check mb-2">
+            <input asp-for="OverdueOnly" class="form-check-input" />
+            <label asp-for="OverdueOnly" class="form-check-label small">Overdue only</label>
+        </div>
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-outline-secondary">Filter</button>
+        <a asp-page="./Outsourced" class="btn btn-link">Clear</a>
+    </div>
+</form>
+
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="alert alert-light border">No outsourced items match.</div>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Order", "order", Model.Sort, sortRoute))</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer", "customer", Model.Sort, sortRoute))</th>
+                <th>Item</th>
+                <th class="text-end">Qty</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Vendor", "vendor", Model.Sort, sortRoute))</th>
+                <th>Quote #</th>
+                <th class="text-end">Cost / price</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Expected in", "expected", Model.Sort, sortRoute))</th>
+                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Ship by", "due", Model.Sort, sortRoute))</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in Model.Result.Items)
+        {
+            var overdue = item.IsOverdue(Model.Today);
+            <tr>
+                <td class="text-nowrap">
+                    <a asp-page="/SalesOrders/Edit" asp-route-id="@item.SalesOrderId">@item.OrderNumber</a>
+                    @if (item.JobId is { } jobId)
+                    {
+                        <div class="small"><a asp-page="/Jobs/Detail" asp-route-id="@jobId">@item.JobNumber</a></div>
+                    }
+                </td>
+                <td>@item.CustomerName</td>
+                <td>
+                    <div>@item.Description</div>
+                    <div class="small text-muted">
+                        @(item.IsLine ? "Order line" : "Additional charge")@(item.PrivateNotes is { } notes ? $" · {notes}" : "")
+                    </div>
+                </td>
+                <td class="text-end text-nowrap">@item.Quantity.ToString("N0")</td>
+                <td>@(item.VendorName ?? "—")</td>
+                <td>@(item.QuoteNumber ?? "—")</td>
+                <td class="text-end text-nowrap">
+                    <div>@(item.VendorCost?.ToString("C2") ?? "—")</div>
+                    <div class="small text-muted">@item.Price.ToString("C2")@(item.MarginPct is { } m ? $" · {m:P1}" : "")</div>
+                </td>
+                <td class="text-nowrap @(overdue ? "text-danger fw-semibold" : "")">@(item.ExpectedIn?.ToString("yyyy-MM-dd") ?? "—")@(overdue ? " ⚠" : "")</td>
+                <td class="text-nowrap">@(item.RequestedShipDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                <td class="text-nowrap"><span class="badge @StatusBadge(item)">@StatusText(item)</span></td>
+                <td class="text-end text-nowrap">
+                    @if (Model.CanAct)
+                    {
+                        <button type="button" class="btn btn-sm @(item.Status == OutsourceItemStatus.Received ? "btn-outline-secondary" : "btn-primary")"
+                                data-action-panel="?handler=ActionPanel&itemId=@item.Id">
+                            @(item.Status switch
+                            {
+                                OutsourceItemStatus.Received => "Details",
+                                OutsourceItemStatus.Pending => "Send / receive…",
+                                _ => "Receive…"
+                            })
+                        </button>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    @await Html.PartialAsync("Shared/_Pager", new PagerModel(
+        Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, Model.Search, Model.Sort)
+        { Extra = Model.FilterRoute })
+}
+
+<partial name="_JobActionModalHost" />

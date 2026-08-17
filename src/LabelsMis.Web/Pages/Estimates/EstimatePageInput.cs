@@ -1,7 +1,10 @@
 using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Web.Services.Estimates;
+using LabelsMis.Web.Services.Outsourcing;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace LabelsMis.Web.Pages.Estimates;
 
@@ -89,6 +92,31 @@ public class EstimateLinePageInput
     /// calculate endpoint share one shape.</summary>
     public string? QuantityMarkupOverridesJson { get; set; }
 
+    /// <summary>Bought from an outside vendor: the calculator still runs for comparison, but each
+    /// quantity is quoted at the entered vendor cost + final price (<see cref="OutsourcePricingJson"/>).</summary>
+    public bool IsOutsourced { get; set; }
+
+    public Guid? OutsourceVendorId { get; set; }
+
+    [StringLength(100)]
+    public string? OutsourceQuoteNumber { get; set; }
+
+    [DataType(DataType.Date)]
+    public DateOnly? OutsourceExpectedIn { get; set; }
+
+    [StringLength(2000)]
+    public string? OutsourcePrivateNotes { get; set; }
+
+    /// <summary>Per-quantity vendor cost + final price as JSON keyed by quantity, e.g.
+    /// {"1000":{"cost":120,"price":250}}. Maintained by the pricing table script.</summary>
+    public string? OutsourcePricingJson { get; set; }
+
+    public OutsourceLineQuoteInput? ToOutsource() => IsOutsourced
+        ? new OutsourceLineQuoteInput(
+            new OutsourceDetails(OutsourceVendorId, OutsourceQuoteNumber, OutsourceExpectedIn, OutsourcePrivateNotes),
+            ParseOutsourcePricing(OutsourcePricingJson))
+        : null;
+
     public EstimateLineFormInput ToForm() => new(
         Id,
         SourceProductId,
@@ -114,7 +142,42 @@ public class EstimateLinePageInput
         LabelOrientationOverride,
         ParseQuantityMarkupOverrides(QuantityMarkupOverridesJson),
         Unwind,
-        ShrinkLayflatIn);
+        ShrinkLayflatIn,
+        ToOutsource());
+
+    private sealed class OutsourcePricingJsonEntry
+    {
+        [JsonPropertyName("cost")] public decimal? Cost { get; set; }
+        [JsonPropertyName("price")] public decimal? Price { get; set; }
+    }
+
+    private static IReadOnlyDictionary<int, OutsourceQuantityPrice> ParseOutsourcePricing(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new Dictionary<int, OutsourceQuantityPrice>();
+        }
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<Dictionary<int, OutsourcePricingJsonEntry>>(json) ?? [];
+            return parsed
+                .Where(kv => kv.Value is { Cost: not null, Price: not null })
+                .ToDictionary(kv => kv.Key, kv => new OutsourceQuantityPrice(kv.Value.Cost!.Value, kv.Value.Price!.Value));
+        }
+        catch (JsonException)
+        {
+            return new Dictionary<int, OutsourceQuantityPrice>();
+        }
+    }
+
+    private static string? SerializeOutsourcePricing(Domain.Entities.EstimateLine line)
+    {
+        var pricing = line.QuantityBreaks
+            .Where(q => q.OutsourceCost.HasValue)
+            .ToDictionary(q => q.Quantity, q => new OutsourcePricingJsonEntry { Cost = q.OutsourceCost, Price = q.TotalPrice });
+        return pricing.Count == 0 ? null : JsonSerializer.Serialize(pricing);
+    }
 
     private static IReadOnlyDictionary<int, decimal>? ParseQuantityMarkupOverrides(string? json)
     {
@@ -171,7 +234,13 @@ public class EstimateLinePageInput
             FinishingOperations = EstimateCalculationMapper
                 .DeserializeFinishingOperations(line.FinishingOperationsJson).ToList(),
             Quantities = line.QuantityBreaks.OrderBy(q => q.Quantity).Select(q => (int?)q.Quantity).ToList(),
-            QuantityMarkupOverridesJson = SerializeQuantityMarkupOverrides(line)
+            QuantityMarkupOverridesJson = SerializeQuantityMarkupOverrides(line),
+            IsOutsourced = line.IsOutsourced,
+            OutsourceVendorId = line.OutsourceVendorId,
+            OutsourceQuoteNumber = line.OutsourceQuoteNumber,
+            OutsourceExpectedIn = line.OutsourceExpectedIn,
+            OutsourcePrivateNotes = line.OutsourcePrivateNotes,
+            OutsourcePricingJson = SerializeOutsourcePricing(line)
         };
     }
 
@@ -184,7 +253,8 @@ public class EstimateLinePageInput
     }
 }
 
-/// <summary>A flat, non-label charge row (die creation, design time) on the estimate form.</summary>
+/// <summary>A flat, non-label row on the estimate form: a one-time charge (die creation, design
+/// time) or an outsourced item (promo, print, wide format) bought from a vendor.</summary>
 public class EstimateChargePageInput
 {
     public Guid? Id { get; set; }
@@ -198,14 +268,43 @@ public class EstimateChargePageInput
     [Range(0, 1000000)]
     public decimal UnitPrice { get; set; }
 
-    public EstimateChargeFormInput ToForm() => new(Id, Description ?? string.Empty, Quantity, UnitPrice);
+    public bool IsOutsourced { get; set; }
+
+    public Guid? OutsourceVendorId { get; set; }
+
+    [StringLength(100)]
+    public string? OutsourceQuoteNumber { get; set; }
+
+    /// <summary>The vendor's cost for the whole charge line (all units).</summary>
+    [Range(0, 100000000)]
+    public decimal? OutsourceCost { get; set; }
+
+    [DataType(DataType.Date)]
+    public DateOnly? OutsourceExpectedIn { get; set; }
+
+    [StringLength(2000)]
+    public string? OutsourcePrivateNotes { get; set; }
+
+    public OutsourceItemInput? ToOutsource() => IsOutsourced
+        ? new OutsourceItemInput(
+            new OutsourceDetails(OutsourceVendorId, OutsourceQuoteNumber, OutsourceExpectedIn, OutsourcePrivateNotes),
+            OutsourceCost)
+        : null;
+
+    public EstimateChargeFormInput ToForm() => new(Id, Description ?? string.Empty, Quantity, UnitPrice, ToOutsource());
 
     public static EstimateChargePageInput FromCharge(Domain.Entities.EstimateCharge charge) => new()
     {
         Id = charge.Id,
         Description = charge.Description,
         Quantity = charge.Quantity,
-        UnitPrice = charge.UnitPrice
+        UnitPrice = charge.UnitPrice,
+        IsOutsourced = charge.IsOutsourced,
+        OutsourceVendorId = charge.OutsourceVendorId,
+        OutsourceQuoteNumber = charge.OutsourceQuoteNumber,
+        OutsourceCost = charge.OutsourceCost,
+        OutsourceExpectedIn = charge.OutsourceExpectedIn,
+        OutsourcePrivateNotes = charge.OutsourcePrivateNotes
     };
 }
 

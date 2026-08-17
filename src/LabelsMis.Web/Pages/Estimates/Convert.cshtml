@@ -43,7 +43,13 @@ else
             var lineInput = Model.Lines[i];
             var estLine = Model.Detail.Estimate.Lines.OrderBy(l => l.LineNumber).ElementAtOrDefault(i);
             <div class="card mb-3">
-                <div class="card-header"><strong>Line @(i + 1)</strong> — @(estLine?.ProductDescription ?? "")</div>
+                <div class="card-header">
+                    <strong>Line @(i + 1)</strong> — @(estLine?.ProductDescription ?? "")
+                    @if (estLine?.IsOutsourced == true)
+                    {
+                        <span class="badge text-bg-info ms-1" title="Carried onto the order and tracked on Production → Outsourced">Outsourced@(estLine.OutsourceVendor is { } vendor ? $" · {vendor.Name}" : "")</span>
+                    }
+                </div>
                 <div class="card-body">
                     <input type="hidden" asp-for="Lines[i].EstimateLineId" />
                     <input type="hidden" asp-for="Lines[i].SelectedTierQuantity" id="Lines_@(i)__SelectedTier" />
@@ -59,7 +65,7 @@ else
                                                data-target-qty="Lines_@(i)__Quantity" data-target-price="Lines_@(i)__UnitPrice"
                                                data-target-tier="Lines_@(i)__SelectedTier"
                                                checked="@(lineInput.SelectedTierQuantity == br.Quantity)" />
-                                        @br.Quantity.ToString("N0") @@ @br.UnitPrice.ToString("C4") = @br.TotalPrice.ToString("C2")
+                                        @br.Quantity.ToString("N0") @@ @br.UnitPrice.ToString("C4") = @br.TotalPrice.ToString("C2")@(br.OutsourceCost is { } oc ? $" (vendor cost {oc:C2})" : "")
                                     </label>
                                 }
                             </div>
@@ -90,11 +96,12 @@ else
         @if (Model.Charges.Count > 0)
         {
             <div class="card mb-3">
-                <div class="card-header"><strong>Additional charges</strong> — billed with the order, not produced as jobs</div>
+                <div class="card-header"><strong>Additional charges</strong> — billed with the order, not produced as jobs (outsourced ones are tracked on Production → Outsourced)</div>
                 <div class="card-body">
                     @for (var c = 0; c < Model.Charges.Count; c++)
                     {
                         var charge = Model.Charges[c];
+                        var estCharge = Model.Detail.Estimate.Charges.FirstOrDefault(x => x.Id == charge.EstimateChargeId);
                         <div class="row g-2 align-items-end mb-2">
                             <input type="hidden" asp-for="Charges[c].EstimateChargeId" />
                             <div class="col-auto pb-2">
@@ -116,6 +123,10 @@ else
                             </div>
                             <div class="col-md-2 pb-2">
                                 <span class="fw-semibold">@((charge.UnitPrice * charge.Quantity).ToString("C2"))</span>
+                                @if (estCharge?.IsOutsourced == true)
+                                {
+                                    <div><span class="badge text-bg-info">Outsourced@(estCharge.OutsourceVendor is { } cv ? $" · {cv.Name}" : "")@(estCharge.OutsourceCost is { } cc ? $" · cost {cc:C2}" : "")</span></div>
+                                }
                             </div>
                         </div>
                     }

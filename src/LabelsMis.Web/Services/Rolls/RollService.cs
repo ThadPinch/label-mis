@@ -1,6 +1,7 @@
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Infrastructure.Persistence;
+using LabelsMis.Web.Pdf;
 using LabelsMis.Web.Services.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,6 +30,20 @@ public record RollDetail(
     Roll Roll,
     string StockDescription,
     IReadOnlyList<RollMovement> Movements);
+
+/// <summary>A roll that can still be consumed, as offered in the roll picker dropdowns.</summary>
+public record RollPickerOption(
+    Guid Id,
+    string RollBarcode,
+    Guid StockId,
+    string StockCode,
+    string StockDescription,
+    StockType StockType,
+    string SupplierLotNumber,
+    decimal WidthIn,
+    decimal RemainingLengthLf,
+    string? Location,
+    RollStatus Status);
 
 public class RollService(
     LabelsMisDbContext db,
@@ -165,6 +180,67 @@ public class RollService(
         return roll is null
             ? null
             : new RollDetail(roll, roll.Stock.Description, roll.Movements.OrderByDescending(m => m.MovedAt).ToList());
+    }
+
+    /// <summary>Everything the printed roll label shows, or null when the roll doesn't exist.</summary>
+    public async Task<RollLabelModel?> GetLabelAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var roll = await db.Rolls.AsNoTracking()
+            .Include(r => r.Stock).ThenInclude(s => s.Supplier)
+            .Include(r => r.Receipt).ThenInclude(rc => rc!.PoLine).ThenInclude(l => l.PurchaseOrder)
+            .SingleOrDefaultAsync(r => r.Id == id, cancellationToken);
+        if (roll is null)
+        {
+            return null;
+        }
+
+        var stock = roll.Stock;
+        return new RollLabelModel(
+            roll.RollBarcode,
+            stock.Code,
+            stock.Description,
+            stock.StockType.ToString(),
+            stock.FaceMaterial,
+            stock.Adhesive,
+            stock.Liner,
+            stock.TotalCaliperMil,
+            stock.Supplier.Name,
+            stock.SupplierPartNumber,
+            roll.SupplierLotNumber,
+            roll.Receipt?.PoLine.PurchaseOrder.PoNumber,
+            roll.WidthIn,
+            roll.OriginalLengthLf,
+            roll.RemainingLengthLf,
+            roll.ReceivedAt,
+            roll.Location,
+            roll.Status.ToString());
+    }
+
+    /// <summary>
+    /// The rolls that still have material on them (available, staged, or on press), for the
+    /// consume-material pickers. Ordered by stock code then barcode so the dropdown groups by
+    /// material naturally.
+    /// </summary>
+    public async Task<IReadOnlyList<RollPickerOption>> ListPickerOptionsAsync(CancellationToken cancellationToken = default)
+    {
+        return await db.Rolls.AsNoTracking()
+            .Where(r => r.RemainingLengthLf > 0
+                && (r.Status == RollStatus.Available || r.Status == RollStatus.Staged || r.Status == RollStatus.OnPress))
+            .OrderBy(r => r.Stock.Code)
+            .ThenBy(r => r.RollBarcode)
+            .Select(r => new RollPickerOption(
+                r.Id,
+                r.RollBarcode,
+                r.StockId,
+                r.Stock.Code,
+                r.Stock.Description,
+                r.Stock.StockType,
+                r.SupplierLotNumber,
+                r.WidthIn,
+                r.RemainingLengthLf,
+                r.Location,
+                r.Status))
+            .ToListAsync(cancellationToken);
     }
 
     public async Task StageAsync(Guid id, string location, CancellationToken cancellationToken = default)

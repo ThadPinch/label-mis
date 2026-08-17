@@ -20,6 +20,17 @@ public class SupplierFormInput
     [Display(Name = "Account number")]
     public string? AccountNumber { get; set; }
 
+    /// <summary>Makes outsourced items for us (promo, print, wide format, or whole label runs);
+    /// only these suppliers appear in the vendor pickers on estimates and orders.</summary>
+    [Display(Name = "Outsource vendor")]
+    public bool IsOutsourceVendor { get; set; }
+
+    [StringLength(2000)]
+    [Display(Name = "Outsourcing notes")]
+    public string? OutsourceNotes { get; set; }
+
+    /// <summary>At least one contact is required — the form always shows a row and keeps the last one.</summary>
+    [MinLength(1, ErrorMessage = "Add at least one contact.")]
     public List<SupplierContactFormInput> Contacts { get; set; } = [new()];
 
     public SupplierForm ToForm() => new(
@@ -28,7 +39,9 @@ public class SupplierFormInput
         Terms,
         DefaultLeadTimeDays,
         AccountNumber,
-        Contacts.Select(c => new SupplierContactInput(c.Id, c.FirstName, c.LastName, c.Email, c.Phone, c.Role, c.IsPrimary)).ToList());
+        Contacts.Select(c => new SupplierContactInput(c.Id, c.FirstName, c.LastName, c.Email, c.Phone, c.Role, c.IsPrimary)).ToList(),
+        IsOutsourceVendor,
+        OutsourceNotes);
 
     public static SupplierFormInput FromEntity(Domain.Entities.Supplier supplier) => new()
     {
@@ -37,16 +50,21 @@ public class SupplierFormInput
         Terms = supplier.Terms,
         DefaultLeadTimeDays = supplier.DefaultLeadTimeDays,
         AccountNumber = supplier.AccountNumber,
-        Contacts = supplier.Contacts.Select(c => new SupplierContactFormInput
-        {
-            Id = c.Id,
-            FirstName = c.FirstName,
-            LastName = c.LastName,
-            Email = c.Email,
-            Phone = c.Phone,
-            Role = c.Role,
-            IsPrimary = c.IsPrimary
-        }).ToList()
+        IsOutsourceVendor = supplier.IsOutsourceVendor,
+        OutsourceNotes = supplier.OutsourceNotes,
+        // Older suppliers may have no contact yet; show an empty row so the required one can be filled in.
+        Contacts = supplier.Contacts.Count == 0
+            ? [new()]
+            : supplier.Contacts.Select(c => new SupplierContactFormInput
+            {
+                Id = c.Id,
+                FirstName = c.FirstName,
+                LastName = c.LastName,
+                Email = c.Email,
+                Phone = c.Phone,
+                Role = c.Role,
+                IsPrimary = c.IsPrimary
+            }).ToList()
     };
 }
 
@@ -54,10 +72,10 @@ public class SupplierContactFormInput
 {
     public Guid? Id { get; set; }
 
-    [Required]
+    [Required(ErrorMessage = "First name is required.")]
     public string FirstName { get; set; } = string.Empty;
 
-    [Required]
+    [Required(ErrorMessage = "Last name is required.")]
     public string LastName { get; set; } = string.Empty;
 
     [EmailAddress]

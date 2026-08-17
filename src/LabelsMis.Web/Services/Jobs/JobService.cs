@@ -7,6 +7,7 @@ using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Services.Estimates;
 using LabelsMis.Web.Services.Models;
+using LabelsMis.Web.Services.Rolls;
 using Microsoft.EntityFrameworkCore;
 
 namespace LabelsMis.Web.Services.Jobs;
@@ -22,7 +23,20 @@ public record JobListItem(
     int Priority,
     int QuantityOrdered,
     Guid SalesOrderId,
-    string OrderNumber);
+    string OrderNumber,
+    bool IsOutsourced = false);
+
+/// <summary>Vendor facts for an outsourced job, shown on the job page and ticket instead of press info.</summary>
+public record JobOutsourceInfo(
+    Guid OutsourcedItemId,
+    string? VendorName,
+    string? QuoteNumber,
+    decimal? VendorCost,
+    DateOnly? ExpectedIn,
+    DateTime? SentToVendorAt,
+    DateTime? ReceivedAt,
+    int QuantityReceived,
+    string? PrivateNotes);
 
 /// <summary>A job on the same sales order, for cross-referencing sibling lines.</summary>
 public record OrderJobLink(
@@ -49,7 +63,8 @@ public record JobDetail(
     Guid SalesOrderId,
     string OrderNumber,
     string? OrderNotes,
-    string? LineNotes);
+    string? LineNotes,
+    JobOutsourceInfo? Outsource = null);
 
 public record JobTicketRouteStep(
     int Sequence,
@@ -78,7 +93,8 @@ public record JobTicketDetail(
     string? LineNotes = null,
     IReadOnlyList<string>? OrderCharges = null,
     Die? Die = null,
-    string? ShippingMethodName = null);
+    string? ShippingMethodName = null,
+    JobOutsourceInfo? Outsource = null);
 
 public record OperatorJobView(
     Job Job,
@@ -97,7 +113,8 @@ public record FinishingTaskView(
     JobOperationStatus Status,
     decimal PlannedMinutes,
     decimal ActualMinutes,
-    bool IsLamination = false)
+    bool IsLamination = false,
+    Guid? MaterialStockId = null)
 {
     public bool IsDone => Status is JobOperationStatus.Complete or JobOperationStatus.Skipped;
 }
@@ -110,7 +127,8 @@ public record JobActionTask(
     decimal PlannedMinutes,
     decimal ActualMinutes,
     bool IsLamination,
-    string? MaterialLabel)
+    string? MaterialLabel,
+    Guid? MaterialStockId)
 {
     public bool IsDone => Status is JobOperationStatus.Complete or JobOperationStatus.Skipped;
 }
@@ -138,21 +156,24 @@ public record JobActionPanel(
     string? NextLabel,
     int QuantityOrdered,
     string SubstrateLabel,
+    Guid SubstrateStockId,
     bool ShowRollClaim,
     JobActionCounts? Counts,
-    IReadOnlyList<JobActionTask> FinishingTasks);
+    IReadOnlyList<JobActionTask> FinishingTasks,
+    IReadOnlyList<RollPickerOption> Rolls);
 
 public class JobService(
     LabelsMisDbContext db,
     ICurrentUserService currentUser,
     DocumentNumberService documentNumbers,
     EstimateCalculationMapper calculationMapper,
-    EstimatingService estimatingService)
+    EstimatingService estimatingService,
+    RollService rollService)
 {
     /// <summary>Job statuses considered "live" — still moving through production.</summary>
     public static readonly IReadOnlyList<JobStatus> LiveStatuses =
     [
-        JobStatus.PrePress, JobStatus.Queued, JobStatus.Printed, JobStatus.Finished, JobStatus.Rewound
+        JobStatus.Outsourced, JobStatus.PrePress, JobStatus.Queued, JobStatus.Printed, JobStatus.Finished, JobStatus.Rewound
     ];
 
     /// <summary>The next production status and its action label for a job in the given status,
@@ -264,7 +285,8 @@ public class JobService(
                 j.Priority,
                 j.QuantityOrdered,
                 j.SalesOrderLine.SalesOrderId,
-                j.SalesOrderLine.SalesOrder.OrderNumber))
+                j.SalesOrderLine.SalesOrder.OrderNumber,
+                j.IsOutsourced))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<JobListItem>(items, page, pageSize, total);
@@ -319,6 +341,8 @@ public class JobService(
             .Include(j => j.Operations).ThenInclude(o => o.TimeEntries)
             .Include(j => j.MaterialUsages).ThenInclude(m => m.Stock)
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.OutsourcedItem).ThenInclude(o => o!.Vendor)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.OutsourcedItem).ThenInclude(o => o!.Receipts)
             .AsSplitQuery()
             .SingleOrDefaultAsync(j => j.Id == id, cancellationToken);
 
@@ -352,8 +376,22 @@ public class JobService(
             order.Id,
             order.OrderNumber,
             order.Notes,
-            job.SalesOrderLine.LineNotes);
+            job.SalesOrderLine.LineNotes,
+            ToOutsourceInfo(job.SalesOrderLine.OutsourcedItem));
     }
+
+    private static JobOutsourceInfo? ToOutsourceInfo(OutsourcedItem? item) => item is null
+        ? null
+        : new JobOutsourceInfo(
+            item.Id,
+            item.Vendor?.Name,
+            item.QuoteNumber,
+            item.VendorCost,
+            item.ExpectedIn,
+            item.SentToVendorAt,
+            item.ReceivedAt,
+            item.QuantityReceived,
+            item.PrivateNotes);
 
     /// <summary>Updates the parent sales order's header notes from the job page (shared notes).</summary>
     public async Task UpdateOrderNotesAsync(Guid jobId, string? notes, CancellationToken cancellationToken = default)
@@ -374,6 +412,8 @@ public class JobService(
             .Include(j => j.Product).ThenInclude(p => p.Substrate)
             .Include(j => j.Product).ThenInclude(p => p.RollSpec)
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.ShippingMethod)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.OutsourcedItem).ThenInclude(o => o!.Vendor)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.OutsourcedItem).ThenInclude(o => o!.Receipts)
             .Include(j => j.Operations)
             .SingleOrDefaultAsync(j => j.Id == id, cancellationToken);
 
@@ -493,7 +533,8 @@ public class JobService(
             job.SalesOrderLine.LineNotes,
             orderCharges.Select(c => c.Quantity > 1 ? $"{c.Description} (×{c.Quantity})" : c.Description).ToList(),
             die,
-            order.ShippingMethod?.Name);
+            order.ShippingMethod?.Name,
+            ToOutsourceInfo(job.SalesOrderLine.OutsourcedItem));
     }
 
     public async Task<OperatorJobView?> GetOperatorViewAsync(
@@ -559,6 +600,7 @@ public class JobService(
 
         var order = await db.SalesOrders
             .Include(o => o.Lines).ThenInclude(l => l.Product)
+            .Include(o => o.Lines).ThenInclude(l => l.OutsourcedItem)
             .SingleOrDefaultAsync(o => o.Id == salesOrderId, cancellationToken)
             ?? throw new InvalidOperationException("Sales order not found.");
 
@@ -601,12 +643,26 @@ public class JobService(
                 userId,
                 now);
 
+            // Outsourced lines skip press/finishing: the job waits at the vendor and only carries the
+            // in-house receiving steps. If the vendor already delivered before release, it is ready to ship.
+            var outsourced = line.OutsourcedItem is not null;
+            if (outsourced)
+            {
+                job.MarkOutsourced(userId, now);
+            }
+
             var operations = await BuildOperationsAsync(
-                job.Id, spec, quantityPlanned, order.CustomerId, userId, now, cancellationToken);
+                job.Id, spec, quantityPlanned, order.CustomerId, userId, now, cancellationToken, outsourced);
             foreach (var operation in operations)
             {
                 job.AddOperation(operation);
                 db.JobOperations.Add(operation);
+            }
+
+            if (outsourced && line.OutsourcedItem!.IsComplete)
+            {
+                job.ReceiveOutsourced(userId, now);
+                CompletePassedOperations(job, job.Status, userId, now);
             }
 
             db.Jobs.Add(job);
@@ -751,6 +807,27 @@ public class JobService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// The vendor delivered an outsourced order line: its job (if the order has been released) moves
+    /// straight to ready-to-ship. No-op when there is no job yet — release will route it there.
+    /// </summary>
+    public async Task ReceiveOutsourcedJobAsync(Guid salesOrderLineId, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var job = await db.Jobs
+            .Include(j => j.Operations)
+            .SingleOrDefaultAsync(j => j.SalesOrderLineId == salesOrderLineId, cancellationToken);
+        if (job is null || job.Status is not JobStatus.Outsourced)
+        {
+            return;
+        }
+
+        job.ReceiveOutsourced(userId, now);
+        CompletePassedOperations(job, job.Status, userId, now);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     // The job status by which each operation type is considered done (i.e. its production stage is
     // behind the job). Moving the job past a stage completes that stage's still-pending operations, so
     // the operations list stays in sync with the status stepper. Finishing ops are completed
@@ -809,7 +886,18 @@ public class JobService(
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToListAsync(cancellationToken);
 
-        return wanted.ToDictionary(s => s, s => counts.FirstOrDefault(c => c.Status == s)?.Count ?? 0);
+        var result = wanted.ToDictionary(s => s, s => counts.FirstOrDefault(c => c.Status == s)?.Count ?? 0);
+
+        // The Outsourced stage badge counts open outsourced items (order lines and charges alike),
+        // not jobs — a charge never has a job, and a line's job only exists once the order is released.
+        if (result.ContainsKey(JobStatus.Outsourced))
+        {
+            result[JobStatus.Outsourced] = await db.OutsourcedItems.AsNoTracking()
+                .Where(o => o.ReceivedAt == null && Outsourcing.OutsourceService.TrackedOrderStatuses.Contains(o.SalesOrder.Status))
+                .CountAsync(cancellationToken);
+        }
+
+        return result;
     }
 
     /// <summary>Advances a job forward to the given status (used by the production stage pages).</summary>
@@ -853,11 +941,7 @@ public class JobService(
         var tasks = new List<JobActionTask>();
         if (job.Status == JobStatus.Printed)
         {
-            var materialByOperation = EstimateCalculationMapper
-                .DeserializeFinishingOperations(job.Spec?.FinishingOperationsJson ?? "[]")
-                .Where(f => f.StockId is { } sid && sid != Guid.Empty)
-                .GroupBy(f => f.OperationId)
-                .ToDictionary(g => g.Key, g => g.First().StockId!.Value);
+            var materialByOperation = MaterialStockByFinishingOperation(job.Spec);
             var stockIds = materialByOperation.Values.Distinct().ToList();
             var stockLabels = await db.Stocks.AsNoTracking()
                 .Where(s => stockIds.Contains(s.Id))
@@ -866,18 +950,23 @@ public class JobService(
             tasks = job.Operations
                 .Where(o => o.OperationType == JobOperationType.Finishing)
                 .OrderBy(o => o.Sequence)
-                .Select(o => new JobActionTask(
-                    o.Id,
-                    GetOperationTypeLabel(o, finishing),
-                    o.Status,
-                    o.PlannedMinutes,
-                    o.ActualMinutes,
-                    o.EquipmentId is Guid finId
-                        && finishing.TryGetValue(finId, out var fin)
-                        && fin.OperationType == FinishingOperationType.Laminate,
-                    o.EquipmentId is Guid eid && materialByOperation.TryGetValue(eid, out var mid)
-                        ? stockLabels.GetValueOrDefault(mid)
-                        : null))
+                .Select(o =>
+                {
+                    Guid? materialStockId = o.EquipmentId is Guid eid && materialByOperation.TryGetValue(eid, out var mid)
+                        ? mid
+                        : null;
+                    return new JobActionTask(
+                        o.Id,
+                        GetOperationTypeLabel(o, finishing),
+                        o.Status,
+                        o.PlannedMinutes,
+                        o.ActualMinutes,
+                        o.EquipmentId is Guid finId
+                            && finishing.TryGetValue(finId, out var fin)
+                            && fin.OperationType == FinishingOperationType.Laminate,
+                        materialStockId is { } stockId ? stockLabels.GetValueOrDefault(stockId) : null,
+                        materialStockId);
+                })
                 .ToList();
         }
 
@@ -920,6 +1009,24 @@ public class JobService(
             }
         }
 
+        // The substrate the job was ordered on (spec) — falling back to the product's default
+        // for pre-spec jobs — heads the roll picker; the picker itself lists all consumable rolls.
+        var substrateId = job.Spec?.SubstrateId is { } specSubstrateId && specSubstrateId != Guid.Empty
+            ? specSubstrateId
+            : job.Product.SubstrateId;
+        var substrateLabel = substrateId == job.Product.SubstrateId
+            ? $"{job.Product.Substrate.Code} — {job.Product.Substrate.Description}"
+            : await db.Stocks.AsNoTracking()
+                .Where(s => s.Id == substrateId)
+                .Select(s => $"{s.Code} — {s.Description}")
+                .FirstOrDefaultAsync(cancellationToken)
+                ?? $"{job.Product.Substrate.Code} — {job.Product.Substrate.Description}";
+
+        var showRollClaim = job.Status == JobStatus.Queued;
+        var rolls = showRollClaim || tasks.Any(t => t.IsLamination && !t.IsDone)
+            ? await rollService.ListPickerOptionsAsync(cancellationToken)
+            : [];
+
         return new JobActionPanel(
             job.Id,
             job.JobNumber,
@@ -929,11 +1036,25 @@ public class JobService(
             next?.Next,
             next?.Label,
             job.QuantityOrdered,
-            $"{job.Product.Substrate.Code} — {job.Product.Substrate.Description}",
-            ShowRollClaim: job.Status == JobStatus.Queued,
+            substrateLabel,
+            substrateId,
+            showRollClaim,
             counts,
-            tasks);
+            tasks,
+            rolls);
     }
+
+    /// <summary>
+    /// The material stock each finishing operation on the job's spec calls for (e.g. the
+    /// laminate for a laminate step), keyed by finishing operation id. Empty when the spec
+    /// names none.
+    /// </summary>
+    public static IReadOnlyDictionary<Guid, Guid> MaterialStockByFinishingOperation(LabelSpec? spec) =>
+        EstimateCalculationMapper
+            .DeserializeFinishingOperations(spec?.FinishingOperationsJson ?? "[]")
+            .Where(f => f.StockId is { } sid && sid != Guid.Empty)
+            .GroupBy(f => f.OperationId)
+            .ToDictionary(g => g.Key, g => g.First().StockId!.Value);
 
     /// <summary>
     /// The action popup's submit: claims roll usage when entered, records the stage operation's
@@ -992,7 +1113,7 @@ public class JobService(
         }
         if (string.IsNullOrWhiteSpace(barcode))
         {
-            throw new InvalidOperationException("Scan or enter a roll barcode.");
+            throw new InvalidOperationException("Select or scan a roll.");
         }
 
         var normalized = barcode.Trim().ToUpperInvariant();
@@ -1090,8 +1211,20 @@ public class JobService(
         Guid customerId,
         Guid userId,
         DateTime now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool outsourced = false)
     {
+        if (outsourced)
+        {
+            // Made by the vendor: only the in-house receiving steps remain.
+            return
+            [
+                JobOperation.Create(Guid.NewGuid(), jobId, 1, JobOperationType.Inspection, EquipmentType.None, null, 15, userId, now),
+                JobOperation.Create(Guid.NewGuid(), jobId, 2, JobOperationType.Pack, EquipmentType.None, null, 15, userId, now),
+                JobOperation.Create(Guid.NewGuid(), jobId, 3, JobOperationType.Ship, EquipmentType.None, null, 10, userId, now),
+            ];
+        }
+
         var press = await db.Presses.AsNoTracking()
             .SingleAsync(p => p.Id == Press.Indigo6800Id, cancellationToken);
 
@@ -1334,7 +1467,20 @@ public class JobService(
             .Select(m => (m.QuantityUsedLf, m.Stock.CostPerMsi / 1000m * m.Stock.WidthIn))
             .ToList();
 
-        return JobCostCalculator.Calculate(laborEntries, materialEntries);
+        // An outsourced job's real cost is what the vendor charged (GetDetailAsync's include brings the
+        // OutsourcedItem along; fall back to a lookup otherwise).
+        var outsideCost = 0m;
+        if (job.IsOutsourced)
+        {
+            outsideCost = job.SalesOrderLine?.OutsourcedItem?.VendorCost
+                ?? await db.OutsourcedItems.AsNoTracking()
+                    .Where(o => o.SalesOrderLineId == job.SalesOrderLineId)
+                    .Select(o => o.VendorCost)
+                    .FirstOrDefaultAsync(cancellationToken)
+                ?? 0m;
+        }
+
+        return JobCostCalculator.Calculate(laborEntries, materialEntries, outsideCost);
     }
 
     private async Task<decimal?> GetEstimatedCostAsync(Job job, CancellationToken cancellationToken)
@@ -1359,7 +1505,8 @@ public class JobService(
             .FirstOrDefault()
             ?? breaks.OrderByDescending(q => q.Quantity).First();
 
-        return breakRow.CalculatedCost;
+        // An outsourced quote's cost basis is the vendor cost, not the in-house calculation.
+        return breakRow.OutsourceCost ?? breakRow.CalculatedCost;
     }
 
     private static string? GetEquipmentName(

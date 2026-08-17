@@ -1,4 +1,5 @@
 using LabelsMis.Web.Authorization;
+using LabelsMis.Web.Pages.Shared;
 using LabelsMis.Web.Services;
 using LabelsMis.Web.Services.FinishingOperations;
 using Microsoft.AspNetCore.Authorization;
@@ -64,7 +65,7 @@ public class EditModel(FinishingOperationService finishingOperationService, ICur
         }
 
         await finishingOperationService.DeactivateAsync(id, cancellationToken);
-        return RedirectToPage("Index");
+        return this.RedirectToListPage();
     }
 
     private async Task ReloadAsync(Guid id, CancellationToken cancellationToken)

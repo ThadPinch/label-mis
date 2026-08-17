@@ -145,6 +145,25 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
             ("Ink", ink, "Spec", SpecSummary(job) ?? "—")
         };
 
+        // Outsourced: the vendor makes it — the floor only inspects, packs and ships. Vendor cost and
+        // private notes are deliberately left off (the ticket travels with the job).
+        if (job.Job.IsOutsourced && job.Outsource is { } outsource)
+        {
+            var vendorText = outsource.VendorName ?? "vendor not set";
+            if (!string.IsNullOrWhiteSpace(outsource.QuoteNumber))
+            {
+                vendorText += $" · quote {outsource.QuoteNumber}";
+            }
+
+            var receivedText = outsource.ReceivedAt is { } received
+                ? $"Received {received.ToLocalTime():MMM d, yyyy}"
+                : outsource.QuantityReceived > 0
+                    ? $"{outsource.QuantityReceived:N0} received so far"
+                    : outsource.SentToVendorAt is { } sent ? $"At vendor since {sent:MMM d, yyyy}" : "Not yet sent to vendor";
+            rows.Insert(1, ("OUTSOURCED", vendorText, "Expected in", outsource.ExpectedIn?.ToString("MMM d, yyyy") ?? "—"));
+            rows.Insert(2, ("Vendor status", receivedText, "Route", "Inspect · Pack · Ship (no press or finishing)"));
+        }
+
         // Finishing tasks from the job's route, with any assigned materials in the descriptions.
         var finishing = job.Route
             .Where(s => s.Type == JobOperationType.Finishing)

@@ -17,6 +17,7 @@ public static class ProductionStages
     public static readonly IReadOnlyList<ProductionStageLink> All =
     [
         new("/Production/PrePress", "Pre-press", JobStatus.PrePress),
+        new("/Production/Outsourced", "Outsourced", JobStatus.Outsourced),
         new("/Production/Press", "Press", JobStatus.Queued),
         new("/Production/Finishing", "Finishing", JobStatus.Printed),
         new("/Production/Rewinding", "Rewinding", JobStatus.Finished),

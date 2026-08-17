@@ -21,7 +21,8 @@ public record EstimateListItem(
     EstimateStatus Status,
     decimal? HighestQtyTotal,
     DateTime CreatedAt,
-    DateOnly? ValidUntilDate);
+    DateOnly? ValidUntilDate,
+    bool IsSentToCustomer = true);
 
 public record EstimateDetail(
     Estimate Estimate,
@@ -157,7 +158,8 @@ public class EstimateService(
                     e.Status,
                     topTotal == 0 ? null : topTotal,
                     e.CreatedAt,
-                    e.ValidUntilDate);
+                    e.ValidUntilDate,
+                    e.SentAt != null);
             })
             .ToList();
 
@@ -172,7 +174,8 @@ public class EstimateService(
             .Include(e => e.ShippingMethod)
             .Include(e => e.Lines).ThenInclude(l => l.Substrate)
             .Include(e => e.Lines).ThenInclude(l => l.QuantityBreaks)
-            .Include(e => e.Charges)
+            .Include(e => e.Lines).ThenInclude(l => l.OutsourceVendor)
+            .Include(e => e.Charges).ThenInclude(c => c.OutsourceVendor)
             .Include(e => e.Revisions)
             .AsSplitQuery()
             .SingleOrDefaultAsync(e => e.Id == id, cancellationToken);
@@ -274,7 +277,7 @@ public class EstimateService(
         var now = DateTime.UtcNow;
 
         var calc = await CalculateAsync(input, cancellationToken);
-        EnsureNoCalculationErrors(calc);
+        EnsureNoCalculationErrors(calc, input.Lines);
 
         await ValidateShippingMethodAsync(input.ShippingMethodId, cancellationToken);
         var estimateNumber = await documentNumbers.NextEstimateNumberAsync(cancellationToken);
@@ -313,7 +316,7 @@ public class EstimateService(
             .SingleAsync(e => e.Id == id, cancellationToken);
 
         var calc = await CalculateAsync(input, cancellationToken);
-        EnsureNoCalculationErrors(calc);
+        EnsureNoCalculationErrors(calc, input.Lines);
 
         await ValidateShippingMethodAsync(input.ShippingMethodId, cancellationToken);
         estimate.UpdateDraft(
@@ -411,7 +414,10 @@ public class EstimateService(
             attachments,
             cancellationToken);
 
-        tracked.SetContactEmail(emailTo, userId, DateTime.UtcNow);
+        var sentNow = DateTime.UtcNow;
+        tracked.SetContactEmail(emailTo, userId, sentNow);
+        // A won-without-sending estimate that is emailed later counts as sent from here on.
+        tracked.RecordSentToCustomer(attachments?.FirstOrDefault(), userId, sentNow);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -469,9 +475,22 @@ public class EstimateService(
         {
             var l = input.Lines[i];
             var lineCalc = calc.Lines.FirstOrDefault(c => c.LineIndex == i);
-            var breaks = (lineCalc?.QuantityBreaks ?? [])
-                .OrderBy(b => b.Quantity)
-                .Select(b => new EstimatePdfBreak(b.Quantity, b.UnitPrice, b.TotalPrice))
+            var previewQuantities = (lineCalc?.QuantityBreaks.Select(b => b.Quantity).ToList() is { Count: > 0 } calcQty)
+                ? calcQty
+                : l.Outsource is not null ? l.Quantities.ToList() : [];
+            var breaks = previewQuantities
+                .OrderBy(q => q)
+                .Select(q =>
+                {
+                    // Outsourced lines quote the entered final price; everything else the calculator's.
+                    if (l.Outsource is not null && l.Outsource.Pricing.TryGetValue(q, out var op))
+                    {
+                        return new EstimatePdfBreak(q, op.FinalPrice / q, op.FinalPrice);
+                    }
+
+                    var b = lineCalc?.QuantityBreaks.First(x => x.Quantity == q);
+                    return new EstimatePdfBreak(q, b?.UnitPrice ?? 0m, b?.TotalPrice ?? 0m);
+                })
                 .ToList();
             lines.Add(new EstimatePdfLine(
                 i + 1,
@@ -586,12 +605,20 @@ public class EstimateService(
                 l.SetupWasteImpressions,
                 l.RunningWastePct,
                 l.LineNotes,
+                l.IsOutsourced,
+                l.OutsourceVendorId,
+                l.OutsourceQuoteNumber,
+                l.OutsourceExpectedIn,
+                l.OutsourcePrivateNotes,
                 QuantityBreaks = l.QuantityBreaks.Select(q => new
                 {
                     q.Quantity,
                     q.UnitPrice,
                     q.TotalPrice,
                     q.CalculatedCost,
+                    q.CalculatedUnitPrice,
+                    q.CalculatedTotalPrice,
+                    q.OutsourceCost,
                     q.MarginPct,
                     q.MarkupPctOverride
                 })
@@ -602,7 +629,13 @@ public class EstimateService(
                 c.Description,
                 c.Quantity,
                 c.UnitPrice,
-                c.LineTotal
+                c.LineTotal,
+                c.IsOutsourced,
+                c.OutsourceVendorId,
+                c.OutsourceQuoteNumber,
+                c.OutsourceCost,
+                c.OutsourceExpectedIn,
+                c.OutsourcePrivateNotes
             })
         });
 
@@ -688,30 +721,13 @@ public class EstimateService(
                 userId,
                 now);
 
-            var lineCalc = calc.Lines.FirstOrDefault(l => l.LineIndex == i);
-            if (lineCalc is not null)
+            line.SetOutsource(input.Outsource?.Details, userId, now);
+
+            var breaks = BuildQuantityBreaks(line, input, calc.Lines.FirstOrDefault(l => l.LineIndex == i), userId, now);
+            line.ReplaceQuantityBreaks(breaks);
+            foreach (var brk in breaks)
             {
-                var breaks = lineCalc.QuantityBreaks.Select(b =>
-                    EstimateQuantityBreak.Create(
-                        Guid.NewGuid(),
-                        line.Id,
-                        b.Quantity,
-                        b.UnitPrice,
-                        b.TotalPrice,
-                        b.TotalCost,
-                        b.MarginPct,
-                        input.QuantityMarkupOverrides is not null
-                            && input.QuantityMarkupOverrides.TryGetValue(b.Quantity, out var markupOverride)
-                            ? markupOverride
-                            : null,
-                        EstimateCalculationMapper.SerializeCostBreakdown(b.CostBreakdown),
-                        userId,
-                        now)).ToList();
-                line.ReplaceQuantityBreaks(breaks);
-                foreach (var brk in breaks)
-                {
-                    db.EstimateQuantityBreaks.Add(brk);
-                }
+                db.EstimateQuantityBreaks.Add(brk);
             }
 
             lines.Add(line);
@@ -719,6 +735,62 @@ public class EstimateService(
         }
 
         estimate.ReplaceLines(lines);
+    }
+
+    /// <summary>
+    /// The calculator's breaks for a line, with outsourced pricing layered on: an outsourced line
+    /// keeps the calculated cost/price for comparison but quotes the entered vendor cost + final
+    /// price for every quantity. When the in-house calculation cannot run at all (a label the press
+    /// can't print is a classic reason to outsource), the outsourced quantities are still quoted with
+    /// zero calculated values.
+    /// </summary>
+    private static List<EstimateQuantityBreak> BuildQuantityBreaks(
+        EstimateLine line,
+        EstimateLineFormInput input,
+        EstimateLineCalculationResponse? lineCalc,
+        Guid userId,
+        DateTime now)
+    {
+        var breaks = new List<EstimateQuantityBreak>();
+        var calculated = lineCalc?.QuantityBreaks ?? [];
+        var quantities = calculated.Count > 0
+            ? calculated.Select(b => b.Quantity).ToList()
+            : input.Outsource is not null ? input.Quantities.ToList() : [];
+
+        foreach (var quantity in quantities)
+        {
+            var b = calculated.FirstOrDefault(c => c.Quantity == quantity);
+            var brk = EstimateQuantityBreak.Create(
+                Guid.NewGuid(),
+                line.Id,
+                quantity,
+                b?.UnitPrice ?? 0m,
+                b?.TotalPrice ?? 0m,
+                b?.TotalCost ?? 0m,
+                b?.MarginPct ?? 0m,
+                input.QuantityMarkupOverrides is not null
+                    && input.QuantityMarkupOverrides.TryGetValue(quantity, out var markupOverride)
+                    ? markupOverride
+                    : null,
+                b is null ? "[]" : EstimateCalculationMapper.SerializeCostBreakdown(b.CostBreakdown),
+                userId,
+                now);
+
+            if (input.Outsource is not null)
+            {
+                if (!input.Outsource.Pricing.TryGetValue(quantity, out var pricing))
+                {
+                    throw new InvalidOperationException(
+                        $"Line {line.LineNumber}: enter the vendor cost and final price for quantity {quantity:N0}.");
+                }
+
+                brk.ApplyOutsourcePricing(pricing.VendorCost, pricing.FinalPrice);
+            }
+
+            breaks.Add(brk);
+        }
+
+        return breaks;
     }
 
     private void AddCharges(
@@ -740,6 +812,7 @@ public class EstimateService(
                 input.UnitPrice,
                 userId,
                 now);
+            charge.SetOutsource(input.Outsource?.Details, input.Outsource?.VendorCost, userId, now);
             charges.Add(charge);
             db.EstimateCharges.Add(charge);
         }
@@ -747,10 +820,12 @@ public class EstimateService(
         estimate.ReplaceCharges(charges);
     }
 
-    private static void EnsureNoCalculationErrors(EstimateCalculationResponse calc)
+    /// <summary>Calculation errors block saving — except on outsourced lines, where the in-house
+    /// calc is only a comparison and may legitimately fail (e.g. a label the press can't run).</summary>
+    private static void EnsureNoCalculationErrors(EstimateCalculationResponse calc, IReadOnlyList<EstimateLineFormInput> lines)
     {
         var errors = calc.Lines
-            .Where(l => l.Errors.Count > 0)
+            .Where(l => l.Errors.Count > 0 && lines.ElementAtOrDefault(l.LineIndex)?.Outsource is null)
             .SelectMany(l => l.Errors.Select(e => $"Line {l.LineIndex + 1}: {e}"))
             .ToList();
         if (errors.Count > 0)

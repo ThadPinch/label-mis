@@ -9,13 +9,16 @@ public record JobActualCostResult(
     decimal TotalMaterialCost,
     decimal TotalCost,
     IReadOnlyList<TimeEntryCost> LaborBreakdown,
-    IReadOnlyList<MaterialUsageCost> MaterialBreakdown);
+    IReadOnlyList<MaterialUsageCost> MaterialBreakdown,
+    decimal TotalOutsideCost = 0m);
 
 public static class JobCostCalculator
 {
+    /// <param name="outsideCost">What an outside vendor charged for an outsourced job (the whole item).</param>
     public static JobActualCostResult Calculate(
         IReadOnlyList<(decimal Hours, decimal CostPerHour)> laborEntries,
-        IReadOnlyList<(decimal QuantityLf, decimal CostPerLf)> materialEntries)
+        IReadOnlyList<(decimal QuantityLf, decimal CostPerLf)> materialEntries,
+        decimal outsideCost = 0m)
     {
         var laborBreakdown = laborEntries
             .Select(e => new TimeEntryCost(e.Hours, e.CostPerHour, Round(e.Hours * e.CostPerHour)))
@@ -28,12 +31,15 @@ public static class JobCostCalculator
         var totalLabor = laborBreakdown.Sum(l => l.LaborCost);
         var totalMaterial = materialBreakdown.Sum(m => m.MaterialCost);
 
+        var totalOutside = Round(Math.Max(0m, outsideCost));
+
         return new JobActualCostResult(
             totalLabor,
             totalMaterial,
-            Round(totalLabor + totalMaterial),
+            Round(totalLabor + totalMaterial + totalOutside),
             laborBreakdown,
-            materialBreakdown);
+            materialBreakdown,
+            totalOutside);
     }
 
     private static decimal Round(decimal value) => Math.Round(value, 4, MidpointRounding.AwayFromZero);

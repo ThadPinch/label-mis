@@ -1,4 +1,5 @@
 using LabelsMis.Web.Authorization;
+using LabelsMis.Web.Pages.Shared;
 using LabelsMis.Web.Services;
 using LabelsMis.Web.Services.Inks;
 using Microsoft.AspNetCore.Authorization;
@@ -63,7 +64,7 @@ public class EditModel(InkService inkService, ICurrentUserService currentUser) :
         }
 
         await inkService.DeactivateAsync(id, cancellationToken);
-        return RedirectToPage("Index");
+        return this.RedirectToListPage();
     }
 
     private async Task ReloadAsync(Guid id, CancellationToken cancellationToken)

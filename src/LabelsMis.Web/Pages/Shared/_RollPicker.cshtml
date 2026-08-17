@@ -1,0 +1,56 @@
+@using System.Globalization
+@using LabelsMis.Web.Services.Rolls
+@model LabelsMis.Web.Pages.Shared.RollPickerModel
+@{
+    // Rendered wherever material is consumed against a job (press run, laminate task). The
+    // roll-picker.js script (delegated, so fetched modal content works too) filters the select
+    // from the search box; scanning a barcode into the search box selects that roll outright.
+    var sizeClass = Model.Small ? " form-control-sm" : "";
+    var selectSize = Model.Small ? " form-select-sm" : "";
+    var preferred = Model.Rolls.Where(r => Model.PreferredStockId is { } pid && r.StockId == pid).ToList();
+    var others = Model.Rolls.Except(preferred).ToList();
+
+    string Inches(decimal v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+    string Feet(decimal v) => v.ToString("N0", CultureInfo.InvariantCulture);
+
+    string OptionText(RollPickerOption r) =>
+        $"{r.RollBarcode} · {r.StockCode} — {r.StockDescription} · {Inches(r.WidthIn)}\" · {Feet(r.RemainingLengthLf)} LF left · Lot {r.SupplierLotNumber}"
+        + (string.IsNullOrWhiteSpace(r.Location) ? "" : $" · {r.Location}");
+
+    // Everything a search token could reasonably be typed against, incl. unformatted numbers.
+    string SearchText(RollPickerOption r) => string.Join(" ", new[]
+    {
+        r.RollBarcode, r.StockCode, r.StockDescription, r.StockType.ToString(), r.SupplierLotNumber,
+        Inches(r.WidthIn), Feet(r.RemainingLengthLf), r.RemainingLengthLf.ToString("0", CultureInfo.InvariantCulture),
+        r.Location ?? "", r.Status.ToString()
+    });
+}
+<div class="roll-picker" data-roll-picker>
+    <input type="text" class="form-control@(sizeClass) mb-1" data-roll-search autocomplete="off" spellcheck="false"
+           placeholder="Search material, barcode, lot, location… or scan"
+           aria-label="Search rolls" />
+    <select name="@Model.InputName" class="form-select@(selectSize)" data-roll-select aria-label="Roll">
+        <option value="">— select a roll —</option>
+        @if (preferred.Count > 0)
+        {
+            <optgroup label="@Model.PreferredGroupLabel" data-group="preferred">
+                @foreach (var r in preferred)
+                {
+                    <option value="@r.RollBarcode" data-search="@SearchText(r)">@OptionText(r)</option>
+                }
+            </optgroup>
+        }
+        @if (others.Count > 0)
+        {
+            <optgroup label="@(preferred.Count > 0 ? "Other inventory" : "Inventory")" data-group="other">
+                @foreach (var r in others)
+                {
+                    <option value="@r.RollBarcode" data-search="@SearchText(r)">@OptionText(r)</option>
+                }
+            </optgroup>
+        }
+    </select>
+    <div class="form-text mt-0" data-roll-count>
+        @(Model.Rolls.Count == 0 ? "No rolls with material on them in inventory." : $"{Model.Rolls.Count} roll{(Model.Rolls.Count == 1 ? "" : "s")} in inventory")
+    </div>
+</div>

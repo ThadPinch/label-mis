@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LabelsMis.Web.Services.Suppliers;
 
-public record SupplierListItem(Guid Id, string Name, string Code, bool IsActive);
+public record SupplierListItem(Guid Id, string Name, string Code, bool IsActive, bool IsOutsourceVendor);
 
 public record SupplierContactInput(
     Guid? Id,
@@ -22,7 +22,9 @@ public record SupplierForm(
     string Terms,
     int DefaultLeadTimeDays,
     string? AccountNumber,
-    IReadOnlyList<SupplierContactInput> Contacts);
+    IReadOnlyList<SupplierContactInput> Contacts,
+    bool IsOutsourceVendor = false,
+    string? OutsourceNotes = null);
 
 public class SupplierService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
@@ -48,7 +50,7 @@ public class SupplierService(LabelsMisDbContext db, ICurrentUserService currentU
         };
         var total = await query.CountAsync(ct);
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(s => new SupplierListItem(s.Id, s.Name, s.Code, s.IsActive)).ToListAsync(ct);
+            .Select(s => new SupplierListItem(s.Id, s.Name, s.Code, s.IsActive, s.IsOutsourceVendor)).ToListAsync(ct);
         return new PagedResult<SupplierListItem>(items, page, pageSize, total);
     }
 
@@ -57,10 +59,12 @@ public class SupplierService(LabelsMisDbContext db, ICurrentUserService currentU
 
     public async Task<Supplier> CreateAsync(SupplierForm form, CancellationToken ct = default)
     {
+        RequireContact(form);
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
         var supplier = Supplier.Create(Guid.NewGuid(), form.Name, form.Code, form.Terms,
             form.DefaultLeadTimeDays, form.AccountNumber, userId, now);
+        supplier.SetOutsourceVendor(form.IsOutsourceVendor, form.OutsourceNotes, userId, now);
         foreach (var c in form.Contacts)
         {
             var contact = SupplierContact.Create(c.Id ?? Guid.NewGuid(), supplier.Id, c.FirstName, c.LastName,
@@ -74,10 +78,12 @@ public class SupplierService(LabelsMisDbContext db, ICurrentUserService currentU
 
     public async Task UpdateAsync(Guid id, SupplierForm form, CancellationToken ct = default)
     {
+        RequireContact(form);
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
         var supplier = await GetByIdAsync(id, ct) ?? throw new InvalidOperationException("Supplier not found.");
         supplier.Update(form.Name, form.Code, form.Terms, form.DefaultLeadTimeDays, form.AccountNumber, userId, now);
+        supplier.SetOutsourceVendor(form.IsOutsourceVendor, form.OutsourceNotes, userId, now);
         SyncContacts(supplier, form.Contacts, userId, now);
         await db.SaveChangesAsync(ct);
     }
@@ -88,6 +94,14 @@ public class SupplierService(LabelsMisDbContext db, ICurrentUserService currentU
             ?? throw new InvalidOperationException("Supplier not found.");
         supplier.Deactivate(RequireUserId(), DateTime.UtcNow);
         await db.SaveChangesAsync(ct);
+    }
+
+    private static void RequireContact(SupplierForm form)
+    {
+        if (form.Contacts.Count == 0)
+        {
+            throw new InvalidOperationException("Add at least one contact for the supplier.");
+        }
     }
 
     private void SyncContacts(Supplier supplier, IReadOnlyList<SupplierContactInput> inputs, Guid userId, DateTime now)

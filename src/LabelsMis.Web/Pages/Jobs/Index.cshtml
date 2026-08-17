@@ -85,7 +85,7 @@
             <td class="text-nowrap"><a asp-page="/SalesOrders/Edit" asp-route-id="@item.SalesOrderId">@item.OrderNumber</a></td>
             <td>@item.CustomerName</td>
             <td>@item.ProductDescription</td>
-            <td class="text-nowrap">@item.Status</td>
+            <td class="text-nowrap">@item.Status @if (item.IsOutsourced) { <span class="badge text-bg-info">Outsourced</span> }</td>
             <td class="text-nowrap">@(item.DueDate?.ToString("yyyy-MM-dd") ?? "—")</td>
             <td class="text-nowrap">@(item.ScheduledForDate?.ToString("yyyy-MM-dd") ?? "—")</td>
             <td class="text-end">@item.QuantityOrdered.ToString("N0")</td>
