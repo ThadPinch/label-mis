@@ -36,6 +36,7 @@ public class DetailModel(
     [BindProperty] public string? OrderNotes { get; set; }
     [BindProperty] public IFormFile? ArtworkFile { get; set; }
     [BindProperty] public ImpositionForm ImpositionForm { get; set; } = new();
+    [BindProperty] public IFormFile? ImpositionFile { get; set; }
 
     public JobDetail? Detail { get; private set; }
     public JobTicketDetail? TicketDetail { get; private set; }
@@ -293,16 +294,71 @@ public class DetailModel(
         }
     }
 
-    /// <summary>Validates the posted template, runs the action, and re-renders (keeping the operator's
-    /// edits) when the template is invalid or the action fails.</summary>
-    private async Task<IActionResult> RunImpositionAction(Func<Task> action, CancellationToken cancellationToken)
+    /// <summary>Regenerates the imposition from the job's saved template — used to overwrite a manual
+    /// upload, so it ignores the (disabled) template form and runs from what's stored.</summary>
+    public async Task<IActionResult> OnPostRegenerateImpositionAsync(CancellationToken cancellationToken) =>
+        await RunImpositionAction(async () =>
+        {
+            var outcome = await impositionService.RunAsync(Id, input: null, cancellationToken);
+            var t = outcome.Template;
+            TempData["ImpositionMessage"] =
+                $"Imposed {t.LabelsAcross} × {t.LabelsAround} ({t.LabelsPerFrame} per frame) from the saved template, replacing the uploaded file.";
+            TempData["ImpositionWarnings"] = string.Join("\n", outcome.Warnings);
+        }, cancellationToken, validateForm: false);
+
+    public async Task<IActionResult> OnPostDeleteImpositionAsync(CancellationToken cancellationToken)
     {
         if (!CanOperateForUser() && !CanChangeStatusForUser()) return Forbid();
-        var templateErrors = ModelState
+        try
+        {
+            await impositionService.DeleteImposedAsync(Id, cancellationToken);
+            TempData["ImpositionMessage"] = "Imposition file deleted. The template is kept — run or upload to make a new one.";
+            return RedirectToImposition();
+        }
+        catch (Exception ex)
+        {
+            ImpositionError = ex.Message;
+            await LoadPageAsync(cancellationToken);
+            return Page();
+        }
+    }
+
+    public async Task<IActionResult> OnPostUploadImpositionAsync(CancellationToken cancellationToken)
+    {
+        if (!CanOperateForUser() && !CanChangeStatusForUser()) return Forbid();
+        if (ImpositionFile is null || ImpositionFile.Length == 0)
+        {
+            ImpositionError = "Select an imposition PDF to upload.";
+            await LoadPageAsync(cancellationToken, keepImpositionForm: true);
+            return Page();
+        }
+
+        try
+        {
+            await impositionService.UploadManualAsync(Id, ImpositionFile, cancellationToken);
+            TempData["ImpositionMessage"] = "Imposition uploaded — the template inputs are inactive until you re-run it.";
+            return RedirectToImposition();
+        }
+        catch (Exception ex)
+        {
+            ImpositionError = ex.Message;
+            await LoadPageAsync(cancellationToken, keepImpositionForm: true);
+            return Page();
+        }
+    }
+
+    /// <summary>Validates the posted template, runs the action, and re-renders (keeping the operator's
+    /// edits) when the template is invalid or the action fails.</summary>
+    private async Task<IActionResult> RunImpositionAction(Func<Task> action, CancellationToken cancellationToken, bool validateForm = true)
+    {
+        if (!CanOperateForUser() && !CanChangeStatusForUser()) return Forbid();
+        var templateErrors = validateForm
+            ? ModelState
             .Where(kv => kv.Key.StartsWith(nameof(ImpositionForm) + ".", StringComparison.Ordinal))
             .SelectMany(kv => kv.Value?.Errors.Select(e => e.ErrorMessage) ?? [])
             .Where(m => !string.IsNullOrWhiteSpace(m))
-            .ToList();
+            .ToList()
+            : [];
         if (templateErrors.Count > 0)
         {
             ImpositionError = string.Join(" ", templateErrors);

@@ -61,17 +61,17 @@
         });
     }
 
-    // The imposition lives on the second tab of the artwork card: land on it after a run
-    // (#imposition), or when the page re-rendered with an imposition message/error.
+    // Original artwork is always the default tab on load. Only a fresh imposition ACTION
+    // (Run / Save / Reset / Upload leaves a success/warning/error alert) switches to the
+    // Imposition tab so its result is visible — a plain visit or an #imposition link does not.
     const impositionTabButton = document.getElementById('artwork-tab-imposition-btn');
-    const wantsImpositionTab = location.hash === '#imposition' || !!document.querySelector('#imposition .alert');
-    if (wantsImpositionTab && impositionTabButton && window.bootstrap?.Tab) {
+    const actionAlert = document.querySelector(
+        '#imposition .alert-success, #imposition .alert-warning, #imposition .alert-danger');
+    if (actionAlert && impositionTabButton && window.bootstrap?.Tab) {
         bootstrap.Tab.getOrCreateInstance(impositionTabButton).show();
-        if (location.hash === '#imposition') {
-            document.getElementById('artwork')?.scrollIntoView({ block: 'start' });
-            if (expandButton && viewer && viewer.classList.contains('d-none')) {
-                expandButton.click();
-            }
+        document.getElementById('artwork')?.scrollIntoView({ block: 'start' });
+        if (expandButton && viewer && viewer.classList.contains('d-none')) {
+            expandButton.click();
         }
     }
 })();

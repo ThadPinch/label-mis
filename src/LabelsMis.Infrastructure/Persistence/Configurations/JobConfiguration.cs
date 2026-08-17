@@ -23,6 +23,7 @@ public class JobConfiguration : IEntityTypeConfiguration<Job>
         builder.OwnsImpositionTemplate(j => j.Imposition);
         builder.Property(j => j.ImposedArtworkFilePath).HasMaxLength(500);
         builder.Property(j => j.ImposedFromArtworkFilePath).HasMaxLength(500);
+        builder.Property(j => j.ImposedIsManual).IsRequired().HasDefaultValue(false);
 
         builder.HasIndex(j => j.JobNumber).IsUnique();
         builder.HasIndex(j => j.Status);

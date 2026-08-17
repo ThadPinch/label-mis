@@ -292,7 +292,7 @@ public class JobService(
                 j.SalesOrderLine.SalesOrder.OrderNumber,
                 j.IsOutsourced,
                 j.ImposedArtworkFilePath != null,
-                j.ImposedArtworkFilePath != null && j.ImposedFromArtworkFilePath != j.Product.ArtworkFilePath))
+                j.ImposedArtworkFilePath != null && !j.ImposedIsManual && j.ImposedFromArtworkFilePath != j.Product.ArtworkFilePath))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<JobListItem>(items, page, pageSize, total);

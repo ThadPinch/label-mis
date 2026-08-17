@@ -57,6 +57,21 @@ public class DieService(LabelsMisDbContext db, ICurrentUserService currentUser)
                 || (d.Location != null && d.Location.ToUpper().Contains(term)));
         }
         var (sortKey, desc) = QueryExtensions.ParseSort(sort);
+        if (sortKey == "location")
+        {
+            // Locations are shelf/bin labels ("11", "108", "165/188"), so they sort naturally —
+            // leading numbers by value, then the rest as text — which SQL collation can't do.
+            // The die library is small, so order the filtered set in memory and page it here.
+            var all = await query.Select(ToListItem).ToListAsync(ct);
+            var ordered = all
+                .OrderBy(d => d.Location is null)
+                .ThenBy(d => d.Location, desc ? NaturalStringComparer.Descending : NaturalStringComparer.Instance)
+                .ThenBy(d => d.Description)
+                .Skip((page - 1) * pageSize).Take(pageSize)
+                .ToList();
+            return new PagedResult<DieListItem>(ordered, page, pageSize, all.Count);
+        }
+
         query = sortKey switch
         {
             "description" => query.OrderByDir(desc, d => d.Description),
@@ -64,26 +79,27 @@ public class DieService(LabelsMisDbContext db, ICurrentUserService currentUser)
             "size" => query.OrderByDir(desc, d => d.LabelAcrossIn).ThenByDir(desc, d => d.LabelAroundIn),
             "layout" => query.OrderByDir(desc, d => d.LabelsAcross).ThenByDir(desc, d => d.LabelsAround),
             "repeat" => query.OrderByDir(desc, d => d.DieRepeatIn),
-            "location" => query.OrderByDir(desc, d => d.Location),
             "active" => query.OrderByDir(desc, d => d.IsActive),
             _ => query.OrderBy(d => d.Description)
         };
         var total = await query.CountAsync(ct);
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(d => new DieListItem(
-                d.Id,
-                d.Description,
-                d.Customer != null ? d.Customer.Name : null,
-                d.LabelAcrossIn,
-                d.LabelAroundIn,
-                d.LabelsAcross,
-                d.LabelsAround,
-                d.DieRepeatIn,
-                d.Location,
-                d.IsActive))
+            .Select(ToListItem)
             .ToListAsync(ct);
         return new PagedResult<DieListItem>(items, page, pageSize, total);
     }
+
+    private static readonly System.Linq.Expressions.Expression<Func<Die, DieListItem>> ToListItem = d => new DieListItem(
+        d.Id,
+        d.Description,
+        d.Customer != null ? d.Customer.Name : null,
+        d.LabelAcrossIn,
+        d.LabelAroundIn,
+        d.LabelsAcross,
+        d.LabelsAround,
+        d.DieRepeatIn,
+        d.Location,
+        d.IsActive);
 
     public Task<Die?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         db.Dies.Include(d => d.Customer).Include(d => d.Supplier).FirstOrDefaultAsync(d => d.Id == id, ct);

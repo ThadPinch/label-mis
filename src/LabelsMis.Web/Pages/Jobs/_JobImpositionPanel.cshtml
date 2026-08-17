@@ -8,6 +8,8 @@
     var imposedInlineUrl = Url.Page("/Jobs/ImposedArtwork", new { id = job.Id, inline = true });
     var imposedDownloadUrl = Url.Page("/Jobs/ImposedArtwork", new { id = job.Id });
     var localImposedAt = imposition?.ImposedAt?.ToLocalTime();
+    // A hand-uploaded imposition doesn't come from the template, so its inputs are inactive.
+    var inputsDisabled = !canImpose || (imposition?.ImposedIsManual ?? false);
 }
 @if (imposition is not null && template is not null)
 {
@@ -21,7 +23,11 @@
                 else
                 {
                     <span class="badge text-bg-success">Imposed @localImposedAt?.ToString("MMM d, HH:mm")</span>
-                    @if (imposition.ImposedIsStale)
+                    @if (imposition.ImposedIsManual)
+                    {
+                        <span class="badge text-bg-info" title="This imposition PDF was uploaded by hand — the template inputs are inactive.">Manual upload</span>
+                    }
+                    else if (imposition.ImposedIsStale)
                     {
                         <span class="badge text-bg-warning" title="The product's artwork was replaced after this imposition was generated.">Artwork changed — re-run</span>
                     }
@@ -37,6 +43,13 @@
                     <button type="button" id="imposition-expand" class="btn btn-sm btn-outline-secondary">Expand</button>
                     <a href="@imposedInlineUrl" target="_blank" class="btn btn-sm btn-outline-secondary">Open</a>
                     <a href="@imposedDownloadUrl" class="btn btn-sm btn-outline-secondary">Download</a>
+                    @if (canImpose)
+                    {
+                        <form method="post" asp-page-handler="DeleteImposition" class="d-inline"
+                              onsubmit="return confirm('Delete this imposition file? The template is kept — you can run or upload a new one.');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                        </form>
+                    }
                 }
             </div>
         </div>
@@ -77,7 +90,15 @@
                 </div>
             }
 
-            @if (!imposition.ArtworkCanBeImposed)
+            @if (imposition.ImposedIsManual)
+            {
+                <div class="alert alert-info py-2 small mb-2">
+                    This job uses a <strong>manually uploaded</strong> imposition PDF, so the template below is inactive.
+                    Re-run the imposition to replace the upload with a generated frame, or upload a different file.
+                </div>
+            }
+
+            @if (!imposition.ArtworkCanBeImposed && !imposition.ImposedIsManual)
             {
                 <div class="alert alert-secondary py-2 small mb-2">
                     @if (imposition.ArtworkFilePath is null)
@@ -95,55 +116,55 @@
                 <div class="row g-2 small">
                     <div class="col-6 col-md-2">
                         <label class="form-label small mb-0">Label across (in)</label>
-                        <input asp-for="ImpositionForm.LabelAcrossIn" asp-format="{0:0.####}" class="form-control form-control-sm" data-imp="labelAcross" disabled="@(!canImpose)" />
+                        <input asp-for="ImpositionForm.LabelAcrossIn" asp-format="{0:0.####}" class="form-control form-control-sm" data-imp="labelAcross" disabled="@inputsDisabled" />
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label small mb-0">Label around (in)</label>
-                        <input asp-for="ImpositionForm.LabelAroundIn" asp-format="{0:0.####}" class="form-control form-control-sm" data-imp="labelAround" disabled="@(!canImpose)" />
+                        <input asp-for="ImpositionForm.LabelAroundIn" asp-format="{0:0.####}" class="form-control form-control-sm" data-imp="labelAround" disabled="@inputsDisabled" />
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label small mb-0">Corner radius</label>
-                        <input asp-for="ImpositionForm.CornerRadiusIn" asp-format="{0:0.####}" class="form-control form-control-sm" disabled="@(!canImpose)" />
+                        <input asp-for="ImpositionForm.CornerRadiusIn" asp-format="{0:0.####}" class="form-control form-control-sm" disabled="@inputsDisabled" />
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label small mb-0">Gutter across</label>
-                        <input asp-for="ImpositionForm.GutterAcrossIn" asp-format="{0:0.####}" class="form-control form-control-sm" data-imp="gutterAcross" disabled="@(!canImpose)" />
+                        <input asp-for="ImpositionForm.GutterAcrossIn" asp-format="{0:0.####}" class="form-control form-control-sm" data-imp="gutterAcross" disabled="@inputsDisabled" />
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label small mb-0">Gutter around</label>
-                        <input asp-for="ImpositionForm.GutterAroundIn" asp-format="{0:0.####}" class="form-control form-control-sm" data-imp="gutterAround" disabled="@(!canImpose)" />
+                        <input asp-for="ImpositionForm.GutterAroundIn" asp-format="{0:0.####}" class="form-control form-control-sm" data-imp="gutterAround" disabled="@inputsDisabled" />
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label small mb-0">Bleed</label>
-                        <input asp-for="ImpositionForm.BleedIn" asp-format="{0:0.####}" class="form-control form-control-sm" disabled="@(!canImpose)" />
+                        <input asp-for="ImpositionForm.BleedIn" asp-format="{0:0.####}" class="form-control form-control-sm" disabled="@inputsDisabled" />
                     </div>
 
                     <div class="col-6 col-md-2">
                         <label class="form-label small mb-0">Labels across</label>
-                        <input asp-for="ImpositionForm.LabelsAcross" type="number" min="1" class="form-control form-control-sm" data-imp="across" disabled="@(!canImpose)" />
+                        <input asp-for="ImpositionForm.LabelsAcross" type="number" min="1" class="form-control form-control-sm" data-imp="across" disabled="@inputsDisabled" />
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label small mb-0">Labels around</label>
-                        <input asp-for="ImpositionForm.LabelsAround" type="number" min="1" class="form-control form-control-sm" data-imp="around" disabled="@(!canImpose)" />
+                        <input asp-for="ImpositionForm.LabelsAround" type="number" min="1" class="form-control form-control-sm" data-imp="around" disabled="@inputsDisabled" />
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label small mb-0">Orientation</label>
-                        <select asp-for="ImpositionForm.Orientation" class="form-select form-select-sm" data-imp="orientation" disabled="@(!canImpose)">
+                        <select asp-for="ImpositionForm.Orientation" class="form-select form-select-sm" data-imp="orientation" disabled="@inputsDisabled">
                             <option value="@((int)LabelOrientation.AsEntered)">As entered</option>
                             <option value="@((int)LabelOrientation.Rotated)">Rotated 90°</option>
                         </select>
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label small mb-0">Web width (in)</label>
-                        <input asp-for="ImpositionForm.WebWidthIn" asp-format="{0:0.####}" class="form-control form-control-sm" data-imp="webWidth" disabled="@(!canImpose)" />
+                        <input asp-for="ImpositionForm.WebWidthIn" asp-format="{0:0.####}" class="form-control form-control-sm" data-imp="webWidth" disabled="@inputsDisabled" />
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label small mb-0">Cross-web offset</label>
-                        <input asp-for="ImpositionForm.CrossWebOffsetIn" asp-format="{0:0.####}" class="form-control form-control-sm" data-imp="offset" disabled="@(!canImpose)" />
+                        <input asp-for="ImpositionForm.CrossWebOffsetIn" asp-format="{0:0.####}" class="form-control form-control-sm" data-imp="offset" disabled="@inputsDisabled" />
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label small mb-0">Eye marks</label>
-                        <select asp-for="ImpositionForm.EyeMarks" class="form-select form-select-sm" disabled="@(!canImpose)">
+                        <select asp-for="ImpositionForm.EyeMarks" class="form-select form-select-sm" disabled="@inputsDisabled">
                             <option value="@((int)ImpositionMarkSide.None)">None</option>
                             <option value="@((int)ImpositionMarkSide.Left)">Left margin</option>
                             <option value="@((int)ImpositionMarkSide.Right)">Right margin</option>
@@ -154,20 +175,20 @@
                     <div class="col-6 col-md-2">
                         <label class="form-label small mb-0">Eye mark W × H (in)</label>
                         <div class="input-group input-group-sm">
-                            <input asp-for="ImpositionForm.EyeMarkWidthIn" asp-format="{0:0.####}" class="form-control" disabled="@(!canImpose)" aria-label="Eye mark width" />
+                            <input asp-for="ImpositionForm.EyeMarkWidthIn" asp-format="{0:0.####}" class="form-control" disabled="@inputsDisabled" aria-label="Eye mark width" />
                             <span class="input-group-text px-1">×</span>
-                            <input asp-for="ImpositionForm.EyeMarkHeightIn" asp-format="{0:0.####}" class="form-control" disabled="@(!canImpose)" aria-label="Eye mark height" />
+                            <input asp-for="ImpositionForm.EyeMarkHeightIn" asp-format="{0:0.####}" class="form-control" disabled="@inputsDisabled" aria-label="Eye mark height" />
                         </div>
                     </div>
                     <div class="col-6 col-md-2 d-flex align-items-end">
                         <div class="form-check">
-                            <input asp-for="ImpositionForm.IncludeDieLines" class="form-check-input" disabled="@(!canImpose)" />
+                            <input asp-for="ImpositionForm.IncludeDieLines" class="form-check-input" disabled="@inputsDisabled" />
                             <label asp-for="ImpositionForm.IncludeDieLines" class="form-check-label small">Die lines (CutContour layer)</label>
                         </div>
                     </div>
                     <div class="col-6 col-md-2 d-flex align-items-end">
                         <div class="form-check">
-                            <input asp-for="ImpositionForm.IncludeSlug" class="form-check-input" disabled="@(!canImpose)" />
+                            <input asp-for="ImpositionForm.IncludeSlug" class="form-check-input" disabled="@inputsDisabled" />
                             <label asp-for="ImpositionForm.IncludeSlug" class="form-check-label small">Slug line</label>
                         </div>
                     </div>
@@ -181,16 +202,41 @@
                 @if (canImpose)
                 {
                     <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
-                        <button type="submit" asp-page-handler="RunImposition" class="btn btn-sm btn-primary" disabled="@(!imposition.ArtworkCanBeImposed)">
-                            @(imposition.ImposedArtworkFilePath is null ? "Run imposition" : "Re-run imposition")
-                        </button>
-                        <button type="submit" asp-page-handler="SaveImposition" class="btn btn-sm btn-outline-primary">Save template</button>
-                        <button type="submit" asp-page-handler="ResetImposition" class="btn btn-sm btn-outline-secondary" formnovalidate
-                                title="Recompute the template from the job's die / estimate layout">Reset to default</button>
-                        <span class="form-text mb-0">Saves the template on this job only — the product and order line keep their own spec.</span>
+                        @if (imposition.ImposedIsManual)
+                        {
+                            <button type="submit" asp-page-handler="RegenerateImposition" class="btn btn-sm btn-primary" formnovalidate disabled="@(!imposition.ArtworkCanBeImposed)">
+                                Re-run imposition (replace upload)
+                            </button>
+                            <span class="form-text mb-0">Generates from the saved template and discards the uploaded file.</span>
+                        }
+                        else
+                        {
+                            <button type="submit" asp-page-handler="RunImposition" class="btn btn-sm btn-primary" disabled="@(!imposition.ArtworkCanBeImposed)">
+                                @(imposition.ImposedArtworkFilePath is null ? "Run imposition" : "Re-run imposition")
+                            </button>
+                            <button type="submit" asp-page-handler="SaveImposition" class="btn btn-sm btn-outline-primary">Save template</button>
+                            <button type="submit" asp-page-handler="ResetImposition" class="btn btn-sm btn-outline-secondary" formnovalidate
+                                    title="Recompute the template from the job's die / estimate layout">Reset to default</button>
+                            <span class="form-text mb-0">Saves the template on this job only — the product and order line keep their own spec.</span>
+                        }
                     </div>
                 }
             </form>
+
+            @if (canImpose)
+            {
+                <hr class="my-3" />
+                <form method="post" asp-page-handler="UploadImposition" enctype="multipart/form-data">
+                    <label asp-for="ImpositionFile" class="form-label small mb-1">
+                        @(imposition.ImposedIsManual ? "Replace the uploaded imposition" : "Or upload a ready-made imposition PDF")
+                    </label>
+                    <div class="input-group input-group-sm" style="max-width: 32rem;">
+                        <input asp-for="ImpositionFile" type="file" class="form-control" accept=".pdf" />
+                        <button type="submit" class="btn btn-outline-primary">Upload imposition</button>
+                    </div>
+                    <div class="form-text">A hand-made press frame (PDF). Uploading deactivates the template above; re-running the imposition overwrites it.</div>
+                </form>
+            }
         </div>
     </div>
 }

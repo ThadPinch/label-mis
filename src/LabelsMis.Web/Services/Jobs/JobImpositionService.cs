@@ -28,7 +28,9 @@ public record JobImpositionView(
     string? ImposedArtworkFilePath,
     DateTime? ImposedAt,
     /// <summary>The imposed PDF was built from an older artwork file than the product now carries.</summary>
-    bool ImposedIsStale);
+    bool ImposedIsStale,
+    /// <summary>The imposed PDF was uploaded by hand — the template inputs are inactive.</summary>
+    bool ImposedIsManual);
 
 /// <summary>Editable template fields as they arrive from the job page.</summary>
 public record ImpositionTemplateInput(
@@ -180,6 +182,70 @@ public class JobImpositionService(
         return new ImpositionRunOutcome(template, key, result.Warnings, result.Source);
     }
 
+    private static readonly HashSet<string> ManualExtensions = new(StringComparer.OrdinalIgnoreCase) { ".pdf" };
+
+    /// <summary>Stores a hand-made imposed PDF on the job, replacing whatever imposition was there.
+    /// The template is left intact so a later Run can regenerate over it.</summary>
+    public async Task UploadManualAsync(Guid jobId, IFormFile file, CancellationToken cancellationToken = default)
+    {
+        if (file.Length <= 0)
+        {
+            throw new InvalidOperationException("The imposition file is empty.");
+        }
+
+        if (file.Length > 100 * 1024 * 1024)
+        {
+            throw new InvalidOperationException("The imposition file exceeds the 100 MB limit.");
+        }
+
+        var extension = Path.GetExtension(file.FileName);
+        if (!ManualExtensions.Contains(extension))
+        {
+            throw new InvalidOperationException("Upload the imposition as a press-ready PDF.");
+        }
+
+        var job = await LoadJobAsync(jobId, tracking: true, cancellationToken)
+            ?? throw new InvalidOperationException("Job not found.");
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+
+        var settings = await storageSettings.GetOrCreateAsync(cancellationToken);
+        var key = $"{settings.ArtworkKeyPrefix}{job.ProductId}/imposed/{job.JobNumber}-manual-{now:yyyyMMddHHmmss}.pdf";
+        await using (var stream = file.OpenReadStream())
+        {
+            await fileStorage.UploadAsync(key, stream, "application/pdf", cancellationToken);
+        }
+
+        job.RecordManualImposedArtwork(key, userId, now);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Removes the job's imposed PDF (keeping the template): deletes the stored file and
+    /// clears the reference. No-op when there is nothing imposed.</summary>
+    public async Task DeleteImposedAsync(Guid jobId, CancellationToken cancellationToken = default)
+    {
+        var job = await LoadJobAsync(jobId, tracking: true, cancellationToken)
+            ?? throw new InvalidOperationException("Job not found.");
+        if (job.ImposedArtworkFilePath is not { } key)
+        {
+            return;
+        }
+
+        // Best-effort blob delete — the reference is cleared regardless so the job never points at a
+        // file that may have already gone.
+        try
+        {
+            await fileStorage.DeleteAsync(key, cancellationToken);
+        }
+        catch
+        {
+            // ignore: the object may already be gone; clearing the job reference is what matters.
+        }
+
+        job.ClearImposedArtwork(RequireUserId(), DateTime.UtcNow);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     /// <summary>Opens the job's imposed PDF for preview/download; null when none has been generated.</summary>
     public async Task<(Stream Stream, string FileName)?> OpenImposedAsync(Guid jobId, CancellationToken cancellationToken = default)
     {
@@ -288,7 +354,8 @@ public class JobImpositionService(
             artworkKey is not null && (ImpositionPdfGenerator.CanImpose(artworkName) || ImpositionPdfGenerator.CanImpose(artworkKey)),
             job.ImposedArtworkFilePath,
             job.ImposedAt,
-            job.ImposedArtworkIsStale(artworkKey));
+            job.ImposedArtworkIsStale(artworkKey),
+            job.ImposedIsManual);
     }
 
     private Guid RequireUserId() =>

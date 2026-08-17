@@ -46,6 +46,10 @@ public class Job : EntityBase
     public DateTime? ImposedAt { get; private set; }
     public string? ImposedFromArtworkFilePath { get; private set; }
 
+    /// <summary>The imposed PDF was uploaded by hand rather than generated from the template — the
+    /// template inputs no longer describe it, and it never counts as "stale".</summary>
+    public bool ImposedIsManual { get; private set; }
+
     public IReadOnlyCollection<JobOperation> Operations => _operations;
     public IReadOnlyCollection<JobMaterialUsage> MaterialUsages => _materialUsages;
 
@@ -140,12 +144,41 @@ public class Job : EntityBase
         ImposedArtworkFilePath = storageKey.Trim();
         ImposedFromArtworkFilePath = string.IsNullOrWhiteSpace(sourceArtworkKey) ? null : sourceArtworkKey.Trim();
         ImposedAt = modifiedAt;
+        ImposedIsManual = false;
         SetModified(modifiedById, modifiedAt);
     }
 
-    /// <summary>The imposed PDF was built from a different artwork file than the product now carries.</summary>
+    /// <summary>Records a hand-uploaded imposed PDF (not generated from the template).</summary>
+    public void RecordManualImposedArtwork(string storageKey, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (string.IsNullOrWhiteSpace(storageKey))
+        {
+            throw new ArgumentException("Imposed artwork storage key is required.", nameof(storageKey));
+        }
+
+        ImposedArtworkFilePath = storageKey.Trim();
+        ImposedFromArtworkFilePath = null;
+        ImposedAt = modifiedAt;
+        ImposedIsManual = true;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>Removes the imposed PDF reference (the template is kept). The stored file is deleted
+    /// by the caller.</summary>
+    public void ClearImposedArtwork(Guid modifiedById, DateTime modifiedAt)
+    {
+        ImposedArtworkFilePath = null;
+        ImposedFromArtworkFilePath = null;
+        ImposedAt = null;
+        ImposedIsManual = false;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>The generated imposed PDF was built from a different artwork file than the product now
+    /// carries. A hand-uploaded imposition is never stale (it isn't derived from the product artwork).</summary>
     public bool ImposedArtworkIsStale(string? currentArtworkKey) =>
         ImposedArtworkFilePath is not null
+        && !ImposedIsManual
         && !string.Equals(ImposedFromArtworkFilePath, currentArtworkKey, StringComparison.Ordinal);
 
     /// <summary>

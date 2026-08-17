@@ -10,9 +10,11 @@ How a job's artwork becomes a press frame. Built 2026-08-17.
   Rotated), `WebWidthIn`, `CrossWebOffsetIn`, `EyeMarks` (`ImpositionMarkSide`), eye-mark size,
   `IncludeDieLines`, `IncludeSlug`. Derived: `PlacedAcross/AroundIn`, `BlockWidthIn`,
   `RepeatLengthIn = around × (placedAround + gutterAround)`, margins, `OverflowsWeb`.
-- `Job.ImposedArtworkFilePath` / `ImposedAt` / `ImposedFromArtworkFilePath` — the last generated
-  frame and the artwork key it was built from (`ImposedArtworkIsStale(currentKey)`). The product's
-  `ArtworkFilePath` stays the unimposed original.
+- `Job.ImposedArtworkFilePath` / `ImposedAt` / `ImposedFromArtworkFilePath` / `ImposedIsManual` —
+  the last imposed frame, the artwork key a generated frame was built from
+  (`ImposedArtworkIsStale(currentKey)`, always false for a manual upload), and whether it was
+  hand-uploaded. The product's `ArtworkFilePath` stays the unimposed original. `RecordImposedArtwork`
+  (generated, clears manual) vs `RecordManualImposedArtwork` (upload, sets manual, source = null).
 - The template is **not** persisted at job creation. `JobImpositionService.GetAsync` returns the
   stored template or a computed default (`IsSeeded = true`); the first Save/Run/Reset persists it.
 
@@ -52,9 +54,18 @@ PdfPlatform (`PdfImporter.ImportPageAsForm` + `PdfCanvas.AddFormXObject`), no ex
 - Output key: `{ArtworkKeyPrefix}{productId}/imposed/{jobNumber}-{yyyyMMddHHmmss}.pdf` via
   `IFileStorageClient` (same bucket/prefix as artwork — never `tmp/pdfs/`, which is purged).
 - Served by `/jobs/{id}/imposed-artwork[?inline=true]` (`Pages/Jobs/ImposedArtwork`).
-- Job page: `_JobImpositionPanel` card (template form, Run / Save / Reset, warnings, expandable
-  preview); handlers `SaveImposition` / `RunImposition` / `ResetImposition` on `Jobs/Detail`;
-  `wwwroot/js/job-imposition.js` gives the live block/margin/repeat readout.
+- Job page: the Artwork card has two tabs — **Original artwork** (the product's unimposed file;
+  always the default tab on load) and **Imposition** (`_JobImpositionPanel`). The Imposition tab has
+  the template form (Run / Save / Reset), warnings, an expandable preview, **and an "Upload
+  imposition" control** for a hand-made press-ready PDF. A manual upload sets `ImposedIsManual`,
+  disables the template inputs, and swaps the Run button for "Re-run imposition (replace upload)"
+  (`RegenerateImposition` handler → generate from the saved template, discarding the upload). A
+  **Delete** button in the preview toolbar removes the imposed file (`Job.ClearImposedArtwork` +
+  best-effort blob delete) while keeping the template.
+  Handlers on `Jobs/Detail`: `SaveImposition` / `RunImposition` / `ResetImposition` /
+  `RegenerateImposition` / `UploadImposition` / `DeleteImposition`. `wwwroot/js/job-imposition.js` gives the live
+  block/margin/repeat readout and switches to the Imposition tab only after an action (never on a
+  plain load or an `#imposition` link).
 - Pre-press stage table has an Imposition column (`ProductionStageModel.ShowImpositionColumn`);
   the operator panel notes when the imposition is missing or stale; the job ticket prints the frame.
 
