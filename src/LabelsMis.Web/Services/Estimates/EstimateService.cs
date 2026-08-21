@@ -499,7 +499,6 @@ public class EstimateService(
                 l.LabelAroundIn,
                 substrates.TryGetValue(l.SubstrateId, out var desc) ? desc : "—",
                 l.InkSet.ToString(),
-                l.LineNotes,
                 breaks));
         }
 
@@ -515,7 +514,6 @@ public class EstimateService(
             shippingName,
             input.ShippingCost,
             (input.ShippingMethodId is { } m && m != Guid.Empty) || input.ShippingCost > 0,
-            input.Notes,
             salesRepName,
             (input.Charges ?? [])
                 .Where(c => !string.IsNullOrWhiteSpace(c.Description))

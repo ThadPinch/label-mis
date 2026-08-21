@@ -102,7 +102,7 @@ public sealed class CustomerImporter : CsvImporterBase
 
                 var customer = Customer.Create(
                     Guid.NewGuid(), row.Name.Trim(), code, PaymentTermsParser.Parse(row.Terms),
-                    row.TaxExempt, row.DefaultMarkupPct, CustomerStatus.Active, null, actorId, now);
+                    row.TaxExempt, row.DefaultMarkupPct, CustomerStatus.Active, null, null, actorId, now);
                 db.Customers.Add(customer);
                 success++;
             }
@@ -243,7 +243,7 @@ public sealed class ProductImporter : CsvImporterBase
                 var product = Product.Create(
                     Guid.NewGuid(), customer.Id, [customer.Id], sku, null, row.Description.Trim(), null,
                     row.LabelAcrossIn, row.LabelAroundIn, 0.125m, stock.Id, InkSet.CMYK, "[]",
-                    null, null, actorId, now);
+                    null, null, null, actorId, now);
                 db.Products.Add(product);
                 success++;
             }

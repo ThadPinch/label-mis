@@ -1,0 +1,34 @@
+@model string
+@*
+    When a sales-order line's .product-select changes, replaces that line's notes with the
+    product's standing notes (cleared when the product has none) — same rule as the estimate.
+    Model is the base URL of the product-notes endpoint (e.g. "?handler=ProductNotes").
+*@
+<script>
+(() => {
+    const baseUrl = '@Html.Raw(Model)';
+
+    document.addEventListener('change', async e => {
+        const select = e.target.closest('.product-select');
+        if (!select) return;
+        const row = select.closest('.order-line');
+        const notesBox = row?.querySelector('[name$=".LineNotes"]');
+        if (!notesBox || notesBox.readOnly || notesBox.disabled) return;
+
+        const productId = select.value;
+        if (!productId) return;
+
+        const sep = baseUrl.includes('?') ? '&' : '?';
+        let notes = null;
+        try {
+            const response = await fetch(`${baseUrl}${sep}productId=${encodeURIComponent(productId)}`);
+            if (!response.ok) return;
+            notes = (await response.json())?.notes ?? null;
+        } catch { return; }
+
+        // The pick may have changed again while the request was in flight.
+        if (select.value !== productId) return;
+        notesBox.value = notes ?? '';
+    });
+})();
+</script>

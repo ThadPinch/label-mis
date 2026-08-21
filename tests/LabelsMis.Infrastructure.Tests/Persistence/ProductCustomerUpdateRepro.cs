@@ -62,13 +62,13 @@ public class ProductCustomerUpdateRepro : IAsyncLifetime
         var customerAId = Guid.NewGuid();
         var customerBId = Guid.NewGuid();
         _db.Customers.Add(Customer.Create(customerAId, "Cust A " + suffix, "CA" + suffix,
-            PaymentTerms.Net30, false, 0.35m, CustomerStatus.Active, null, TestUserId, now));
+            PaymentTerms.Net30, false, 0.35m, CustomerStatus.Active, null, null, TestUserId, now));
         _db.Customers.Add(Customer.Create(customerBId, "Cust B " + suffix, "CB" + suffix,
-            PaymentTerms.Net30, false, 0.35m, CustomerStatus.Active, null, TestUserId, now));
+            PaymentTerms.Net30, false, 0.35m, CustomerStatus.Active, null, null, TestUserId, now));
 
         var productId = Guid.NewGuid();
         var product = Product.Create(productId, customerAId, [customerAId], "SKU-" + suffix, null,
-            "Product " + suffix, null, 2m, 3m, 0m, substrateId, InkSet.CMYK, "[]", null, null, TestUserId, now);
+            "Product " + suffix, null, 2m, 3m, 0m, substrateId, InkSet.CMYK, "[]", null, null, null, TestUserId, now);
         _db.Products.Add(product);
 
         await _db.SaveChangesAsync();
@@ -89,7 +89,7 @@ public class ProductCustomerUpdateRepro : IAsyncLifetime
 
         loaded.Update(loaded.CustomerSku, "Product EDITED", loaded.LabelAcrossIn, loaded.LabelAroundIn,
             loaded.CornerRadiusIn, loaded.SubstrateId, loaded.InkSet, loaded.FinishingOperationsJson,
-            loaded.DieId, loaded.ArtworkFilePath, TestUserId, now);
+            loaded.DieId, loaded.ArtworkFilePath, loaded.Notes, TestUserId, now);
         // Same customer stays assigned — this is the case that used to throw.
         var (added, removed) = loaded.SetCustomers(customerAId, [customerAId], TestUserId, now);
         db2.ProductCustomers.AddRange(added); // mirrors ProductService.UpdateAsync

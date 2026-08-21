@@ -1,0 +1,41 @@
+@model string
+@*
+    Pre-fills the header notes ([name="Input.Notes"]) from the customer's standing notes when
+    #customer-select changes. Only fills an empty box, or one still holding the notes this script
+    put there for the previous pick — anything the user typed is left alone.
+    Model is the base URL of the customer-notes endpoint (e.g. "?handler=CustomerNotes").
+*@
+<script>
+(() => {
+    const baseUrl = '@Html.Raw(Model)';
+    const customerSelect = document.getElementById('customer-select');
+    const notesBox = document.querySelector('[name="Input.Notes"]');
+    if (!customerSelect || !notesBox || notesBox.readOnly || notesBox.disabled) return;
+
+    let lastApplied = null;
+
+    customerSelect.addEventListener('change', async () => {
+        const customerId = customerSelect.value;
+        if (!customerId) return;
+
+        const current = notesBox.value.trim();
+        if (current !== '' && current !== lastApplied) return;
+
+        const sep = baseUrl.includes('?') ? '&' : '?';
+        let notes = null;
+        try {
+            const response = await fetch(`${baseUrl}${sep}customerId=${encodeURIComponent(customerId)}`);
+            if (!response.ok) return;
+            notes = (await response.json())?.notes ?? null;
+        } catch { return; }
+
+        // Re-check: the user may have typed while the request was in flight.
+        const now = notesBox.value.trim();
+        if (now !== '' && now !== lastApplied) return;
+
+        notesBox.value = notes ?? '';
+        lastApplied = notes ? notes.trim() : null;
+        notesBox.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+})();
+</script>

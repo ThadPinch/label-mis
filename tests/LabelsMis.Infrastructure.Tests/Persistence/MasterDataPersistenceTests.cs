@@ -57,7 +57,7 @@ public class MasterDataPersistenceTests : IAsyncLifetime
         var id = Guid.NewGuid();
         var now = DateTime.UtcNow;
         var customer = Customer.Create(id, "Acme Labels", "ACME", PaymentTerms.Net30, false, 0.45m,
-            CustomerStatus.Active, null, TestUserId, now);
+            CustomerStatus.Active, null, null, TestUserId, now);
         customer.AddAddress(Address.Create(Guid.NewGuid(), id, AddressType.Billing, "123 Main St", null,
             "Chicago", "IL", "60601", "US", true, TestUserId, now));
         customer.AddContact(Contact.Create(Guid.NewGuid(), id, "Jane", "Doe", "jane@acme.com", null,

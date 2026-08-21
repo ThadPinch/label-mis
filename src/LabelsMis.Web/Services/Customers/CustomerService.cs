@@ -52,6 +52,7 @@ public record CustomerForm(
     decimal DefaultMarkupPct,
     CustomerStatus Status,
     Guid? SalesRepId,
+    string? Notes,
     IReadOnlyList<AddressInput> Addresses,
     IReadOnlyList<ContactInput> Contacts);
 
@@ -107,6 +108,13 @@ public class CustomerService(LabelsMisDbContext db, ICurrentUserService currentU
             .AsSplitQuery()
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
+    /// <summary>The customer's standing notes, for pre-filling a new estimate/order's header notes.</summary>
+    public Task<string?> GetNotesAsync(Guid customerId, CancellationToken cancellationToken = default) =>
+        db.Customers.AsNoTracking()
+            .Where(c => c.Id == customerId)
+            .Select(c => c.Notes)
+            .FirstOrDefaultAsync(cancellationToken);
+
     /// <summary>Addresses for a customer, default-first within each type, for ship-to pickers.</summary>
     public async Task<IReadOnlyList<CustomerAddressOption>> GetAddressOptionsAsync(
         Guid customerId, CancellationToken cancellationToken = default) =>
@@ -139,6 +147,7 @@ public class CustomerService(LabelsMisDbContext db, ICurrentUserService currentU
             form.DefaultMarkupPct,
             form.Status,
             form.SalesRepId,
+            form.Notes,
             userId,
             now);
 
@@ -194,6 +203,7 @@ public class CustomerService(LabelsMisDbContext db, ICurrentUserService currentU
             form.DefaultMarkupPct,
             form.Status,
             form.SalesRepId,
+            form.Notes,
             userId,
             now);
 

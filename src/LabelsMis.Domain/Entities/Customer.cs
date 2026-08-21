@@ -20,6 +20,10 @@ public class Customer : MasterDataEntity
     public CustomerStatus Status { get; private set; }
     public Guid? SalesRepId { get; private set; }
 
+    /// <summary>Standing internal notes for this customer. Seeds the header notes of a new estimate or
+    /// sales order when the customer is picked; never printed on a customer document.</summary>
+    public string? Notes { get; private set; }
+
     public IReadOnlyCollection<Address> Addresses => _addresses;
     public IReadOnlyCollection<Contact> Contacts => _contacts;
 
@@ -32,6 +36,7 @@ public class Customer : MasterDataEntity
         decimal defaultMarkupPct,
         CustomerStatus status,
         Guid? salesRepId,
+        string? notes,
         Guid createdById,
         DateTime createdAt)
     {
@@ -58,7 +63,8 @@ public class Customer : MasterDataEntity
             TaxExempt = taxExempt,
             DefaultMarkupPct = defaultMarkupPct,
             Status = status,
-            SalesRepId = salesRepId
+            SalesRepId = salesRepId,
+            Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim()
         };
         customer.SetCreated(id, createdById, createdAt);
         return customer;
@@ -72,6 +78,7 @@ public class Customer : MasterDataEntity
         decimal defaultMarkupPct,
         CustomerStatus status,
         Guid? salesRepId,
+        string? notes,
         Guid modifiedById,
         DateTime modifiedAt)
     {
@@ -97,6 +104,7 @@ public class Customer : MasterDataEntity
         DefaultMarkupPct = defaultMarkupPct;
         Status = status;
         SalesRepId = salesRepId;
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
         SetModified(modifiedById, modifiedAt);
     }
 

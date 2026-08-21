@@ -25,7 +25,7 @@ public class SalesOrder : EntityBase
     public SalesOrderStatus Status { get; private set; }
     public string? Notes { get; private set; }
 
-    /// <summary>Internal billing instructions carried over from the estimate; surfaced on the invoice.</summary>
+    /// <summary>Internal billing instructions carried over from the estimate. Never printed on a customer document.</summary>
     public string? BillingNotes { get; private set; }
 
     public Guid? ShippingMethodId { get; private set; }

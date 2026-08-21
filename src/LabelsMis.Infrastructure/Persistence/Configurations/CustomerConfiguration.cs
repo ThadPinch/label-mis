@@ -16,6 +16,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.Terms).IsRequired();
         builder.Property(c => c.DefaultMarkupPct).HasMoneyPrecision();
         builder.Property(c => c.Status).IsRequired();
+        builder.Property(c => c.Notes).HasMaxLength(2000);
 
         builder.HasIndex(c => c.Code).IsUnique();
         builder.HasIndex(c => c.Name);

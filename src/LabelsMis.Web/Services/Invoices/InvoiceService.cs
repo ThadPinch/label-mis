@@ -46,7 +46,6 @@ public record InvoiceDetail(
     Guid SalesOrderId,
     string OrderNumber,
     IReadOnlyList<Payment> Payments,
-    string? BillingNotes = null,
     IReadOnlyList<InvoiceDocumentInfo>? Documents = null);
 
 public record InvoicePdfResult(string InvoiceNumber, Guid SalesOrderId, byte[] Bytes);
@@ -293,7 +292,6 @@ public class InvoiceService(
             invoice.SalesOrderId,
             invoice.SalesOrder.OrderNumber,
             invoice.Payments.ToList(),
-            invoice.SalesOrder.BillingNotes,
             documents);
     }
 

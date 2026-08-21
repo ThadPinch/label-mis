@@ -56,11 +56,12 @@
             <div class="col-md-6">
                 <label asp-for="Notes" class="form-label">Header notes</label>
                 <textarea asp-for="Notes" class="form-control" rows="2" readonly="@isReadOnly"></textarea>
+                <div class="form-text">Internal — carries to the sales order and job ticket, never printed for the customer. Pre-filled from the customer's notes when picked.</div>
             </div>
             <div class="col-md-6">
                 <label asp-for="BillingNotes" class="form-label">Billing notes</label>
                 <textarea asp-for="BillingNotes" class="form-control" rows="2" readonly="@isReadOnly"></textarea>
-                <div class="form-text">Internal — carries to the sales order and shows on the invoice.</div>
+                <div class="form-text">Internal — carries to the sales order. Never printed.</div>
             </div>
         </div>
     </div>

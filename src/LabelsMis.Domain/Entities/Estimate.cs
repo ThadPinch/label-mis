@@ -22,7 +22,7 @@ public class Estimate : EntityBase
     public EstimateStatus Status { get; private set; }
     public string? Notes { get; private set; }
 
-    /// <summary>Internal billing instructions; carried onto the sales order and surfaced on the invoice.</summary>
+    /// <summary>Internal billing instructions; carried onto the sales order. Never printed on a customer document.</summary>
     public string? BillingNotes { get; private set; }
     public DateOnly? ValidUntilDate { get; private set; }
     public DateTime? WonAt { get; private set; }

@@ -38,6 +38,7 @@ public record ProductFormInput(
     IReadOnlyList<FinishingOperationSelectionInput> FinishingOperations,
     Guid? DieId,
     string? ArtworkFilePath,
+    string? Notes,
     RollSpecInput? RollSpec);
 
 public record ProductPickerItem(
@@ -52,7 +53,8 @@ public record ProductPickerItem(
     InkSet InkSet,
     string FinishingOperationsJson,
     Guid? DieId,
-    int? UnwindPosition = null);
+    int? UnwindPosition = null,
+    string? Notes = null);
 
 public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
@@ -191,12 +193,21 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
             line.FinishingOperationsJson,
             dieId: null,
             artworkFilePath: null,
+            // Line notes are quote-specific; standing product notes are curated on the product itself.
+            notes: null,
             userId,
             now);
 
         db.Products.Add(product);
         return product;
     }
+
+    /// <summary>The product's standing notes, for seeding an order line's notes when the product is picked.</summary>
+    public Task<string?> GetNotesAsync(Guid productId, CancellationToken cancellationToken = default) =>
+        db.Products.AsNoTracking()
+            .Where(p => p.Id == productId)
+            .Select(p => p.Notes)
+            .FirstOrDefaultAsync(cancellationToken);
 
     public async Task<IReadOnlyList<ProductPickerItem>> ListPickerForCustomerAsync(
         Guid customerId,
@@ -249,6 +260,7 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
             EstimateCalculationMapper.SerializeFinishingOperations(input.FinishingOperations),
             input.DieId,
             input.ArtworkFilePath,
+            input.Notes,
             userId,
             now);
 
@@ -282,6 +294,7 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
             EstimateCalculationMapper.SerializeFinishingOperations(input.FinishingOperations),
             input.DieId,
             input.ArtworkFilePath,
+            input.Notes,
             userId,
             now);
 
@@ -398,7 +411,8 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
                 p.InkSet,
                 p.FinishingOperationsJson,
                 p.DieId,
-                p.RollSpec == null ? (int?)null : p.RollSpec.UnwindPosition))
+                p.RollSpec == null ? (int?)null : p.RollSpec.UnwindPosition,
+                p.Notes))
             .ToListAsync(cancellationToken);
     }
 

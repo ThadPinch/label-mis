@@ -1288,6 +1288,8 @@
             }
         };
         set('[name$=".ProductDescription"]', product.description);
+        // The product's standing notes replace whatever the line had (cleared when it has none).
+        set('[name$=".LineNotes"]', product.notes ?? '');
         set('[name$=".LabelAcrossIn"]', product.labelAcrossIn);
         set('[name$=".LabelAroundIn"]', product.labelAroundIn);
         set('[name$=".CornerRadiusIn"]', product.cornerRadiusIn);

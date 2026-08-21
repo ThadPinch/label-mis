@@ -34,6 +34,7 @@ public class DetailModel(
     [BindProperty] public decimal? ConsumedLf { get; set; }
     [BindProperty] public string? RollBarcode { get; set; }
     [BindProperty] public string? OrderNotes { get; set; }
+    [BindProperty] public string? JobNotes { get; set; }
     [BindProperty] public IFormFile? ArtworkFile { get; set; }
     [BindProperty] public ImpositionForm ImpositionForm { get; set; } = new();
     [BindProperty] public IFormFile? ImpositionFile { get; set; }
@@ -71,6 +72,7 @@ public class DetailModel(
     public bool CanImpose => CanOperate || CanChangeStatus;
     public bool CanAdvanceStage => CanOperate || CanChangeStatus;
     public bool CanEditOrderNotes => CanOperate || CanChangeStatus;
+    public bool CanEditJobNotes => CanEditOrderNotes;
     public bool CanRecordCounts => CanOperate || CanChangeStatus;
 
     /// <summary>An operation row in the counts recorder, prefilled with the recorded values or
@@ -175,6 +177,22 @@ public class DetailModel(
             {
                 await jobService.AdvanceJobStatusAsync(Id, step.Next, cancellationToken);
             }
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            await LoadPageAsync(cancellationToken);
+            return Page();
+        }
+    }
+
+    public async Task<IActionResult> OnPostSaveJobNotesAsync(CancellationToken cancellationToken)
+    {
+        if (!CanOperateForUser() && !CanChangeStatusForUser()) return Forbid();
+        try
+        {
+            await jobService.UpdateJobNotesAsync(Id, JobNotes, cancellationToken);
             return RedirectToPage(new { id = Id });
         }
         catch (Exception ex)
@@ -463,6 +481,7 @@ public class DetailModel(
 
         StatusInput = Detail.Job.Status;
         OrderNotes = Detail.OrderNotes;
+        JobNotes = Detail.Job.Notes;
 
         Imposition = await impositionService.GetAsync(Id, cancellationToken);
         if (Imposition is not null && !keepImpositionForm)

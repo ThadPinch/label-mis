@@ -16,7 +16,6 @@ public record EstimatePdfModel(
     string? ShippingMethodName,
     decimal ShippingCost,
     bool HasShipping,
-    string? Notes,
     string? SalesRepName,
     IReadOnlyList<EstimatePdfCharge>? Charges = null);
 
@@ -35,7 +34,6 @@ public record EstimatePdfLine(
     decimal LabelAroundIn,
     string SubstrateDescription,
     string InkSet,
-    string? LineNotes,
     IReadOnlyList<EstimatePdfBreak> Breaks);
 
 public record EstimatePdfBreak(int Quantity, decimal UnitPrice, decimal TotalPrice);

@@ -16,7 +16,8 @@ public class SalesOrderLineConfiguration : IEntityTypeConfiguration<SalesOrderLi
         builder.Property(l => l.Quantity).IsRequired();
         builder.Property(l => l.UnitPrice).HasMoneyPrecision();
         builder.Property(l => l.LineTotal).HasMoneyPrecision();
-        builder.Property(l => l.LineNotes).HasMaxLength(1000);
+        // Matches EstimateLine.LineNotes so notes never fail to carry across at conversion.
+        builder.Property(l => l.LineNotes).HasMaxLength(2000);
 
         builder.OwnsLabelSpec(l => l.Spec);
 

@@ -256,6 +256,22 @@ else
                     {
                         <p class="mb-0 small">@(string.IsNullOrWhiteSpace(Model.Detail.OrderNotes) ? "—" : Model.Detail.OrderNotes)</p>
                     }
+
+                    <div class="small text-muted mt-2 mb-1">
+                        Job notes
+                        <span class="ms-1">@Model.Detail.Job.JobNumber</span>
+                    </div>
+                    @if (Model.CanEditJobNotes)
+                    {
+                        <form method="post" asp-page-handler="SaveJobNotes">
+                            <textarea asp-for="JobNotes" class="form-control form-control-sm mb-1" rows="2" placeholder="Notes for this job only (starts as the order line's notes)"></textarea>
+                            <button type="submit" class="btn btn-sm btn-outline-primary">Save job notes</button>
+                        </form>
+                    }
+                    else
+                    {
+                        <p class="mb-0 small">@(string.IsNullOrWhiteSpace(Model.Detail.Job.Notes) ? "—" : Model.Detail.Job.Notes)</p>
+                    }
                 </div>
             </div>
 

@@ -34,12 +34,6 @@
 
 <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
 
-@if (!string.IsNullOrWhiteSpace(Model.Detail.BillingNotes))
-{
-    <div class="alert alert-warning py-2 px-3 mb-2 small">
-        <strong>Billing notes:</strong> @Model.Detail.BillingNotes
-    </div>
-}
 @if (invoice.Status == InvoiceStatus.Void && !string.IsNullOrWhiteSpace(invoice.VoidReason))
 {
     <div class="alert alert-danger py-2 px-3 mb-2 small">

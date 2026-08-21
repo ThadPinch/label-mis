@@ -80,7 +80,7 @@ public class TransactionFlowPersistenceTests : IAsyncLifetime
 
         _db.Suppliers.Add(Supplier.Create(supplierId, "Sup", "SUP", "Net 30", 7, null, TestUserId, now));
         _db.Customers.Add(Customer.Create(customerId, "Flow Customer", "FLOW", PaymentTerms.Net30, false, 0.45m,
-            CustomerStatus.Active, null, TestUserId, now));
+            CustomerStatus.Active, null, null, TestUserId, now));
         _db.Stocks.Add(Stock.Create(stockId, "STK1", "BOPP", "BOPP", "Acrylic", "PET", 2.3m, 13.5m,
             supplierId, null, 0.85m, 1000m, TestUserId, now));
         await _db.SaveChangesAsync();
@@ -96,7 +96,7 @@ public class TransactionFlowPersistenceTests : IAsyncLifetime
 
         var product = Product.Create(
             Guid.NewGuid(), customerId, [customerId], "FLOW-0001", null, "Flow labels", line.Id,
-            4, 3, 0.125m, stockId, InkSet.CMYK, "[]", null, null, TestUserId, now);
+            4, 3, 0.125m, stockId, InkSet.CMYK, "[]", null, null, null, TestUserId, now);
         _db.Products.Add(product);
         foreach (var assignment in product.CustomerAssignments)
         {
@@ -135,7 +135,7 @@ public class TransactionFlowPersistenceTests : IAsyncLifetime
 
         _db.Suppliers.Add(Supplier.Create(supplierId, "Sup2", "SUP2", "Net 30", 7, null, TestUserId, now));
         _db.Customers.Add(Customer.Create(customerId, "Won Customer", "WON", PaymentTerms.Net30, false, 0.45m,
-            CustomerStatus.Active, null, TestUserId, now));
+            CustomerStatus.Active, null, null, TestUserId, now));
         _db.Stocks.Add(Stock.Create(stockId, "STK2", "BOPP", "BOPP", "Acrylic", "PET", 2.3m, 13.5m,
             supplierId, null, 0.85m, 1000m, TestUserId, now));
 
@@ -162,7 +162,7 @@ public class TransactionFlowPersistenceTests : IAsyncLifetime
 
         _db.Suppliers.Add(Supplier.Create(supplierId, "Sup3", $"SUP3-{estimateId:N}"[..12], "Net 30", 7, null, TestUserId, now));
         _db.Customers.Add(Customer.Create(customerId, "Rev Customer", $"REV-{estimateId:N}"[..12], PaymentTerms.Net30, false, 0.45m,
-            CustomerStatus.Active, null, TestUserId, now));
+            CustomerStatus.Active, null, null, TestUserId, now));
         _db.Stocks.Add(Stock.Create(stockId, $"STK-{estimateId:N}"[..12], "BOPP", "BOPP", "Acrylic", "PET", 2.3m, 13.5m,
             supplierId, null, 0.85m, 1000m, TestUserId, now));
 
@@ -194,7 +194,7 @@ public class TransactionFlowPersistenceTests : IAsyncLifetime
 
         _db.Suppliers.Add(Supplier.Create(supplierId, "Sup4", $"SUP4-{estimateId:N}"[..12], "Net 30", 7, null, TestUserId, now));
         _db.Customers.Add(Customer.Create(customerId, "Rev2 Customer", $"REV2-{estimateId:N}"[..12], PaymentTerms.Net30, false, 0.45m,
-            CustomerStatus.Active, null, TestUserId, now));
+            CustomerStatus.Active, null, null, TestUserId, now));
         _db.Stocks.Add(Stock.Create(stockId, $"STK-{estimateId:N}"[..12], "BOPP", "BOPP", "Acrylic", "PET", 2.3m, 13.5m,
             supplierId, null, 0.85m, 1000m, TestUserId, now));
 

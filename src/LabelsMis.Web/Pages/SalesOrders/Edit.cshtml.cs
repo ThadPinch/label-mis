@@ -9,6 +9,7 @@ using LabelsMis.Web.Services.Estimates;
 using LabelsMis.Web.Services.Invoices;
 using LabelsMis.Web.Services.Jobs;
 using LabelsMis.Web.Services.Outsourcing;
+using LabelsMis.Web.Services.Products;
 using LabelsMis.Web.Services.SalesOrders;
 using LabelsMis.Web.Services.Shipping;
 using Microsoft.AspNetCore.Authorization;
@@ -40,6 +41,7 @@ public class EditModel(
     SalesOrderDocumentService documentService,
     ShippingMethodService shippingMethodService,
     CustomerService customerService,
+    ProductService productService,
     InvoiceService invoiceService,
     OutsourceService outsourceService,
     LabelsMisDbContext db) : PageModel
@@ -766,6 +768,12 @@ public class EditModel(
 
     public Task<IActionResult> OnGetAddressesAsync(Guid? customerId, CancellationToken cancellationToken) =>
         ShipToAddressJson.BuildAsync(customerService, customerId, cancellationToken);
+
+    public async Task<IActionResult> OnGetCustomerNotesAsync(Guid customerId, CancellationToken cancellationToken) =>
+        new JsonResult(new { notes = await customerService.GetNotesAsync(customerId, cancellationToken) });
+
+    public async Task<IActionResult> OnGetProductNotesAsync(Guid productId, CancellationToken cancellationToken) =>
+        new JsonResult(new { notes = await productService.GetNotesAsync(productId, cancellationToken) });
 
     private async Task LoadLookupsAsync(Guid customerId, CancellationToken cancellationToken)
     {

@@ -199,13 +199,13 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
 
         _db.Suppliers.Add(Supplier.Create(supplierId, $"Sync Sup {suffix}", $"SS{suffix}"[..10], "Net 30", 7, null, TestUserId, now));
         _db.Customers.Add(Customer.Create(customerId, $"Sync Customer {suffix}", $"SC{suffix}"[..10],
-            PaymentTerms.Net30, false, 0.45m, CustomerStatus.Active, null, TestUserId, now));
+            PaymentTerms.Net30, false, 0.45m, CustomerStatus.Active, null, null, TestUserId, now));
         _db.Stocks.Add(Stock.Create(stockId, $"ST{suffix}"[..10], "BOPP", "BOPP", "Acrylic", "PET", 2.3m, 13.5m,
             supplierId, null, 0.85m, 1000m, TestUserId, now));
 
         var product = Product.Create(
             Guid.NewGuid(), customerId, [customerId], $"SKU-{suffix}", null, "Sync test labels", null,
-            4, 3, 0.125m, stockId, InkSet.CMYK, "[]", null, null, TestUserId, now);
+            4, 3, 0.125m, stockId, InkSet.CMYK, "[]", null, null, null, TestUserId, now);
         _db.Products.Add(product);
         foreach (var assignment in product.CustomerAssignments)
         {

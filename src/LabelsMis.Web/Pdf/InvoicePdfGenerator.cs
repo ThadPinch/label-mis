@@ -77,11 +77,7 @@ public class InvoicePdfGenerator(
             document.Add(BuildPaymentsTable(invoice));
         }
 
-        if (!string.IsNullOrWhiteSpace(invoice.Notes))
-        {
-            document.Add(Paragraph("Notes", StandardFont.HelveticaBold, color: PdfStyle.Accent, marginTop: 12f));
-            document.Add(Paragraph(invoice.Notes!));
-        }
+        // No notes of any kind print on the invoice — order/billing notes are internal.
 
         if (!string.IsNullOrWhiteSpace(termsText))
         {

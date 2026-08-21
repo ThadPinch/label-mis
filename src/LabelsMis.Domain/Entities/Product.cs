@@ -34,6 +34,11 @@ public class Product : MasterDataEntity
     /// <summary>The original file name of the uploaded artwork, for display; the stored key in
     /// <see cref="ArtworkFilePath"/> is timestamped and opaque.</summary>
     public string? ArtworkOriginalFileName { get; private set; }
+
+    /// <summary>Standing production notes for this product. Copied onto the estimate line when the
+    /// product is pulled in (replacing whatever the line had), and from there to the order line and job.
+    /// Internal — never printed on a customer document.</summary>
+    public string? Notes { get; private set; }
     public ProductStatus Status { get; private set; }
 
     public IReadOnlyCollection<ProductCustomer> CustomerAssignments => _customerAssignments;
@@ -55,6 +60,7 @@ public class Product : MasterDataEntity
         string finishingOperationsJson,
         Guid? dieId,
         string? artworkFilePath,
+        string? notes,
         Guid createdById,
         DateTime createdAt)
     {
@@ -85,6 +91,7 @@ public class Product : MasterDataEntity
             FinishingOperationsJson = string.IsNullOrWhiteSpace(finishingOperationsJson) ? "[]" : finishingOperationsJson,
             DieId = dieId,
             ArtworkFilePath = string.IsNullOrWhiteSpace(artworkFilePath) ? null : artworkFilePath.Trim(),
+            Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
             Status = ProductStatus.Active
         };
         product.SetCreated(id, createdById, createdAt);
@@ -103,6 +110,7 @@ public class Product : MasterDataEntity
         string finishingOperationsJson,
         Guid? dieId,
         string? artworkFilePath,
+        string? notes,
         Guid modifiedById,
         DateTime modifiedAt)
     {
@@ -121,6 +129,7 @@ public class Product : MasterDataEntity
         FinishingOperationsJson = string.IsNullOrWhiteSpace(finishingOperationsJson) ? "[]" : finishingOperationsJson;
         DieId = dieId;
         ArtworkFilePath = string.IsNullOrWhiteSpace(artworkFilePath) ? null : artworkFilePath.Trim();
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
         SetModified(modifiedById, modifiedAt);
     }
 

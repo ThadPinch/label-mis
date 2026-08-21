@@ -27,6 +27,7 @@ public class ProductPageInput
     public List<FinishingOperationSelectionInput> FinishingOperations { get; set; } = [];
     public Guid? DieId { get; set; }
     public string? ArtworkFilePath { get; set; }
+    [StringLength(2000)] public string? Notes { get; set; }
     public int LabelsPerRoll { get; set; }
     public decimal CoreSizeIn { get; set; } = 3m;
     [Range(1, 8)] public int UnwindPosition { get; set; } = 1;
@@ -48,6 +49,7 @@ public class ProductPageInput
         FinishingOperations,
         DieId,
         ArtworkFilePath,
+        Notes,
         LabelsPerRoll > 0
             ? new RollSpecInput(LabelsPerRoll, CoreSizeIn, UnwindPosition, MaxOdIn, RollsPerCase, CaseLabelFormat)
             : null);

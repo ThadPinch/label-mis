@@ -299,6 +299,12 @@ public class CreateModel(
     public Task<IActionResult> OnGetAddressesAsync(Guid? customerId, CancellationToken cancellationToken) =>
         ShipToAddressJson.BuildAsync(customerService, customerId, cancellationToken);
 
+    public async Task<IActionResult> OnGetCustomerNotesAsync(Guid customerId, CancellationToken cancellationToken) =>
+        new JsonResult(new { notes = await customerService.GetNotesAsync(customerId, cancellationToken) });
+
+    public async Task<IActionResult> OnGetProductNotesAsync(Guid productId, CancellationToken cancellationToken) =>
+        new JsonResult(new { notes = await productService.GetNotesAsync(productId, cancellationToken) });
+
     private async Task LoadLookupsAsync(Guid? customerId, CancellationToken cancellationToken)
     {
         ViewData["ShowProductFilter"] = true;

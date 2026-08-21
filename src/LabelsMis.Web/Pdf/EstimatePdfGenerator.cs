@@ -71,13 +71,11 @@ public class EstimatePdfGenerator(
                 l.LabelAroundIn,
                 l.Substrate.Description,
                 l.InkSet.ToString(),
-                l.LineNotes,
                 l.QuantityBreaks.OrderBy(q => q.Quantity)
                     .Select(q => new EstimatePdfBreak(q.Quantity, q.UnitPrice, q.TotalPrice)).ToList())).ToList(),
             detail.Estimate.ShippingMethod?.Name,
             detail.Estimate.ShippingCost,
             detail.Estimate.ShippingMethodId is not null || detail.Estimate.ShippingCost > 0,
-            detail.Estimate.Notes,
             detail.SalesRepName,
             detail.Estimate.Charges.OrderBy(c => c.LineNumber)
                 .Select(c => new EstimatePdfCharge(c.Description, c.Quantity, c.UnitPrice, c.LineTotal)).ToList());
@@ -116,11 +114,6 @@ public class EstimatePdfGenerator(
                 size: 9f, color: PdfStyle.GreyDarken1));
 
             document.Add(BuildBreaksTable(line));
-
-            if (!string.IsNullOrWhiteSpace(line.LineNotes))
-            {
-                document.Add(Paragraph($"Notes: {line.LineNotes}", StandardFont.HelveticaOblique, 9f, marginTop: 2f));
-            }
         }
 
         if (model.Charges is { Count: > 0 } charges)
@@ -139,12 +132,7 @@ public class EstimatePdfGenerator(
             document.Add(Paragraph("Shipping is added to each quantity total above.", StandardFont.HelveticaOblique, 8f, color: PdfStyle.GreyDarken1));
         }
 
-        if (!string.IsNullOrWhiteSpace(model.Notes))
-        {
-            document.Add(Paragraph("Notes", StandardFont.HelveticaBold, color: PdfStyle.Accent, marginTop: 12f));
-            document.Add(Paragraph(model.Notes!));
-        }
-
+        // Header and line notes are internal (they travel to the order and job ticket) — never printed here.
         document.Add(BuildTermsBox(termsText));
 
         document.Add(Paragraph(

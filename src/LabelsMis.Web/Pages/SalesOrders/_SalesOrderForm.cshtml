@@ -49,7 +49,7 @@
                     <div class="col-12">
                         <label asp-for="BillingNotes" class="form-label small mb-0">Billing notes</label>
                         <textarea asp-for="BillingNotes" class="form-control form-control-sm" rows="2" readonly="@isLocked"></textarea>
-                        <div class="form-text">Internal — shows on the invoice page.</div>
+                        <div class="form-text">Internal — never printed.</div>
                     </div>
                 </div>
             </div>
@@ -205,9 +205,9 @@
                         </div>
                     }
                 </div>
-                <div class="col-md-2">
+                <div class="col-12">
                     <label class="form-label small mb-0">Line notes</label>
-                    <input name="Input.Lines[@i].LineNotes" value="@line.LineNotes" class="form-control form-control-sm" placeholder="Notes" readonly="@isLocked" />
+                    <textarea name="Input.Lines[@i].LineNotes" class="form-control form-control-sm" rows="2" placeholder="Notes" readonly="@isLocked">@line.LineNotes</textarea>
                 </div>
             </div>
 
@@ -605,9 +605,9 @@
                             <div class="small artwork-upload-message mt-1 text-muted"></div>
                         </div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-12">
                         <label class="form-label small mb-0">Line notes</label>
-                        <input name="Input.Lines[__LINE__].LineNotes" value="" class="form-control form-control-sm" placeholder="Notes" />
+                        <textarea name="Input.Lines[__LINE__].LineNotes" class="form-control form-control-sm" rows="2" placeholder="Notes"></textarea>
                     </div>
                 </div>
                 <div class="mt-2 order-line-outsource">

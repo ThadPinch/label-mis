@@ -411,6 +411,16 @@ public class JobService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>Updates this job's own notes (seeded from its order line at scheduling; printed on the ticket).</summary>
+    public async Task UpdateJobNotesAsync(Guid jobId, string? notes, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var job = await db.Jobs.SingleAsync(j => j.Id == jobId, cancellationToken);
+        job.UpdateNotes(notes, userId, now);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<JobTicketDetail?> GetTicketDetailAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var job = await db.Jobs.AsNoTracking()

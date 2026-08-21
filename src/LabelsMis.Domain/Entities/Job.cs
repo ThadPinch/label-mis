@@ -119,6 +119,13 @@ public class Job : EntityBase
         SetModified(modifiedById, modifiedAt);
     }
 
+    /// <summary>Edits this job's own notes (seeded from the order line at scheduling). Allowed in any status.</summary>
+    public void UpdateNotes(string? notes, Guid modifiedById, DateTime modifiedAt)
+    {
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        SetModified(modifiedById, modifiedAt);
+    }
+
     /// <summary>Replaces the job's spec — a production edit on the floor, or one-time backfill.</summary>
     public void SetSpec(LabelSpec spec, Guid modifiedById, DateTime modifiedAt)
     {

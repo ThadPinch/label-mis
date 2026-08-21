@@ -39,7 +39,6 @@ public class PdfGeneratorSmokeTests
             3m,
             "White matte BOPP 2.6 mil",
             InkSet.CMYK.ToString(),
-            i % 2 == 0 ? "Includes lamination." : null,
             new[]
             {
                 new EstimatePdfBreak(1000, 0.1234m, 123.40m),
@@ -54,7 +53,6 @@ public class PdfGeneratorSmokeTests
             new EstimatePdfAddress("Receiving Dept", "456 Dock Rd", null, "Tempe", "AZ", "85281"),
             lines,
             "UPS Ground", 42.50m, true,
-            "Customer requested matte finish on all labels.",
             "Pat Doe");
 
         var bytes = await generator.GenerateBytesAsync(model);
@@ -189,7 +187,7 @@ public class PdfGeneratorSmokeTests
 
         var customer = Customer.Create(
             Guid.NewGuid(), "Acme Foods", "ACME", PaymentTerms.Prepay, false, 0.4m,
-            CustomerStatus.Active, null, UserId, Now);
+            CustomerStatus.Active, null, null, UserId, Now);
         customer.AddAddress(Address.Create(
             Guid.NewGuid(), customer.Id, AddressType.Billing, "123 Main St", "Suite 4",
             "Phoenix", "AZ", "85001", "US", true, UserId, Now));

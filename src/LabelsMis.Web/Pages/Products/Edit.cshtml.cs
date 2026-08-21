@@ -116,7 +116,8 @@ public class EditModel(ProductService productService, ArtworkService artworkServ
             FinishingOperations = Services.Estimates.EstimateCalculationMapper
                 .DeserializeFinishingOperations(product.FinishingOperationsJson).ToList(),
             DieId = product.DieId,
-            ArtworkFilePath = product.ArtworkFilePath
+            ArtworkFilePath = product.ArtworkFilePath,
+            Notes = product.Notes
         };
         if (product.RollSpec is not null)
         {

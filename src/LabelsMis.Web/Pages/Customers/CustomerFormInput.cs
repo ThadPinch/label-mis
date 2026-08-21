@@ -29,6 +29,10 @@ public class CustomerFormInput
 
     public Guid? SalesRepId { get; set; }
 
+    [StringLength(2000)]
+    [Display(Name = "Notes")]
+    public string? Notes { get; set; }
+
     public List<AddressFormInput> Addresses { get; set; } = [];
 
     public List<ContactFormInput> Contacts { get; set; } = [];
@@ -47,6 +51,7 @@ public class CustomerFormInput
         DefaultMarkupPct,
         Status,
         SalesRepId,
+        Notes,
         Addresses.Select(a => new AddressInput(a.Id, a.AddressType, a.Street1, a.Street2, a.City, a.State, a.Zip, a.Country, a.IsDefault)).ToList(),
         Contacts.Select(c => new ContactInput(c.Id, c.FirstName, c.LastName, c.Email, c.Phone, c.Role, c.IsPrimary)).ToList());
 
@@ -59,6 +64,7 @@ public class CustomerFormInput
         DefaultMarkupPct = customer.DefaultMarkupPct,
         Status = customer.Status,
         SalesRepId = customer.SalesRepId,
+        Notes = customer.Notes,
         Addresses = customer.Addresses.Select(a => new AddressFormInput
         {
             Id = a.Id,
