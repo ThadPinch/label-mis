@@ -2,7 +2,6 @@ using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Services.Models;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 
 namespace LabelsMis.Web.Services.FinishingOperations;
@@ -13,7 +12,6 @@ public record FinishingOperationForm(
     string Code,
     string Description,
     FinishingOperationType OperationType,
-    Guid? DieId,
     decimal DefaultSetupMinutes,
     decimal DefaultRunSpeedFpm,
     string EquipmentName,
@@ -50,27 +48,16 @@ public class FinishingOperationService(LabelsMisDbContext db, ICurrentUserServic
     }
 
     public Task<FinishingOperation?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
-        db.FinishingOperations
-            .Include(o => o.Die)
-            .FirstOrDefaultAsync(o => o.Id == id, ct);
-
-    public async Task<IReadOnlyList<SelectListItem>> GetDieSelectListAsync(CancellationToken ct = default) =>
-        await db.Dies.AsNoTracking()
-            .Where(d => d.IsActive)
-            .OrderBy(d => d.Description)
-            .Select(d => new SelectListItem(d.Description, d.Id.ToString()))
-            .ToListAsync(ct);
+        db.FinishingOperations.FirstOrDefaultAsync(o => o.Id == id, ct);
 
     public async Task<FinishingOperation> CreateAsync(FinishingOperationForm form, CancellationToken ct = default)
     {
         var userId = RequireUserId();
-        await ValidateDieBindingAsync(form, ct);
         var operation = FinishingOperation.Create(
             Guid.NewGuid(),
             form.Code,
             form.Description,
             form.OperationType,
-            form.DieId,
             form.DefaultSetupMinutes,
             form.DefaultRunSpeedFpm,
             form.EquipmentName,
@@ -86,12 +73,10 @@ public class FinishingOperationService(LabelsMisDbContext db, ICurrentUserServic
     {
         var operation = await db.FinishingOperations.FirstOrDefaultAsync(o => o.Id == id, ct)
             ?? throw new InvalidOperationException("Finishing operation not found.");
-        await ValidateDieBindingAsync(form, ct);
         operation.Update(
             form.Code,
             form.Description,
             form.OperationType,
-            form.DieId,
             form.DefaultSetupMinutes,
             form.DefaultRunSpeedFpm,
             form.EquipmentName,
@@ -107,25 +92,6 @@ public class FinishingOperationService(LabelsMisDbContext db, ICurrentUserServic
             ?? throw new InvalidOperationException("Finishing operation not found.");
         operation.Deactivate(RequireUserId(), DateTime.UtcNow);
         await db.SaveChangesAsync(ct);
-    }
-
-    private async Task ValidateDieBindingAsync(FinishingOperationForm form, CancellationToken ct)
-    {
-        if (form.OperationType != FinishingOperationType.DieCut)
-        {
-            return;
-        }
-
-        if (form.DieId is not { } dieId || dieId == Guid.Empty)
-        {
-            throw new InvalidOperationException("Select a die for die-cut operations.");
-        }
-
-        var dieExists = await db.Dies.AnyAsync(d => d.Id == dieId && d.IsActive, ct);
-        if (!dieExists)
-        {
-            throw new InvalidOperationException("Selected die was not found or is inactive.");
-        }
     }
 
     private Guid RequireUserId() =>

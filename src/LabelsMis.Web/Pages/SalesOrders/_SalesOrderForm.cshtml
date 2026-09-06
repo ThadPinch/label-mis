@@ -18,7 +18,7 @@
     var shrinkStocks = (IReadOnlyDictionary<Guid, decimal?>?)ViewData["ShrinkStocks"] ?? new Dictionary<Guid, decimal?>();
 }
 <script type="application/json" id="shrink-stocks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(shrinkStocks))</script>
-<script type="application/json" id="so-finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString(), dieId = o.DieId, setupMinutes = o.DefaultSetupMinutes, runSpeedFpm = o.DefaultRunSpeedFpm })))</script>
+<script type="application/json" id="so-finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString(), setupMinutes = o.DefaultSetupMinutes, runSpeedFpm = o.DefaultRunSpeedFpm })))</script>
 <script type="application/json" id="so-dies-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(dies.Select(d => new { id = d.Id, description = d.Description, setupRating = d.SetupRating, speedRating = d.SpeedRating })))</script>
 <script type="application/json" id="so-finishing-stocks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingStocks.Select(s => new { id = s.Value, label = s.Text })))</script>
 
@@ -321,7 +321,7 @@
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label small mb-0">Die</label>
-                                <select name="Input.Lines[@i].DieId" class="form-select form-select-sm" disabled="@isLocked">
+                                <select name="Input.Lines[@i].DieId" class="form-select form-select-sm so-line-die" disabled="@isLocked">
                                     <option value="">No die assigned</option>
                                     @foreach (var d in dies)
                                     {
@@ -926,8 +926,9 @@
             });
         }
 
-        function buildSoFinishingItem(op) {
-            const dieId = op.category === 'DieCut' && op.dieId ? String(op.dieId) : '';
+        // A die-cut row starts on the line's own die (the spec's Die field); the task carries none.
+        function buildSoFinishingItem(op, lineDieId) {
+            const dieId = op.category === 'DieCut' && lineDieId ? String(lineDieId) : '';
             const dieBlock = op.category === 'DieCut'
                 ? `<div class="col-md-4">
                         <label class="form-label small mb-0">Die</label>
@@ -1024,7 +1025,7 @@
                 const list = lineEl?.querySelector('.so-finishing-selected');
                 if (op && list && !list.querySelector(`.finishing-item[data-op-id="${op.id}"]`)) {
                     list.querySelector('.so-finishing-empty')?.remove();
-                    const item = buildSoFinishingItem(op);
+                    const item = buildSoFinishingItem(op, lineEl.querySelector('.so-line-die')?.value);
                     list.appendChild(item);
                     reindexFinishing(lineEl);
                     if (item.querySelector('.so-finishing-die')?.value) applySoDieRatings(item);

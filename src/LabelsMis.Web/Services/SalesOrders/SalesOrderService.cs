@@ -2,6 +2,7 @@ using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
+using LabelsMis.Web.Services.Estimates;
 using LabelsMis.Web.Services.Models;
 using LabelsMis.Web.Services.Outsourcing;
 using Microsoft.EntityFrameworkCore;
@@ -310,8 +311,11 @@ public class SalesOrderService(
 
             var product = await productService.EnsureProductForLineAsync(estimateLine.Id, userId, now, cancellationToken);
 
-            // Snapshot the spec the customer was quoted, pinning the product's die + artwork.
-            var spec = estimateLine.ToLabelSpec(product.DieId, product.ArtworkFilePath);
+            // Snapshot the spec the customer was quoted, pinning the die the line's die-cut row was
+            // quoted with (falling back to the product's die) + the product's artwork.
+            var spec = estimateLine.ToLabelSpec(
+                EstimateCalculationMapper.ResolveDieId(estimateLine.FinishingOperationsJson) ?? product.DieId,
+                product.ArtworkFilePath);
 
             var orderLine = SalesOrderLine.Create(
                 Guid.NewGuid(),

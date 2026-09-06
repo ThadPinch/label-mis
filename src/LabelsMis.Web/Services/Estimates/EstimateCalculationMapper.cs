@@ -350,6 +350,14 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
         return JsonSerializer.Deserialize<List<FinishingOperationSelectionInput>>(json, FinishingJsonOptions) ?? [];
     }
 
+    /// <summary>The die a finishing list runs on: the first die named on any of its rows (only die-cut
+    /// rows carry one), or null when the list has no die.</summary>
+    public static Guid? ResolveDieId(string? finishingOperationsJson) =>
+        DeserializeFinishingOperations(finishingOperationsJson ?? string.Empty)
+            .OrderBy(o => o.SortOrder)
+            .Select(o => o.DieId)
+            .FirstOrDefault(d => d is { } id && id != Guid.Empty);
+
     public static string SerializeSpots(IReadOnlyList<SpotSelectionInput> spots) =>
         JsonSerializer.Serialize(spots.OrderBy(s => s.SortOrder));
 

@@ -18,11 +18,6 @@ public class FinishingOperationConfiguration : IEntityTypeConfiguration<Finishin
         builder.Property(o => o.EquipmentName).HasMaxLength(200).IsRequired();
         builder.Property(o => o.CostPerHour).HasMoneyPrecision();
 
-        builder.HasOne(o => o.Die)
-            .WithMany()
-            .HasForeignKey(o => o.DieId)
-            .OnDelete(DeleteBehavior.SetNull);
-
         builder.HasIndex(o => o.Code).IsUnique();
     }
 }

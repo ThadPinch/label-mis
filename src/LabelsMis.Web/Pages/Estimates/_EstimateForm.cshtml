@@ -21,7 +21,7 @@
 }
 @if (!isReadOnly)
 {
-    <script type="application/json" id="finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString(), dieId = o.DieId, setupMinutes = o.DefaultSetupMinutes, runSpeedFpm = o.DefaultRunSpeedFpm })))</script>
+    <script type="application/json" id="finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString(), setupMinutes = o.DefaultSetupMinutes, runSpeedFpm = o.DefaultRunSpeedFpm })))</script>
     <script type="application/json" id="spot-inks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(spotInks.Select(s => new { id = s.Id, code = s.Code, description = s.Description })))</script>
     <script type="application/json" id="finishing-stocks-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingStocks.Select(s => new { id = s.Id, code = s.Code, description = s.Description })))</script>
     <script type="application/json" id="dies-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(dies.Select(d => new { id = d.Id, description = d.Description, setupRating = d.SetupRating, speedRating = d.SpeedRating, labelAcrossIn = d.LabelAcrossIn, labelAroundIn = d.LabelAroundIn, cornerRadiusIn = d.CornerRadiusIn, gutterAcrossIn = d.GutterAcrossIn, gutterAroundIn = d.GutterAroundIn, labelsAcross = d.LabelsAcross, labelsAround = d.LabelsAround })))</script>

@@ -99,7 +99,7 @@
             <div class="card-header py-1 small fw-semibold">Finishing operations</div>
             <div class="card-body py-2">
                 <p class="text-muted small mb-2">Added operations are auto-populated when this product is pulled into an estimate.</p>
-                <script type="application/json" id="finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString(), dieId = o.DieId, setupMinutes = o.DefaultSetupMinutes, runSpeedFpm = o.DefaultRunSpeedFpm })))</script>
+                <script type="application/json" id="finishing-ops-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(finishingOps.Select(o => new { id = o.Id, code = o.Code, description = o.Description, category = o.OperationType.ToString(), setupMinutes = o.DefaultSetupMinutes, runSpeedFpm = o.DefaultRunSpeedFpm })))</script>
                 <div id="product-finishing" data-prefix="@fieldPrefix">
                     <div class="finishing-builder row g-2 align-items-end">
                         <div class="col-md-4">
@@ -131,7 +131,6 @@
                                 <input type="hidden" name="@(fieldPrefix)FinishingOperations[@j].OperationId" value="@sel.OperationId" class="finishing-op-id" />
                                 <input type="hidden" name="@(fieldPrefix)FinishingOperations[@j].SortOrder" value="@j" class="finishing-sort" />
                                 <input type="hidden" name="@(fieldPrefix)FinishingOperations[@j].StockId" value="@(sel.StockId?.ToString() ?? "")" />
-                                <input type="hidden" name="@(fieldPrefix)FinishingOperations[@j].DieId" value="@(sel.DieId?.ToString() ?? "")" />
                                 <div class="d-flex justify-content-between align-items-center gap-2">
                                     <div class="text-truncate">
                                         <span class="fw-semibold">@(op is null ? sel.OperationId.ToString() : $"{op.Code} — {op.Description}")</span>
@@ -278,12 +277,10 @@
         const item = document.createElement('div');
         item.className = 'finishing-item border rounded p-2 mb-2';
         item.dataset.opId = op.id;
-        // Die-cut operations carry their configured die so it flows into estimates.
-        const dieId = op.category === 'DieCut' && op.dieId ? String(op.dieId) : '';
+        // The row carries no die of its own: the product's Die field is stamped onto die-cut rows on save.
         item.innerHTML = `
             <input type="hidden" name="${prefix}FinishingOperations[0].OperationId" value="${esc(op.id)}" class="finishing-op-id" />
             <input type="hidden" name="${prefix}FinishingOperations[0].SortOrder" value="0" class="finishing-sort" />
-            <input type="hidden" name="${prefix}FinishingOperations[0].DieId" value="${esc(dieId)}" />
             <div class="d-flex justify-content-between align-items-center gap-2">
                 <div class="text-truncate">
                     <span class="fw-semibold">${esc(op.code)} — ${esc(op.description)}</span>

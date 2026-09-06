@@ -1256,10 +1256,8 @@
         const list = lineEl?.querySelector('.finishing-selected');
         if (!list || !op) return false;
         if (list.querySelector(`.finishing-item[data-op-id="${op.id}"]`)) return false;
-        // A die-cut operation's configured die is the default when none was passed in.
-        if (!dieId && op.category === 'DieCut' && op.dieId) {
-            dieId = String(op.dieId);
-        }
+        // A die-cut row added by hand starts at "No die" — the task itself never names one; the
+        // estimator picks the die on the row.
         const item = buildFinishingItem(lineEl, op, setupOverride, runOverride, stockId, dieId);
         list.appendChild(item);
         renumberFinishing(lineEl);
@@ -1318,8 +1316,9 @@
                     const setup = f.SetupMinutesOverride ?? f.setupMinutesOverride;
                     const run = f.RunSpeedFpmOverride ?? f.runSpeedFpmOverride;
                     const stock = f.StockId ?? f.stockId;
-                    // The product's own die seeds die-cut operations that don't carry one.
-                    const die = f.DieId ?? f.dieId ?? (op.category === 'DieCut' ? product.dieId : null);
+                    // The product's Die field is the only source for its die-cut rows; whatever die a
+                    // stored row carries (the product's own die, or a legacy task die) is ignored.
+                    const die = op.category === 'DieCut' ? product.dieId : null;
                     addFinishingToLine(lineEl, op, setup == null ? '' : String(setup), run == null ? '' : String(run), stock == null ? '' : String(stock), die == null ? '' : String(die));
                 });
             }

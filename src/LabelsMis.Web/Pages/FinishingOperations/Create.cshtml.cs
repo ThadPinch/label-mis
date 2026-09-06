@@ -25,7 +25,6 @@ public class CreateModel(FinishingOperationService finishingOperationService) : 
             Input = FinishingOperationFormInput.ForDuplicate(operation);
         }
 
-        await LoadLookupsAsync(cancellationToken);
         return Page();
     }
 
@@ -33,7 +32,6 @@ public class CreateModel(FinishingOperationService finishingOperationService) : 
     {
         if (!ModelState.IsValid)
         {
-            await LoadLookupsAsync(cancellationToken);
             return Page();
         }
 
@@ -45,11 +43,7 @@ public class CreateModel(FinishingOperationService finishingOperationService) : 
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            await LoadLookupsAsync(cancellationToken);
             return Page();
         }
     }
-
-    private async Task LoadLookupsAsync(CancellationToken cancellationToken) =>
-        ViewData["Dies"] = await finishingOperationService.GetDieSelectListAsync(cancellationToken);
 }

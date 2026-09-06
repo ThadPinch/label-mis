@@ -142,7 +142,6 @@ public class MasterDataPersistenceTests : IAsyncLifetime
             "LAM-GLOSS",
             "Gloss laminate",
             FinishingOperationType.Laminate,
-            dieId: null,
             15m,
             200m,
             "Laminator",

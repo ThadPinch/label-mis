@@ -191,7 +191,8 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
             line.SubstrateId,
             line.InkSet,
             line.FinishingOperationsJson,
-            dieId: null,
+            // The die quoted on the estimate line's die-cut row becomes the product's die.
+            dieId: EstimateCalculationMapper.ResolveDieId(line.FinishingOperationsJson),
             artworkFilePath: null,
             // Line notes are quote-specific; standing product notes are curated on the product itself.
             notes: null,
@@ -200,6 +201,31 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
 
         db.Products.Add(product);
         return product;
+    }
+
+    private static Guid? NormalizeDieId(Guid? dieId) => dieId is { } id && id != Guid.Empty ? id : null;
+
+    /// <summary>The product's finishing rows as stored. The product's Die field is the single source
+    /// of its die: it is stamped onto every die-cut row (so specs seeded from the product run their
+    /// die-cut step on that die) and no other row carries one. Whatever the form posted for a row's
+    /// die — nothing today, a task's die on legacy products — is discarded.</summary>
+    private async Task<string> SerializeFinishingAsync(
+        IReadOnlyList<FinishingOperationSelectionInput> finishing,
+        Guid? dieId,
+        CancellationToken cancellationToken)
+    {
+        var operationIds = finishing.Select(f => f.OperationId).Distinct().ToList();
+        var dieCutOperationIds = operationIds.Count == 0
+            ? []
+            : await db.FinishingOperations.AsNoTracking()
+                .Where(o => operationIds.Contains(o.Id) && o.OperationType == FinishingOperationType.DieCut)
+                .Select(o => o.Id)
+                .ToListAsync(cancellationToken);
+
+        var stamped = finishing
+            .Select(f => f with { DieId = dieCutOperationIds.Contains(f.OperationId) ? dieId : null })
+            .ToList();
+        return EstimateCalculationMapper.SerializeFinishingOperations(stamped);
     }
 
     /// <summary>The product's standing notes, for seeding an order line's notes when the product is picked.</summary>
@@ -244,6 +270,7 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
         }
 
         var internalSku = await NextInternalSkuAsync(skuPrefix, cancellationToken);
+        var dieId = NormalizeDieId(input.DieId);
         var product = Product.Create(
             Guid.NewGuid(),
             primaryCustomerId,
@@ -257,8 +284,8 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
             input.CornerRadiusIn,
             input.SubstrateId,
             input.InkSet,
-            EstimateCalculationMapper.SerializeFinishingOperations(input.FinishingOperations),
-            input.DieId,
+            await SerializeFinishingAsync(input.FinishingOperations, dieId, cancellationToken),
+            dieId,
             input.ArtworkFilePath,
             input.Notes,
             userId,
@@ -283,6 +310,7 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
             .Include(p => p.CustomerAssignments)
             .SingleAsync(p => p.Id == id, cancellationToken);
 
+        var dieId = NormalizeDieId(input.DieId);
         product.Update(
             input.CustomerSku,
             input.Description,
@@ -291,8 +319,8 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
             input.CornerRadiusIn,
             input.SubstrateId,
             input.InkSet,
-            EstimateCalculationMapper.SerializeFinishingOperations(input.FinishingOperations),
-            input.DieId,
+            await SerializeFinishingAsync(input.FinishingOperations, dieId, cancellationToken),
+            dieId,
             input.ArtworkFilePath,
             input.Notes,
             userId,
