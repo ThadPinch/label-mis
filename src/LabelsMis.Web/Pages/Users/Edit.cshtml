@@ -1,11 +1,11 @@
 @page "/users/edit/{id:guid}"
 @model LabelsMis.Web.Pages.Users.EditModel
 @{
-    ViewData["Title"] = Model.Input.Email;
+    ViewData["Title"] = Model.CurrentEmail;
     ViewData["BackNav"] = new BackNavModel();
 }
 
-<h1 class="h3 mb-3">Edit user — @Model.Input.Email</h1>
+<h1 class="h3 mb-3">Edit user — @Model.CurrentEmail</h1>
     <form method="post">
         <div asp-validation-summary="All" class="text-danger mb-3"></div>
         <partial name="_UserForm" for="Input" />

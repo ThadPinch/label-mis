@@ -26,6 +26,7 @@ public record CreateUserInput(
     bool MustChangePassword);
 
 public record UpdateUserInput(
+    string Email,
     IReadOnlyList<string> Roles,
     bool IsLockedOut,
     bool MustChangePassword,
@@ -33,6 +34,7 @@ public record UpdateUserInput(
 
 public class UserAdminService(
     UserManager<ApplicationUser> userManager,
+    SignInManager<ApplicationUser> signInManager,
     ICurrentUserService currentUser)
 {
     public async Task<IReadOnlyList<UserListItem>> ListAsync(
@@ -120,6 +122,12 @@ public class UserAdminService(
         return user;
     }
 
+    public async Task<bool> IsEmailTakenAsync(string email, Guid excludingUserId, CancellationToken cancellationToken = default)
+    {
+        var existing = await userManager.FindByEmailAsync(email.Trim());
+        return existing is not null && existing.Id != excludingUserId;
+    }
+
     public async Task UpdateAsync(Guid id, UpdateUserInput input, CancellationToken cancellationToken = default)
     {
         var actorId = RequireUserId();
@@ -133,6 +141,8 @@ public class UserAdminService(
         {
             throw new InvalidOperationException("You cannot lock your own account.");
         }
+
+        var emailChanged = await ChangeEmailAsync(user, input.Email);
 
         await SetRolesAsync(user, roles);
 
@@ -169,6 +179,47 @@ public class UserAdminService(
                 await userManager.UpdateAsync(user);
             }
         }
+
+        if (emailChanged && user.Id == actorId)
+        {
+            // Changing the email rotates the security stamp; reissue the cookie so the
+            // admin editing their own account is not signed out mid-session.
+            await signInManager.RefreshSignInAsync(user);
+        }
+    }
+
+    private async Task<bool> ChangeEmailAsync(ApplicationUser user, string newEmail)
+    {
+        var email = newEmail.Trim();
+        if (string.Equals(user.Email, email, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // UserName is the login and the sales-rep name on documents, so it tracks Email.
+        // Both go through UserManager so the normalized columns used by login are updated.
+        var userNameResult = await userManager.SetUserNameAsync(user, email);
+        if (!userNameResult.Succeeded)
+        {
+            throw new InvalidOperationException(FormatErrors(userNameResult));
+        }
+
+        var emailResult = await userManager.SetEmailAsync(user, email);
+        if (!emailResult.Succeeded)
+        {
+            throw new InvalidOperationException(FormatErrors(emailResult));
+        }
+
+        // SetEmailAsync clears the confirmation flag; an admin-entered address is
+        // treated as confirmed, the same as accounts created by the seeder.
+        user.EmailConfirmed = true;
+        var confirmResult = await userManager.UpdateAsync(user);
+        if (!confirmResult.Succeeded)
+        {
+            throw new InvalidOperationException(FormatErrors(confirmResult));
+        }
+
+        return true;
     }
 
     private async Task SetRolesAsync(ApplicationUser user, IReadOnlyList<string> roles)
