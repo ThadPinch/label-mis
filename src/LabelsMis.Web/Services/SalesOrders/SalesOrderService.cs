@@ -976,6 +976,14 @@ public class SalesOrderService(
             }
             else
             {
+                // Once the vendor has delivered anything the deal is done: the form renders these
+                // fields read-only, and the service ignores the (round-tripped) values so a stale
+                // or tampered post can't rewrite them.
+                if (existing.IsComplete || existing.QuantityReceived > 0)
+                {
+                    return;
+                }
+
                 existing.UpdateDetails(input.Details, input.VendorCost, userId, now);
             }
         }

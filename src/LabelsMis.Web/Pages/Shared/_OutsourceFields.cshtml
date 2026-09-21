@@ -2,6 +2,10 @@
 @{
     var p = Model.Prefix;
     var inv = System.Globalization.CultureInfo.InvariantCulture;
+    // The switch locks on its own once a job is routed; the vendor details lock only when the vendor
+    // has already delivered (or the whole form is read-only). Locked selects don't post, so their
+    // values are round-tripped as hidden fields to keep the save from blanking them.
+    var vendorLocked = Model.ReadOnly || Model.VendorFieldsLocked;
 }
 <div class="outsource-block" data-outsource-block>
     <label class="form-check form-switch mb-1 d-inline-flex align-items-center gap-2 small">
@@ -21,20 +25,28 @@
             <span class="badge text-bg-info ms-1">@Model.StatusLabel</span>
         }
     </label>
+    @if (!Model.ReadOnly && !string.IsNullOrEmpty(Model.LockNote) && (Model.ToggleLocked || Model.VendorFieldsLocked))
+    {
+        <div class="form-text mt-0 mb-1 outsource-lock-note"><span class="me-1" aria-hidden="true">🔒</span>@Model.LockNote</div>
+    }
     <div class="row g-2 outsource-fields @(Model.IsOutsourced ? "" : "d-none")">
         <div class="col-md-4">
             <label class="form-label small mb-0">Vendor</label>
-            <select name="@(p).OutsourceVendorId" class="form-select form-select-sm outsource-vendor" disabled="@Model.ReadOnly">
+            <select name="@(p).OutsourceVendorId" class="form-select form-select-sm outsource-vendor" disabled="@vendorLocked">
                 <option value="">— choose vendor —</option>
                 @foreach (var v in Model.Vendors)
                 {
                     <option value="@v.Value" selected="@(Model.VendorId?.ToString() == v.Value)">@v.Text</option>
                 }
             </select>
+            @if (Model.VendorFieldsLocked && !Model.ReadOnly)
+            {
+                <input type="hidden" name="@(p).OutsourceVendorId" value="@(Model.VendorId?.ToString() ?? "")" />
+            }
         </div>
         <div class="col-6 col-md-3">
             <label class="form-label small mb-0">Vendor quote #</label>
-            <input name="@(p).OutsourceQuoteNumber" value="@Model.QuoteNumber" class="form-control form-control-sm" maxlength="100" readonly="@Model.ReadOnly" />
+            <input name="@(p).OutsourceQuoteNumber" value="@Model.QuoteNumber" class="form-control form-control-sm" maxlength="100" readonly="@vendorLocked" />
         </div>
         @if (Model.ShowCost)
         {
@@ -42,13 +54,13 @@
                 <label class="form-label small mb-0">Vendor cost</label>
                 <div class="input-group input-group-sm">
                     <span class="input-group-text">$</span>
-                    <input name="@(p).OutsourceCost" value="@(Model.VendorCost?.ToString("0.####", inv) ?? "")" class="form-control outsource-cost @Model.CostInputClass" inputmode="decimal" placeholder="total" readonly="@Model.ReadOnly" />
+                    <input name="@(p).OutsourceCost" value="@(Model.VendorCost?.ToString("0.####", inv) ?? "")" class="form-control outsource-cost @Model.CostInputClass" inputmode="decimal" placeholder="total" readonly="@vendorLocked" />
                 </div>
             </div>
         }
         <div class="col-6 col-md-3">
             <label class="form-label small mb-0">Expected in</label>
-            <input type="date" name="@(p).OutsourceExpectedIn" value="@(Model.ExpectedIn?.ToString("yyyy-MM-dd") ?? "")" class="form-control form-control-sm" readonly="@Model.ReadOnly" />
+            <input type="date" name="@(p).OutsourceExpectedIn" value="@(Model.ExpectedIn?.ToString("yyyy-MM-dd") ?? "")" class="form-control form-control-sm" readonly="@vendorLocked" />
         </div>
         @if (Model.MarginInputClass is not null && Model.ShowCost && !Model.ReadOnly)
         {
@@ -70,7 +82,7 @@
         }
         <div class="col-12">
             <label class="form-label small mb-0">Private notes <span class="text-muted">(internal — never on customer documents)</span></label>
-            <textarea name="@(p).OutsourcePrivateNotes" class="form-control form-control-sm" rows="2" maxlength="2000" readonly="@Model.ReadOnly">@Model.PrivateNotes</textarea>
+            <textarea name="@(p).OutsourcePrivateNotes" class="form-control form-control-sm" rows="2" maxlength="2000" readonly="@vendorLocked">@Model.PrivateNotes</textarea>
         </div>
         @if (!Model.ShowCost)
         {

@@ -24,6 +24,12 @@ public record OutsourceFieldsModel(
     /// <summary>The switch itself can no longer be flipped (a job is routed / the vendor is involved),
     /// but the vendor details stay editable. The current value is posted as a hidden field.</summary>
     public bool ToggleLocked { get; init; }
+    /// <summary>The vendor details themselves are frozen (the vendor already delivered). Values are
+    /// rendered read-only and round-tripped as hidden fields so the save leaves them untouched.</summary>
+    public bool VendorFieldsLocked { get; init; }
+    /// <summary>Why the switch / vendor details are locked; shown next to the switch so the user
+    /// knows what they can still change (e.g. "Job already created — vendor details stay editable").</summary>
+    public string? LockNote { get; init; }
     /// <summary>Short tracking status shown next to the switch on existing orders (e.g. "At vendor").</summary>
     public string? StatusLabel { get; init; }
     public string ToggleLabel { get; init; } = "Outsource this item";

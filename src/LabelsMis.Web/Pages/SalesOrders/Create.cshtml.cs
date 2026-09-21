@@ -96,7 +96,12 @@ public class SalesOrderChargePageInput : IOutsourcePageInput
 
     /// <summary>Display-only: vendor tracking on an existing order (sent / received), for the row badge.</summary>
     public string? OutsourceStatusLabel { get; set; }
+    /// <summary>Display-only: the outsource switch can no longer be flipped (vendor involved).</summary>
     public bool OutsourceLocked { get; set; }
+    /// <summary>Display-only: the vendor details are frozen (the vendor already delivered).</summary>
+    public bool OutsourceVendorLocked { get; set; }
+    /// <summary>Display-only: why the switch / vendor details are locked, shown next to them.</summary>
+    public string? OutsourceLockNote { get; set; }
 }
 
 public class OrderSpotPageInput
@@ -133,8 +138,13 @@ public class SalesOrderLinePageInput : IOutsourcePageInput
 
     /// <summary>Display-only: vendor tracking on an existing order (sent / received), for the row badge.</summary>
     public string? OutsourceStatusLabel { get; set; }
-    /// <summary>Display-only: the outsource switch can no longer be flipped (job exists / vendor involved).</summary>
+    /// <summary>Display-only: the outsource switch can no longer be flipped (job exists / vendor involved).
+    /// The vendor details stay editable unless <see cref="OutsourceVendorLocked"/> is also set.</summary>
     public bool OutsourceLocked { get; set; }
+    /// <summary>Display-only: the vendor details are frozen (the vendor already delivered).</summary>
+    public bool OutsourceVendorLocked { get; set; }
+    /// <summary>Display-only: why the switch / vendor details are locked, shown next to them.</summary>
+    public string? OutsourceLockNote { get; set; }
 
     public Guid ProductId { get; set; }
     public Guid? SourceEstimateLineId { get; set; }
