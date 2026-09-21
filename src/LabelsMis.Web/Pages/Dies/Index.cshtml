@@ -1,13 +1,37 @@
 @page "/dies"
+@using System.Globalization
+@using LabelsMis.Domain.Dies
+@using Microsoft.AspNetCore.Html
 @model LabelsMis.Web.Pages.Dies.IndexModel
 @{
     ViewData["Title"] = "Dies";
+    var sizeMode = Model.SizeSearch is not null;
     var route = new Dictionary<string, string?>
     {
         ["Search"] = Model.Search,
         ["IncludeInactive"] = Model.IncludeInactive ? "true" : null,
         ["Sort"] = Model.Sort
     };
+    var sizeRoute = new Dictionary<string, string?>
+    {
+        ["LabelAcrossIn"] = Model.SizeSearch?.LabelAcrossIn.ToString("0.####", CultureInfo.InvariantCulture),
+        ["LabelAroundIn"] = Model.SizeSearch?.LabelAroundIn.ToString("0.####", CultureInfo.InvariantCulture),
+        ["ToleranceIn"] = Model.SizeSearch?.ToleranceIn.ToString("0.####", CultureInfo.InvariantCulture)
+    };
+    // "Clear size" keeps the text search / sort / inactive toggle and drops only the size fields.
+    var clearSizeRoute = route.Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => kv.Value!);
+
+    // Sort headers only make sense for the plain list; a size search is ranked by closeness.
+    Func<string, string, Task<IHtmlContent>> header = async (label, key) => sizeMode
+        ? new HtmlString(label)
+        : await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel(label, key, Model.Sort, route));
+}
+@functions {
+    static string Signed(decimal delta) =>
+        delta == 0m ? "0" : (delta > 0m ? "+" : "\u2212") + Math.Abs(delta).ToString("0.00##");
+
+    static string DeltaLabel(DieSizeMatch match) =>
+        match.IsExact ? "exact" : $"{Signed(match.DeltaAcrossIn)} \u00d7 {Signed(match.DeltaAroundIn)}";
 }
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
@@ -18,33 +42,73 @@
     }
 </div>
 
-<form method="get" class="row g-2 align-items-center mb-2">
+<form method="get" class="row g-2 align-items-end mb-2">
     <input type="hidden" asp-for="Sort" />
     <div class="col-md-4 col-lg-3">
-        <input asp-for="Search" class="form-control form-control-sm" placeholder="Search description, customer, location" />
+        <label asp-for="Search" class="form-label small mb-0">Search</label>
+        <input asp-for="Search" class="form-control form-control-sm" placeholder="Description, customer, location" />
+    </div>
+    <div class="col-6 col-sm-auto">
+        <label asp-for="LabelAcrossIn" class="form-label small mb-0">Across (in)</label>
+        <input asp-for="LabelAcrossIn" type="text" inputmode="decimal" class="form-control form-control-sm" style="max-width: 6.5rem" placeholder="e.g. 1.5" />
+    </div>
+    <div class="col-6 col-sm-auto">
+        <label asp-for="LabelAroundIn" class="form-label small mb-0">Around (in)</label>
+        <input asp-for="LabelAroundIn" type="text" inputmode="decimal" class="form-control form-control-sm" style="max-width: 6.5rem" placeholder="e.g. 1" />
+    </div>
+    <div class="col-6 col-sm-auto">
+        <label asp-for="ToleranceIn" class="form-label small mb-0">Tolerance</label>
+        <select asp-for="ToleranceIn" class="form-select form-select-sm">
+            @foreach (var tol in DieSizeMatcher.ToleranceChoicesIn)
+            {
+                <option value="@tol.ToString("0.####", CultureInfo.InvariantCulture)" selected="@(tol == Model.ToleranceIn)">±@tol.ToString("0.###")&quot;</option>
+            }
+        </select>
     </div>
     <div class="col-auto">
-        <div class="form-check small mb-0">
+        <div class="form-check small mb-1">
             <input asp-for="IncludeInactive" class="form-check-input" />
             <label asp-for="IncludeInactive" class="form-check-label">Show inactive</label>
         </div>
     </div>
     <div class="col-auto">
         <button type="submit" class="btn btn-sm btn-outline-secondary">Search</button>
+        @if (sizeMode)
+        {
+            <a asp-page="Index" asp-all-route-data="clearSizeRoute" class="btn btn-sm btn-link">Clear size</a>
+        }
     </div>
 </form>
+
+@if (Model.SizeSearchError is not null)
+{
+    <div class="alert alert-warning py-2 small mb-2" role="alert">@Model.SizeSearchError</div>
+}
+else if (Model.SizeSearch is { } size)
+{
+    <p class="small text-muted mb-2">
+        Dies within ±@size.ToleranceIn.ToString("0.###")&quot; of
+        <strong>@size.LabelAcrossIn.ToString("0.####")&quot; × @size.LabelAroundIn.ToString("0.####")&quot;</strong>
+        in either orientation — exact matches first, then closest.
+        <strong>@Model.Result.TotalCount</strong> found.
+    </p>
+}
 
 <div class="card mb-2">
     <table class="table table-sm table-striped small align-middle mb-0">
         <thead>
             <tr>
-                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Description", "description", Model.Sort, route))</th>
-                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer", "customer", Model.Sort, route))</th>
-                <th class="text-end">@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Label size", "size", Model.Sort, route))</th>
-                <th class="text-end">@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Layout", "layout", Model.Sort, route))</th>
-                <th class="text-end">@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Die repeat", "repeat", Model.Sort, route))</th>
-                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Location", "location", Model.Sort, route))</th>
-                <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Active", "active", Model.Sort, route))</th>
+                <th>@await header("Description", "description")</th>
+                <th>@await header("Customer", "customer")</th>
+                <th class="text-end">@await header("Label size", "size")</th>
+                @if (sizeMode)
+                {
+                    <th class="text-end" title="Die minus requested, in the requested orientation">Δ</th>
+                }
+                <th class="text-end">@await header("Layout", "layout")</th>
+                <th class="text-end">@await header("Die repeat", "repeat")</th>
+                <th>@await header("Location", "location")</th>
+                <th>@await header("Active", "active")</th>
                 <th></th>
             </tr>
         </thead>
@@ -55,6 +119,26 @@
                 <td>@item.Description</td>
                 <td>@(item.CustomerName ?? "—")</td>
                 <td class="text-end text-nowrap">@item.LabelAcrossIn.ToString("0.####")&quot; × @item.LabelAroundIn.ToString("0.####")&quot;</td>
+                @if (sizeMode)
+                {
+                    <td class="text-end text-nowrap">
+                        @if (item.SizeMatch is { } match)
+                        {
+                            if (match.IsExact)
+                            {
+                                <span class="badge text-bg-success">exact</span>
+                            }
+                            else
+                            {
+                                @DeltaLabel(match)
+                            }
+                            if (match.Rotated)
+                            {
+                                <span class="badge text-bg-info ms-1" title="Matches with across and around swapped">rotated</span>
+                            }
+                        }
+                    </td>
+                }
                 <td class="text-end text-nowrap">@item.LabelsAcross × @item.LabelsAround</td>
                 <td class="text-end text-nowrap">@(item.DieRepeatIn is { } repeat ? $"{repeat:0.0000}\"" : "—")</td>
                 <td>@(item.Location ?? "—")</td>
@@ -68,6 +152,12 @@
                 </td>
             </tr>
         }
+        @if (sizeMode && Model.Result.Items.Count == 0)
+        {
+            <tr>
+                <td colspan="9" class="text-muted">No dies within that tolerance. Try a wider tolerance@(Model.IncludeInactive ? "" : " or include inactive dies").</td>
+            </tr>
+        }
         </tbody>
     </table>
 </div>
@@ -78,4 +168,7 @@
     Model.Result.TotalCount,
     Model.Search,
     Model.Sort,
-    IncludeInactive: Model.IncludeInactive))
+    IncludeInactive: Model.IncludeInactive)
+{
+    Extra = sizeRoute
+})

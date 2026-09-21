@@ -1,3 +1,4 @@
+using LabelsMis.Domain.Dies;
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Infrastructure.Persistence;
@@ -16,7 +17,14 @@ public record DieListItem(
     int LabelsAround,
     decimal? DieRepeatIn,
     string? Location,
-    bool IsActive);
+    bool IsActive)
+{
+    /// <summary>Set only on size-proximity searches: how this die compares to the requested size.</summary>
+    public DieSizeMatch? SizeMatch { get; init; }
+}
+
+/// <summary>A size-proximity die search: "what do we have close to across × around?"</summary>
+public record DieSizeSearch(decimal LabelAcrossIn, decimal LabelAroundIn, decimal ToleranceIn);
 
 public record DieForm(
     string Description,
@@ -42,7 +50,7 @@ public record DieForm(
 public class DieService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
     public async Task<PagedResult<DieListItem>> ListAsync(
-        string? search, string? sort, int page, int pageSize, bool includeInactive, CancellationToken ct = default)
+        string? search, DieSizeSearch? sizeSearch, string? sort, int page, int pageSize, bool includeInactive, CancellationToken ct = default)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 5, 100);
@@ -56,6 +64,12 @@ public class DieService(LabelsMisDbContext db, ICurrentUserService currentUser)
                 || (d.Customer != null && d.Customer.Name.ToUpper().Contains(term))
                 || (d.Location != null && d.Location.ToUpper().Contains(term)));
         }
+
+        if (sizeSearch is not null)
+        {
+            return await ListBySizeAsync(query, sizeSearch, page, pageSize, ct);
+        }
+
         var (sortKey, desc) = QueryExtensions.ParseSort(sort);
         if (sortKey == "location")
         {
@@ -87,6 +101,37 @@ public class DieService(LabelsMisDbContext db, ICurrentUserService currentUser)
             .Select(ToListItem)
             .ToListAsync(ct);
         return new PagedResult<DieListItem>(items, page, pageSize, total);
+    }
+
+    /// <summary>Size-proximity search. The DB pre-filter is the loose bounding box — both dimensions
+    /// within ±tolerance in either orientation — which is exactly the match rule, so everything it
+    /// returns scores; the domain matcher then picks the best orientation and the list is ranked
+    /// exact-first, then by closeness. Sort is ignored here: closeness is the point of the search.</summary>
+    private static async Task<PagedResult<DieListItem>> ListBySizeAsync(
+        IQueryable<Die> query, DieSizeSearch sizeSearch, int page, int pageSize, CancellationToken ct)
+    {
+        var (wantAcross, wantAround, tol) = sizeSearch;
+        var acrossMin = wantAcross - tol;
+        var acrossMax = wantAcross + tol;
+        var aroundMin = wantAround - tol;
+        var aroundMax = wantAround + tol;
+        var candidates = await query
+            .Where(d =>
+                (d.LabelAcrossIn >= acrossMin && d.LabelAcrossIn <= acrossMax
+                    && d.LabelAroundIn >= aroundMin && d.LabelAroundIn <= aroundMax)
+                || (d.LabelAroundIn >= acrossMin && d.LabelAroundIn <= acrossMax
+                    && d.LabelAcrossIn >= aroundMin && d.LabelAcrossIn <= aroundMax))
+            .Select(ToListItem)
+            .ToListAsync(ct);
+
+        var ranked = candidates
+            .Select(d => d with { SizeMatch = DieSizeMatcher.Match(d.LabelAcrossIn, d.LabelAroundIn, wantAcross, wantAround, tol) })
+            .Where(d => d.SizeMatch is not null)
+            .OrderBy(d => d.SizeMatch!, DieSizeMatch.RankComparer)
+            .ThenBy(d => d.Description)
+            .ToList();
+        var items = ranked.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return new PagedResult<DieListItem>(items, page, pageSize, ranked.Count);
     }
 
     private static readonly System.Linq.Expressions.Expression<Func<Die, DieListItem>> ToListItem = d => new DieListItem(
