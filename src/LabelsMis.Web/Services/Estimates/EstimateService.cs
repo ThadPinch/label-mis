@@ -48,7 +48,7 @@ public class EstimateService(
     EstimatingService estimatingService,
     EstimatePdfGenerator pdfGenerator,
     TempPdfStorage pdfStorage,
-    IEmailSender emailSender,
+    Email.DocumentEmailService documentEmail,
     SalesOrders.SalesOrderService salesOrderService)
 {
     public async Task<PagedResult<EstimateListItem>> ListAsync(
@@ -351,6 +351,7 @@ public class EstimateService(
         string? subject,
         string? body,
         bool includePdf,
+        bool ccMe = false,
         CancellationToken cancellationToken = default)
     {
         var userId = RequireUserId();
@@ -369,11 +370,15 @@ public class EstimateService(
 
         if (!string.IsNullOrWhiteSpace(emailTo))
         {
-            await emailSender.SendAsync(
+            await documentEmail.SendAsync(
+                EmailDocumentType.Estimate,
+                tracked.Id,
+                salesOrderId: null,
                 emailTo,
                 DefaultIfBlank(subject, $"Estimate {tracked.EstimateNumber}"),
                 DefaultIfBlank(body, $"Please find attached estimate {tracked.EstimateNumber}."),
                 includePdf ? [pdfPath] : null,
+                ccMe,
                 cancellationToken);
         }
     }
@@ -384,6 +389,7 @@ public class EstimateService(
         string? subject,
         string? body,
         bool includePdf,
+        bool ccMe = false,
         CancellationToken cancellationToken = default)
     {
         var userId = RequireUserId();
@@ -407,11 +413,15 @@ public class EstimateService(
             attachments = [pdfPath];
         }
 
-        await emailSender.SendAsync(
+        await documentEmail.SendAsync(
+            EmailDocumentType.Estimate,
+            tracked.Id,
+            salesOrderId: null,
             emailTo,
             DefaultIfBlank(subject, $"Estimate {tracked.EstimateNumber}"),
             DefaultIfBlank(body, $"Please find attached estimate {tracked.EstimateNumber}."),
             attachments,
+            ccMe,
             cancellationToken);
 
         var sentNow = DateTime.UtcNow;

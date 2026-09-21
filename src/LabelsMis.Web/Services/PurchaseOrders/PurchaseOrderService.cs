@@ -42,7 +42,7 @@ public class PurchaseOrderService(
     ICurrentUserService currentUser,
     DocumentNumberService documentNumbers,
     PurchaseOrderPdfGenerator pdfGenerator,
-    IEmailSender emailSender)
+    Email.DocumentEmailService documentEmail)
 {
     public async Task<PagedResult<PurchaseOrderListItem>> ListAsync(
         string? search,
@@ -206,7 +206,10 @@ public class PurchaseOrderService(
         if (sendEmail && !string.IsNullOrWhiteSpace(emailTo))
         {
             var pdfPath = await pdfGenerator.GenerateAsync(detail, cancellationToken);
-            await emailSender.SendAsync(
+            await documentEmail.SendAsync(
+                EmailDocumentType.PurchaseOrder,
+                detail.Id,
+                salesOrderId: null,
                 emailTo,
                 $"Purchase order {detail.PoNumber}",
                 $"Hello {detail.Supplier.Name},\n\nPlease find attached purchase order {detail.PoNumber}. " +
@@ -214,6 +217,7 @@ public class PurchaseOrderService(
                 (detail.ExpectedAt.HasValue ? $", with an expected date of {detail.ExpectedAt:MMM d, yyyy}" : string.Empty) +
                 ".\n\nPlease confirm receipt and advise of any pricing or lead-time discrepancies.\n\nThank you.",
                 [pdfPath],
+                ccMe: false,
                 cancellationToken);
         }
     }

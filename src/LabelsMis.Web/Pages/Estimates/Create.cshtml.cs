@@ -37,6 +37,9 @@ public class CreateModel(
     [BindProperty]
     public bool IncludePdf { get; set; } = true;
 
+    [BindProperty]
+    public bool CcMe { get; set; }
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Input.ValidUntilDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
@@ -94,7 +97,7 @@ public class CreateModel(
         // The draft now exists; send it and surface any email failure on the edit page.
         try
         {
-            await estimateService.SendAsync(estimateId, EmailTo, EmailSubject, EmailBody, IncludePdf, cancellationToken);
+            await estimateService.SendAsync(estimateId, EmailTo, EmailSubject, EmailBody, IncludePdf, CcMe, cancellationToken);
             TempData["EstimateStatus"] = !string.IsNullOrWhiteSpace(EmailTo)
                 ? $"Estimate created and emailed to {EmailTo}."
                 : "Estimate created and marked sent.";

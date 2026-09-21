@@ -1,0 +1,57 @@
+@using LabelsMis.Web.Services.Email
+@model IReadOnlyList<EmailLogRow>
+@*
+    Send history for a document (estimate) or an order (its invoices). Model is the list of
+    log rows, newest first. Renders nothing when there is no history.
+*@
+@if (Model.Count > 0)
+{
+    <div class="card mb-3 email-history">
+        <div class="card-header py-1 small fw-semibold d-flex justify-content-between align-items-center">
+            <span>Email history</span>
+            <span class="text-muted fw-normal">@Model.Count sent</span>
+        </div>
+        <ul class="list-group list-group-flush small">
+            @foreach (var row in Model)
+            {
+                <li class="list-group-item py-1">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <span class="text-truncate" title="@row.Subject">
+                            @if (row.DocumentType != LabelsMis.Domain.Entities.EmailDocumentType.Estimate)
+                            {
+                                <span class="text-muted">@row.DocumentType ·</span>
+                            }
+                            <strong>@row.To</strong>
+                            @if (!string.IsNullOrWhiteSpace(row.Cc))
+                            {
+                                <span class="text-muted">cc @row.Cc</span>
+                            }
+                        </span>
+                        <span class="text-nowrap">
+                            @if (row.Succeeded)
+                            {
+                                <span class="badge text-bg-success">Sent</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-danger" title="@row.Error">Failed</span>
+                            }
+                        </span>
+                    </div>
+                    <div class="text-muted">
+                        <span title="@row.SentAt.ToString("u")">@row.SentAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</span>
+                        · @row.SentBy
+                        @if (row.HadAttachment)
+                        {
+                            <span>· PDF attached</span>
+                        }
+                    </div>
+                    @if (!row.Succeeded && !string.IsNullOrWhiteSpace(row.Error))
+                    {
+                        <div class="text-danger text-truncate" title="@row.Error">@row.Error</div>
+                    }
+                </li>
+            }
+        </ul>
+    </div>
+}

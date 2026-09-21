@@ -25,6 +25,7 @@ public class MailgunEmailSender(
         string subject,
         string body,
         IReadOnlyList<string>? attachmentPaths = null,
+        string? cc = null,
         CancellationToken cancellationToken = default)
     {
         var settings = await db.EmailSettings.AsNoTracking()
@@ -48,6 +49,11 @@ public class MailgunEmailSender(
             { new StringContent(subject), "subject" },
             { new StringContent(body), "text" }
         };
+
+        if (!string.IsNullOrWhiteSpace(cc))
+        {
+            form.Add(new StringContent(cc.Trim()), "cc");
+        }
 
         var openStreams = new List<Stream>();
         try

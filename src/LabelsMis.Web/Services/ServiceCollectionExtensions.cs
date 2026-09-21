@@ -42,6 +42,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DocumentNumberService>();
         services.AddScoped<EstimateCalculationMapper>();
         services.AddSingleton<EstimatingService>();
+        services.AddScoped<Email.DocumentEmailService>();
         services.AddScoped<EstimateService>();
         services.AddScoped<EstimatePdfGenerator>();
         services.AddScoped<ProductService>();

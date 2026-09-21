@@ -87,7 +87,7 @@ public class InvoiceService(
     DocumentNumberService documentNumbers,
     Settings.GeneralSettingsService generalSettings,
     Microsoft.Extensions.Options.IOptions<InvoiceOptions> options,
-    LabelsMis.Domain.Email.IEmailSender emailSender,
+    Email.DocumentEmailService documentEmail,
     Pdf.InvoicePdfGenerator pdfGenerator)
 {
     /// <summary>The shop's tax rate from general settings; appsettings fallback until the
@@ -618,6 +618,7 @@ public class InvoiceService(
         string? subject,
         string? body,
         bool includePdf,
+        bool ccMe = false,
         CancellationToken cancellationToken = default)
     {
         var userId = RequireUserId();
@@ -635,11 +636,15 @@ public class InvoiceService(
 
         var pdfPath = await pdfGenerator.GenerateAsync(detail, cancellationToken);
 
-        await emailSender.SendAsync(
+        await documentEmail.SendAsync(
+            EmailDocumentType.Invoice,
+            detail.Invoice.Id,
+            detail.Invoice.SalesOrderId,
             emailTo,
             string.IsNullOrWhiteSpace(subject) ? $"Invoice {detail.Invoice.InvoiceNumber}" : subject,
             string.IsNullOrWhiteSpace(body) ? $"Please find attached invoice {detail.Invoice.InvoiceNumber}." : body,
             includePdf ? [pdfPath] : null,
+            ccMe,
             cancellationToken);
 
         var tracked = await db.Invoices.SingleAsync(i => i.Id == invoiceId, cancellationToken);

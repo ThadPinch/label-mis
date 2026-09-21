@@ -385,6 +385,8 @@ else if (Model.IsLocked)
                 </ul>
             </div>
         }
+
+        @await Html.PartialAsync("_EmailHistory", Model.EmailHistory)
     </div>
 </div>
 
@@ -454,6 +456,10 @@ else if (Model.IsLocked)
                     <div class="form-check">
                         <input asp-for="IncludePdf" class="form-check-input" />
                         <label asp-for="IncludePdf" class="form-check-label">Include PDF as attachment</label>
+                    </div>
+                    <div class="form-check">
+                        <input asp-for="CcMe" class="form-check-input" />
+                        <label asp-for="CcMe" class="form-check-label">Send me a copy</label>
                     </div>
                 </div>
                 <div class="modal-footer">

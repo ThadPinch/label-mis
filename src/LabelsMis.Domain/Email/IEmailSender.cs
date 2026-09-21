@@ -7,5 +7,6 @@ public interface IEmailSender
         string subject,
         string body,
         IReadOnlyList<string>? attachmentPaths = null,
+        string? cc = null,
         CancellationToken cancellationToken = default);
 }

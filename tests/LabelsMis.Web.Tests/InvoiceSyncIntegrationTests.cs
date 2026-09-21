@@ -61,13 +61,14 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
         // Null settings fall back to InvoiceOptions.DefaultTaxRate, keeping the expected
         // tax math independent of whatever GeneralSettings row the test database carries.
         var settings = new StubGeneralSettingsService(null);
+        var currentUser = new StubCurrentUserService(TestUserId);
         _invoiceService = new InvoiceService(
             _db,
-            new StubCurrentUserService(TestUserId),
+            currentUser,
             new DocumentNumberService(_db),
             settings,
             Options.Create(new InvoiceOptions()),
-            new NoopEmailSender(),
+            new LabelsMis.Web.Services.Email.DocumentEmailService(_db, currentUser, new NoopEmailSender()),
             new LabelsMis.Web.Pdf.InvoicePdfGenerator(settings, new TempPdfStorage(null!)));
     }
 
@@ -254,6 +255,7 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
             string subject,
             string body,
             IReadOnlyList<string>? attachmentPaths = null,
+            string? cc = null,
             CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 

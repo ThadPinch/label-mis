@@ -21,7 +21,8 @@ public class EditModel(
     LabelsMisDbContext db,
     UserManager<ApplicationUser> userManager,
     ShippingMethodService shippingMethodService,
-    OutsourceService outsourceService) : PageModel
+    OutsourceService outsourceService,
+    Services.Email.DocumentEmailService documentEmail) : PageModel
 {
     [BindProperty(SupportsGet = true)]
     public Guid Id { get; set; }
@@ -43,6 +44,11 @@ public class EditModel(
 
     [BindProperty]
     public bool IncludePdf { get; set; }
+
+    [BindProperty]
+    public bool CcMe { get; set; }
+
+    public IReadOnlyList<Services.Email.EmailLogRow> EmailHistory { get; private set; } = [];
 
     public EstimateDetail? Detail { get; private set; }
     public bool CanEdit { get; private set; }
@@ -121,7 +127,7 @@ public class EditModel(
 
         try
         {
-            await estimateService.SendAsync(Id, EmailTo, EmailSubject, EmailBody, IncludePdf, cancellationToken);
+            await estimateService.SendAsync(Id, EmailTo, EmailSubject, EmailBody, IncludePdf, CcMe, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -165,7 +171,7 @@ public class EditModel(
 
         try
         {
-            await estimateService.ResendAsync(Id, EmailTo, EmailSubject, EmailBody, IncludePdf, cancellationToken);
+            await estimateService.ResendAsync(Id, EmailTo, EmailSubject, EmailBody, IncludePdf, CcMe, cancellationToken);
             TempData["EstimateStatus"] = $"Estimate emailed to {EmailTo}.";
         }
         catch (Exception ex)
@@ -286,6 +292,8 @@ public class EditModel(
         CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Estimator);
         CanAdmin = User.IsInRole(AppRoles.Admin);
         Detail = await estimateService.GetDetailAsync(Id, cancellationToken);
+        EmailHistory = await documentEmail.ListForDocumentAsync(
+            Domain.Entities.EmailDocumentType.Estimate, Id, cancellationToken);
         CanDelete = CanEdit
             && Detail?.Estimate.Status == EstimateStatus.Draft
             && Detail.SalesOrderId is null;

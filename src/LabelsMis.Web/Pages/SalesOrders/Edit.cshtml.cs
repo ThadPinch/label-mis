@@ -44,6 +44,7 @@ public class EditModel(
     ProductService productService,
     InvoiceService invoiceService,
     OutsourceService outsourceService,
+    Services.Email.DocumentEmailService documentEmail,
     LabelsMisDbContext db) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
@@ -79,6 +80,8 @@ public class EditModel(
     [BindProperty] public string? EmailSubject { get; set; }
     [BindProperty] public string? EmailBody { get; set; }
     [BindProperty] public bool IncludePdf { get; set; } = true;
+    [BindProperty] public bool CcMe { get; set; }
+    public IReadOnlyList<Services.Email.EmailLogRow> EmailHistory { get; private set; } = [];
 
     /// <summary>Customer payment terms; Prepay gates scheduling on full payment.</summary>
     public PaymentTerms? CustomerTerms { get; private set; }
@@ -289,6 +292,7 @@ public class EditModel(
             .Select(s => new OrderShipmentInfo(s.Id, s.ShipmentNumber, s.ShipDate, s.Status))
             .ToListAsync(cancellationToken);
 
+        EmailHistory = await documentEmail.ListForSalesOrderAsync(Id, cancellationToken);
         Invoices = await db.Invoices.AsNoTracking()
             .Where(i => i.SalesOrderId == Id)
             .OrderBy(i => i.InvoiceDate)
@@ -641,7 +645,7 @@ public class EditModel(
                 throw new InvalidOperationException("Invoice not found on this order.");
             }
 
-            await invoiceService.SendAsync(SendInvoiceId, EmailTo, EmailSubject, EmailBody, IncludePdf, cancellationToken);
+            await invoiceService.SendAsync(SendInvoiceId, EmailTo, EmailSubject, EmailBody, IncludePdf, CcMe, cancellationToken);
             TempData["OrderStatus"] = $"Invoice emailed to {EmailTo}.";
             return RedirectToPage(new { id = Id });
         }

@@ -10,11 +10,13 @@ public class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : IEmailSend
         string subject,
         string body,
         IReadOnlyList<string>? attachmentPaths = null,
+        string? cc = null,
         CancellationToken cancellationToken = default)
     {
         logger.LogInformation(
-            "Email to {To} subject {Subject} attachments {AttachmentCount}",
+            "Email to {To} cc {Cc} subject {Subject} attachments {AttachmentCount}",
             to,
+            cc ?? "-",
             subject,
             attachmentPaths?.Count ?? 0);
         return Task.CompletedTask;
