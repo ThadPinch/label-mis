@@ -241,6 +241,14 @@ else
         <div class="col-lg-5 d-flex flex-column gap-3">
             <div class="card">
                 <div class="card-body py-2">
+                    @if (!string.IsNullOrWhiteSpace(ticket?.CustomerNotes))
+                    {
+                        <div class="small text-muted mb-1">
+                            Standing customer notes
+                            <span class="ms-1">@Model.Detail.CustomerName</span>
+                        </div>
+                        <p class="mb-2 small fw-semibold" style="white-space: pre-line">@ticket!.CustomerNotes</p>
+                    }
                     <div class="small text-muted mb-1">
                         Order notes
                         <a asp-page="/SalesOrders/Edit" asp-route-id="@Model.Detail.SalesOrderId" class="ms-1">@Model.Detail.OrderNumber</a>
@@ -354,7 +362,8 @@ else
                             <tr><th class="text-muted fw-normal">Unwind</th><td>@(Model.Detail.Job.Spec?.Unwind?.Label() ?? "—")</td></tr>
                             @if (Model.Detail.Job.Spec?.ShrinkLayflatIn is { } shrinkLayflat)
                             {
-                                <tr><th class="text-muted fw-normal">Shrink layflat</th><td>@shrinkLayflat.ToString("0.0000")&quot;</td></tr>
+                                <tr><th class="text-muted fw-normal">Shrink layflat</th><td>@LabelsMis.Domain.Common.Inches.FormatWithMm(shrinkLayflat)</td></tr>
+                                <tr><th class="text-muted fw-normal">Shrink size</th><td>@LabelsMis.Domain.Common.Inches.FormatSizeWithMm(Model.Detail.Job.Spec.LabelAcrossIn, Model.Detail.Job.Spec.LabelAroundIn)</td></tr>
                             }
                             @if (!string.IsNullOrWhiteSpace(Model.Detail.LineNotes))
                             {

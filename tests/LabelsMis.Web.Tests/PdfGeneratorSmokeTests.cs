@@ -134,7 +134,9 @@ public class PdfGeneratorSmokeTests
                 new JobTicketRouteStep(5, JobOperationType.Pack, "Pack & label cases", 30m)
             },
             OrderNotes: "Rush order — customer will pick up partials as they finish.",
-            LineNotes: "Matte finish only — no gloss substitutes.");
+            LineNotes: "Matte finish only — no gloss substitutes.",
+            CustomerNotes: "Always ship blind.\nShips on their own UPS account — never prepay freight.",
+            ShrinkLayflatIn: 3.9375m);
 
         // A sibling line on the same order: the ticket shows a compact block for every job.
         var siblingJob = Job.CreatePlanned(
