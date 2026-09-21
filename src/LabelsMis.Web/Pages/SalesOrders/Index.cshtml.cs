@@ -31,6 +31,14 @@ public class IndexModel(SalesOrderService salesOrderService, LabelsMisDbContext 
     public async Task OnGetAsync(CancellationToken cancellationToken) =>
         await LoadAsync(cancellationToken);
 
+    /// <summary>Serves one order's lines and charges for the list's per-row expander, fetched by
+    /// sales-order-lines.js on first expand.</summary>
+    public async Task<IActionResult> OnGetLinesAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var summary = await salesOrderService.GetItemsSummaryAsync(id, cancellationToken);
+        return summary is null ? NotFound() : Partial("_SalesOrderLines", summary);
+    }
+
     public async Task<IActionResult> OnPostDeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         if (!User.IsInRole(AppRoles.Admin))

@@ -1,0 +1,54 @@
+@model LabelsMis.Web.Services.SalesOrders.SalesOrderItemsSummary
+@{
+    // Rendered into a row's expander on the Sales Orders list (fetched on demand by
+    // sales-order-lines.js via ?handler=Lines&id=…). Read-only: no forms, no links.
+    var hasItems = Model.Lines.Count > 0 || Model.Charges.Count > 0;
+}
+@if (!hasItems)
+{
+    <div class="text-muted small py-1">No lines</div>
+}
+else
+{
+    <table class="table table-sm small mb-0 so-lines-table">
+        <thead>
+        <tr>
+            <th class="text-muted fw-normal" style="width: 3rem;">#</th>
+            <th class="text-muted fw-normal">Item</th>
+            <th class="text-muted fw-normal text-end">Qty</th>
+            <th class="text-muted fw-normal text-end">Unit price</th>
+            <th class="text-muted fw-normal text-end">Line total</th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var line in Model.Lines)
+        {
+            <tr>
+                <td class="text-muted">@line.LineNumber</td>
+                <td>
+                    @line.Description
+                    <span class="text-muted">· @line.ProductSku</span>
+                    @if (line.IsOutsourced) { <span class="badge text-bg-secondary ms-1">Outsourced</span> }
+                </td>
+                <td class="text-end text-nowrap">@line.Quantity.ToString("N0")</td>
+                <td class="text-end text-nowrap">@line.UnitPrice.ToString("C4")</td>
+                <td class="text-end text-nowrap">@line.LineTotal.ToString("C2")</td>
+            </tr>
+        }
+        @foreach (var charge in Model.Charges)
+        {
+            <tr>
+                <td class="text-muted">@($"C{charge.LineNumber}")</td>
+                <td>
+                    @charge.Description
+                    <span class="text-muted">· charge</span>
+                    @if (charge.IsOutsourced) { <span class="badge text-bg-secondary ms-1">Outsourced</span> }
+                </td>
+                <td class="text-end text-nowrap">@charge.Quantity.ToString("N0")</td>
+                <td class="text-end text-nowrap">@charge.UnitPrice.ToString("C2")</td>
+                <td class="text-end text-nowrap">@charge.LineTotal.ToString("C2")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

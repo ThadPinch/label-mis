@@ -78,6 +78,33 @@ public record SalesOrderListItem(
 
 public record SalesOrderPackingListPdf(string OrderNumber, byte[] Bytes);
 
+/// <summary>One ordered line as shown in the Sales Orders list expander. Description is the
+/// line's snapshot, falling back to the product's description on rows created before the snapshot.</summary>
+public record SalesOrderLineSummary(
+    int LineNumber,
+    string ProductSku,
+    string Description,
+    int Quantity,
+    decimal UnitPrice,
+    decimal LineTotal,
+    bool IsOutsourced);
+
+/// <summary>One extra charge as shown in the Sales Orders list expander.</summary>
+public record SalesOrderChargeSummary(
+    int LineNumber,
+    string Description,
+    int Quantity,
+    decimal UnitPrice,
+    decimal LineTotal,
+    bool IsOutsourced);
+
+/// <summary>What was ordered on one sales order: lines then charges, each in line-number order.</summary>
+public record SalesOrderItemsSummary(
+    Guid Id,
+    string OrderNumber,
+    IReadOnlyList<SalesOrderLineSummary> Lines,
+    IReadOnlyList<SalesOrderChargeSummary> Charges);
+
 public class SalesOrderService(
     LabelsMisDbContext db,
     ICurrentUserService currentUser,
@@ -164,6 +191,37 @@ public class SalesOrderService(
 
         return new PagedResult<SalesOrderListItem>(items, page, pageSize, total);
     }
+
+    /// <summary>The lines and charges on an order, projected read-only for the list page's per-row
+    /// expander; null when the order doesn't exist.</summary>
+    public async Task<SalesOrderItemsSummary?> GetItemsSummaryAsync(Guid id, CancellationToken cancellationToken = default) =>
+        await db.SalesOrders.AsNoTracking()
+            .Where(o => o.Id == id)
+            .Select(o => new SalesOrderItemsSummary(
+                o.Id,
+                o.OrderNumber,
+                o.Lines
+                    .OrderBy(l => l.LineNumber)
+                    .Select(l => new SalesOrderLineSummary(
+                        l.LineNumber,
+                        l.Product.InternalSku,
+                        l.Description ?? l.Product.Description,
+                        l.Quantity,
+                        l.UnitPrice,
+                        l.LineTotal,
+                        l.OutsourcedItem != null))
+                    .ToList(),
+                o.Charges
+                    .OrderBy(c => c.LineNumber)
+                    .Select(c => new SalesOrderChargeSummary(
+                        c.LineNumber,
+                        c.Description,
+                        c.Quantity,
+                        c.UnitPrice,
+                        c.LineTotal,
+                        c.OutsourcedItem != null))
+                    .ToList()))
+            .SingleOrDefaultAsync(cancellationToken);
 
     public async Task<SalesOrder?> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
         await db.SalesOrders
