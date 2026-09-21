@@ -180,7 +180,9 @@ public class EditModel(
     }
 
     /// <summary>Marks each line input with its existing job so the form can pin the product select
-    /// (and lock the outsource switch — a job is already routed one way or the other).</summary>
+    /// and lock the outsource switch (a job is already routed one way or the other). Only the switch
+    /// locks here — the vendor details, price, quantity and description stay editable on an unlocked
+    /// order; <see cref="ToPageInput"/> freezes the vendor details separately once the vendor has delivered.</summary>
     private void ApplyLineJobsToInput()
     {
         foreach (var lineJob in LineJobs)
@@ -191,6 +193,9 @@ public class EditModel(
                 line.HasJob = true;
                 line.JobNumber = lineJob.JobNumber;
                 line.OutsourceLocked = true;
+                line.OutsourceLockNote ??= line.IsOutsourced
+                    ? $"Job {lineJob.JobNumber} is routed to the vendor, so outsourcing can't be switched off — vendor, quote, cost and expected-in date can still be changed."
+                    : $"Job {lineJob.JobNumber} is already in production, so this line can't be switched to outsourced. Add a new line instead.";
             }
         }
     }
@@ -202,6 +207,20 @@ public class EditModel(
         { QuantityReceived: > 0 } => $"Received {item.QuantityReceived:N0} so far",
         { IsSent: true } => "At vendor",
         _ => "Not yet sent"
+    };
+
+    /// <summary>The vendor details freeze once the vendor has delivered anything; before that a
+    /// slipped date or revised quote is a normal edit even while the item is at the vendor.</summary>
+    private static bool OutsourceVendorLocked(Domain.Entities.OutsourcedItem? item) =>
+        item is { IsComplete: true } or { QuantityReceived: > 0 };
+
+    private static string? OutsourceLockNote(Domain.Entities.OutsourcedItem? item) => item switch
+    {
+        null => null,
+        { IsComplete: true } => "Vendor already delivered — vendor details are locked and outsourcing can't be switched off.",
+        { QuantityReceived: > 0 } => "Vendor has started delivering — vendor details are locked and outsourcing can't be switched off.",
+        { IsSent: true } => "Already sent to the vendor, so outsourcing can't be switched off — vendor, quote, cost and expected-in date can still be changed.",
+        _ => null
     };
 
     private async Task LoadLineDetailsAsync(CancellationToken cancellationToken)
@@ -422,7 +441,9 @@ public class EditModel(
             OutsourceExpectedIn = c.OutsourcedItem?.ExpectedIn,
             OutsourcePrivateNotes = c.OutsourcedItem?.PrivateNotes,
             OutsourceStatusLabel = OutsourceStatusLabel(c.OutsourcedItem),
-            OutsourceLocked = c.OutsourcedItem is { CanBeRemoved: false }
+            OutsourceLocked = c.OutsourcedItem is { CanBeRemoved: false },
+            OutsourceVendorLocked = OutsourceVendorLocked(c.OutsourcedItem),
+            OutsourceLockNote = OutsourceLockNote(c.OutsourcedItem)
         }).ToList(),
         Lines = order.Lines.OrderBy(l => l.LineNumber).Select(l =>
         {
@@ -444,6 +465,8 @@ public class EditModel(
                 OutsourcePrivateNotes = l.OutsourcedItem?.PrivateNotes,
                 OutsourceStatusLabel = OutsourceStatusLabel(l.OutsourcedItem),
                 OutsourceLocked = l.OutsourcedItem is { CanBeRemoved: false },
+                OutsourceVendorLocked = OutsourceVendorLocked(l.OutsourcedItem),
+                OutsourceLockNote = OutsourceLockNote(l.OutsourcedItem),
                 Unwind = spec?.Unwind,
                 HasArtwork = !string.IsNullOrWhiteSpace(l.Product.ArtworkFilePath),
                 ArtworkFileName = string.IsNullOrWhiteSpace(l.Product.ArtworkFilePath)
@@ -502,16 +525,25 @@ public class EditModel(
                 .Select(o => o.Status)
                 .SingleAsync(cancellationToken);
 
+            var form = Input.ToForm();
             InvoiceSyncResult syncResult;
             if (status == SalesOrderStatus.Open)
             {
-                syncResult = await salesOrderService.UpdateAsync(Id, Input.ToForm(), admin, cancellationToken);
+                syncResult = await salesOrderService.UpdateAsync(Id, form, admin, cancellationToken);
             }
             else
             {
                 // Unlocked edit of an in-production order: in-place line updates + job propagation.
+                // The Unlocked flag is posted back as a hidden field so the save honours it and the
+                // redirect keeps the form open; without it the order was scheduled mid-edit.
                 if (!CanUnlock) return Forbid();
-                syncResult = await salesOrderService.UpdateInProductionAsync(Id, Input.ToForm(), cancellationToken);
+                if (!Unlocked)
+                {
+                    throw new InvalidOperationException(
+                        "This order went into production while you were editing. Use Unlock to edit and try again.");
+                }
+
+                syncResult = await salesOrderService.UpdateInProductionAsync(Id, form, cancellationToken);
             }
 
             switch (syncResult.Outcome)
@@ -533,7 +565,7 @@ public class EditModel(
             }
 
             await UploadLineArtworkAsync(cancellationToken);
-            return RedirectToPage(new { id = Id });
+            return RedirectToPage(new { id = Id, unlocked = Unlocked ? "true" : null });
         }
         catch (Exception ex)
         {
