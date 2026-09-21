@@ -54,9 +54,10 @@
     </div>
 </form>
 
-<table class="table table-striped">
+<table class="table table-striped-pairs so-list">
     <thead>
     <tr>
+        <th class="so-toggle-cell"><span class="visually-hidden">Items</span></th>
         <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Order #", "number", Model.Sort, route))</th>
         <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer", "customer", Model.Sort, route))</th>
         <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("PO #", "po", Model.Sort, route))</th>
@@ -69,7 +70,18 @@
     <tbody>
     @foreach (var item in Model.Result.Items)
     {
+        var detailId = $"so-lines-{item.Id}";
         <tr>
+            <td class="so-toggle-cell">
+                <button type="button" class="btn btn-link btn-sm p-0 lh-1 so-toggle"
+                        data-lines-toggle="?handler=Lines&id=@item.Id"
+                        aria-expanded="false" aria-controls="@detailId"
+                        title="Show items" aria-label="Show items on order @item.OrderNumber">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z" />
+                    </svg>
+                </button>
+            </td>
             <td>@item.OrderNumber</td><td>@item.CustomerName</td><td>@(item.CustomerPoNumber ?? "—")</td>
             <td>@(item.RequestedShipDate?.ToString("yyyy-MM-dd") ?? "—")</td><td>@item.Status</td>
             <td>@item.OrderTotal.ToString("C2")</td>
@@ -103,10 +115,18 @@
                 }
             </td>
         </tr>
+        @* Expander row: always rendered (so pair-striping stays aligned), shown by the toggle and
+           filled with the _SalesOrderLines partial on first open. *@
+        <tr id="@detailId" class="so-detail" hidden>
+            <td class="so-toggle-cell"></td>
+            <td colspan="7" class="pt-0 pb-2">
+                <div data-lines-body></div>
+            </td>
+        </tr>
     }
     @if (Model.Result.Items.Count == 0)
     {
-        <tr><td colspan="7" class="text-center text-muted py-4">No sales orders match your filters.</td></tr>
+        <tr><td colspan="8" class="text-center text-muted py-4">No sales orders match your filters.</td></tr>
     }
     </tbody>
 </table>
@@ -116,3 +136,7 @@
 {
     Extra = route
 })
+
+@section Scripts {
+    <script src="~/js/sales-order-lines.js" asp-append-version="true"></script>
+}

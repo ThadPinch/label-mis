@@ -1381,3 +1381,39 @@ body {
   text-transform: uppercase;
   color: var(--lm-text-muted);
 }
+
+/* ==========================================================================
+   Row expanders (Sales Orders list): every data row is followed by a hidden
+   detail row, so zebra-stripe in pairs of <tr> rather than per row.
+   ========================================================================== */
+.table-striped-pairs > tbody > tr:nth-of-type(4n + 1) > *,
+.table-striped-pairs > tbody > tr:nth-of-type(4n + 2) > * {
+  --bs-table-color-type: var(--bs-table-striped-color);
+  --bs-table-bg-type: var(--bs-table-striped-bg);
+}
+
+.so-toggle-cell {
+  width: 2rem;
+  padding-right: 0;
+}
+
+.so-toggle {
+  color: var(--lm-text-muted);
+}
+
+.so-toggle svg {
+  transition: transform 0.15s ease;
+}
+
+.so-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+/* The detail row's inner table sits on the parent stripe rather than painting its own. */
+.so-lines-table {
+  --bs-table-bg: transparent;
+}
+
+.so-lines-table > tbody > tr:last-child > * {
+  border-bottom: 0;
+}
