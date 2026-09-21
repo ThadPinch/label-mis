@@ -32,4 +32,7 @@ public record OutsourceFieldsModel(
     public string CostInputClass { get; init; } = "";
     /// <summary>When set, a read-only margin readout is rendered with this CSS class for the page script to fill.</summary>
     public string? MarginReadoutClass { get; init; }
+    /// <summary>When set (and the block is editable with a cost field), an unnamed "target margin %" input is
+    /// rendered with this CSS class so the page script can drive the unit price from it. Never posted.</summary>
+    public string? MarginInputClass { get; init; }
 }

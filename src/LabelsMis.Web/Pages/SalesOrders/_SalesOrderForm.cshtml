@@ -226,6 +226,7 @@
                     ToggleLabel = "Outsource this line",
                     CostInputClass = "order-line-outsource-cost",
                     MarginReadoutClass = "order-line-outsource-margin",
+                    MarginInputClass = "order-line-outsource-target",
                     Hint = outsourceLineHint
                 })" />
             </div>
@@ -616,6 +617,7 @@
                         ToggleLabel = "Outsource this line",
                         CostInputClass = "order-line-outsource-cost",
                         MarginReadoutClass = "order-line-outsource-margin",
+                        MarginInputClass = "order-line-outsource-target",
                         Hint = outsourceLineHint
                     })" />
                 </div>
@@ -724,7 +726,8 @@
                                 StatusLabel = charge.OutsourceStatusLabel,
                                 ToggleLabel = "Outsourced item (promo, print, wide format)",
                                 CostInputClass = "order-charge-outsource-cost",
-                                MarginReadoutClass = "order-charge-outsource-margin"
+                                MarginReadoutClass = "order-charge-outsource-margin",
+                                MarginInputClass = "order-charge-outsource-target"
                             })" />
                         </div>
                     </div>
@@ -778,7 +781,8 @@
                     {
                         ToggleLabel = "Outsourced item (promo, print, wide format)",
                         CostInputClass = "order-charge-outsource-cost",
-                        MarginReadoutClass = "order-charge-outsource-margin"
+                        MarginReadoutClass = "order-charge-outsource-margin",
+                        MarginInputClass = "order-charge-outsource-target"
                     })" />
                 </div>
             </div>
@@ -1045,33 +1049,94 @@
     })();
 </script>
 <script>
-    // Outsourced lines/charges: live margin readout — our price (qty × unit) against the vendor's cost.
+    // Outsourced lines/charges: live margin readout — our price (qty × unit) against the vendor's cost —
+    // plus a "target margin" input that drives the unit price the other way:
+    //   unit price = vendor cost ÷ qty ÷ (1 − margin)   (margin on price, same basis as the readout).
+    // Nothing new is posted: the target input has no name; unit price stays the stored value.
     (function () {
-        const pct = (total, cost) => Number.isFinite(total) && Number.isFinite(cost) && total > 0
-            ? `${((total - cost) / total * 100).toFixed(1)}%`
-            : '—';
+        const MAX_MARGIN = 0.999;
+        const marginOf = (total, cost) => Number.isFinite(total) && Number.isFinite(cost) && total > 0
+            ? (total - cost) / total
+            : null;
+        const fmt = margin => (margin * 100).toFixed(1).replace(/^-0\.0$/, '0.0');
         const paint = (el, total, cost) => {
             if (!el) return;
-            el.textContent = pct(total, cost);
-            el.classList.toggle('text-danger', Number.isFinite(total) && Number.isFinite(cost) && total > 0 && total < cost);
+            const margin = marginOf(total, cost);
+            el.textContent = margin === null ? '—' : `${fmt(margin)}%`;
+            el.classList.toggle('text-danger', margin !== null && total < cost);
         };
-        const refresh = () => {
-            document.querySelectorAll('#order-lines .order-line').forEach(line => {
+        // Keep the target input agreeing with the readout, except while the user is typing in it.
+        const syncTarget = (input, total, cost, qty, force) => {
+            if (!input) return;
+            input.disabled = !(Number.isFinite(cost) && cost > 0 && Number.isFinite(qty) && qty > 0);
+            if (!force && document.activeElement === input) return;
+            const margin = input.disabled ? null : marginOf(total, cost);
+            input.value = margin === null ? '' : fmt(margin);
+        };
+        const rows = () => [
+            ...[...document.querySelectorAll('#order-lines .order-line')].map(line => {
                 const qty = Number(line.querySelector('.line-qty')?.value);
-                const price = Number(line.querySelector('.line-price')?.value);
-                const cost = Number(line.querySelector('.order-line-outsource-cost')?.value);
-                paint(line.querySelector('.order-line-outsource-margin'), qty * price, cost);
-            });
-            document.querySelectorAll('#order-charges .order-charge-row').forEach(row => {
+                return {
+                    qty,
+                    priceInput: line.querySelector('.line-price'),
+                    cost: Number(line.querySelector('.order-line-outsource-cost')?.value),
+                    readout: line.querySelector('.order-line-outsource-margin'),
+                    target: line.querySelector('.order-line-outsource-target')
+                };
+            }),
+            ...[...document.querySelectorAll('#order-charges .order-charge-row')].map(row => {
                 const qtyRaw = Number(row.querySelector('.order-charge-qty')?.value);
-                const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
-                const price = Number(row.querySelector('.order-charge-price')?.value);
-                const cost = Number(row.querySelector('.order-charge-outsource-cost')?.value);
-                paint(row.querySelector('.order-charge-outsource-margin'), qty * price, cost);
+                return {
+                    qty: Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1,
+                    priceInput: row.querySelector('.order-charge-price'),
+                    cost: Number(row.querySelector('.order-charge-outsource-cost')?.value),
+                    readout: row.querySelector('.order-charge-outsource-margin'),
+                    target: row.querySelector('.order-charge-outsource-target')
+                };
+            })
+        ];
+        const refresh = (force) => {
+            rows().forEach(r => {
+                const total = r.qty * Number(r.priceInput?.value);
+                paint(r.readout, total, r.cost);
+                syncTarget(r.target, total, r.cost, r.qty, force === r.target);
             });
         };
+
+        // "50", "50%", "49.6" → 0.496; blank/garbage → null; clamped to 0–99.9%.
+        const parseMargin = raw => {
+            const parsed = parseFloat(String(raw ?? '').trim().replace(/%$/, ''));
+            if (!Number.isFinite(parsed)) return null;
+            return Math.min(Math.max(parsed / 100, 0), MAX_MARGIN);
+        };
+        const applyTarget = input => {
+            const row = rows().find(r => r.target === input);
+            const margin = parseMargin(input.value);
+            if (!row || !row.priceInput || margin === null) return;
+            if (!(Number.isFinite(row.cost) && row.cost > 0 && Number.isFinite(row.qty) && row.qty > 0)) return;
+            const unit = Math.round(row.cost / row.qty / (1 - margin) * 10000) / 10000; // 4 dp, as the app stores unit price
+            if (!Number.isFinite(unit)) return;
+            row.priceInput.value = String(unit);
+            // Fire the events the existing scripts listen for (charge row totals, this readout).
+            row.priceInput.dispatchEvent(new Event('input', { bubbles: true }));
+            row.priceInput.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+
         document.addEventListener('input', e => {
+            const target = e.target.closest('.order-line-outsource-target, .order-charge-outsource-target');
+            if (target) { applyTarget(target); return; }
             if (e.target.closest('#order-lines, #order-charges')) refresh();
+        });
+        // Leaving the target input snaps it to the margin actually achieved after rounding the unit price.
+        document.addEventListener('focusout', e => {
+            const target = e.target.closest('.order-line-outsource-target, .order-charge-outsource-target');
+            if (target) refresh(target);
+        });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && e.target.closest('.order-line-outsource-target, .order-charge-outsource-target')) {
+                e.preventDefault();
+                e.target.blur();
+            }
         });
         document.addEventListener('outsource:toggle', refresh);
         document.addEventListener('order-line-added', refresh);
