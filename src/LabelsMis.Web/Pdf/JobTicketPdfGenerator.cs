@@ -3,6 +3,7 @@ using FrontEndSuite.PdfPlatform.Document;
 using FrontEndSuite.PdfPlatform.Fonts;
 using FrontEndSuite.PdfPlatform.Geometry;
 using FrontEndSuite.PdfPlatform.Layout;
+using LabelsMis.Domain.Common;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Web.Services.Jobs;
 using LabelsMis.Web.Services.Settings;
@@ -72,6 +73,15 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
     private static void ComposeContent(FlowDocument document, JobTicketDetail detail, IReadOnlyList<JobTicketDetail> orderJobs)
     {
         document.Add(WithMarginBottom(OrderSection(detail)));
+
+        // Standing customer notes travel with the customer onto every ticket ("always ship
+        // blind", "ships on their UPS account"). Read live from the profile; omitted when empty.
+        if (!string.IsNullOrWhiteSpace(detail.CustomerNotes))
+        {
+            var standingBody = new FlowCell { Border = (PdfStyle.GreyDarken1, 1f), Padding = 6f };
+            standingBody.Add(Paragraph(detail.CustomerNotes!.Trim(), StandardFont.HelveticaBold));
+            document.Add(WithMarginBottom(SectionShell("STANDING CUSTOMER NOTES", standingBody)));
+        }
 
         // Notes up front, always shown so the floor sees them before the job specs
         // and has a place to write. Order notes first, then every job's own notes so
@@ -171,8 +181,15 @@ public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettings
             .ToList();
         rows.Add(("Finishing", finishing.Count > 0 ? string.Join(" · ", finishing) : "None", "", ""));
 
-        rows.Add(("Unwind", job.Job.Spec?.Unwind?.Label() ?? "—",
-            "Shrink layflat", job.Job.Spec?.ShrinkLayflatIn is { } shrinkLayflat ? $"{shrinkLayflat:0.0000}\"" : "—"));
+        rows.Add(("Unwind", job.Job.Spec?.Unwind?.Label() ?? "—", "", ""));
+
+        // Shrink-sleeve jobs: layflat and sleeve size in both units — converters spec in mm.
+        // Non-shrink jobs (no layflat on the spec) get no shrink rows at all.
+        if (job.ShrinkLayflatIn is { } shrinkLayflat)
+        {
+            rows.Add(("Shrink layflat", Inches.FormatWithMm(shrinkLayflat),
+                "Shrink size", Inches.FormatSizeWithMm(job.LabelAcrossIn, job.LabelAroundIn)));
+        }
 
         // Die details — the same facts the job page's die popover shows.
         if (job.Die is { } die)

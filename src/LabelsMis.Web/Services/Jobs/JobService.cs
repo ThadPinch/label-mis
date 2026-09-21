@@ -98,7 +98,12 @@ public record JobTicketDetail(
     IReadOnlyList<string>? OrderCharges = null,
     Die? Die = null,
     string? ShippingMethodName = null,
-    JobOutsourceInfo? Outsource = null);
+    JobOutsourceInfo? Outsource = null,
+    /// <summary>The customer's standing notes, read live from the profile at ticket time so
+    /// every job for that customer carries them (e.g. "always ship blind").</summary>
+    string? CustomerNotes = null,
+    /// <summary>Shrink-sleeve layflat (inches) from the job's spec snapshot; null for non-shrink jobs.</summary>
+    decimal? ShrinkLayflatIn = null);
 
 public record OperatorJobView(
     Job Job,
@@ -433,6 +438,7 @@ public class JobService(
             .Include(j => j.Product).ThenInclude(p => p.Substrate)
             .Include(j => j.Product).ThenInclude(p => p.RollSpec)
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.ShippingMethod)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.Customer)
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.OutsourcedItem).ThenInclude(o => o!.Vendor)
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.OutsourcedItem).ThenInclude(o => o!.Receipts)
             .Include(j => j.Operations)
@@ -555,7 +561,11 @@ public class JobService(
             orderCharges.Select(c => c.Quantity > 1 ? $"{c.Description} (×{c.Quantity})" : c.Description).ToList(),
             die,
             order.ShippingMethod?.Name,
-            ToOutsourceInfo(job.SalesOrderLine.OutsourcedItem));
+            ToOutsourceInfo(job.SalesOrderLine.OutsourcedItem),
+            // Standing notes come from the ordering customer's profile, live — not snapshotted —
+            // so a profile edit shows on the next ticket printed for any of their jobs.
+            order.Customer?.Notes,
+            spec.ShrinkLayflatIn);
     }
 
     public async Task<OperatorJobView?> GetOperatorViewAsync(

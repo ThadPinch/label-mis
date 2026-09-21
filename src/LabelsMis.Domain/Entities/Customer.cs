@@ -21,7 +21,8 @@ public class Customer : MasterDataEntity
     public Guid? SalesRepId { get; private set; }
 
     /// <summary>Standing internal notes for this customer. Seeds the header notes of a new estimate or
-    /// sales order when the customer is picked; never printed on a customer document.</summary>
+    /// sales order when the customer is picked and prints on every job ticket for the customer; never
+    /// printed on a customer-facing document.</summary>
     public string? Notes { get; private set; }
 
     public IReadOnlyCollection<Address> Addresses => _addresses;
