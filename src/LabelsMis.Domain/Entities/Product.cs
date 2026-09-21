@@ -39,6 +39,11 @@ public class Product : MasterDataEntity
     /// product is pulled in (replacing whatever the line had), and from there to the order line and job.
     /// Internal — never printed on a customer document.</summary>
     public string? Notes { get; private set; }
+
+    /// <summary>Product-specific markup as a fraction (0.60 = 60%), or null to fall back to the
+    /// customer's default markup. Seeds the estimate line's markup when the product is pulled in.</summary>
+    public decimal? MarkupPctOverride { get; private set; }
+
     public ProductStatus Status { get; private set; }
 
     public IReadOnlyCollection<ProductCustomer> CustomerAssignments => _customerAssignments;
@@ -130,6 +135,18 @@ public class Product : MasterDataEntity
         DieId = dieId;
         ArtworkFilePath = string.IsNullOrWhiteSpace(artworkFilePath) ? null : artworkFilePath.Trim();
         Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>Sets or clears the product-specific markup. Null means "use the customer default".</summary>
+    public void SetMarkupOverride(decimal? markupPct, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (markupPct is < 0m or > 10m)
+        {
+            throw new ArgumentOutOfRangeException(nameof(markupPct), "Markup must be between 0 and 10 (0%–1000%).");
+        }
+
+        MarkupPctOverride = markupPct;
         SetModified(modifiedById, modifiedAt);
     }
 

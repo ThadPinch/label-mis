@@ -25,6 +25,13 @@ public class GeneralSettings : EntityBase
     /// taxable customers.</summary>
     public decimal TaxRate { get; private set; } = 0.0825m;
 
+    /// <summary>Shop-wide default markup as a fraction (0.55 = 55%). Seeds the markup on new
+    /// customers and is the last fallback when neither a line override, the product, nor the
+    /// customer supplies one.</summary>
+    public decimal DefaultMarkupPct { get; private set; } = DefaultMarkupPctFallback;
+
+    public const decimal DefaultMarkupPctFallback = 0.55m;
+
     public byte[]? LogoBytes { get; private set; }
     public string? LogoContentType { get; private set; }
 
@@ -47,12 +54,18 @@ public class GeneralSettings : EntityBase
         string? website,
         string? termsText,
         decimal taxRate,
+        decimal defaultMarkupPct,
         Guid modifiedById,
         DateTime modifiedAt)
     {
         if (taxRate is < 0m or > 1m)
         {
             throw new ArgumentOutOfRangeException(nameof(taxRate), "Tax rate must be between 0 and 1.");
+        }
+
+        if (defaultMarkupPct is < 0m or > 10m)
+        {
+            throw new ArgumentOutOfRangeException(nameof(defaultMarkupPct), "Default markup must be between 0 and 10 (0%–1000%).");
         }
 
         CompanyName = companyName.Trim();
@@ -66,6 +79,7 @@ public class GeneralSettings : EntityBase
         Website = Normalize(website);
         TermsText = Normalize(termsText);
         TaxRate = taxRate;
+        DefaultMarkupPct = defaultMarkupPct;
         SetModified(modifiedById, modifiedAt);
     }
 

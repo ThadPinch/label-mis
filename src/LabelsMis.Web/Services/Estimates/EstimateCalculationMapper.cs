@@ -119,6 +119,24 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
         var customer = await db.Customers.AsNoTracking()
             .SingleAsync(c => c.Id == customerId, cancellationToken);
 
+        // Markup precedence: line override → product override → customer default → shop default.
+        decimal? productMarkup = null;
+        if (line.SourceProductId is { } sourceProductId && sourceProductId != Guid.Empty)
+        {
+            productMarkup = await db.Products.AsNoTracking()
+                .Where(p => p.Id == sourceProductId)
+                .Select(p => p.MarkupPctOverride)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        var shopDefaultMarkup = await db.GeneralSettings.AsNoTracking()
+            .Select(s => (decimal?)s.DefaultMarkupPct)
+            .FirstOrDefaultAsync(cancellationToken) ?? GeneralSettings.DefaultMarkupPctFallback;
+
+        var markupPct = line.MarkupPctOverride
+            ?? productMarkup
+            ?? (customer.DefaultMarkupPct > 0m ? customer.DefaultMarkupPct : shopDefaultMarkup);
+
         var press = await db.Presses.AsNoTracking()
             .SingleAsync(p => p.Id == Press.Indigo6800Id, cancellationToken);
 
@@ -216,7 +234,7 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             line.Quantities.Where(q => q > 0).Distinct().OrderBy(q => q).ToList(),
             line.SetupWasteImpressions,
             line.RunningWastePct,
-            line.MarkupPctOverride ?? customer.DefaultMarkupPct,
+            markupPct,
             MinimumMarginPct,
             line.MaxLabelsAcrossOverride,
             line.LabelOrientationOverride,

@@ -42,6 +42,7 @@ public class GeneralSettingsService(LabelsMisDbContext db, ICurrentUserService c
             input.Website,
             input.TermsText,
             input.TaxRate,
+            input.DefaultMarkupPct,
             userId,
             DateTime.UtcNow);
         await db.SaveChangesAsync(cancellationToken);
@@ -78,4 +79,5 @@ public record GeneralSettingsFormInput(
     string? Email,
     string? Website,
     string? TermsText,
-    decimal TaxRate);
+    decimal TaxRate,
+    decimal DefaultMarkupPct);

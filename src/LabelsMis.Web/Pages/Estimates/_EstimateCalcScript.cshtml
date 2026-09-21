@@ -1328,6 +1328,19 @@
         const productDie = dieById.get(String(product.dieId ?? ''));
         if (productDie && !getLineDie(lineEl)) snapLineToDie(lineEl, productDie);
         applyDieToLine(lineEl);
+        // Product-level markup seeds the line override; without one the line falls back to the
+        // customer default (server side). Per-quantity overrides are dropped either way so the
+        // freshly pulled product prices consistently across its quantity breaks.
+        const productMarkup = product.markupPctOverride;
+        if (productMarkup !== null && productMarkup !== undefined && !Number.isNaN(Number(productMarkup))) {
+            setLineMarkup(lineEl, Number(productMarkup));
+        } else {
+            const overrideInput = lineEl.querySelector('.markup-override-input');
+            if (overrideInput) overrideInput.value = '';
+            lineMarkupCache.delete(lineEl.dataset.lineIndex);
+            updateMarginDisplay(lineEl, null);
+        }
+        setQtyMarkupMap(lineEl, {});
     };
 
     const readQuantities = (lineEl) => [...lineEl.querySelectorAll('.quantity-input')]

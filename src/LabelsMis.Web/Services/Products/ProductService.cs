@@ -39,7 +39,8 @@ public record ProductFormInput(
     Guid? DieId,
     string? ArtworkFilePath,
     string? Notes,
-    RollSpecInput? RollSpec);
+    RollSpecInput? RollSpec,
+    decimal? MarkupPctOverride = null);
 
 public record ProductPickerItem(
     Guid Id,
@@ -54,7 +55,8 @@ public record ProductPickerItem(
     string FinishingOperationsJson,
     Guid? DieId,
     int? UnwindPosition = null,
-    string? Notes = null);
+    string? Notes = null,
+    decimal? MarkupPctOverride = null);
 
 public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
@@ -291,6 +293,8 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
             userId,
             now);
 
+        product.SetMarkupOverride(input.MarkupPctOverride, userId, now);
+
         if (input.RollSpec is not null)
         {
             product.SetRollSpec(CreateRollSpec(product.Id, input.RollSpec, userId, now));
@@ -326,6 +330,7 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
             userId,
             now);
 
+        product.SetMarkupOverride(input.MarkupPctOverride, userId, now);
         SyncCustomerAssignments(product, input.PrimaryCustomerId, input.CustomerIds, userId, now);
 
         if (input.RollSpec is null)
@@ -440,7 +445,8 @@ public class ProductService(LabelsMisDbContext db, ICurrentUserService currentUs
                 p.FinishingOperationsJson,
                 p.DieId,
                 p.RollSpec == null ? (int?)null : p.RollSpec.UnwindPosition,
-                p.Notes))
+                p.Notes,
+                p.MarkupPctOverride))
             .ToListAsync(cancellationToken);
     }
 

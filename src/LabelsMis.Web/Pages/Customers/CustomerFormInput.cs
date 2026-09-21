@@ -20,9 +20,10 @@ public class CustomerFormInput
     [Display(Name = "Tax exempt")]
     public bool TaxExempt { get; set; }
 
+    /// <summary>Fraction (0.55 = 55%). Seeded from Settings → General on the Create page.</summary>
     [Range(0, 10)]
-    [Display(Name = "Default markup %")]
-    public decimal DefaultMarkupPct { get; set; } = 0.45m;
+    [Display(Name = "Default markup (fraction, 0.55 = 55%)")]
+    public decimal DefaultMarkupPct { get; set; } = Domain.Entities.GeneralSettings.DefaultMarkupPctFallback;
 
     [Display(Name = "Status")]
     public CustomerStatus Status { get; set; } = CustomerStatus.Active;

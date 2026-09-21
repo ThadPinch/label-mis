@@ -38,7 +38,8 @@ public class GeneralModel(GeneralSettingsService generalSettings) : PageModel
             Email = settings.Email,
             Website = settings.Website,
             TermsText = settings.TermsText,
-            TaxRatePercent = settings.TaxRate * 100m
+            TaxRatePercent = settings.TaxRate * 100m,
+            DefaultMarkupPercent = settings.DefaultMarkupPct * 100m
         };
         LogoDataUri = BuildLogoDataUri(settings.LogoBytes, settings.LogoContentType);
     }
@@ -74,7 +75,8 @@ public class GeneralModel(GeneralSettingsService generalSettings) : PageModel
             Input.Email,
             Input.Website,
             Input.TermsText,
-            Input.TaxRatePercent / 100m), cancellationToken);
+            Input.TaxRatePercent / 100m,
+            Input.DefaultMarkupPercent / 100m), cancellationToken);
 
         if (LogoUpload is not null)
         {
@@ -158,4 +160,8 @@ public class GeneralSettingsPageInput
     [Range(0, 100)]
     [Display(Name = "Sales tax rate (%)")]
     public decimal TaxRatePercent { get; set; } = 8.25m;
+
+    [Range(0, 1000)]
+    [Display(Name = "Default markup (%)")]
+    public decimal DefaultMarkupPercent { get; set; } = 55m;
 }

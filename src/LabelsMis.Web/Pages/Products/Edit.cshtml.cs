@@ -117,7 +117,8 @@ public class EditModel(ProductService productService, ArtworkService artworkServ
                 .DeserializeFinishingOperations(product.FinishingOperationsJson).ToList(),
             DieId = product.DieId,
             ArtworkFilePath = product.ArtworkFilePath,
-            Notes = product.Notes
+            Notes = product.Notes,
+            MarkupPercent = product.MarkupPctOverride is { } mp ? mp * 100m : null
         };
         if (product.RollSpec is not null)
         {

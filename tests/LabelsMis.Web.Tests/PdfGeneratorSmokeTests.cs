@@ -264,7 +264,7 @@ public class PdfGeneratorSmokeTests
             "Printing Solutions AZ", "2120 W Broadway Rd", null, "Mesa", "AZ", "85202",
             "(480) 555-0142", "orders@printingsolutionsaz.com", "printingsolutionsaz.com",
             "Prices valid for 30 days. 10% over/under constitutes a complete order.",
-            0.0825m, UserId, Now);
+            0.0825m, 0.55m, UserId, Now);
         settings.SetLogo(TinyPng, "image/png", UserId, Now);
         return settings;
     }

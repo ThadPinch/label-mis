@@ -22,6 +22,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.ArtworkFilePath).HasMaxLength(500);
         builder.Property(p => p.ArtworkOriginalFileName).HasMaxLength(255);
         builder.Property(p => p.Notes).HasMaxLength(2000);
+        builder.Property(p => p.MarkupPctOverride).HasPrecision(18, 4);
         builder.Property(p => p.Status).IsRequired();
 
         builder.HasIndex(p => p.InternalSku).IsUnique();

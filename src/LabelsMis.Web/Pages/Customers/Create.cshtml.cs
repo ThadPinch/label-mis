@@ -1,6 +1,7 @@
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Services.Customers;
+using LabelsMis.Web.Services.Settings;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -11,7 +12,10 @@ using Microsoft.EntityFrameworkCore;
 namespace LabelsMis.Web.Pages.Customers;
 
 [Authorize(Policy = MasterDataPolicies.Edit)]
-public class CreateModel(CustomerService customerService, UserManager<ApplicationUser> userManager) : PageModel
+public class CreateModel(
+    CustomerService customerService,
+    UserManager<ApplicationUser> userManager,
+    GeneralSettingsService generalSettings) : PageModel
 {
     [BindProperty]
     public CustomerFormInput Input { get; set; } = new();
@@ -19,6 +23,9 @@ public class CreateModel(CustomerService customerService, UserManager<Applicatio
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         ViewData["CanEditForm"] = true;
+        // New customers start at the shop-wide default markup (Settings → General).
+        var settings = await generalSettings.GetAsync(cancellationToken);
+        Input.DefaultMarkupPct = settings?.DefaultMarkupPct ?? Domain.Entities.GeneralSettings.DefaultMarkupPctFallback;
         await LoadSalesRepOptionsAsync(cancellationToken);
     }
 
