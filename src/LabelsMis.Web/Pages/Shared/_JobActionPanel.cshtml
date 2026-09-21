@@ -15,12 +15,27 @@
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
 <div class="modal-body">
+    @if (Model.Error is { } error)
+    {
+        <div class="alert alert-danger py-2 mb-2" role="alert">@error</div>
+    }
     @if (Model.FinishingTasks.Count > 0)
     {
         var remaining = Model.FinishingTasks.Count(t => !t.IsDone);
         <p class="form-text mt-0 mb-2">
-            Complete each task with the time it took (less than planned if it ran faster) and any
-            laminate used. The job moves to Rewinding once all are done (@remaining remaining).
+            @if (remaining > 0)
+            {
+                <text>Complete each task with the time it took (less than planned if it ran faster) and any
+                laminate used. The job moves to Rewinding once all are done (@remaining remaining).</text>
+            }
+            else if (Model.Status == JobStatus.Printed)
+            {
+                <text>All finishing tasks are done.</text>
+            }
+            else
+            {
+                <text>All finishing tasks are done — the job has moved on to Rewinding.</text>
+            }
         </p>
         <ul class="list-group list-group-flush">
             @foreach (var task in Model.FinishingTasks)
@@ -44,7 +59,9 @@
                     </div>
                     @if (!task.IsDone)
                     {
-                        <form method="post" asp-page-handler="CompleteTask" class="row g-2 align-items-end mt-1">
+                        @* data-modal-inline: job-action-modal.js posts this form via fetch and swaps
+                           the popup body with the refreshed panel, so the other tasks stay open. *@
+                        <form method="post" asp-page-handler="CompleteTask" class="row g-2 align-items-end mt-1" data-modal-inline>
                             <input type="hidden" name="jobId" value="@Model.JobId" />
                             <input type="hidden" name="operationId" value="@task.OperationId" />
                             <input type="hidden" name="returnUrl" value="" />
@@ -142,15 +159,24 @@
     }
 </div>
 <div class="modal-footer py-2">
-    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+    @{
+        var tasksAllDone = Model.FinishingTasks.Count > 0 && Model.FinishingTasks.All(t => t.IsDone);
+        // Completing the last task advanced the job itself: there is nothing left to submit, so
+        // the only footer action is closing (which refreshes the list behind the popup).
+        var tasksAdvanced = tasksAllDone && Model.Status != JobStatus.Printed;
+    }
+    <button type="button" class="btn @(tasksAdvanced ? "btn-primary" : "btn-outline-secondary") btn-sm" data-bs-dismiss="modal">
+        @(tasksAdvanced ? "Close" : "Cancel")
+    </button>
     @if (Model.FinishingTasks.Count == 0 && Model.NextLabel is { } nextLabel)
     {
         <button type="submit" form="job-action-advance-form" class="btn btn-primary btn-sm">
             @(Model.Counts is not null ? $"Record & {char.ToLowerInvariant(nextLabel[0])}{nextLabel[1..]}" : nextLabel)
         </button>
     }
-    else if (Model.FinishingTasks.Count > 0 && Model.FinishingTasks.All(t => t.IsDone) && Model.NextLabel is { } doneLabel)
+    else if (tasksAllDone && !tasksAdvanced && Model.NextLabel is { } doneLabel)
     {
+        @* Every task is done but the job is still in Finishing (e.g. all were skipped). *@
         <form method="post" asp-page-handler="RecordAdvance" class="d-inline">
             <input type="hidden" name="jobId" value="@Model.JobId" />
             <input type="hidden" name="returnUrl" value="" />

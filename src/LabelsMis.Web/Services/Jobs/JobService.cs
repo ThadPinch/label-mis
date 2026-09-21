@@ -164,7 +164,12 @@ public record JobActionPanel(
     bool ShowRollClaim,
     JobActionCounts? Counts,
     IReadOnlyList<JobActionTask> FinishingTasks,
-    IReadOnlyList<RollPickerOption> Rolls);
+    IReadOnlyList<RollPickerOption> Rolls)
+{
+    /// <summary>Message from a failed submit, shown at the top of the popup when it is
+    /// re-rendered in place (fetch) instead of redirecting back to the list.</summary>
+    public string? Error { get; init; }
+}
 
 public class JobService(
     LabelsMisDbContext db,
@@ -935,7 +940,14 @@ public class JobService(
     /// job is in Finishing, otherwise the stage operation's counts/time prefills, plus the roll
     /// claim context for stages that consume material.
     /// </summary>
-    public async Task<JobActionPanel?> GetActionPanelAsync(Guid jobId, CancellationToken cancellationToken = default)
+    /// <para><paramref name="stage"/> picks which stage's form to build; it defaults to the job's
+    /// current status. The finishing popup passes <see cref="JobStatus.Printed"/> when it re-renders
+    /// after a task completes, so the task list stays up (showing everything done) even though
+    /// completing the last task has already advanced the job.</para>
+    public async Task<JobActionPanel?> GetActionPanelAsync(
+        Guid jobId,
+        CancellationToken cancellationToken = default,
+        JobStatus? stage = null)
     {
         var job = await db.Jobs.AsNoTracking()
             .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
@@ -950,12 +962,13 @@ public class JobService(
         }
 
         var finishing = await db.FinishingOperations.AsNoTracking().ToDictionaryAsync(f => f.Id, cancellationToken);
-        var next = NextStep(job.Status);
+        var stageStatus = stage ?? job.Status;
+        var next = NextStep(stageStatus);
 
         // Finishing-task mode: Printed jobs complete their tasks one by one (the job advances
         // itself when the last one is done), so the popup lists tasks instead of one counts form.
         var tasks = new List<JobActionTask>();
-        if (job.Status == JobStatus.Printed)
+        if (stageStatus == JobStatus.Printed)
         {
             var materialByOperation = MaterialStockByFinishingOperation(job.Spec);
             var stockIds = materialByOperation.Values.Distinct().ToList();
@@ -989,10 +1002,10 @@ public class JobService(
         // Counts mode: the operation belonging to the job's current stage, prefilled with the
         // recorded values or the expected defaults (mirrors the jobs/{id} counts recorder).
         JobActionCounts? counts = null;
-        if (job.Status != JobStatus.PrePress && tasks.Count == 0 && next is not null)
+        if (stageStatus != JobStatus.PrePress && tasks.Count == 0 && next is not null)
         {
             var operations = job.Operations.OrderBy(o => o.Sequence).ToList();
-            var stageOperation = job.Status switch
+            var stageOperation = stageStatus switch
             {
                 JobStatus.Queued => operations.FirstOrDefault(o => o.OperationType == JobOperationType.Press),
                 JobStatus.Finished => operations.FirstOrDefault(o => o.OperationType == JobOperationType.Inspection),
@@ -1038,7 +1051,7 @@ public class JobService(
                 .FirstOrDefaultAsync(cancellationToken)
                 ?? $"{job.Product.Substrate.Code} — {job.Product.Substrate.Description}";
 
-        var showRollClaim = job.Status == JobStatus.Queued;
+        var showRollClaim = stageStatus == JobStatus.Queued;
         var rolls = showRollClaim || tasks.Any(t => t.IsLamination && !t.IsDone)
             ? await rollService.ListPickerOptionsAsync(cancellationToken)
             : [];
