@@ -50,6 +50,18 @@
             <label class="form-label small mb-0">Expected in</label>
             <input type="date" name="@(p).OutsourceExpectedIn" value="@(Model.ExpectedIn?.ToString("yyyy-MM-dd") ?? "")" class="form-control form-control-sm" readonly="@Model.ReadOnly" />
         </div>
+        @if (Model.MarginInputClass is not null && Model.ShowCost && !Model.ReadOnly)
+        {
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-0">Target margin</label>
+                <div class="input-group input-group-sm">
+                    <input type="text" class="form-control @Model.MarginInputClass" inputmode="decimal" autocomplete="off"
+                           aria-label="Target margin percent" title="Type a margin to set the unit price: vendor cost ÷ qty ÷ (1 − margin)"
+                           disabled="@(!(Model.VendorCost > 0))" />
+                    <span class="input-group-text">%</span>
+                </div>
+            </div>
+        }
         @if (Model.MarginReadoutClass is not null)
         {
             <div class="col-6 col-md-2 d-flex align-items-end">
