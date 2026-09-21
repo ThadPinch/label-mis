@@ -27,6 +27,10 @@
         <div class="text-muted small">
             @Model.Detail.CustomerName
             &middot; Sales order <a asp-page="/SalesOrders/Edit" asp-route-id="@Model.Detail.SalesOrderId">@Model.Detail.OrderNumber</a>
+            @if (!string.IsNullOrWhiteSpace(invoice.SalesOrder?.CustomerPoNumber))
+            {
+                <span>&middot; Customer PO <strong>@invoice.SalesOrder.CustomerPoNumber</strong></span>
+            }
         </div>
     </div>
     <a asp-page-handler="Pdf" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-secondary">Download invoice</a>
