@@ -2,6 +2,7 @@ using LabelsMis.Domain.Enums;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
+using LabelsMis.Web.Pages.Shared;
 using LabelsMis.Web.Services.Jobs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -107,8 +108,14 @@ public class IndexModel(JobService jobService, LabelsMisDbContext db) : PageMode
         return RedirectToReturnUrl(returnUrl);
     }
 
-    /// <summary>Completes one finishing task from the popup (time + optional laminate claim).</summary>
+    /// <summary>
+    /// Completes one finishing task from the popup (time + optional laminate claim). The popup
+    /// posts these in place (job-action-modal.js), so a fetch request gets the refreshed panel
+    /// back — remaining tasks, or all done — instead of a redirect that would close the popup.
+    /// A plain form post keeps the redirect back to the list.
+    /// </summary>
     public async Task<IActionResult> OnPostCompleteTaskAsync(
+        Guid jobId,
         Guid operationId,
         decimal actualMinutes,
         string? rollBarcode,
@@ -121,6 +128,7 @@ public class IndexModel(JobService jobService, LabelsMisDbContext db) : PageMode
             return Forbid();
         }
 
+        string? error = null;
         try
         {
             await jobService.CompleteFinishingTaskAsync(
@@ -128,7 +136,20 @@ public class IndexModel(JobService jobService, LabelsMisDbContext db) : PageMode
         }
         catch (Exception ex)
         {
-            TempData["JobActionError"] = ex.Message;
+            error = ex.Message;
+        }
+
+        if (Request.IsFetch())
+        {
+            // Always the finishing-task view: completing the last task already moved the job
+            // on, and the operator should still see the list with everything ticked off.
+            var panel = await jobService.GetActionPanelAsync(jobId, cancellationToken, JobStatus.Printed);
+            return panel is null ? NotFound() : Partial("_JobActionPanel", panel with { Error = error });
+        }
+
+        if (error is not null)
+        {
+            TempData["JobActionError"] = error;
         }
 
         return RedirectToReturnUrl(returnUrl);
