@@ -2,20 +2,36 @@ using LabelsMis.Domain.Common;
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Fedex;
+using LabelsMis.Infrastructure.Fedex;
 using LabelsMis.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace LabelsMis.Web.Background;
 
 public class ShipmentTrackingPoller(
     IServiceProvider serviceProvider,
+    IOptions<FedexOptions> fedexOptions,
     ILogger<ShipmentTrackingPoller> logger) : BackgroundService
 {
     private static readonly TimeSpan NormalInterval = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromHours(2);
 
+    /// <summary>True when the carrier client is the sandbox stub. Its tracking events are
+    /// fabricated with fresh timestamps on every call, so polling it never converges: each cycle
+    /// inserts new rows for every open shipment and the in-memory graph grows until the container
+    /// is recycled. Polling only makes sense against a real carrier.</summary>
+    public static bool ShouldPoll(FedexOptions options) => !options.UseSandbox;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!ShouldPoll(fedexOptions.Value))
+        {
+            logger.LogInformation(
+                "Shipment tracking poller disabled: Fedex:UseSandbox is true, so there is no real carrier to poll.");
+            return;
+        }
+
         var delay = NormalInterval;
 
         while (!stoppingToken.IsCancellationRequested)
