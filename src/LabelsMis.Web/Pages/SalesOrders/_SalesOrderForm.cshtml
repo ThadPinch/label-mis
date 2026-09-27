@@ -126,11 +126,11 @@
 {
     <div class="row g-2 mb-2">
         <div class="col-md-5">
-            <select id="product-filter-customer" class="form-select form-select-sm">
+            <select id="product-filter-customer" class="form-select form-select-sm" data-products-url="?handler=Products">
                 <option value="">Pull products from: all customers</option>
                 @foreach (var customer in (IEnumerable<SelectListItem>)ViewData["Customers"]!)
                 {
-                    <option value="@customer.Value">Pull products from: @customer.Text</option>
+                    <option value="@customer.Value" selected="@(customer.Value == Model.CustomerId.ToString())">Pull products from: @customer.Text</option>
                 }
             </select>
         </div>

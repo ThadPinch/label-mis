@@ -473,6 +473,10 @@ else if (Model.IsLocked)
 
 @section Scripts {
     <script src="~/js/artwork-upload.js" asp-append-version="true"></script>
+    @if (Model.IsEditing)
+    {
+        <script src="~/js/so-product-picker.js" asp-append-version="true"></script>
+    }
     <script>
         (function () {
             document.getElementById('invoice-contact-select')?.addEventListener('change', (event) => {
