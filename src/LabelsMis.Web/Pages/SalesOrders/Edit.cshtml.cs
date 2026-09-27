@@ -811,8 +811,20 @@ public class EditModel(
     public async Task<IActionResult> OnGetProductNotesAsync(Guid productId, CancellationToken cancellationToken) =>
         new JsonResult(new { notes = await productService.GetNotesAsync(productId, cancellationToken) });
 
+    /// <summary>Picker list for the "Pull products from" filter above the line items — every
+    /// product, or one customer's. Mirrors the Create page so a saved order can add lines for
+    /// products assigned to a different customer.</summary>
+    public async Task<IActionResult> OnGetProductsAsync(Guid? customerId, CancellationToken cancellationToken)
+    {
+        var products = !customerId.HasValue || customerId.Value == Guid.Empty
+            ? await productService.ListPickerAllAsync(cancellationToken)
+            : await productService.ListPickerForCustomerAsync(customerId.Value, cancellationToken);
+        return new JsonResult(products);
+    }
+
     private async Task LoadLookupsAsync(Guid customerId, CancellationToken cancellationToken)
     {
+        ViewData["ShowProductFilter"] = IsEditing;
         ViewData["OutsourceVendors"] = await outsourceService.GetVendorOptionsAsync(
             Input.Lines.Select(l => l.OutsourceVendorId).Concat(Input.Charges.Select(c => c.OutsourceVendorId)),
             cancellationToken);
@@ -820,8 +832,18 @@ public class EditModel(
             Input.ShippingMethodId, cancellationToken);
         ViewData["Customers"] = await db.Customers.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.Name)
             .Select(c => new SelectListItem(c.Name, c.Id.ToString())).ToListAsync(cancellationToken);
+
+        // The order customer's products plus whatever each line already points at: a line may
+        // carry another customer's product (picked through the filter), and its select must still
+        // render that product selected rather than falling back to "Select product".
+        var lineProductIds = Input.Lines
+            .Select(l => l.ProductId)
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
         ViewData["Products"] = await db.Products.AsNoTracking()
-            .Where(p => p.IsActive && p.CustomerAssignments.Any(a => a.CustomerId == customerId))
+            .Where(p => (p.IsActive && p.CustomerAssignments.Any(a => a.CustomerId == customerId))
+                || lineProductIds.Contains(p.Id))
             .OrderBy(p => p.InternalSku)
             .Select(p => new SelectListItem($"{p.InternalSku} — {p.Description}", p.Id.ToString()))
             .ToListAsync(cancellationToken);

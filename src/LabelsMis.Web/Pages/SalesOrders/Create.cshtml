@@ -10,69 +10,15 @@
 
 @section Scripts {
 <script src="~/js/artwork-upload.js" asp-append-version="true"></script>
+<script src="~/js/so-product-picker.js" asp-append-version="true"></script>
 <script>
 (() => {
     document.addEventListener('DOMContentLoaded', () => {
         LabelsMis.initSalesOrderArtworkUploads(document.getElementById('sales-order-form'));
     });
 
-    const customerSelect = document.getElementById('customer-select');
-    const productFilterSelect = document.getElementById('product-filter-customer');
-    if (!productFilterSelect) return;
-
-    let productsCacheKey = null;
-    let productsList = [];
-
-    const getProductFilterKey = () => {
-        const value = productFilterSelect.value;
-        return value || 'all';
-    };
-
-    const buildProductsUrl = () => {
-        const key = getProductFilterKey();
-        return key === 'all'
-            ? '?handler=Products'
-            : `?handler=Products&customerId=${encodeURIComponent(key)}`;
-    };
-
-    const populateProductSelects = () => {
-        document.querySelectorAll('.product-select').forEach(sel => {
-            const currentVal = sel.value;
-            sel.innerHTML = '<option value="">Select product</option>';
-            productsList.forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p.id;
-                opt.textContent = `${p.internalSku} — ${p.description}`;
-                if (p.id === currentVal) opt.selected = true;
-                sel.appendChild(opt);
-            });
-        });
-    };
-
-    const loadProducts = async () => {
-        const cacheKey = getProductFilterKey();
-        if (productsCacheKey === cacheKey) {
-            populateProductSelects();
-            return;
-        }
-
-        const response = await fetch(buildProductsUrl());
-        if (!response.ok) return;
-
-        productsList = await response.json();
-        productsCacheKey = cacheKey;
-        populateProductSelects();
-    };
-
-    const syncProductFilterToOrderCustomer = () => {
-        if (!customerSelect?.value) return;
-        const matchingOption = [...productFilterSelect.options].some(o => o.value === customerSelect.value);
-        if (matchingOption) {
-            productFilterSelect.value = customerSelect.value;
-            productsCacheKey = null;
-        }
-    };
-
+    // Create-only: seed the unit price from the product's price breaks when the product or
+    // quantity changes. Edits keep the price the order was saved with.
     const updateSuggestedPrice = async (row) => {
         const productId = row.querySelector('.product-select')?.value;
         const qty = row.querySelector('.line-qty')?.value;
@@ -82,28 +28,12 @@
         if (data.unitPrice != null) row.querySelector('.line-price').value = data.unitPrice;
     };
 
-    customerSelect?.addEventListener('change', () => {
-        syncProductFilterToOrderCustomer();
-        loadProducts();
-    });
-
-    productFilterSelect.addEventListener('change', () => {
-        productsCacheKey = null;
-        loadProducts();
-    });
-
     document.addEventListener('change', e => {
         if (e.target.matches('.line-qty, .product-select')) {
             const row = e.target.closest('.order-line');
             if (row) updateSuggestedPrice(row);
         }
     });
-
-    // Newly added line rows need their product dropdown filled from the loaded list.
-    document.addEventListener('order-line-added', () => populateProductSelects());
-
-    syncProductFilterToOrderCustomer();
-    loadProducts();
 })();
 </script>
 <partial name="Shared/_ShipToAddressScript" model="@("?handler=Addresses")" />
