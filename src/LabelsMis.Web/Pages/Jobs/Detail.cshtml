@@ -151,7 +151,7 @@ else
                                 }
                                 else
                                 {
-                                    <span class="text-muted">No artwork on file for this product yet.</span>
+                                    <span class="text-muted">No artwork on file for this product yet.@(Model.Imposition?.ArtworkIsJobPrintFile == true ? " The Imposition tab uses the job's Print file." : "")</span>
                                 }
                             </span>
                             <div class="d-flex gap-1">
