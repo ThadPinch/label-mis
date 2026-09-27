@@ -495,8 +495,9 @@ public class SalesOrderService(
     /// The explicit "unlocked" edit path for orders already in production. Lines are updated
     /// in place (matched by id) so job references stay intact, and line changes are propagated
     /// to the linked jobs: spec edits via <see cref="Job.SetSpec"/>, quantity changes via
-    /// <see cref="Job.UpdateOrderedQuantity"/>. Lines can be added; a line can only be removed
-    /// while no job references it. Products on job-linked lines cannot change.
+    /// <see cref="Job.UpdateOrderedQuantity"/>. Lines can be added — while the order is in
+    /// production each new line gets its job planned right away, exactly as release would have; a
+    /// line can only be removed while no job references it. Products on job-linked lines cannot change.
     /// </summary>
     public async Task<Invoices.InvoiceSyncResult> UpdateInProductionAsync(
         Guid id,
@@ -540,6 +541,7 @@ public class SalesOrderService(
 
         var keptIds = new HashSet<Guid>();
         var replanJobIds = new List<Guid>();
+        var addedLines = new List<SalesOrderLine>();
         var seedSpecs = await LoadProductSeedSpecsAsync(input.Lines, cancellationToken);
 
         foreach (var lineInput in input.Lines)
@@ -598,6 +600,7 @@ public class SalesOrderService(
                 order.AddLine(newLine);
                 db.SalesOrderLines.Add(newLine);
                 keptIds.Add(newLine.Id);
+                addedLines.Add(newLine);
             }
         }
 
@@ -623,6 +626,20 @@ public class SalesOrderService(
 
         // Charges never have jobs; they are matched by id so outsourced-item tracking survives.
         SyncCharges(order, input.Charges, userId, now);
+
+        // A line added while the order is on the floor gets its job now — release already happened,
+        // so nothing else would ever create one. Runs after the outsourcing sync so a new outsourced
+        // line's job is routed to the vendor like it would have been at release. Orders that have
+        // moved on (shipped/invoiced) keep the line as a paper change only.
+        if (order.Status is SalesOrderStatus.InProduction)
+        {
+            foreach (var newLine in addedLines)
+            {
+                var outsourcedItem = newLine.OutsourcedItem
+                    ?? db.OutsourcedItems.Local.SingleOrDefault(o => o.SalesOrderLineId == newLine.Id);
+                await jobService.CreateJobForLineAsync(order, newLine, outsourcedItem, userId, now, cancellationToken);
+            }
+        }
 
         // Spec/quantity changes invalidate the plan minutes on pending operations.
         foreach (var jobId in replanJobIds)

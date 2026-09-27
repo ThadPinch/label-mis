@@ -653,51 +653,7 @@ public class JobService(
                 continue;
             }
 
-            var jobNumber = await documentNumbers.NextJobNumberAsync(cancellationToken);
-            var quantityPlanned = (int)Math.Ceiling(line.Quantity * 1.05m);
-
-            // Snapshot the ordered spec onto the job; seed from the product for pre-refactor lines
-            // whose Spec hasn't been backfilled yet.
-            var spec = line.Spec ?? line.Product.ToLabelSpec();
-
-            var job = Job.CreatePlanned(
-                Guid.NewGuid(),
-                jobNumber,
-                line.Id,
-                line.ProductId,
-                line.Quantity,
-                quantityPlanned,
-                order.RequestedShipDate,
-                priority: 5,
-                notes: line.LineNotes,
-                spec,
-                userId,
-                now);
-
-            // Outsourced lines skip press/finishing: the job waits at the vendor and only carries the
-            // in-house receiving steps. If the vendor already delivered before release, it is ready to ship.
-            var outsourced = line.OutsourcedItem is not null;
-            if (outsourced)
-            {
-                job.MarkOutsourced(userId, now);
-            }
-
-            var operations = await BuildOperationsAsync(
-                job.Id, spec, quantityPlanned, order.CustomerId, userId, now, cancellationToken, outsourced);
-            foreach (var operation in operations)
-            {
-                job.AddOperation(operation);
-                db.JobOperations.Add(operation);
-            }
-
-            if (outsourced && line.OutsourcedItem!.IsComplete)
-            {
-                job.ReceiveOutsourced(userId, now);
-                CompletePassedOperations(job, job.Status, userId, now);
-            }
-
-            db.Jobs.Add(job);
-            created.Add(job);
+            created.Add(await CreateJobForLineAsync(order, line, line.OutsourcedItem, userId, now, cancellationToken));
         }
 
         if (created.Count == 0)
@@ -708,6 +664,77 @@ public class JobService(
         order.AdvanceStatus(SalesOrderStatus.InProduction, userId, now);
         await db.SaveChangesAsync(cancellationToken);
         return created;
+    }
+
+    /// <summary>
+    /// Plans one job for an order line and adds it (with its route) to the unit of work — the single
+    /// place a job is created, shared by release-to-production and by unlocked edits that add a line
+    /// to an order already in production. Planned quantity carries a 5% overrun; the spec is the
+    /// line's snapshot, seeded from the product for pre-refactor lines. An outsourced line's job is
+    /// routed to the vendor (receiving steps only) and, if the vendor already delivered, is ready to
+    /// ship. Does not save.
+    /// </summary>
+    /// <param name="outsourcedItem">The line's vendor item when it is outsourced; the line's own
+    /// navigation may not be loaded on a freshly added line, so the caller passes it explicitly.</param>
+    public async Task<Job> CreateJobForLineAsync(
+        SalesOrder order,
+        SalesOrderLine line,
+        OutsourcedItem? outsourcedItem,
+        Guid userId,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var jobNumber = await documentNumbers.NextJobNumberAsync(cancellationToken);
+        var quantityPlanned = (int)Math.Ceiling(line.Quantity * 1.05m);
+
+        // Snapshot the ordered spec onto the job; seed from the product for pre-refactor lines
+        // whose Spec hasn't been backfilled yet (loading the product when the line's navigation isn't).
+        var spec = line.Spec;
+        if (spec is null)
+        {
+            var product = line.Product
+                ?? await db.Products.AsNoTracking().SingleAsync(p => p.Id == line.ProductId, cancellationToken);
+            spec = product.ToLabelSpec();
+        }
+
+        var job = Job.CreatePlanned(
+            Guid.NewGuid(),
+            jobNumber,
+            line.Id,
+            line.ProductId,
+            line.Quantity,
+            quantityPlanned,
+            order.RequestedShipDate,
+            priority: 5,
+            notes: line.LineNotes,
+            spec,
+            userId,
+            now);
+
+        // Outsourced lines skip press/finishing: the job waits at the vendor and only carries the
+        // in-house receiving steps. If the vendor already delivered before release, it is ready to ship.
+        var outsourced = outsourcedItem is not null;
+        if (outsourced)
+        {
+            job.MarkOutsourced(userId, now);
+        }
+
+        var operations = await BuildOperationsAsync(
+            job.Id, spec, quantityPlanned, order.CustomerId, userId, now, cancellationToken, outsourced);
+        foreach (var operation in operations)
+        {
+            job.AddOperation(operation);
+            db.JobOperations.Add(operation);
+        }
+
+        if (outsourcedItem is { IsComplete: true })
+        {
+            job.ReceiveOutsourced(userId, now);
+            CompletePassedOperations(job, job.Status, userId, now);
+        }
+
+        db.Jobs.Add(job);
+        return job;
     }
 
     public async Task ScheduleAsync(
