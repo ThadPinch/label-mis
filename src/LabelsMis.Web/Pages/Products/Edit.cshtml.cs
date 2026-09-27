@@ -1,3 +1,4 @@
+using LabelsMis.Domain.Estimating;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
@@ -46,7 +47,12 @@ public class EditModel(ProductService productService, ArtworkService artworkServ
 
         try
         {
-            await productService.UpdateAsync(Id, Input.ToForm(), cancellationToken);
+            // Compare against the stored override so re-saving the displayed margin keeps it exact.
+            var currentMarkup = await db.Products.AsNoTracking()
+                .Where(p => p.Id == Id)
+                .Select(p => p.MarkupPctOverride)
+                .SingleOrDefaultAsync(cancellationToken);
+            await productService.UpdateAsync(Id, Input.ToForm(currentMarkup), cancellationToken);
             return RedirectToPage(new { id = Id });
         }
         catch (InvalidOperationException ex)
@@ -118,7 +124,7 @@ public class EditModel(ProductService productService, ArtworkService artworkServ
             DieId = product.DieId,
             ArtworkFilePath = product.ArtworkFilePath,
             Notes = product.Notes,
-            MarkupPercent = product.MarkupPctOverride is { } mp ? mp * 100m : null
+            MarginPercent = product.MarkupPctOverride is { } mp ? PricingMath.MarkupToMarginPercent(mp) : null
         };
         if (product.RollSpec is not null)
         {

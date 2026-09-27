@@ -1,3 +1,4 @@
+using LabelsMis.Domain.Estimating;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Services.Customers;
@@ -23,9 +24,8 @@ public class CreateModel(
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         ViewData["CanEditForm"] = true;
-        // New customers start at the shop-wide default markup (Settings → General).
-        var settings = await generalSettings.GetAsync(cancellationToken);
-        Input.DefaultMarkupPct = settings?.DefaultMarkupPct ?? Domain.Entities.GeneralSettings.DefaultMarkupPctFallback;
+        // New customers start at the shop-wide default markup (Settings → General), shown as margin.
+        Input.DefaultMarginPercent = PricingMath.MarkupToMarginPercent(await ShopDefaultMarkupAsync(cancellationToken));
         await LoadSalesRepOptionsAsync(cancellationToken);
     }
 
@@ -41,7 +41,9 @@ public class CreateModel(
 
         try
         {
-            var customer = await customerService.CreateAsync(Input.ToForm(), cancellationToken);
+            // An untouched margin field stores the shop default markup exactly, not its rounded margin re-converted.
+            var shopDefault = await ShopDefaultMarkupAsync(cancellationToken);
+            var customer = await customerService.CreateAsync(Input.ToForm(shopDefault), cancellationToken);
             return RedirectToPage("Edit", new { id = customer.Id });
         }
         catch (Exception ex)
@@ -51,6 +53,12 @@ public class CreateModel(
             await LoadSalesRepOptionsAsync(cancellationToken);
             return Page();
         }
+    }
+
+    private async Task<decimal> ShopDefaultMarkupAsync(CancellationToken cancellationToken)
+    {
+        var settings = await generalSettings.GetAsync(cancellationToken);
+        return settings?.DefaultMarkupPct ?? Domain.Entities.GeneralSettings.DefaultMarkupPctFallback;
     }
 
     private async Task LoadSalesRepOptionsAsync(CancellationToken cancellationToken)

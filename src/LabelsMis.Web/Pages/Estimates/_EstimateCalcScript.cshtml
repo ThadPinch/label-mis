@@ -318,7 +318,6 @@
 
         const breaks = lineResult.quantityBreaks || [];
         const imposition = lineResult.imposition;
-        const markupPct = Number(lineResult.markupPctUsed ?? 0);
         const hasErrors = (lineResult.errors || []).length > 0;
         const includeTitle = !targetEl;
 
@@ -404,7 +403,7 @@
                             <dl class="calc-dl">
                                 <dt>Total cost</dt>
                                 <dd>${fmtMoney(row.totalCost)}</dd>
-                                <dt>Markup (${fmtPct(row.markupPctUsed ?? markupPct)})</dt>
+                                <dt>Gross profit</dt>
                                 <dd>${fmtMoney(markupAmount)}</dd>
                                 <dt>Total price</dt>
                                 <dd class="fw-semibold">${fmtMoney(row.totalPrice)}</dd>

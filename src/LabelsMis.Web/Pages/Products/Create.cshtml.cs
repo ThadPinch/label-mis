@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.Estimating;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Services.Estimates;
@@ -28,8 +29,9 @@ public class ProductPageInput
     public Guid? DieId { get; set; }
     public string? ArtworkFilePath { get; set; }
     [StringLength(2000)] public string? Notes { get; set; }
-    /// <summary>Whole-number percent in the form (60 = 60%); stored as a fraction.</summary>
-    [Range(0, 1000)] public decimal? MarkupPercent { get; set; }
+    /// <summary>Gross margin on price as a percent in the form (31.0 = 31%); stored as a markup-on-cost
+    /// fraction (0.45) via <see cref="PricingMath"/>. Null means "use the customer default".</summary>
+    [Range(0, PricingMath.MaxFormMarginPercent)] public decimal? MarginPercent { get; set; }
     public int LabelsPerRoll { get; set; }
     public decimal CoreSizeIn { get; set; } = 3m;
     [Range(1, 8)] public int UnwindPosition { get; set; } = 1;
@@ -37,7 +39,10 @@ public class ProductPageInput
     public int RollsPerCase { get; set; } = 1;
     public string? CaseLabelFormat { get; set; }
 
-    public ProductFormInput ToForm() => new(
+    /// <param name="currentMarkupPct">Markup the form's margin field was pre-filled from (the stored
+    /// override on Edit). Re-entering the displayed margin keeps that value exactly instead of
+    /// drifting through the one-decimal display rounding.</param>
+    public ProductFormInput ToForm(decimal? currentMarkupPct = null) => new(
         PrimaryCustomerId,
         CustomerIds ?? [],
         CustomerSku,
@@ -55,7 +60,7 @@ public class ProductPageInput
         LabelsPerRoll > 0
             ? new RollSpecInput(LabelsPerRoll, CoreSizeIn, UnwindPosition, MaxOdIn, RollsPerCase, CaseLabelFormat)
             : null,
-        MarkupPercent is { } mp ? mp / 100m : null);
+        MarginPercent is { } mp ? PricingMath.MarginPercentToMarkup(mp, currentMarkupPct) : null);
 }
 
 [Authorize(Policy = TransactionPolicies.ProductsEdit)]

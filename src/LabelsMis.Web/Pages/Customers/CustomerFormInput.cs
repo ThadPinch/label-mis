@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.Estimating;
 using LabelsMis.Web.Services.Customers;
 
 namespace LabelsMis.Web.Pages.Customers;
@@ -20,10 +21,12 @@ public class CustomerFormInput
     [Display(Name = "Tax exempt")]
     public bool TaxExempt { get; set; }
 
-    /// <summary>Fraction (0.55 = 55%). Seeded from Settings → General on the Create page.</summary>
-    [Range(0, 10)]
-    [Display(Name = "Default markup (fraction, 0.55 = 55%)")]
-    public decimal DefaultMarkupPct { get; set; } = Domain.Entities.GeneralSettings.DefaultMarkupPctFallback;
+    /// <summary>Gross margin on price as a percent (35.5 = 35.5%). Seeded from Settings → General on the
+    /// Create page and converted to the stored markup-on-cost fraction via <see cref="PricingMath"/>.
+    /// The upper bound is the 1000% markup cap the entities enforce, expressed as a margin.</summary>
+    [Range(0, PricingMath.MaxFormMarginPercent)]
+    [Display(Name = "Default margin %")]
+    public decimal DefaultMarginPercent { get; set; } = PricingMath.MarkupToMarginPercent(Domain.Entities.GeneralSettings.DefaultMarkupPctFallback);
 
     [Display(Name = "Status")]
     public CustomerStatus Status { get; set; } = CustomerStatus.Active;
@@ -44,12 +47,15 @@ public class CustomerFormInput
         Contacts = Contacts.Where(c => !c.IsEmpty()).ToList();
     }
 
-    public CustomerForm ToForm() => new(
+    /// <param name="currentMarkupPct">Markup the margin field was pre-filled from: the customer's stored
+    /// value on Edit, the shop-wide default on Create. Re-entering the displayed margin keeps it exactly
+    /// instead of drifting through the one-decimal display rounding.</param>
+    public CustomerForm ToForm(decimal? currentMarkupPct = null) => new(
         Name,
         Code,
         Terms,
         TaxExempt,
-        DefaultMarkupPct,
+        PricingMath.MarginPercentToMarkup(DefaultMarginPercent, currentMarkupPct),
         Status,
         SalesRepId,
         Notes,
@@ -62,7 +68,7 @@ public class CustomerFormInput
         Code = customer.Code,
         Terms = customer.Terms,
         TaxExempt = customer.TaxExempt,
-        DefaultMarkupPct = customer.DefaultMarkupPct,
+        DefaultMarginPercent = PricingMath.MarkupToMarginPercent(customer.DefaultMarkupPct),
         Status = customer.Status,
         SalesRepId = customer.SalesRepId,
         Notes = customer.Notes,

@@ -52,7 +52,9 @@ public class EditModel(CustomerService customerService, ICurrentUserService curr
 
         try
         {
-            await customerService.UpdateAsync(id, Input.ToForm(), cancellationToken);
+            // Compare against the stored markup so re-saving the displayed margin keeps it exact.
+            var currentMarkup = await customerService.GetDefaultMarkupPctAsync(id, cancellationToken);
+            await customerService.UpdateAsync(id, Input.ToForm(currentMarkup), cancellationToken);
             return RedirectToPage(new { id });
         }
         catch (Exception ex)

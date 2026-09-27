@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using LabelsMis.Domain.Estimating;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Web.Services.Settings;
 using Microsoft.AspNetCore.Authorization;
@@ -39,7 +40,7 @@ public class GeneralModel(GeneralSettingsService generalSettings) : PageModel
             Website = settings.Website,
             TermsText = settings.TermsText,
             TaxRatePercent = settings.TaxRate * 100m,
-            DefaultMarkupPercent = settings.DefaultMarkupPct * 100m
+            DefaultMarginPercent = PricingMath.MarkupToMarginPercent(settings.DefaultMarkupPct)
         };
         LogoDataUri = BuildLogoDataUri(settings.LogoBytes, settings.LogoContentType);
     }
@@ -64,6 +65,8 @@ public class GeneralModel(GeneralSettingsService generalSettings) : PageModel
             return Page();
         }
 
+        // Compare against the stored markup so re-saving the displayed margin keeps it exact.
+        var current = await generalSettings.GetOrCreateAsync(cancellationToken);
         await generalSettings.UpdateAsync(new GeneralSettingsFormInput(
             Input.CompanyName,
             Input.AddressLine1,
@@ -76,7 +79,7 @@ public class GeneralModel(GeneralSettingsService generalSettings) : PageModel
             Input.Website,
             Input.TermsText,
             Input.TaxRatePercent / 100m,
-            Input.DefaultMarkupPercent / 100m), cancellationToken);
+            PricingMath.MarginPercentToMarkup(Input.DefaultMarginPercent, current.DefaultMarkupPct)), cancellationToken);
 
         if (LogoUpload is not null)
         {
@@ -161,7 +164,9 @@ public class GeneralSettingsPageInput
     [Display(Name = "Sales tax rate (%)")]
     public decimal TaxRatePercent { get; set; } = 8.25m;
 
-    [Range(0, 1000)]
-    [Display(Name = "Default markup (%)")]
-    public decimal DefaultMarkupPercent { get; set; } = 55m;
+    /// <summary>Gross margin on price as a percent; stored as the markup-on-cost fraction via
+    /// <see cref="PricingMath"/> (35.5% margin ⇔ 0.55 markup, the entity's fallback).</summary>
+    [Range(0, PricingMath.MaxFormMarginPercent)]
+    [Display(Name = "Default margin %")]
+    public decimal DefaultMarginPercent { get; set; } = PricingMath.MarkupToMarginPercent(Domain.Entities.GeneralSettings.DefaultMarkupPctFallback);
 }
