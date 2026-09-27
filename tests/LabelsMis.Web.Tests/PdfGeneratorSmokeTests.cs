@@ -32,6 +32,7 @@ public class PdfGeneratorSmokeTests
             new StubGeneralSettingsService(BrandedSettings()),
             UnusedPdfStorage());
 
+        // Odd lines carry finishing so the render exercises the extra row; even lines omit it.
         var lines = Enumerable.Range(1, 8).Select(i => new EstimatePdfLine(
             i,
             $"4×3 matte BOPP label — design {i}",
@@ -44,7 +45,8 @@ public class PdfGeneratorSmokeTests
                 new EstimatePdfBreak(1000, 0.1234m, 123.40m),
                 new EstimatePdfBreak(2500, 0.0987m, 246.75m),
                 new EstimatePdfBreak(5000, 0.0765m, 382.50m)
-            })).ToList();
+            },
+            i % 2 == 1 ? ["Matte lamination", "Die cut & rewind"] : null)).ToList();
 
         var model = new EstimatePdfModel(
             "EST-1001", 2, Now, new DateOnly(2026, 8, 24),

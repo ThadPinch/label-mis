@@ -376,6 +376,30 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             .Select(o => o.DieId)
             .FirstOrDefault(d => d is { } id && id != Guid.Empty);
 
+    /// <summary>The customer-facing names of a finishing list, in run order: one entry per distinct
+    /// operation, blank ids and ids missing from <paramref name="operationNames"/> dropped.</summary>
+    public static IReadOnlyList<string> ResolveFinishingDescriptions(
+        IReadOnlyList<FinishingOperationSelectionInput> selections,
+        IReadOnlyDictionary<Guid, string> operationNames)
+    {
+        var names = new List<string>();
+        var seen = new HashSet<Guid>();
+        foreach (var selection in selections.OrderBy(o => o.SortOrder))
+        {
+            if (selection.OperationId == Guid.Empty || !seen.Add(selection.OperationId))
+            {
+                continue;
+            }
+
+            if (operationNames.TryGetValue(selection.OperationId, out var name) && !string.IsNullOrWhiteSpace(name))
+            {
+                names.Add(name);
+            }
+        }
+
+        return names;
+    }
+
     public static string SerializeSpots(IReadOnlyList<SpotSelectionInput> spots) =>
         JsonSerializer.Serialize(spots.OrderBy(s => s.SortOrder));
 

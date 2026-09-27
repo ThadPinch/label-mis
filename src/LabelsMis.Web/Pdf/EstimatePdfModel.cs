@@ -27,6 +27,8 @@ public record EstimatePdfAddress(
     string? State,
     string? Zip);
 
+/// <param name="Finishing">Customer-facing names of the line's selected finishing operations, in
+/// run order. Null or empty means the line has no finishing and the PDF omits the row.</param>
 public record EstimatePdfLine(
     int LineNumber,
     string ProductDescription,
@@ -34,7 +36,8 @@ public record EstimatePdfLine(
     decimal LabelAroundIn,
     string SubstrateDescription,
     string InkSet,
-    IReadOnlyList<EstimatePdfBreak> Breaks);
+    IReadOnlyList<EstimatePdfBreak> Breaks,
+    IReadOnlyList<string>? Finishing = null);
 
 public record EstimatePdfBreak(int Quantity, decimal UnitPrice, decimal TotalPrice);
 

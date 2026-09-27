@@ -24,13 +24,16 @@ public record EstimateListItem(
     DateOnly? ValidUntilDate,
     bool IsSentToCustomer = true);
 
+/// <param name="FinishingOperationNames">Description of every finishing operation referenced by
+/// the estimate's lines, keyed by operation id; null when the caller did not load them.</param>
 public record EstimateDetail(
     Estimate Estimate,
     Customer Customer,
     IReadOnlyList<EstimateRevision> Revisions,
     Guid? SalesOrderId,
     string? SalesOrderNumber,
-    string? SalesRepName = null);
+    string? SalesRepName = null,
+    IReadOnlyDictionary<Guid, string>? FinishingOperationNames = null);
 
 public class EstimateOptions
 {
@@ -201,13 +204,39 @@ public class EstimateService(
                 .FirstOrDefaultAsync(cancellationToken);
         }
 
+        var finishingNames = await LoadFinishingOperationNamesAsync(
+            estimate.Lines.SelectMany(l => EstimateCalculationMapper.DeserializeFinishingOperations(l.FinishingOperationsJson)),
+            cancellationToken);
+
         return new EstimateDetail(
             estimate,
             estimate.Customer,
             estimate.Revisions.OrderByDescending(r => r.RevisionNumber).ToList(),
             salesOrder?.Id,
             salesOrder?.OrderNumber,
-            salesRepName);
+            salesRepName,
+            finishingNames);
+    }
+
+    /// <summary>Descriptions of the finishing operations a set of selections refers to, keyed by id.
+    /// Inactive operations are included so an older estimate still names what it quoted.</summary>
+    private async Task<IReadOnlyDictionary<Guid, string>> LoadFinishingOperationNamesAsync(
+        IEnumerable<FinishingOperationSelectionInput> selections,
+        CancellationToken cancellationToken)
+    {
+        var operationIds = selections
+            .Select(o => o.OperationId)
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+        if (operationIds.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        return await db.FinishingOperations.AsNoTracking()
+            .Where(o => operationIds.Contains(o.Id))
+            .ToDictionaryAsync(o => o.Id, o => o.Description, cancellationToken);
     }
 
     public async Task<EstimateCalculationResponse> CalculateAsync(
@@ -463,6 +492,10 @@ public class EstimateService(
             .Where(s => substrateIds.Contains(s.Id))
             .ToDictionaryAsync(s => s.Id, s => s.Description, cancellationToken);
 
+        var finishingNames = await LoadFinishingOperationNamesAsync(
+            input.Lines.SelectMany(l => l.FinishingOperations),
+            cancellationToken);
+
         string? shippingName = null;
         if (input.ShippingMethodId is { } smId && smId != Guid.Empty)
         {
@@ -509,7 +542,8 @@ public class EstimateService(
                 l.LabelAroundIn,
                 substrates.TryGetValue(l.SubstrateId, out var desc) ? desc : "—",
                 l.InkSet.ToString(),
-                breaks));
+                breaks,
+                EstimateCalculationMapper.ResolveFinishingDescriptions(l.FinishingOperations, finishingNames)));
         }
 
         var model = new EstimatePdfModel(
