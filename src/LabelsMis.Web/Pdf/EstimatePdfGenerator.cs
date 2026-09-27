@@ -51,6 +51,7 @@ public class EstimatePdfGenerator(
             ?? detail.Customer.Addresses.FirstOrDefault();
 
         var shipTo = detail.Estimate.ShippingAddress;
+        var finishingNames = detail.FinishingOperationNames ?? new Dictionary<Guid, string>();
 
         return new EstimatePdfModel(
             detail.Estimate.EstimateNumber,
@@ -72,7 +73,10 @@ public class EstimatePdfGenerator(
                 l.Substrate.Description,
                 l.InkSet.ToString(),
                 l.QuantityBreaks.OrderBy(q => q.Quantity)
-                    .Select(q => new EstimatePdfBreak(q.Quantity, q.UnitPrice, q.TotalPrice)).ToList())).ToList(),
+                    .Select(q => new EstimatePdfBreak(q.Quantity, q.UnitPrice, q.TotalPrice)).ToList(),
+                EstimateCalculationMapper.ResolveFinishingDescriptions(
+                    EstimateCalculationMapper.DeserializeFinishingOperations(l.FinishingOperationsJson),
+                    finishingNames))).ToList(),
             detail.Estimate.ShippingMethod?.Name,
             detail.Estimate.ShippingCost,
             detail.Estimate.ShippingMethodId is not null || detail.Estimate.ShippingCost > 0,
@@ -112,6 +116,13 @@ public class EstimatePdfGenerator(
                 $"Size: {line.LabelAcrossIn}\" × {line.LabelAroundIn}\"   •   " +
                 $"Substrate: {line.SubstrateDescription}   •   Ink: {line.InkSet}",
                 size: 9f, color: PdfStyle.GreyDarken1));
+
+            if (line.Finishing is { Count: > 0 } finishing)
+            {
+                document.Add(Paragraph(
+                    $"Finishing: {string.Join("; ", finishing)}",
+                    size: 9f, color: PdfStyle.GreyDarken1));
+            }
 
             document.Add(BuildBreaksTable(line));
         }
