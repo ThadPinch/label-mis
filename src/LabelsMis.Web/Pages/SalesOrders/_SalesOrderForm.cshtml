@@ -324,7 +324,7 @@
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label small mb-0">Die</label>
-                                <select name="Input.Lines[@i].DieId" class="form-select form-select-sm so-line-die" disabled="@isLocked">
+                                <select name="Input.Lines[@i].DieId" class="form-select form-select-sm so-line-die" data-filter data-filter-placeholder="Search dies…" disabled="@isLocked">
                                     <option value="">No die assigned</option>
                                     @foreach (var d in dies)
                                     {
@@ -465,7 +465,7 @@
                                         {
                                             <div class="col-md-4">
                                                 <label class="form-label small mb-0">Die</label>
-                                                <select name="Input.Lines[@i].Finishing[@j].DieId" class="form-select form-select-sm so-finishing-die" disabled="@isLocked">
+                                                <select name="Input.Lines[@i].Finishing[@j].DieId" class="form-select form-select-sm so-finishing-die" data-filter data-filter-placeholder="Search dies…" disabled="@isLocked">
                                                     <option value="">No die</option>
                                                     @foreach (var d in dies)
                                                     {
@@ -940,7 +940,7 @@
             const dieBlock = op.category === 'DieCut'
                 ? `<div class="col-md-4">
                         <label class="form-label small mb-0">Die</label>
-                        <select name="Input.Lines[0].Finishing[0].DieId" class="form-select form-select-sm so-finishing-die">
+                        <select name="Input.Lines[0].Finishing[0].DieId" class="form-select form-select-sm so-finishing-die" data-filter data-filter-placeholder="Search dies…">
                             <option value="">No die</option>
                             ${SO_DIES.map(d => `<option value="${soEsc(d.id)}"${String(d.id) === dieId ? ' selected' : ''}>${soEsc(d.description)}</option>`).join('')}
                         </select>

@@ -1224,7 +1224,7 @@
         const dieBlock = op.category === 'DieCut'
             ? `<div class="col-md-4 finishing-die-group">
                     <label class="form-label small mb-0">Die</label>
-                    <select name="Input.Lines[${lineIdx}].FinishingOperations[0].DieId" class="form-select form-select-sm finishing-die-select">${buildFinishingDieOptions(dieId)}</select>
+                    <select name="Input.Lines[${lineIdx}].FinishingOperations[0].DieId" class="form-select form-select-sm finishing-die-select" data-filter data-filter-placeholder="Search dies…">${buildFinishingDieOptions(dieId)}</select>
                 </div>`
             : '';
         item.innerHTML = `

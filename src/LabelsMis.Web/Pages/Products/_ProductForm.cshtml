@@ -91,7 +91,7 @@
                     </div>
                     <div class="col-md-3">
                         <label asp-for="DieId" class="form-label small mb-0">Die</label>
-                        <select asp-for="DieId" class="form-select form-select-sm" asp-items="@((IEnumerable<SelectListItem>)ViewData["Dies"]!)"><option value="">None</option></select>
+                        <select asp-for="DieId" class="form-select form-select-sm" data-filter data-filter-placeholder="Search dies…" asp-items="@((IEnumerable<SelectListItem>)ViewData["Dies"]!)"><option value="">None</option></select>
                     </div>
                     <div class="col-md-6">
                         <label asp-for="SubstrateId" class="form-label small mb-0">Substrate</label>
