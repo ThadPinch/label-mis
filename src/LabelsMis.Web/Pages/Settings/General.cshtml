@@ -1,5 +1,6 @@
 @page "/settings/general"
 @model LabelsMis.Web.Pages.Settings.GeneralModel
+@using LabelsMis.Domain.Estimating
 @{
     ViewData["Title"] = "General settings";
     ViewData["BackNav"] = new BackNavModel();
@@ -64,13 +65,13 @@
                     <div class="form-text">Applied to new invoices for taxable customers.</div>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="Input.DefaultMarkupPercent" class="form-label"></label>
+                    <label asp-for="Input.DefaultMarginPercent" class="form-label"></label>
                     <div class="input-group">
-                        <input asp-for="Input.DefaultMarkupPercent" class="form-control" type="number" step="0.1" min="0" max="1000" />
+                        <input asp-for="Input.DefaultMarginPercent" class="form-control" type="number" step="0.1" min="0" max="@PricingMath.MaxFormMarginPercent" />
                         <span class="input-group-text">%</span>
                     </div>
-                    <span asp-validation-for="Input.DefaultMarkupPercent" class="text-danger"></span>
-                    <div class="form-text">Pre-fills the markup on new customers and is the fallback when a product or customer has none. Markup on cost — 55% markup ≈ 35.5% margin on price.</div>
+                    <span asp-validation-for="Input.DefaultMarginPercent" class="text-danger"></span>
+                    <div class="form-text">Pre-fills the margin on new customers and is the fallback when a product or customer has none. Gross margin on price — 35.5% margin means the price is cost plus 55%.</div>
                 </div>
                 <div class="col-12">
                     <label asp-for="Input.TermsText" class="form-label"></label>

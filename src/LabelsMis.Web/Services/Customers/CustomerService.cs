@@ -108,6 +108,14 @@ public class CustomerService(LabelsMisDbContext db, ICurrentUserService currentU
             .AsSplitQuery()
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
+    /// <summary>The stored markup-on-cost fraction alone; the edit form compares the re-entered margin
+    /// against it so an untouched field saves the exact stored value.</summary>
+    public Task<decimal?> GetDefaultMarkupPctAsync(Guid id, CancellationToken cancellationToken = default) =>
+        db.Customers.AsNoTracking()
+            .Where(c => c.Id == id)
+            .Select(c => (decimal?)c.DefaultMarkupPct)
+            .SingleOrDefaultAsync(cancellationToken);
+
     /// <summary>The customer's standing notes, for pre-filling a new estimate/order's header notes.</summary>
     public Task<string?> GetNotesAsync(Guid customerId, CancellationToken cancellationToken = default) =>
         db.Customers.AsNoTracking()
