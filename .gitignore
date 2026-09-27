@@ -106,3 +106,6 @@ migrations.sql
 
 # macOS
 .DS_Store
+
+# Local file-storage output (artwork/job files written by the dev FileStorage client)
+src/LabelsMis.Web/data/
