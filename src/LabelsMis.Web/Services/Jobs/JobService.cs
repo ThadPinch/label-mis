@@ -651,51 +651,7 @@ public class JobService(
                 continue;
             }
 
-            var jobNumber = await documentNumbers.NextJobNumberAsync(cancellationToken);
-            var quantityPlanned = (int)Math.Ceiling(line.Quantity * 1.05m);
-
-            // Snapshot the ordered spec onto the job; seed from the product for pre-refactor lines
-            // whose Spec hasn't been backfilled yet.
-            var spec = line.Spec ?? line.Product.ToLabelSpec();
-
-            var job = Job.CreatePlanned(
-                Guid.NewGuid(),
-                jobNumber,
-                line.Id,
-                line.ProductId,
-                line.Quantity,
-                quantityPlanned,
-                order.RequestedShipDate,
-                priority: 5,
-                notes: line.LineNotes,
-                spec,
-                userId,
-                now);
-
-            // Outsourced lines skip press/finishing: the job waits at the vendor and only carries the
-            // in-house receiving steps. If the vendor already delivered before release, it is ready to ship.
-            var outsourced = line.OutsourcedItem is not null;
-            if (outsourced)
-            {
-                job.MarkOutsourced(userId, now);
-            }
-
-            var operations = await BuildOperationsAsync(
-                job.Id, spec, quantityPlanned, order.CustomerId, userId, now, cancellationToken, outsourced);
-            foreach (var operation in operations)
-            {
-                job.AddOperation(operation);
-                db.JobOperations.Add(operation);
-            }
-
-            if (outsourced && line.OutsourcedItem!.IsComplete)
-            {
-                job.ReceiveOutsourced(userId, now);
-                CompletePassedOperations(job, job.Status, userId, now);
-            }
-
-            db.Jobs.Add(job);
-            created.Add(job);
+            created.Add(await CreateJobForLineAsync(order, line, line.OutsourcedItem, userId, now, cancellationToken));
         }
 
         if (created.Count == 0)
@@ -706,6 +662,77 @@ public class JobService(
         order.AdvanceStatus(SalesOrderStatus.InProduction, userId, now);
         await db.SaveChangesAsync(cancellationToken);
         return created;
+    }
+
+    /// <summary>
+    /// Plans one job for an order line and adds it (with its route) to the unit of work — the single
+    /// place a job is created, shared by release-to-production and by unlocked edits that add a line
+    /// to an order already in production. Planned quantity carries a 5% overrun; the spec is the
+    /// line's snapshot, seeded from the product for pre-refactor lines. An outsourced line's job is
+    /// routed to the vendor (receiving steps only) and, if the vendor already delivered, is ready to
+    /// ship. Does not save.
+    /// </summary>
+    /// <param name="outsourcedItem">The line's vendor item when it is outsourced; the line's own
+    /// navigation may not be loaded on a freshly added line, so the caller passes it explicitly.</param>
+    public async Task<Job> CreateJobForLineAsync(
+        SalesOrder order,
+        SalesOrderLine line,
+        OutsourcedItem? outsourcedItem,
+        Guid userId,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var jobNumber = await documentNumbers.NextJobNumberAsync(cancellationToken);
+        var quantityPlanned = (int)Math.Ceiling(line.Quantity * 1.05m);
+
+        // Snapshot the ordered spec onto the job; seed from the product for pre-refactor lines
+        // whose Spec hasn't been backfilled yet (loading the product when the line's navigation isn't).
+        var spec = line.Spec;
+        if (spec is null)
+        {
+            var product = line.Product
+                ?? await db.Products.AsNoTracking().SingleAsync(p => p.Id == line.ProductId, cancellationToken);
+            spec = product.ToLabelSpec();
+        }
+
+        var job = Job.CreatePlanned(
+            Guid.NewGuid(),
+            jobNumber,
+            line.Id,
+            line.ProductId,
+            line.Quantity,
+            quantityPlanned,
+            order.RequestedShipDate,
+            priority: 5,
+            notes: line.LineNotes,
+            spec,
+            userId,
+            now);
+
+        // Outsourced lines skip press/finishing: the job waits at the vendor and only carries the
+        // in-house receiving steps. If the vendor already delivered before release, it is ready to ship.
+        var outsourced = outsourcedItem is not null;
+        if (outsourced)
+        {
+            job.MarkOutsourced(userId, now);
+        }
+
+        var operations = await BuildOperationsAsync(
+            job.Id, spec, quantityPlanned, order.CustomerId, userId, now, cancellationToken, outsourced);
+        foreach (var operation in operations)
+        {
+            job.AddOperation(operation);
+            db.JobOperations.Add(operation);
+        }
+
+        if (outsourcedItem is { IsComplete: true })
+        {
+            job.ReceiveOutsourced(userId, now);
+            CompletePassedOperations(job, job.Status, userId, now);
+        }
+
+        db.Jobs.Add(job);
+        return job;
     }
 
     public async Task ScheduleAsync(
@@ -1296,16 +1323,7 @@ public class JobService(
                 continue;
             }
 
-            operations.Add(JobOperation.Create(
-                Guid.NewGuid(),
-                jobId,
-                sequence++,
-                JobOperationType.Finishing,
-                EquipmentType.FinishingOperation,
-                selection.OperationId,
-                plannedMinutes: FinishingPlannedMinutes(selection, finishingOp, basis),
-                userId,
-                now));
+            operations.Add(CreateFinishingOperation(jobId, sequence++, selection, finishingOp, basis, userId, now));
         }
 
         operations.Add(JobOperation.Create(
@@ -1317,6 +1335,26 @@ public class JobService(
 
         return operations;
     }
+
+    /// <summary>One finishing pass as a pending route step, planned at the job's time basis.</summary>
+    private static JobOperation CreateFinishingOperation(
+        Guid jobId,
+        int sequence,
+        FinishingOperationSelectionInput selection,
+        FinishingOperation finishingOp,
+        PlannedTimeBasis? basis,
+        Guid userId,
+        DateTime now) =>
+        JobOperation.Create(
+            Guid.NewGuid(),
+            jobId,
+            sequence,
+            JobOperationType.Finishing,
+            EquipmentType.FinishingOperation,
+            selection.OperationId,
+            plannedMinutes: FinishingPlannedMinutes(selection, finishingOp, basis),
+            userId,
+            now);
 
     /// <summary>Press and web-length figures computed at the job's planned quantity.</summary>
     private sealed record PlannedTimeBasis(decimal PressMinutes, decimal WebLengthFt);
@@ -1404,7 +1442,8 @@ public class JobService(
     /// Recomputes plan minutes on a job's pending press/finishing operations after its spec or
     /// quantity changed (unlocked sales-order edits). Started/completed operations and the flat
     /// inspection/pack/ship allowances are left alone. Does not save — the caller's unit of work
-    /// persists the changes.
+    /// persists the changes. Only replans steps that exist: a finishing selection added to or
+    /// dropped from the spec is reconciled onto the route by <see cref="SyncFinishingOperationsAsync"/>.
     /// </summary>
     public async Task RecomputePlannedMinutesAsync(Guid jobId, CancellationToken cancellationToken = default)
     {
@@ -1444,8 +1483,8 @@ public class JobService(
             .Where(f => finishingIds.Contains(f.Id))
             .ToDictionaryAsync(f => f.Id, cancellationToken);
 
-        // Match spec selections to existing operations by finishing-op id, in sequence order;
-        // spec edits don't add/remove job operations, so unmatched rows on either side are skipped.
+        // Match spec selections to existing operations by finishing-op id, in sequence order. Plan
+        // minutes only: unmatched rows on either side are SyncFinishingOperationsAsync's concern.
         var replanned = new HashSet<Guid>();
         foreach (var selection in finishingSelections)
         {
@@ -1468,6 +1507,95 @@ public class JobService(
 
             replanned.Add(operation.Id);
             operation.UpdatePlannedMinutes(FinishingPlannedMinutes(selection, finishingOp, basis), userId, now);
+        }
+    }
+
+    /// <summary>
+    /// Reconciles a job's finishing route with its spec after an unlocked sales-order edit changed
+    /// the finishing selections. A selected operation with no Finishing step on the job (in any
+    /// status) gets a pending step planned exactly as release would have, slotted ahead of the
+    /// inspection/pack/ship steps; a <em>pending</em> Finishing step whose operation is no longer
+    /// selected is removed. Started and completed steps are never touched — a dropped selection
+    /// whose step already ran stays on the ticket as history. Steps are only added while the job
+    /// is still ahead of the finishing stage: once it is Finished or beyond, a new pending step
+    /// would block closing a job the floor has already moved past. Outsourced jobs carry no
+    /// finishing route and are left alone. Does not save. Run before
+    /// <see cref="RecomputePlannedMinutesAsync"/> so the new steps are replanned with the rest.
+    /// </summary>
+    public async Task SyncFinishingOperationsAsync(Guid jobId, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var job = await db.Jobs
+            .Include(j => j.Operations)
+            .SingleAsync(j => j.Id == jobId, cancellationToken);
+        if (job.Spec is null || job.IsOutsourced || job.Status is JobStatus.Closed)
+        {
+            return;
+        }
+
+        var selections = EstimateCalculationMapper.DeserializeFinishingOperations(job.Spec.FinishingOperationsJson)
+            .Where(s => s.OperationId != Guid.Empty)
+            .OrderBy(s => s.SortOrder)
+            .ToList();
+        var selectedIds = selections.Select(s => s.OperationId).ToHashSet();
+
+        var dropped = job.Operations
+            .Where(o => o.OperationType == JobOperationType.Finishing
+                && o.Status == JobOperationStatus.Pending
+                && (o.EquipmentId is not Guid equipmentId || !selectedIds.Contains(equipmentId)))
+            .OrderBy(o => o.Sequence)
+            .ToList();
+        foreach (var operation in dropped)
+        {
+            job.RemoveOperation(operation, userId, now);
+            db.JobOperations.Remove(operation);
+        }
+
+        if (job.Status >= JobStatus.Finished)
+        {
+            return;
+        }
+
+        var missing = selections
+            .Where(s => !job.Operations.Any(o =>
+                o.OperationType == JobOperationType.Finishing && o.EquipmentId == s.OperationId))
+            .GroupBy(s => s.OperationId)
+            .Select(g => g.First())
+            .ToList();
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        var missingIds = missing.Select(s => s.OperationId).ToList();
+        var finishingOps = await db.FinishingOperations.AsNoTracking()
+            .Where(f => missingIds.Contains(f.Id))
+            .ToDictionaryAsync(f => f.Id, cancellationToken);
+        if (finishingOps.Count == 0)
+        {
+            return;
+        }
+
+        var customerId = await db.SalesOrderLines
+            .Where(l => l.Id == job.SalesOrderLineId)
+            .Select(l => l.SalesOrder.CustomerId)
+            .SingleAsync(cancellationToken);
+        var basis = await ComputeTimeBasisAsync(job.Spec, job.QuantityPlanned, customerId, cancellationToken);
+
+        foreach (var selection in missing)
+        {
+            if (!finishingOps.TryGetValue(selection.OperationId, out var finishingOp))
+            {
+                continue;
+            }
+
+            // Provisional sequence past the end keeps the (job, sequence) pair unique until the
+            // route is renumbered around the insert.
+            var provisionalSequence = job.Operations.Select(o => o.Sequence).DefaultIfEmpty(0).Max() + 1;
+            var operation = CreateFinishingOperation(job.Id, provisionalSequence, selection, finishingOp, basis, userId, now);
+            job.AddOperationBeforeClosingSteps(operation, userId, now);
+            db.JobOperations.Add(operation);
         }
     }
 

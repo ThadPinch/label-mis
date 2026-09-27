@@ -189,6 +189,27 @@ public class JobOperation : EntityBase
         SetModified(modifiedById, modifiedAt);
     }
 
+    /// <summary>
+    /// Moves the step to another position in the route — used when a step is added to or dropped
+    /// from a job that is already on the floor. Only pending steps move; a started or completed step
+    /// keeps the position it was worked at.
+    /// </summary>
+    public void Resequence(int sequence, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (sequence <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sequence));
+        }
+
+        if (Status != JobOperationStatus.Pending)
+        {
+            throw new InvalidOperationException("Only pending operations can be resequenced.");
+        }
+
+        Sequence = sequence;
+        SetModified(modifiedById, modifiedAt);
+    }
+
     public void Complete(Guid modifiedById, DateTime modifiedAt)
     {
         if (_timeEntries.Any(t => t.ClockedOutAt is null))

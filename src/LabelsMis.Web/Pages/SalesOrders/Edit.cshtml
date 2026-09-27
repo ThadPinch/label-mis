@@ -88,8 +88,9 @@
 {
     <div class="alert alert-warning py-2 mb-2">
         <strong>Unlocked for editing.</strong> This order is in production — saved changes update its
-        jobs (spec and quantities) immediately. Lines with jobs keep their product; lines without jobs
-        can still be changed freely.
+        jobs (spec, finishing route and quantities) immediately, and a new line gets a job of its own.
+        You will be shown the full list of changes to confirm before they are saved. Lines with jobs
+        keep their product; lines without jobs can still be changed freely.
     </div>
 }
 else if (Model.IsLocked)
@@ -471,11 +472,43 @@ else if (Model.IsLocked)
     </div>
 }
 
+@if (Model.IsLocked && Model.Unlocked && Model.CanUnlock)
+{
+    <div class="modal fade" id="so-change-preview-modal" tabindex="-1" aria-labelledby="so-change-preview-label" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="so-change-preview-label">Confirm changes to @Model.Order?.OrderNumber</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-1">
+                        This order is in production. Saving applies the changes below to its jobs and tickets right away.
+                    </p>
+                    <div class="alert alert-danger py-2 mb-2 d-none" role="alert" data-preview-error></div>
+                    <div class="alert alert-danger py-2 mb-2 d-none" role="alert" data-preview-blocked>
+                        One or more changes can't be saved as entered — fix the items marked ⛔ and try again.
+                    </div>
+                    <div class="small" data-preview-items></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" data-preview-confirm>Save changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @section Scripts {
     <script src="~/js/artwork-upload.js" asp-append-version="true"></script>
     @if (Model.IsEditing)
     {
         <script src="~/js/so-product-picker.js" asp-append-version="true"></script>
+    }
+    @if (Model.IsLocked && Model.Unlocked && Model.CanUnlock)
+    {
+        <script src="~/js/so-change-preview.js" asp-append-version="true"></script>
     }
     <script>
         (function () {

@@ -105,6 +105,40 @@ public record SalesOrderItemsSummary(
     IReadOnlyList<SalesOrderLineSummary> Lines,
     IReadOnlyList<SalesOrderChargeSummary> Charges);
 
+public enum SalesOrderChangeKind
+{
+    Quantity,
+    UnitPrice,
+    ProductChange,
+    LabelSize,
+    Substrate,
+    Die,
+    InkSet,
+    FinishingAdded,
+    FinishingRemoved,
+    /// <summary>Some other spec detail (gutters, bleed, white, spots, waste, layout, unwind, or a
+    /// finishing row's stock/die/time overrides) changed.</summary>
+    Spec,
+    NewJob,
+    /// <summary>A line added to an order that has already shipped — recorded, but no job is planned.</summary>
+    NewLine,
+    RemovedLine,
+    JobStarted
+}
+
+/// <summary>One entry in the "what will this save do" preview shown before an unlocked edit posts.
+/// <paramref name="Warning"/> flags a consequence worth a second look (a job already on the floor);
+/// <paramref name="Error"/> flags a rule the save would refuse, with the message it would throw.</summary>
+public record SalesOrderChangeItem(
+    SalesOrderChangeKind Kind,
+    int? LineNumber,
+    string Label,
+    string Text,
+    bool Warning = false,
+    bool Error = false);
+
+public record SalesOrderChangePreview(IReadOnlyList<SalesOrderChangeItem> Items, bool HasChanges);
+
 public class SalesOrderService(
     LabelsMisDbContext db,
     ICurrentUserService currentUser,
@@ -495,8 +529,9 @@ public class SalesOrderService(
     /// The explicit "unlocked" edit path for orders already in production. Lines are updated
     /// in place (matched by id) so job references stay intact, and line changes are propagated
     /// to the linked jobs: spec edits via <see cref="Job.SetSpec"/>, quantity changes via
-    /// <see cref="Job.UpdateOrderedQuantity"/>. Lines can be added; a line can only be removed
-    /// while no job references it. Products on job-linked lines cannot change.
+    /// <see cref="Job.UpdateOrderedQuantity"/>. Lines can be added — while the order is in
+    /// production each new line gets its job planned right away, exactly as release would have; a
+    /// line can only be removed while no job references it. Products on job-linked lines cannot change.
     /// </summary>
     public async Task<Invoices.InvoiceSyncResult> UpdateInProductionAsync(
         Guid id,
@@ -540,6 +575,8 @@ public class SalesOrderService(
 
         var keptIds = new HashSet<Guid>();
         var replanJobIds = new List<Guid>();
+        var resyncFinishingJobIds = new List<Guid>();
+        var addedLines = new List<SalesOrderLine>();
         var seedSpecs = await LoadProductSeedSpecsAsync(input.Lines, cancellationToken);
 
         foreach (var lineInput in input.Lines)
@@ -566,6 +603,13 @@ public class SalesOrderService(
                 {
                     if (lineInput.Spec is { } jobSpec)
                     {
+                        // Compare finishing selections before the job's spec is replaced so a
+                        // changed route can be reconciled onto the job's operations below.
+                        if (!SameFinishingSelections(job.Spec, jobSpec))
+                        {
+                            resyncFinishingJobIds.Add(job.Id);
+                        }
+
                         job.SetSpec(jobSpec, userId, now);
                     }
 
@@ -598,6 +642,7 @@ public class SalesOrderService(
                 order.AddLine(newLine);
                 db.SalesOrderLines.Add(newLine);
                 keptIds.Add(newLine.Id);
+                addedLines.Add(newLine);
             }
         }
 
@@ -624,6 +669,27 @@ public class SalesOrderService(
         // Charges never have jobs; they are matched by id so outsourced-item tracking survives.
         SyncCharges(order, input.Charges, userId, now);
 
+        // A line added while the order is on the floor gets its job now — release already happened,
+        // so nothing else would ever create one. Runs after the outsourcing sync so a new outsourced
+        // line's job is routed to the vendor like it would have been at release. Orders that have
+        // moved on (shipped/invoiced) keep the line as a paper change only.
+        if (order.Status is SalesOrderStatus.InProduction)
+        {
+            foreach (var newLine in addedLines)
+            {
+                var outsourcedItem = newLine.OutsourcedItem
+                    ?? db.OutsourcedItems.Local.SingleOrDefault(o => o.SalesOrderLineId == newLine.Id);
+                await jobService.CreateJobForLineAsync(order, newLine, outsourcedItem, userId, now, cancellationToken);
+            }
+        }
+
+        // A finishing operation added to or dropped from the spec changes the job's route, not just
+        // its plan minutes: reconcile the pending finishing steps first, then replan everything.
+        foreach (var jobId in resyncFinishingJobIds)
+        {
+            await jobService.SyncFinishingOperationsAsync(jobId, cancellationToken);
+        }
+
         // Spec/quantity changes invalidate the plan minutes on pending operations.
         foreach (var jobId in replanJobIds)
         {
@@ -636,6 +702,285 @@ public class SalesOrderService(
         // invoices are left alone and reported back to the caller.
         return await invoiceService.SyncDraftFromSalesOrderAsync(id, cancellationToken);
     }
+
+    /// <summary>
+    /// Describes, without saving, what <see cref="UpdateInProductionAsync"/> would do with this
+    /// form: per-line quantity/price/spec differences, the job a save would plan for each added
+    /// line, removals (flagged as errors when the save would refuse them, with the same message),
+    /// and a warning for every affected job that has already started on the floor. Read-only —
+    /// the Edit page shows it in a confirm dialog before the real post.
+    /// </summary>
+    public async Task<SalesOrderChangePreview> PreviewInProductionChangesAsync(
+        Guid id,
+        SalesOrderFormInput input,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateLines(input.Lines);
+
+        var order = await db.SalesOrders.AsNoTracking()
+            .Include(o => o.Lines).ThenInclude(l => l.Product)
+            .SingleOrDefaultAsync(o => o.Id == id, cancellationToken)
+            ?? throw new InvalidOperationException("Sales order not found.");
+
+        if (order.Status is SalesOrderStatus.Cancelled or SalesOrderStatus.Closed)
+        {
+            throw new InvalidOperationException("Cancelled or closed orders cannot be edited.");
+        }
+
+        var lineIds = order.Lines.Select(l => l.Id).ToList();
+        var jobsByLine = (await db.Jobs.AsNoTracking()
+                .Include(j => j.Operations)
+                .Where(j => lineIds.Contains(j.SalesOrderLineId) && j.Status != JobStatus.Closed)
+                .ToListAsync(cancellationToken))
+            .ToLookup(j => j.SalesOrderLineId);
+        var names = await LoadChangeNamesAsync(order, input, cancellationToken);
+
+        var items = new List<SalesOrderChangeItem>();
+        var existingLines = order.Lines.ToDictionary(l => l.Id);
+        var keptIds = new HashSet<Guid>();
+        var nextLineNumber = order.Lines.Count;
+
+        foreach (var lineInput in input.Lines)
+        {
+            if (lineInput.Id is { } lineId && existingLines.TryGetValue(lineId, out var line))
+            {
+                keptIds.Add(lineId);
+                var n = line.LineNumber;
+                var label = $"Line {n} · {line.Product.InternalSku}";
+                var lineJobs = jobsByLine[lineId].ToList();
+                var jobAffected = false;
+
+                if (lineInput.ProductId != line.ProductId)
+                {
+                    var newSku = names.Products.GetValueOrDefault(lineInput.ProductId, "unknown product");
+                    items.Add(lineJobs.Count > 0
+                        ? new SalesOrderChangeItem(SalesOrderChangeKind.ProductChange, n, label,
+                            $"Line {n} already has a job — its product cannot change. Remove the job first or add a new line.",
+                            Error: true)
+                        : new SalesOrderChangeItem(SalesOrderChangeKind.ProductChange, n, label,
+                            $"Product {line.Product.InternalSku} → {newSku}"));
+                }
+
+                if (line.Quantity != lineInput.Quantity)
+                {
+                    items.Add(new SalesOrderChangeItem(SalesOrderChangeKind.Quantity, n, label,
+                        $"Quantity {line.Quantity:N0} → {lineInput.Quantity:N0}"));
+                    jobAffected = true;
+                }
+
+                if (line.UnitPrice != lineInput.UnitPrice)
+                {
+                    items.Add(new SalesOrderChangeItem(SalesOrderChangeKind.UnitPrice, n, label,
+                        $"Unit price {FormatPrice(line.UnitPrice)} → {FormatPrice(lineInput.UnitPrice)}"));
+                }
+
+                if (lineInput.Spec is { } spec)
+                {
+                    jobAffected |= AddSpecChanges(items, n, label, line.Spec, spec, names);
+                }
+
+                if (jobAffected)
+                {
+                    foreach (var job in lineJobs.Where(JobHasStarted))
+                    {
+                        items.Add(new SalesOrderChangeItem(SalesOrderChangeKind.JobStarted, n, label,
+                            $"{job.JobNumber} has already started production — its ticket will change",
+                            Warning: true));
+                    }
+                }
+            }
+            else
+            {
+                nextLineNumber++;
+                var sku = names.Products.GetValueOrDefault(lineInput.ProductId, "unknown product");
+                var label = $"Line {nextLineNumber} · {sku}";
+                var outsourced = lineInput.Outsource is not null ? " (outsourced — the job is routed to the vendor)" : string.Empty;
+                items.Add(order.Status is SalesOrderStatus.InProduction
+                    ? new SalesOrderChangeItem(SalesOrderChangeKind.NewJob, nextLineNumber, label,
+                        $"New job will be created for line {nextLineNumber}: {sku} × {lineInput.Quantity:N0}{outsourced}")
+                    : new SalesOrderChangeItem(SalesOrderChangeKind.NewLine, nextLineNumber, label,
+                        $"Line {nextLineNumber} will be added: {sku} × {lineInput.Quantity:N0} — no job is planned because the order is already {order.Status}",
+                        Warning: true));
+            }
+        }
+
+        foreach (var removed in existingLines.Values.Where(l => !keptIds.Contains(l.Id)).OrderBy(l => l.LineNumber))
+        {
+            var n = removed.LineNumber;
+            var label = $"Line {n} · {removed.Product.InternalSku}";
+            items.Add(jobsByLine[removed.Id].Any()
+                ? new SalesOrderChangeItem(SalesOrderChangeKind.RemovedLine, n, label,
+                    $"Line {n} has a job in production and cannot be removed.", Error: true)
+                : new SalesOrderChangeItem(SalesOrderChangeKind.RemovedLine, n, label,
+                    $"Line {n} will be removed: {removed.Product.InternalSku} × {removed.Quantity:N0}"));
+        }
+
+        return new SalesOrderChangePreview(items, items.Count > 0);
+    }
+
+    /// <summary>Display names for everything the preview may need to mention.</summary>
+    private sealed record ChangeNames(
+        IReadOnlyDictionary<Guid, string> Products,
+        IReadOnlyDictionary<Guid, string> Stocks,
+        IReadOnlyDictionary<Guid, string> Dies,
+        IReadOnlyDictionary<Guid, string> Finishing);
+
+    private async Task<ChangeNames> LoadChangeNamesAsync(
+        SalesOrder order,
+        SalesOrderFormInput input,
+        CancellationToken cancellationToken)
+    {
+        var specs = order.Lines.Select(l => l.Spec)
+            .Concat(input.Lines.Select(l => l.Spec))
+            .OfType<LabelSpec>()
+            .ToList();
+        var productIds = input.Lines.Select(l => l.ProductId).Where(id => id != Guid.Empty).Distinct().ToList();
+        var stockIds = specs.Select(s => s.SubstrateId).Distinct().ToList();
+        var dieIds = specs.Select(s => s.DieId).OfType<Guid>().Distinct().ToList();
+        var finishingIds = specs.SelectMany(FinishingOperationIds).Distinct().ToList();
+
+        return new ChangeNames(
+            await db.Products.AsNoTracking()
+                .Where(p => productIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.InternalSku, cancellationToken),
+            await db.Stocks.AsNoTracking()
+                .Where(s => stockIds.Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id, s => $"{s.Code} — {s.Description}", cancellationToken),
+            await db.Dies.AsNoTracking()
+                .Where(d => dieIds.Contains(d.Id))
+                .ToDictionaryAsync(d => d.Id, d => d.Description, cancellationToken),
+            await db.FinishingOperations.AsNoTracking()
+                .Where(f => finishingIds.Contains(f.Id))
+                .ToDictionaryAsync(f => f.Id, f => $"{f.Code} — {f.Description}", cancellationToken));
+    }
+
+    /// <summary>Appends one item per spec difference that matters to the ticket; returns whether
+    /// anything differed (so the caller can warn about jobs already on the floor).</summary>
+    private static bool AddSpecChanges(
+        List<SalesOrderChangeItem> items,
+        int lineNumber,
+        string label,
+        LabelSpec? before,
+        LabelSpec after,
+        ChangeNames names)
+    {
+        if (before is null)
+        {
+            items.Add(new SalesOrderChangeItem(SalesOrderChangeKind.Spec, lineNumber, label,
+                "Spec will be recorded on this line (none was saved before)"));
+            return true;
+        }
+
+        var start = items.Count;
+
+        if (before.LabelAcrossIn != after.LabelAcrossIn || before.LabelAroundIn != after.LabelAroundIn)
+        {
+            items.Add(new SalesOrderChangeItem(SalesOrderChangeKind.LabelSize, lineNumber, label,
+                $"Label size {FormatSize(before)} → {FormatSize(after)}"));
+        }
+
+        if (before.SubstrateId != after.SubstrateId)
+        {
+            items.Add(new SalesOrderChangeItem(SalesOrderChangeKind.Substrate, lineNumber, label,
+                $"Substrate {names.Stocks.GetValueOrDefault(before.SubstrateId, "unknown")} → {names.Stocks.GetValueOrDefault(after.SubstrateId, "unknown")}"));
+        }
+
+        if (NormalizeId(before.DieId) != NormalizeId(after.DieId))
+        {
+            items.Add(new SalesOrderChangeItem(SalesOrderChangeKind.Die, lineNumber, label,
+                $"Die {DieName(before.DieId, names)} → {DieName(after.DieId, names)}"));
+        }
+
+        if (before.InkSet != after.InkSet)
+        {
+            items.Add(new SalesOrderChangeItem(SalesOrderChangeKind.InkSet, lineNumber, label,
+                $"Ink set {before.InkSet} → {after.InkSet}"));
+        }
+
+        var beforeFinishing = EstimateCalculationMapper.DeserializeFinishingOperations(before.FinishingOperationsJson)
+            .Where(s => s.OperationId != Guid.Empty).OrderBy(s => s.SortOrder).ToList();
+        var afterFinishing = EstimateCalculationMapper.DeserializeFinishingOperations(after.FinishingOperationsJson)
+            .Where(s => s.OperationId != Guid.Empty).OrderBy(s => s.SortOrder).ToList();
+        var beforeIds = beforeFinishing.Select(s => s.OperationId).ToHashSet();
+        var afterIds = afterFinishing.Select(s => s.OperationId).ToHashSet();
+
+        foreach (var added in afterFinishing.Where(s => !beforeIds.Contains(s.OperationId)).DistinctBy(s => s.OperationId))
+        {
+            items.Add(new SalesOrderChangeItem(SalesOrderChangeKind.FinishingAdded, lineNumber, label,
+                $"Finishing added: {names.Finishing.GetValueOrDefault(added.OperationId, "unknown operation")}"));
+        }
+
+        foreach (var removed in beforeFinishing.Where(s => !afterIds.Contains(s.OperationId)).DistinctBy(s => s.OperationId))
+        {
+            items.Add(new SalesOrderChangeItem(SalesOrderChangeKind.FinishingRemoved, lineNumber, label,
+                $"Finishing removed: {names.Finishing.GetValueOrDefault(removed.OperationId, "unknown operation")}"));
+        }
+
+        var other = OtherSpecDifferences(before, after, beforeFinishing, afterFinishing);
+        if (other.Count > 0)
+        {
+            items.Add(new SalesOrderChangeItem(SalesOrderChangeKind.Spec, lineNumber, label,
+                $"Also changed: {string.Join(", ", other)}"));
+        }
+
+        return items.Count > start;
+    }
+
+    /// <summary>The spec fields the preview does not itemise, named when they differ.</summary>
+    private static List<string> OtherSpecDifferences(
+        LabelSpec before,
+        LabelSpec after,
+        IReadOnlyList<FinishingOperationSelectionInput> beforeFinishing,
+        IReadOnlyList<FinishingOperationSelectionInput> afterFinishing)
+    {
+        var changed = new List<string>();
+        if (before.CornerRadiusIn != after.CornerRadiusIn) changed.Add("corner radius");
+        if (before.GutterAcrossIn != after.GutterAcrossIn || before.GutterAroundIn != after.GutterAroundIn) changed.Add("gutters");
+        if (before.BleedIn != after.BleedIn) changed.Add("bleed");
+        if (before.WhiteHits != after.WhiteHits || before.WhiteCoveragePct != after.WhiteCoveragePct) changed.Add("white ink");
+
+        var beforeSpots = EstimateCalculationMapper.DeserializeSpots(before.SpotsJson)
+            .OrderBy(s => s.SortOrder).Select(s => (s.InkId, s.Hits, s.CoveragePct));
+        var afterSpots = EstimateCalculationMapper.DeserializeSpots(after.SpotsJson)
+            .OrderBy(s => s.SortOrder).Select(s => (s.InkId, s.Hits, s.CoveragePct));
+        if (!beforeSpots.SequenceEqual(afterSpots)) changed.Add("spot colors");
+
+        // Rows for operations present on both sides: stock, die, and time overrides.
+        var beforeRows = beforeFinishing.DistinctBy(s => s.OperationId).ToDictionary(s => s.OperationId);
+        var finishingSettingsChanged = afterFinishing
+            .DistinctBy(s => s.OperationId)
+            .Where(s => beforeRows.ContainsKey(s.OperationId))
+            .Any(s =>
+            {
+                var b = beforeRows[s.OperationId];
+                return NormalizeId(b.StockId) != NormalizeId(s.StockId)
+                    || NormalizeId(b.DieId) != NormalizeId(s.DieId)
+                    || b.SetupMinutesOverride != s.SetupMinutesOverride
+                    || b.RunSpeedFpmOverride != s.RunSpeedFpmOverride;
+            });
+        if (finishingSettingsChanged) changed.Add("finishing settings");
+
+        if (before.SetupWasteImpressions != after.SetupWasteImpressions || before.RunningWastePct != after.RunningWastePct) changed.Add("waste allowances");
+        if (before.MaxLabelsAcrossOverride != after.MaxLabelsAcrossOverride || before.LabelOrientationOverride != after.LabelOrientationOverride) changed.Add("layout overrides");
+        if (before.Unwind != after.Unwind) changed.Add("unwind");
+        if (before.ShrinkLayflatIn != after.ShrinkLayflatIn) changed.Add("shrink layflat");
+        return changed;
+    }
+
+    /// <summary>A job is "started" once it has left the planned stage or any step has been worked.</summary>
+    private static bool JobHasStarted(Job job) =>
+        job.Status is not (JobStatus.PrePress or JobStatus.Outsourced)
+        || job.Operations.Any(o => o.Status != JobOperationStatus.Pending);
+
+    private static Guid? NormalizeId(Guid? id) => id is { } value && value != Guid.Empty ? value : null;
+
+    private static string DieName(Guid? dieId, ChangeNames names) =>
+        NormalizeId(dieId) is { } id ? names.Dies.GetValueOrDefault(id, "unknown die") : "none";
+
+    private static string FormatSize(LabelSpec spec) =>
+        $"{spec.LabelAcrossIn:0.####}\" × {spec.LabelAroundIn:0.####}\"";
+
+    private static string FormatPrice(decimal price) => price.ToString("$#,##0.00##");
 
     /// <summary>
     /// Copies an order into a fresh Open order for reordering: same customer, sales rep, lines
@@ -818,6 +1163,20 @@ public class SalesOrderService(
             throw new InvalidOperationException("Select a product on every line item.");
         }
     }
+
+    /// <summary>The set of finishing operations a spec selects (ignoring order and per-row
+    /// overrides, which only change plan minutes, not the route).</summary>
+    private static HashSet<Guid> FinishingOperationIds(LabelSpec? spec) =>
+        spec is null
+            ? []
+            : EstimateCalculationMapper.DeserializeFinishingOperations(spec.FinishingOperationsJson)
+                .Select(s => s.OperationId)
+                .Where(id => id != Guid.Empty)
+                .ToHashSet();
+
+    /// <summary>True when both specs route through the same finishing operations.</summary>
+    private static bool SameFinishingSelections(LabelSpec? before, LabelSpec? after) =>
+        FinishingOperationIds(before).SetEquals(FinishingOperationIds(after));
 
     private static List<SalesOrderLine> BuildLines(
         Guid salesOrderId,
