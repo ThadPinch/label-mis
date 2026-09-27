@@ -221,8 +221,8 @@ public class JobService(
         pageSize = Math.Clamp(pageSize, 5, 100);
 
         var query = db.Jobs.AsNoTracking()
-            .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
-            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder)
+            .Include(j => j.Product)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.Customer)
             .AsQueryable();
 
         if (includeStatuses is { Count: > 0 })
@@ -241,7 +241,7 @@ public class JobService(
 
         if (customerId.HasValue)
         {
-            query = query.Where(j => j.Product.CustomerAssignments.Any(a => a.CustomerId == customerId.Value));
+            query = query.Where(j => j.SalesOrderLine.SalesOrder.CustomerId == customerId.Value);
         }
 
         if (dueFrom.HasValue)
@@ -266,7 +266,7 @@ public class JobService(
                 j.JobNumber.ToUpper().Contains(term)
                 || j.Product.Description.ToUpper().Contains(term)
                 || (j.SalesOrderLine.Description != null && j.SalesOrderLine.Description.ToUpper().Contains(term))
-                || (j.Product.PrimaryCustomer != null && j.Product.PrimaryCustomer.Name.ToUpper().Contains(term)));
+                || j.SalesOrderLine.SalesOrder.Customer.Name.ToUpper().Contains(term));
         }
 
         var (sortKey, desc) = QueryExtensions.ParseSort(sort);
@@ -274,7 +274,7 @@ public class JobService(
         {
             "number" => query.OrderByDir(desc, j => j.JobNumber),
             "order" => query.OrderByDir(desc, j => j.SalesOrderLine.SalesOrder.OrderNumber),
-            "customer" => query.OrderByDir(desc, j => j.Product.PrimaryCustomer != null ? j.Product.PrimaryCustomer.Name : ""),
+            "customer" => query.OrderByDir(desc, j => j.SalesOrderLine.SalesOrder.Customer.Name),
             "product" => query.OrderByDir(desc, j => j.SalesOrderLine.Description ?? j.Product.Description),
             "status" => query.OrderByDir(desc, j => j.Status).ThenByDescending(j => j.CreatedAt),
             "due" => query.OrderByDir(desc, j => j.DueDate).ThenBy(j => j.Priority),
@@ -291,7 +291,7 @@ public class JobService(
             .Select(j => new JobListItem(
                 j.Id,
                 j.JobNumber,
-                j.Product.PrimaryCustomer != null ? j.Product.PrimaryCustomer.Name : "",
+                j.SalesOrderLine.SalesOrder.Customer.Name,
                 j.SalesOrderLine.Description ?? j.Product.Description,
                 j.Status,
                 j.DueDate,
@@ -352,11 +352,10 @@ public class JobService(
     public async Task<JobDetail?> GetDetailAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var job = await db.Jobs
-            .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
             .Include(j => j.Product).ThenInclude(p => p.Substrate)
             .Include(j => j.Operations).ThenInclude(o => o.TimeEntries)
             .Include(j => j.MaterialUsages).ThenInclude(m => m.Stock)
-            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.Customer)
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.OutsourcedItem).ThenInclude(o => o!.Vendor)
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.OutsourcedItem).ThenInclude(o => o!.Receipts)
             .AsSplitQuery()
@@ -382,7 +381,7 @@ public class JobService(
         var order = job.SalesOrderLine.SalesOrder;
         return new JobDetail(
             job,
-            job.Product.PrimaryCustomer != null ? job.Product.PrimaryCustomer.Name : "",
+            order.Customer.Name,
             job.SalesOrderLine.Description ?? job.Product.Description,
             job.Product.ArtworkFilePath,
             job.Product.ArtworkOriginalFileName,
@@ -434,7 +433,6 @@ public class JobService(
     public async Task<JobTicketDetail?> GetTicketDetailAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var job = await db.Jobs.AsNoTracking()
-            .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
             .Include(j => j.Product).ThenInclude(p => p.Substrate)
             .Include(j => j.Product).ThenInclude(p => p.RollSpec)
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.ShippingMethod)
@@ -541,7 +539,7 @@ public class JobService(
 
         return new JobTicketDetail(
             job,
-            job.Product.PrimaryCustomer != null ? job.Product.PrimaryCustomer.Name : "",
+            order.Customer.Name,
             job.SalesOrderLine.Description ?? job.Product.Description,
             job.Product.InternalSku,
             order.OrderNumber,
@@ -573,8 +571,8 @@ public class JobService(
         CancellationToken cancellationToken = default)
     {
         var job = await db.Jobs
-            .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
-            .Include(j => j.SalesOrderLine)
+            .Include(j => j.Product)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.Customer)
             .Include(j => j.Operations).ThenInclude(o => o.TimeEntries)
             .SingleOrDefaultAsync(j => j.Id == jobId, cancellationToken);
 
@@ -587,8 +585,8 @@ public class JobService(
     {
         var normalized = jobNumber.Trim().ToUpperInvariant();
         var job = await db.Jobs
-            .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
-            .Include(j => j.SalesOrderLine)
+            .Include(j => j.Product)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.Customer)
             .Include(j => j.Operations).ThenInclude(o => o.TimeEntries)
             .SingleOrDefaultAsync(j => j.JobNumber.ToUpper() == normalized, cancellationToken);
 
@@ -614,7 +612,7 @@ public class JobService(
 
         return new OperatorJobView(
             job,
-            job.Product.PrimaryCustomer != null ? job.Product.PrimaryCustomer.Name : "",
+            job.SalesOrderLine.SalesOrder.Customer.Name,
             job.SalesOrderLine.Description ?? job.Product.Description,
             current,
             isClockedOn,
@@ -960,9 +958,8 @@ public class JobService(
         JobStatus? stage = null)
     {
         var job = await db.Jobs.AsNoTracking()
-            .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
             .Include(j => j.Product).ThenInclude(p => p.Substrate)
-            .Include(j => j.SalesOrderLine)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.Customer)
             .Include(j => j.Operations).ThenInclude(o => o.TimeEntries)
             .AsSplitQuery()
             .SingleOrDefaultAsync(j => j.Id == jobId, cancellationToken);
@@ -1069,7 +1066,7 @@ public class JobService(
         return new JobActionPanel(
             job.Id,
             job.JobNumber,
-            job.Product.PrimaryCustomer?.Name ?? "",
+            job.SalesOrderLine.SalesOrder.Customer.Name,
             job.SalesOrderLine.Description ?? job.Product.Description,
             job.Status,
             next?.Next,

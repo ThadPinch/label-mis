@@ -56,7 +56,7 @@ public class EvaService(LabelsMisDbContext db)
         var toUtc = to.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
 
         var jobs = await db.Jobs.AsNoTracking()
-            .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
+            .Include(j => j.Product)
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.Customer)
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.OutsourcedItem)
             .Include(j => j.Operations).ThenInclude(o => o.TimeEntries)
