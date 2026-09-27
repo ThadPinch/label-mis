@@ -1,0 +1,156 @@
+@model LabelsMis.Web.Pages.Jobs.DetailModel
+@using LabelsMis.Domain.Enums
+@using LabelsMis.Web.Services.Jobs
+@{
+    var job = Model.Detail!.Job;
+    var categories = Enum.GetValues<JobFileCategory>();
+    var printFileOnJob = Model.JobFiles.Any(f => f.IsImpositionSource);
+}
+<div class="card" id="files">
+    <div class="card-header py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span class="fw-semibold">
+            Job files
+            <span class="badge text-bg-secondary ms-1">@Model.JobFiles.Count(f => !f.IsArchived)</span>
+        </span>
+        <span class="small">
+            @if (Model.ArchivedFileCount > 0)
+            {
+                @if (Model.ShowArchivedFiles)
+                {
+                    <a asp-page="Detail" asp-route-id="@job.Id" asp-fragment="files" class="text-decoration-none">Hide archived</a>
+                }
+                else
+                {
+                    <a asp-page="Detail" asp-route-id="@job.Id" asp-route-showArchivedFiles="true" asp-fragment="files" class="text-decoration-none">Show @Model.ArchivedFileCount archived</a>
+                }
+            }
+        </span>
+    </div>
+    @if (Model.JobFileMessage is { } fileMessage)
+    {
+        <div class="alert alert-success py-1 px-3 small mb-0 rounded-0 border-0 border-bottom">@fileMessage</div>
+    }
+    <div class="px-3 py-2 small text-muted border-bottom">
+        Every upload is kept — nothing here replaces an earlier file. The newest <strong>Print file</strong> is what the Imposition tab imposes;
+        @if (printFileOnJob)
+        {
+            <span>this job has one.</span>
+        }
+        else
+        {
+            <span>with none on the job, the product's artwork above is imposed instead.</span>
+        }
+    </div>
+    @if (Model.JobFiles.Count == 0)
+    {
+        <div class="card-body py-3 text-center text-muted small">No files on this job yet.</div>
+    }
+    else
+    {
+        <table class="table table-sm small mb-0 align-middle">
+            <thead>
+                <tr><th>File</th><th>Category</th><th>Uploaded</th><th class="text-end">Size</th><th></th></tr>
+            </thead>
+            <tbody>
+            @foreach (var file in Model.JobFiles)
+            {
+                var sizeLabel = file.SizeBytes >= 1024 * 1024
+                    ? $"{file.SizeBytes / (1024m * 1024m):N1} MB"
+                    : $"{Math.Max(1, file.SizeBytes / 1024):N0} KB";
+                var inlineUrl = Url.Page("/Jobs/File", new { id = job.Id, fileId = file.Id, inline = true });
+                var downloadUrl = Url.Page("/Jobs/File", new { id = job.Id, fileId = file.Id });
+                var previewable = file.ContentType.StartsWith("image/") || file.ContentType == "application/pdf";
+                <tr class="@(file.IsArchived ? "text-muted" : "")">
+                    <td class="text-truncate" style="max-width: 18rem;">
+                        <a href="@downloadUrl" title="Download @file.FileName" class="@(file.IsArchived ? "text-decoration-line-through" : "")">@file.FileName</a>
+                        @if (file.IsImpositionSource)
+                        {
+                            <span class="badge text-bg-primary ms-1" title="The Imposition tab imposes this file.">imposes</span>
+                        }
+                        @if (file.IsArchived)
+                        {
+                            <span class="badge text-bg-secondary ms-1">archived</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(file.Notes))
+                        {
+                            <div class="text-muted text-truncate" title="@file.Notes">@file.Notes</div>
+                        }
+                    </td>
+                    <td>
+                        @if (Model.CanManageJobFiles && !file.IsArchived)
+                        {
+                            <form method="post" asp-page-handler="RecategorizeJobFile" asp-route-fileId="@file.Id" class="d-inline">
+                                <select name="category" class="form-select form-select-sm py-0" style="width: auto;" onchange="this.form.requestSubmit()" aria-label="File category">
+                                    @foreach (var c in categories)
+                                    {
+                                        <option value="@c" selected="@(c == file.Category)">@JobFileService.CategoryLabel(c)</option>
+                                    }
+                                </select>
+                            </form>
+                        }
+                        else
+                        {
+                            @JobFileService.CategoryLabel(file.Category)
+                        }
+                    </td>
+                    <td title="@file.UploadedAt.ToLocalTime().ToString("f")">
+                        @file.UploadedAt.ToLocalTime().ToString("MMM d, yyyy")
+                        <div class="text-muted text-truncate" style="max-width: 12rem;">@file.UploadedBy</div>
+                    </td>
+                    <td class="text-end text-nowrap">@sizeLabel</td>
+                    <td class="text-end text-nowrap">
+                        @if (previewable)
+                        {
+                            <a href="@inlineUrl" target="_blank" class="btn btn-sm btn-link p-0 me-2">Open</a>
+                        }
+                        @if (Model.CanManageJobFiles)
+                        {
+                            @if (file.IsArchived)
+                            {
+                                <form method="post" asp-page-handler="RestoreJobFile" asp-route-fileId="@file.Id" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-link p-0">Restore</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form method="post" asp-page-handler="ArchiveJobFile" asp-route-fileId="@file.Id" class="d-inline"
+                                      onsubmit="return confirm('Archive @file.FileName? It stays in the job history and can be restored.');">
+                                    <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="Archive this file">Archive</button>
+                                </form>
+                            }
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+    @if (Model.CanManageJobFiles)
+    {
+        <div class="card-footer py-2">
+            <form method="post" asp-page-handler="UploadJobFile" enctype="multipart/form-data" class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label asp-for="JobFileUpload" class="form-label small mb-0">Add a file</label>
+                    <input asp-for="JobFileUpload" type="file" class="form-control form-control-sm"
+                           accept=".pdf,.ai,.eps,.svg,.png,.jpg,.jpeg,.tif,.tiff,.gif,.psd,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.zip" />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="JobFileCategory" class="form-label small mb-0">Category</label>
+                    <select asp-for="JobFileCategory" class="form-select form-select-sm">
+                        @foreach (var c in categories)
+                        {
+                            <option value="@c">@JobFileService.CategoryLabel(c)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="JobFileNotes" class="form-label small mb-0">Note <span class="text-muted">(optional)</span></label>
+                    <input asp-for="JobFileNotes" class="form-control form-control-sm" maxlength="500" placeholder="e.g. rev 2 from customer" />
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-sm btn-outline-primary w-100">Add</button>
+                </div>
+            </form>
+        </div>
+    }
+</div>

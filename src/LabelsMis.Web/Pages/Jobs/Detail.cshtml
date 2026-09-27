@@ -147,7 +147,7 @@ else
                                 @if (Model.ArtworkFileName is { } artworkFileName)
                                 {
                                     <span class="fw-semibold">@artworkFileName</span>
-                                    <span class="text-muted ms-1">— the unimposed original on the product</span>
+                                    <span class="text-muted ms-1">— the unimposed original on the product@(Model.Imposition?.ArtworkIsJobPrintFile == true ? "; the Imposition tab uses the job's Print file instead" : "")</span>
                                 }
                                 else
                                 {
@@ -204,6 +204,8 @@ else
                     </div>
                 </div>
             </div>
+
+            <partial name="_JobFilesPanel" model="Model" />
 
             <partial name="_JobOperatorPanel" model="Model" />
 

@@ -1572,6 +1572,74 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.ToTable("Job", "public");
                 });
 
+            modelBuilder.Entity("LabelsMis.Domain.Entities.JobFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ArchivedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FileKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<long>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ModifiedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)");
+
+                    b.Property<Guid>("TenantId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000001"));
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("JobId");
+
+                    b.HasIndex("ModifiedById");
+
+                    b.ToTable("JobFile", "public");
+                });
+
             modelBuilder.Entity("LabelsMis.Domain.Entities.JobMaterialUsage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4423,6 +4491,28 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Navigation("SalesOrderLine");
 
                     b.Navigation("Spec");
+                });
+
+            modelBuilder.Entity("LabelsMis.Domain.Entities.JobFile", b =>
+                {
+                    b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LabelsMis.Domain.Entities.Job", "Job")
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ModifiedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Job");
                 });
 
             modelBuilder.Entity("LabelsMis.Domain.Entities.JobMaterialUsage", b =>

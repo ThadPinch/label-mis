@@ -23,8 +23,10 @@ public record JobImpositionView(
     string SeedSource,
     string? ArtworkFilePath,
     string? ArtworkFileName,
-    /// <summary>The product artwork is a type the imposer can place (PDF/AI/PNG/JPEG).</summary>
+    /// <summary>The artwork is a type the imposer can place (PDF/AI/PNG/JPEG).</summary>
     bool ArtworkCanBeImposed,
+    /// <summary>Where the artwork comes from: the job's Print file when one is on the job, else the product's artwork.</summary>
+    bool ArtworkIsJobPrintFile,
     string? ImposedArtworkFilePath,
     DateTime? ImposedAt,
     /// <summary>The imposed PDF was built from an older artwork file than the product now carries.</summary>
@@ -80,8 +82,24 @@ public class JobImpositionService(
     ICurrentUserService currentUser,
     EstimateCalculationMapper calculationMapper,
     EstimatingService estimatingService,
-    ImpositionPdfGenerator generator)
+    ImpositionPdfGenerator generator,
+    JobFileService jobFiles)
 {
+    /// <summary>The artwork prepress imposes for a job: the newest active Print file on the job when
+    /// there is one, otherwise the product's artwork. Returns (key, display name, isJobPrintFile).</summary>
+    private async Task<(string? Key, string? Name, bool IsJobPrintFile)> ResolveArtworkAsync(Job job, CancellationToken cancellationToken)
+    {
+        var printFile = await jobFiles.GetPrintFileAsync(job.Id, cancellationToken);
+        if (printFile is not null)
+        {
+            return (printFile.FileKey, printFile.OriginalFileName, true);
+        }
+
+        var key = job.Product.ArtworkFilePath;
+        var name = job.Product.ArtworkOriginalFileName ?? (key is null ? null : Path.GetFileName(key));
+        return (key, name, false);
+    }
+
     public async Task<JobImpositionView?> GetAsync(Guid jobId, CancellationToken cancellationToken = default)
     {
         var job = await LoadJobAsync(jobId, tracking: false, cancellationToken);
@@ -94,7 +112,8 @@ public class JobImpositionService(
             ? (stored, false, string.Empty)
             : await BuildDefaultAsync(job, cancellationToken);
 
-        return ToView(job, template, isSeeded, seedSource);
+        var artwork = await ResolveArtworkAsync(job, cancellationToken);
+        return ToView(job, template, isSeeded, seedSource, artwork);
     }
 
     /// <summary>Stores the template on the job without generating anything.</summary>
@@ -142,13 +161,13 @@ public class JobImpositionService(
             (template, _, _) = await BuildDefaultAsync(job, cancellationToken);
         }
 
-        var artworkKey = job.Product.ArtworkFilePath;
+        var (artworkKey, resolvedName, _) = await ResolveArtworkAsync(job, cancellationToken);
         if (string.IsNullOrWhiteSpace(artworkKey))
         {
-            throw new InvalidOperationException("Upload the product's artwork before running the imposition.");
+            throw new InvalidOperationException("Upload a Print file to the job (or artwork to the product) before running the imposition.");
         }
 
-        var artworkName = job.Product.ArtworkOriginalFileName ?? Path.GetFileName(artworkKey);
+        var artworkName = resolvedName ?? Path.GetFileName(artworkKey);
         if (!ImpositionPdfGenerator.CanImpose(artworkName) && !ImpositionPdfGenerator.CanImpose(artworkKey))
         {
             throw new InvalidOperationException(
@@ -339,10 +358,14 @@ public class JobImpositionService(
         return await query.SingleOrDefaultAsync(j => j.Id == jobId, cancellationToken);
     }
 
-    private static JobImpositionView ToView(Job job, ImpositionTemplate template, bool isSeeded, string seedSource)
+    private static JobImpositionView ToView(
+        Job job,
+        ImpositionTemplate template,
+        bool isSeeded,
+        string seedSource,
+        (string? Key, string? Name, bool IsJobPrintFile) artwork)
     {
-        var artworkKey = job.Product.ArtworkFilePath;
-        var artworkName = job.Product.ArtworkOriginalFileName ?? (artworkKey is null ? null : Path.GetFileName(artworkKey));
+        var (artworkKey, artworkName, artworkIsJobPrintFile) = artwork;
         return new JobImpositionView(
             job.Id,
             job.JobNumber,
@@ -352,6 +375,7 @@ public class JobImpositionService(
             artworkKey,
             artworkName,
             artworkKey is not null && (ImpositionPdfGenerator.CanImpose(artworkName) || ImpositionPdfGenerator.CanImpose(artworkKey)),
+            artworkIsJobPrintFile,
             job.ImposedArtworkFilePath,
             job.ImposedAt,
             job.ImposedArtworkIsStale(artworkKey),

@@ -20,6 +20,7 @@ public class DetailModel(
     ArtworkService artworkService,
     RollService rollService,
     JobImpositionService impositionService,
+    JobFileService jobFileService,
     LabelsMisDbContext db) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
@@ -38,6 +39,10 @@ public class DetailModel(
     [BindProperty] public IFormFile? ArtworkFile { get; set; }
     [BindProperty] public ImpositionForm ImpositionForm { get; set; } = new();
     [BindProperty] public IFormFile? ImpositionFile { get; set; }
+    [BindProperty] public IFormFile? JobFileUpload { get; set; }
+    [BindProperty] public JobFileCategory JobFileCategory { get; set; } = JobFileCategory.CustomerArtwork;
+    [BindProperty] public string? JobFileNotes { get; set; }
+    [BindProperty(SupportsGet = true)] public bool ShowArchivedFiles { get; set; }
 
     public JobDetail? Detail { get; private set; }
     public JobTicketDetail? TicketDetail { get; private set; }
@@ -70,6 +75,12 @@ public class DetailModel(
 
     /// <summary>Prepress runs the imposition: operators and schedulers (and admins).</summary>
     public bool CanImpose => CanOperate || CanChangeStatus;
+    /// <summary>Production files on the job (newest first); archived rows only when asked for.</summary>
+    public IReadOnlyList<JobFileInfo> JobFiles { get; private set; } = [];
+    public int ArchivedFileCount { get; private set; }
+    public string? JobFileMessage { get; private set; }
+    /// <summary>Anyone who can work the job can add files; same people can archive their mistakes.</summary>
+    public bool CanManageJobFiles => CanOperate || CanChangeStatus;
     public bool CanAdvanceStage => CanOperate || CanChangeStatus;
     public bool CanEditOrderNotes => CanOperate || CanChangeStatus;
     public bool CanEditJobNotes => CanEditOrderNotes;
@@ -277,6 +288,54 @@ public class DetailModel(
         }
     }
 
+    public async Task<IActionResult> OnPostUploadJobFileAsync(CancellationToken cancellationToken)
+    {
+        if (!CanOperateForUser() && !CanChangeStatusForUser()) return Forbid();
+        if (JobFileUpload is null || JobFileUpload.Length == 0)
+        {
+            ErrorMessage = "Select a file to add to the job.";
+            await LoadPageAsync(cancellationToken);
+            return Page();
+        }
+
+        try
+        {
+            var file = await jobFileService.UploadAsync(Id, JobFileCategory, JobFileUpload, JobFileNotes, cancellationToken);
+            TempData["JobFileMessage"] = $"Added {file.OriginalFileName} as {JobFileService.CategoryLabel(file.Category)}.";
+            return RedirectToPage(pageName: null, pageHandler: null, routeValues: new { id = Id }, fragment: "files");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            await LoadPageAsync(cancellationToken);
+            return Page();
+        }
+    }
+
+    public async Task<IActionResult> OnPostArchiveJobFileAsync(Guid fileId, CancellationToken cancellationToken)
+    {
+        if (!CanOperateForUser() && !CanChangeStatusForUser()) return Forbid();
+        await jobFileService.ArchiveAsync(Id, fileId, cancellationToken);
+        TempData["JobFileMessage"] = "File archived. It stays in the job's history and can be restored.";
+        return RedirectToPage(pageName: null, pageHandler: null, routeValues: new { id = Id }, fragment: "files");
+    }
+
+    public async Task<IActionResult> OnPostRestoreJobFileAsync(Guid fileId, CancellationToken cancellationToken)
+    {
+        if (!CanOperateForUser() && !CanChangeStatusForUser()) return Forbid();
+        await jobFileService.RestoreAsync(Id, fileId, cancellationToken);
+        TempData["JobFileMessage"] = "File restored.";
+        return RedirectToPage(pageName: null, pageHandler: null, routeValues: new { id = Id, showArchivedFiles = true }, fragment: "files");
+    }
+
+    public async Task<IActionResult> OnPostRecategorizeJobFileAsync(Guid fileId, JobFileCategory category, CancellationToken cancellationToken)
+    {
+        if (!CanOperateForUser() && !CanChangeStatusForUser()) return Forbid();
+        await jobFileService.RecategorizeAsync(Id, fileId, category, cancellationToken);
+        TempData["JobFileMessage"] = $"File marked as {JobFileService.CategoryLabel(category)}.";
+        return RedirectToPage(pageName: null, pageHandler: null, routeValues: new { id = Id }, fragment: "files");
+    }
+
     public async Task<IActionResult> OnPostSaveImpositionAsync(CancellationToken cancellationToken) =>
         await RunImpositionAction(async () =>
         {
@@ -429,6 +488,10 @@ public class DetailModel(
 
         TicketDetail = await jobService.GetTicketDetailAsync(Id, cancellationToken);
         OrderJobs = await jobService.GetOrderJobsAsync(Id, cancellationToken);
+        var allFiles = await jobFileService.ListAsync(Id, includeArchived: true, cancellationToken);
+        ArchivedFileCount = allFiles.Count(f => f.IsArchived);
+        JobFiles = ShowArchivedFiles ? allFiles : allFiles.Where(f => !f.IsArchived).ToList();
+        JobFileMessage = TempData["JobFileMessage"] as string;
         await LoadEntityInfoAsync(cancellationToken);
 
         var finishingEquipmentIds = Detail.Operations

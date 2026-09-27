@@ -29,7 +29,7 @@
                     }
                     else if (imposition.ImposedIsStale)
                     {
-                        <span class="badge text-bg-warning" title="The product's artwork was replaced after this imposition was generated.">Artwork changed — re-run</span>
+                        <span class="badge text-bg-warning" title="The artwork was replaced after this imposition was generated.">Artwork changed — re-run</span>
                     }
                 }
                 <span class="text-muted imposition-summary" data-imposition-summary>
@@ -103,7 +103,7 @@
                 <div class="alert alert-secondary py-2 small mb-2">
                     @if (imposition.ArtworkFilePath is null)
                     {
-                        <span>Upload the product's artwork above (PDF or PDF-compatible .ai, or PNG/JPEG) to run the imposition.</span>
+                        <span>Add a <strong>Print file</strong> under Job files (or upload the product's artwork above) — PDF or PDF-compatible .ai, or PNG/JPEG — to run the imposition.</span>
                     }
                     else
                     {

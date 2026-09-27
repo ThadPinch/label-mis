@@ -38,6 +38,7 @@ public class LabelsMisDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<SalesOrderLine> SalesOrderLines => Set<SalesOrderLine>();
     public DbSet<SalesOrderCharge> SalesOrderCharges => Set<SalesOrderCharge>();
     public DbSet<SalesOrderDocument> SalesOrderDocuments => Set<SalesOrderDocument>();
+    public DbSet<JobFile> JobFiles => Set<JobFile>();
     public DbSet<OutsourcedItem> OutsourcedItems => Set<OutsourcedItem>();
     public DbSet<OutsourceReceipt> OutsourceReceipts => Set<OutsourceReceipt>();
     public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();

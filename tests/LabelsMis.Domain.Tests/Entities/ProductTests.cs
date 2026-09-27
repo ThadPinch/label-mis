@@ -56,6 +56,21 @@ public class ProductTests
         product.Notes.Should().Be("Rewind #4");
     }
 
+    [Fact]
+    public void ClearArtworkFile_RemovesReferenceAndStampsModified()
+    {
+        var product = CreateProduct();
+        product.SetArtworkFile("artwork/p/20260101.pdf", "label.pdf", UserId, Now);
+        var remover = Guid.NewGuid();
+
+        product.ClearArtworkFile(remover, Now.AddMinutes(1));
+
+        product.ArtworkFilePath.Should().BeNull();
+        product.ArtworkOriginalFileName.Should().BeNull();
+        product.ModifiedById.Should().Be(remover);
+        product.ModifiedAt.Should().Be(Now.AddMinutes(1));
+    }
+
     private static Product CreateProduct()
     {
         var customerId = Guid.NewGuid();
