@@ -212,9 +212,15 @@
                         var fileName = System.IO.Path.GetFileName(Model.ArtworkFilePath);
                         var ext = System.IO.Path.GetExtension(Model.ArtworkFilePath)!.ToLowerInvariant();
                         var inlineUrl = Url.Page("/Artwork/Download", new { productId = artworkProductId, inline = true });
-                        <p class="small mb-2">
-                            Current file:
-                            <a asp-page="/Artwork/Download" asp-route-productId="@artworkProductId" target="_blank">@fileName</a>
+                        <p class="small mb-2 d-flex justify-content-between align-items-center gap-2">
+                            <span class="text-truncate">
+                                Current file:
+                                <a asp-page="/Artwork/Download" asp-route-productId="@artworkProductId" target="_blank">@fileName</a>
+                            </span>
+                            @if (canEditArtwork)
+                            {
+                                <button type="submit" form="artwork-remove-form" class="btn btn-sm btn-link text-danger p-0 flex-shrink-0">Remove artwork</button>
+                            }
                         </p>
                         @if (ext is ".png" or ".jpg" or ".jpeg")
                         {

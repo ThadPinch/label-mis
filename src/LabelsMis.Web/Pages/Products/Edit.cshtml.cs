@@ -80,6 +80,23 @@ public class EditModel(ProductService productService, ArtworkService artworkServ
         }
     }
 
+    public async Task<IActionResult> OnPostRemoveArtworkAsync(CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.Estimator)) return Forbid();
+
+        try
+        {
+            var removed = await artworkService.RemoveForProductAsync(Id, cancellationToken);
+            TempData["ProductStatus"] = removed ? "Artwork removed." : "No artwork to remove.";
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return await ReloadPageAsync(cancellationToken);
+        }
+    }
+
     private async Task<IActionResult> ReloadPageAsync(CancellationToken cancellationToken)
     {
         CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Estimator);

@@ -41,6 +41,24 @@ public class ArtworkService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>Removes the artwork from the product without a replacement. The file itself is
+    /// kept in storage for the same reason re-uploads don't delete it: sales-order lines and jobs
+    /// snapshot the key and must still be able to open it. Who/when is recorded on the product's
+    /// ModifiedBy/ModifiedAt.</summary>
+    public async Task<bool> RemoveForProductAsync(Guid productId, CancellationToken cancellationToken = default)
+    {
+        var userId = currentUser.UserId ?? throw new InvalidOperationException("User is not authenticated.");
+        var product = await db.Products.SingleAsync(p => p.Id == productId, cancellationToken);
+        if (product.ArtworkFilePath is null)
+        {
+            return false;
+        }
+
+        product.ClearArtworkFile(userId, DateTime.UtcNow);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     public async Task<(Stream Stream, string ContentType, string FileName)?> OpenForProductAsync(
         Guid productId,
         CancellationToken cancellationToken = default)

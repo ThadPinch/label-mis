@@ -14,6 +14,11 @@
     </h1>
 </div>
 
+@if (TempData["ProductStatus"] is string productStatus)
+{
+    <div class="alert alert-success py-1 px-2 small mb-2">@productStatus</div>
+}
+
 <form method="post">
     <div asp-validation-summary="All" class="text-danger small mb-2"></div>
     <partial name="_ProductForm" for="Input" />
@@ -33,6 +38,9 @@
 {
     @* Target of the artwork upload controls rendered inside the form partial's Artwork card. *@
     <form method="post" asp-page-handler="UploadArtwork" enctype="multipart/form-data" id="artwork-upload-form"></form>
+    @* Target of the Remove artwork button in the same card; confirmed in the browser before it posts. *@
+    <form method="post" asp-page-handler="RemoveArtwork" id="artwork-remove-form"
+          onsubmit="return confirm('Remove the current artwork from this product? Jobs that already imposed it keep their imposed PDF; new impositions will need a fresh upload.');"></form>
 }
 
 @section Scripts {

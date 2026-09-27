@@ -163,6 +163,15 @@ public class Product : MasterDataEntity
         SetModified(modifiedById, modifiedAt);
     }
 
+    /// <summary>Detaches the current artwork from the product. The stored file is left in place:
+    /// order lines and jobs snapshot the exact key they ran, so it must stay resolvable.</summary>
+    public void ClearArtworkFile(Guid modifiedById, DateTime modifiedAt)
+    {
+        ArtworkFilePath = null;
+        ArtworkOriginalFileName = null;
+        SetModified(modifiedById, modifiedAt);
+    }
+
     /// <summary>Diffs the customer assignments to the requested set and reports which rows were
     /// added and removed so the caller can stage the corresponding inserts/deletes with EF. The
     /// caller must add <paramref name="added"/> to the DbSet: children reached through a tracked
