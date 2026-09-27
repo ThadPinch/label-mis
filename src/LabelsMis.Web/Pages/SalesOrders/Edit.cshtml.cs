@@ -578,6 +578,56 @@ public class EditModel(
         }
     }
 
+    /// <summary>
+    /// Read-only dry run of the unlocked save, fetched by <c>so-change-preview.js</c> before the
+    /// form posts so the user confirms what will reach the jobs. Same authorisation as Save; JSON
+    /// in every outcome (a 400 with <c>error</c> when the preview itself fails or the order is not
+    /// in the unlocked-edit state) so the script can render the message in the dialog.
+    /// </summary>
+    public async Task<IActionResult> OnPostPreviewChangesAsync(CancellationToken cancellationToken)
+    {
+        var admin = User.IsInRole(AppRoles.Admin);
+        if (!admin && !User.IsInRole(AppRoles.Csr) && !User.IsInRole(AppRoles.Estimator)) return Forbid();
+
+        try
+        {
+            var status = await db.SalesOrders.AsNoTracking()
+                .Where(o => o.Id == Id)
+                .Select(o => o.Status)
+                .SingleAsync(cancellationToken);
+            if (status == SalesOrderStatus.Open)
+            {
+                return new JsonResult(new { items = Array.Empty<object>(), hasChanges = false });
+            }
+
+            if (!CanUnlock) return Forbid();
+            if (!Unlocked)
+            {
+                throw new InvalidOperationException(
+                    "This order went into production while you were editing. Use Unlock to edit and try again.");
+            }
+
+            var preview = await salesOrderService.PreviewInProductionChangesAsync(Id, Input.ToForm(), cancellationToken);
+            return new JsonResult(new
+            {
+                items = preview.Items.Select(i => new
+                {
+                    kind = i.Kind.ToString(),
+                    lineNumber = i.LineNumber,
+                    label = i.Label,
+                    text = i.Text,
+                    warning = i.Warning,
+                    error = i.Error
+                }),
+                hasChanges = preview.HasChanges
+            });
+        }
+        catch (Exception ex)
+        {
+            return new JsonResult(new { error = ex.Message }) { StatusCode = StatusCodes.Status400BadRequest };
+        }
+    }
+
     public async Task<IActionResult> OnPostDeleteAsync(CancellationToken cancellationToken)
     {
         if (!User.IsInRole(AppRoles.Admin)) return Forbid();
