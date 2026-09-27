@@ -187,8 +187,8 @@ public class ReportService(LabelsMisDbContext db)
     private async Task<GeneratedReport> JobsAsync(DateTime fromUtc, DateTime toUtc, string rangeLabel, ReportFilters filters, CancellationToken ct)
     {
         var rows = await db.Jobs.AsNoTracking()
-            .Include(j => j.Product).ThenInclude(p => p.PrimaryCustomer)
-            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder)
+            .Include(j => j.Product)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.Customer)
             .Include(j => j.Operations)
             .Where(j => j.CreatedAt >= fromUtc && j.CreatedAt < toUtc)
             .Where(j => filters.CustomerId == null || j.SalesOrderLine.SalesOrder.CustomerId == filters.CustomerId)
@@ -199,7 +199,7 @@ public class ReportService(LabelsMisDbContext db)
             {
                 j.JobNumber,
                 j.SalesOrderLine.SalesOrder.OrderNumber,
-                j.Product.PrimaryCustomer != null ? j.Product.PrimaryCustomer.Name : "",
+                j.SalesOrderLine.SalesOrder.Customer.Name,
                 j.SalesOrderLine.Description ?? j.Product.Description,
                 j.Status.ToString(),
                 j.DueDate != null ? j.DueDate.ToString()! : "",
