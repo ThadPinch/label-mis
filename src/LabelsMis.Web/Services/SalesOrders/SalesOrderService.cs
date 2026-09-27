@@ -541,6 +541,7 @@ public class SalesOrderService(
 
         var keptIds = new HashSet<Guid>();
         var replanJobIds = new List<Guid>();
+        var resyncFinishingJobIds = new List<Guid>();
         var addedLines = new List<SalesOrderLine>();
         var seedSpecs = await LoadProductSeedSpecsAsync(input.Lines, cancellationToken);
 
@@ -568,6 +569,13 @@ public class SalesOrderService(
                 {
                     if (lineInput.Spec is { } jobSpec)
                     {
+                        // Compare finishing selections before the job's spec is replaced so a
+                        // changed route can be reconciled onto the job's operations below.
+                        if (!SameFinishingSelections(job.Spec, jobSpec))
+                        {
+                            resyncFinishingJobIds.Add(job.Id);
+                        }
+
                         job.SetSpec(jobSpec, userId, now);
                     }
 
@@ -639,6 +647,13 @@ public class SalesOrderService(
                     ?? db.OutsourcedItems.Local.SingleOrDefault(o => o.SalesOrderLineId == newLine.Id);
                 await jobService.CreateJobForLineAsync(order, newLine, outsourcedItem, userId, now, cancellationToken);
             }
+        }
+
+        // A finishing operation added to or dropped from the spec changes the job's route, not just
+        // its plan minutes: reconcile the pending finishing steps first, then replan everything.
+        foreach (var jobId in resyncFinishingJobIds)
+        {
+            await jobService.SyncFinishingOperationsAsync(jobId, cancellationToken);
         }
 
         // Spec/quantity changes invalidate the plan minutes on pending operations.
@@ -835,6 +850,20 @@ public class SalesOrderService(
             throw new InvalidOperationException("Select a product on every line item.");
         }
     }
+
+    /// <summary>The set of finishing operations a spec selects (ignoring order and per-row
+    /// overrides, which only change plan minutes, not the route).</summary>
+    private static HashSet<Guid> FinishingOperationIds(LabelSpec? spec) =>
+        spec is null
+            ? []
+            : EstimateCalculationMapper.DeserializeFinishingOperations(spec.FinishingOperationsJson)
+                .Select(s => s.OperationId)
+                .Where(id => id != Guid.Empty)
+                .ToHashSet();
+
+    /// <summary>True when both specs route through the same finishing operations.</summary>
+    private static bool SameFinishingSelections(LabelSpec? before, LabelSpec? after) =>
+        FinishingOperationIds(before).SetEquals(FinishingOperationIds(after));
 
     private static List<SalesOrderLine> BuildLines(
         Guid salesOrderId,

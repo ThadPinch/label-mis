@@ -87,9 +87,178 @@ public class JobTests
         result.TotalCost.Should().Be(425m);
     }
 
+    [Fact]
+    public void AddOperationBeforeClosingSteps_WithClosingSteps_InsertsAheadOfInspectionAndRenumbers()
+    {
+        var job = CreateJob();
+        var press = AddOperation(job, 1, JobOperationType.Press);
+        var lam = AddOperation(job, 2, JobOperationType.Finishing);
+        var inspect = AddOperation(job, 3, JobOperationType.Inspection);
+        var pack = AddOperation(job, 4, JobOperationType.Pack);
+        var ship = AddOperation(job, 5, JobOperationType.Ship);
+        var dieCut = CreateOperation(job.Id, 99, JobOperationType.Finishing);
+
+        job.AddOperationBeforeClosingSteps(dieCut, UserId, Now);
+
+        job.Operations.OrderBy(o => o.Sequence).Should().Equal(press, lam, dieCut, inspect, pack, ship);
+        job.Operations.Select(o => o.Sequence).OrderBy(s => s).Should().Equal(1, 2, 3, 4, 5, 6);
+    }
+
+    [Fact]
+    public void AddOperationBeforeClosingSteps_WithoutClosingSteps_AppendsAtEnd()
+    {
+        var job = CreateJob();
+        var press = AddOperation(job, 1, JobOperationType.Press);
+        var added = CreateOperation(job.Id, 7, JobOperationType.Finishing);
+
+        job.AddOperationBeforeClosingSteps(added, UserId, Now);
+
+        job.Operations.OrderBy(o => o.Sequence).Should().Equal(press, added);
+        added.Sequence.Should().Be(2);
+    }
+
+    [Fact]
+    public void AddOperationBeforeClosingSteps_WhenEarlierStepStarted_KeepsStartedStepSequence()
+    {
+        var job = CreateJob();
+        var press = AddOperation(job, 1, JobOperationType.Press);
+        press.Start(UserId, Now, UserId, Now);
+        var inspect = AddOperation(job, 2, JobOperationType.Inspection);
+        var added = CreateOperation(job.Id, 3, JobOperationType.Finishing);
+
+        job.AddOperationBeforeClosingSteps(added, UserId, Now);
+
+        press.Sequence.Should().Be(1);
+        added.Sequence.Should().Be(2);
+        inspect.Sequence.Should().Be(3);
+    }
+
+    [Fact]
+    public void AddOperationBeforeClosingSteps_WhenOperationNotPending_Throws()
+    {
+        var job = CreateJob();
+        var started = CreateOperation(job.Id, 1, JobOperationType.Finishing);
+        started.Start(UserId, Now, UserId, Now);
+
+        var act = () => job.AddOperationBeforeClosingSteps(started, UserId, Now);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*pending*");
+    }
+
+    [Fact]
+    public void RemoveOperation_WhenPending_RemovesAndClosesSequenceGap()
+    {
+        var job = CreateJob();
+        var press = AddOperation(job, 1, JobOperationType.Press);
+        var lam = AddOperation(job, 2, JobOperationType.Finishing);
+        var inspect = AddOperation(job, 3, JobOperationType.Inspection);
+        var ship = AddOperation(job, 4, JobOperationType.Ship);
+
+        job.RemoveOperation(lam, UserId, Now);
+
+        job.Operations.OrderBy(o => o.Sequence).Should().Equal(press, inspect, ship);
+        job.Operations.Select(o => o.Sequence).OrderBy(s => s).Should().Equal(1, 2, 3);
+    }
+
+    [Fact]
+    public void RemoveOperation_WhenStarted_Throws()
+    {
+        var job = CreateJob();
+        var lam = AddOperation(job, 1, JobOperationType.Finishing);
+        lam.Start(UserId, Now, UserId, Now);
+
+        var act = () => job.RemoveOperation(lam, UserId, Now);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*pending*");
+        job.Operations.Should().Contain(lam);
+    }
+
+    [Fact]
+    public void RemoveOperation_WhenNotOnJob_Throws()
+    {
+        var job = CreateJob();
+        var stray = CreateOperation(Guid.NewGuid(), 1, JobOperationType.Finishing);
+
+        var act = () => job.RemoveOperation(stray, UserId, Now);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*does not belong*");
+    }
+
+    [Fact]
+    public void RemoveOperation_WhenLaterStepCompleted_LeavesCompletedSequenceAlone()
+    {
+        var job = CreateJob();
+        var press = AddOperation(job, 1, JobOperationType.Press);
+        var lam = AddOperation(job, 2, JobOperationType.Finishing);
+        var inspect = AddOperation(job, 3, JobOperationType.Inspection);
+        inspect.Complete(UserId, Now);
+        var ship = AddOperation(job, 4, JobOperationType.Ship);
+
+        job.RemoveOperation(lam, UserId, Now);
+
+        press.Sequence.Should().Be(1);
+        inspect.Sequence.Should().Be(3);
+        ship.Sequence.Should().Be(4);
+    }
+
+    [Fact]
+    public void Resequence_WhenPending_UpdatesSequence()
+    {
+        var op = CreateOperation(Guid.NewGuid(), 1, JobOperationType.Finishing);
+
+        op.Resequence(4, UserId, Now);
+
+        op.Sequence.Should().Be(4);
+    }
+
+    [Fact]
+    public void Resequence_WhenCompleted_Throws()
+    {
+        var op = CreateOperation(Guid.NewGuid(), 1, JobOperationType.Finishing);
+        op.Complete(UserId, Now);
+
+        var act = () => op.Resequence(2, UserId, Now);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*pending*");
+    }
+
+    [Fact]
+    public void Resequence_WhenZero_Throws()
+    {
+        var op = CreateOperation(Guid.NewGuid(), 1, JobOperationType.Finishing);
+
+        var act = () => op.Resequence(0, UserId, Now);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
     private static Job CreateJob() =>
         Job.CreatePlanned(Guid.NewGuid(), "JOB-2026-00001", Guid.NewGuid(), Guid.NewGuid(),
             5000, 5250, null, 5, null, null, UserId, Now);
+
+    private static JobOperation CreateOperation(Guid jobId, int sequence, JobOperationType type) =>
+        JobOperation.Create(
+            Guid.NewGuid(),
+            jobId,
+            sequence,
+            type,
+            type switch
+            {
+                JobOperationType.Press => EquipmentType.Press,
+                JobOperationType.Finishing => EquipmentType.FinishingOperation,
+                _ => EquipmentType.None
+            },
+            type == JobOperationType.Finishing ? Guid.NewGuid() : null,
+            10,
+            UserId,
+            Now);
+
+    private static JobOperation AddOperation(Job job, int sequence, JobOperationType type)
+    {
+        var operation = CreateOperation(job.Id, sequence, type);
+        job.AddOperation(operation);
+        return operation;
+    }
 }
 
 public class RollTests

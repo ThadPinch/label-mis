@@ -215,6 +215,89 @@ public class Job : EntityBase
 
     public void AddOperation(JobOperation operation) => _operations.Add(operation);
 
+    /// <summary>The steps that close every route (QC, pack, ship). A production step added to a job
+    /// already on the floor slots in ahead of them.</summary>
+    private static readonly JobOperationType[] ClosingOperationTypes =
+        [JobOperationType.Inspection, JobOperationType.Pack, JobOperationType.Ship];
+
+    /// <summary>
+    /// Adds a pending step to the route ahead of the closing inspection/pack/ship steps (after the
+    /// last production step; at the end when there are no closing steps) and renumbers the pending
+    /// steps after it. Started and completed steps keep their sequence; pending steps flow around them.
+    /// </summary>
+    public void AddOperationBeforeClosingSteps(JobOperation operation, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (operation.Status is not JobOperationStatus.Pending)
+        {
+            throw new InvalidOperationException("Only a pending operation can be added to a job's route.");
+        }
+
+        var route = _operations.OrderBy(o => o.Sequence).ToList();
+        var index = route.FindIndex(o => ClosingOperationTypes.Contains(o.OperationType));
+        route.Insert(index < 0 ? route.Count : index, operation);
+        _operations.Add(operation);
+        ResequencePending(route, modifiedById, modifiedAt);
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>
+    /// Drops a pending step from the route (a finishing selection removed from the spec) and closes
+    /// the gap in the pending steps after it. A started or completed step is never removed — the
+    /// work happened.
+    /// </summary>
+    public void RemoveOperation(JobOperation operation, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (!_operations.Contains(operation))
+        {
+            throw new InvalidOperationException("The operation does not belong to this job.");
+        }
+
+        if (operation.Status is not JobOperationStatus.Pending)
+        {
+            throw new InvalidOperationException("Only pending operations can be removed from a job.");
+        }
+
+        _operations.Remove(operation);
+        ResequencePending(_operations.OrderBy(o => o.Sequence).ToList(), modifiedById, modifiedAt);
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>
+    /// Numbers the pending steps 1..n in the given route order, skipping the sequence numbers that
+    /// started/completed steps already hold so those never move and no two steps share a number.
+    /// Only steps whose number actually changes are touched.
+    /// </summary>
+    private static void ResequencePending(IReadOnlyList<JobOperation> route, Guid modifiedById, DateTime modifiedAt)
+    {
+        var fixedSequences = route
+            .Where(o => o.Status is not JobOperationStatus.Pending)
+            .Select(o => o.Sequence)
+            .ToHashSet();
+
+        var next = 1;
+        foreach (var operation in route)
+        {
+            if (operation.Status is not JobOperationStatus.Pending)
+            {
+                next = Math.Max(next, operation.Sequence + 1);
+                continue;
+            }
+
+            var sequence = next;
+            while (fixedSequences.Contains(sequence))
+            {
+                sequence++;
+            }
+
+            if (operation.Sequence != sequence)
+            {
+                operation.Resequence(sequence, modifiedById, modifiedAt);
+            }
+
+            next = sequence + 1;
+        }
+    }
+
     public void ReplaceOperations(IEnumerable<JobOperation> operations)
     {
         _operations.Clear();
