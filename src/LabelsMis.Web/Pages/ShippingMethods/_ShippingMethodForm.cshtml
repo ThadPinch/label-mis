@@ -10,7 +10,7 @@
     <div class="col-md-4">
         <label asp-for="MethodType" class="form-label"></label>
         <select asp-for="MethodType" asp-items="Html.GetEnumSelectList<ShippingMethodType>()" class="form-select"></select>
-        <span class="form-text">FedEx is a label only — no live rates are pulled.</span>
+        <span class="form-text">FedEx is a label only — no live rates are pulled. Customer account = shipped on the customer's own carrier account, billed $0.</span>
     </div>
     <div class="col-md-3">
         <label asp-for="Price" class="form-label"></label>
@@ -19,6 +19,12 @@
             <input asp-for="Price" class="form-control" />
         </div>
         <span asp-validation-for="Price" class="text-danger"></span>
+    </div>
+    <div class="col-12">
+        <label asp-for="Notes" class="form-label"></label>
+        <input asp-for="Notes" class="form-control" maxlength="500" />
+        <span asp-validation-for="Notes" class="text-danger"></span>
+        <div class="form-text">Shown next to the method on estimates and orders, e.g. how its price is billed.</div>
     </div>
     <div class="col-12 form-check ms-1">
         <input asp-for="RequiresAddress" class="form-check-input" />

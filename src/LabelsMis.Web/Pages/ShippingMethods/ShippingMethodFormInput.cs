@@ -19,14 +19,19 @@ public class ShippingMethodFormInput
     [Display(Name = "Requires shipping address")]
     public bool RequiresAddress { get; set; } = true;
 
-    public ShippingMethodForm ToForm() => new(Name, MethodType, Price, RequiresAddress);
+    [StringLength(Domain.Entities.ShippingMethod.NotesMaxLength)]
+    [Display(Name = "Notes")]
+    public string? Notes { get; set; }
+
+    public ShippingMethodForm ToForm() => new(Name, MethodType, Price, RequiresAddress, Notes);
 
     public static ShippingMethodFormInput FromEntity(Domain.Entities.ShippingMethod method) => new()
     {
         Name = method.Name,
         MethodType = method.MethodType,
         Price = method.Price,
-        RequiresAddress = method.RequiresAddress
+        RequiresAddress = method.RequiresAddress,
+        Notes = method.Notes
     };
 
     public static ShippingMethodFormInput ForDuplicate(Domain.Entities.ShippingMethod method)

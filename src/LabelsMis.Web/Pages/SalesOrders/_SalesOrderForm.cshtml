@@ -68,11 +68,13 @@
                             {
                                 <option value="@m.Id" data-price="@m.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                                         data-requires-address="@m.RequiresAddress.ToString().ToLowerInvariant()"
+                                        data-notes="@m.Notes" title="@m.Notes"
                                         selected="@(m.Id == Model.ShippingMethodId)">
                                     @m.Name — @m.Price.ToString("C2")@(m.IsActive ? "" : " (inactive)")
                                 </option>
                             }
                         </select>
+                        <partial name="Shared/_ShippingMethodNotes" model="@(shippingMethods.FirstOrDefault(m => m.Id == Model.ShippingMethodId)?.Notes)" />
                     </div>
                     <div class="col-md-5">
                         <label asp-for="ShippingCost" class="form-label small mb-0">Price</label>

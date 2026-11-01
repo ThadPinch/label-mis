@@ -1,0 +1,16 @@
+@model string?
+@*
+    The selected shipping method's notes (how it bills), shown under #shipping-method-select and
+    refreshed from the option's data-notes when the method changes.
+*@
+<div class="form-text" id="shipping-method-notes">@Model</div>
+<script>
+(() => {
+    const select = document.getElementById('shipping-method-select');
+    const notes = document.getElementById('shipping-method-notes');
+    if (!select || !notes) return;
+    select.addEventListener('change', () => {
+        notes.textContent = select.selectedOptions?.[0]?.dataset.notes || '';
+    });
+})();
+</script>

@@ -31,6 +31,7 @@
             <th>Name</th>
             <th>Type</th>
             <th class="text-end">Price</th>
+            <th>Notes</th>
             <th>Address</th>
             <th>Active</th>
             <th></th>
@@ -43,6 +44,7 @@
             <td>@item.Name</td>
             <td>@item.MethodType</td>
             <td class="text-end">@item.Price.ToString("C2")</td>
+            <td class="small text-muted">@item.Notes</td>
             <td>@(item.RequiresAddress ? "Required" : "Not needed")</td>
             <td>@(item.IsActive ? "Yes" : "No")</td>
             <td class="text-end text-nowrap">
