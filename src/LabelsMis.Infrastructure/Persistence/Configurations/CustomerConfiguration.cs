@@ -17,6 +17,8 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.DefaultMarkupPct).HasMoneyPrecision();
         builder.Property(c => c.Status).IsRequired();
         builder.Property(c => c.Notes).HasMaxLength(2000);
+        builder.Property(c => c.QuickBooksCustomerId).HasMaxLength(100);
+        builder.Property(c => c.TaxSetupComplete).HasDefaultValue(false);
 
         builder.HasIndex(c => c.Code).IsUnique();
         builder.HasIndex(c => c.Name);

@@ -843,11 +843,26 @@ public class InvoiceService(
         return result;
     }
 
-    /// <summary>Customer-level reasons an invoice can't go to QuickBooks yet (filled in by E7).</summary>
-    private Task<Dictionary<Guid, IReadOnlyList<string>>> GetCustomerBlockersAsync(
+    /// <summary>Customer-level reasons an invoice can't go to QuickBooks yet (E7): the new-client
+    /// form isn't back, or no Billing contact has an email (<see cref="CustomerBillingRules"/>).</summary>
+    private async Task<Dictionary<Guid, IReadOnlyList<string>>> GetCustomerBlockersAsync(
         IReadOnlyCollection<Guid> customerIds,
-        CancellationToken cancellationToken) =>
-        Task.FromResult(new Dictionary<Guid, IReadOnlyList<string>>());
+        CancellationToken cancellationToken)
+    {
+        var customers = await db.Customers.AsNoTracking()
+            .Where(c => customerIds.Contains(c.Id))
+            .Select(c => new
+            {
+                c.Id,
+                c.TaxSetupComplete,
+                Contacts = c.Contacts.Select(ct => new BillingContactFacts(ct.Role, ct.Email, ct.IsPrimary)).ToList()
+            })
+            .ToListAsync(cancellationToken);
+
+        return customers.ToDictionary(
+            c => c.Id,
+            c => CustomerBillingRules.Blockers(c.TaxSetupComplete, c.Contacts));
+    }
 
     /// <summary>Flags the invoice ready for QuickBooks before the order ships (deposits, prepay).</summary>
     public async Task SetBillBeforeShipAsync(

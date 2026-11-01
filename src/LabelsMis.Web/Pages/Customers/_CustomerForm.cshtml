@@ -57,6 +57,27 @@
             </div>
         </div>
     </div>
+    <div class="row g-3 mt-0" id="quickbooks-setup">
+        <div class="col-md-4">
+            <label asp-for="QuickBooksCustomerId" class="form-label"></label>
+            <input asp-for="QuickBooksCustomerId" class="form-control" maxlength="100" placeholder="Not linked yet" />
+            <span asp-validation-for="QuickBooksCustomerId" class="text-danger"></span>
+        </div>
+        <div class="col-6 col-md-3 align-self-end">
+            <div class="form-check mb-2">
+                <input asp-for="TaxSetupComplete" class="form-check-input" />
+                <label asp-for="TaxSetupComplete" class="form-check-label"></label>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <label asp-for="TaxSetupCompletedAt" class="form-label"></label>
+            <input asp-for="TaxSetupCompletedAt" class="form-control" type="date" />
+        </div>
+        <div class="col-12 form-text mt-1">
+            Until the new-client (tax / resale) form is back, this customer's invoices wait with
+            "Waiting on new-client form". Invoices also wait until a contact with role <strong>Billing</strong> has an email.
+        </div>
+    </div>
 </fieldset>
 
 <div class="d-flex align-items-center justify-content-between mt-4 mb-2">
@@ -155,7 +176,7 @@
                 </div>
                 <div class="col-6 col-md-2">
                     <label asp-for="Contacts[i].Role" class="form-label small mb-1"></label>
-                    <input asp-for="Contacts[i].Role" class="form-control form-control-sm" />
+                    <input asp-for="Contacts[i].Role" class="form-control form-control-sm" list="contact-role-options" />
                 </div>
                 <div class="col-12 col-md-1 align-self-end">
                     <div class="form-check mb-1">
@@ -242,7 +263,7 @@
             </div>
             <div class="col-6 col-md-2">
                 <label class="form-label small mb-1" for="Input_Contacts___INDEX___Role">Role</label>
-                <input name="Input.Contacts[__INDEX__].Role" id="Input_Contacts___INDEX___Role" class="form-control form-control-sm" />
+                <input name="Input.Contacts[__INDEX__].Role" id="Input_Contacts___INDEX___Role" class="form-control form-control-sm" list="contact-role-options" />
             </div>
             <div class="col-12 col-md-1 align-self-end">
                 <div class="form-check mb-1">
@@ -254,3 +275,10 @@
         </div>
     </div>
 </template>
+
+<datalist id="contact-role-options">
+    <option value="Billing"></option>
+    <option value="Purchasing"></option>
+    <option value="Art / proofs"></option>
+    <option value="Shipping"></option>
+</datalist>

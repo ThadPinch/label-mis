@@ -54,7 +54,10 @@ public record CustomerForm(
     Guid? SalesRepId,
     string? Notes,
     IReadOnlyList<AddressInput> Addresses,
-    IReadOnlyList<ContactInput> Contacts);
+    IReadOnlyList<ContactInput> Contacts,
+    string? QuickBooksCustomerId,
+    bool TaxSetupComplete,
+    DateOnly? TaxSetupCompletedAt);
 
 public class CustomerService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
@@ -158,6 +161,7 @@ public class CustomerService(LabelsMisDbContext db, ICurrentUserService currentU
             form.Notes,
             userId,
             now);
+        customer.SetQuickBooksSetup(form.QuickBooksCustomerId, form.TaxSetupComplete, form.TaxSetupCompletedAt, userId, now);
 
         foreach (var address in form.Addresses)
         {
@@ -214,6 +218,7 @@ public class CustomerService(LabelsMisDbContext db, ICurrentUserService currentU
             form.Notes,
             userId,
             now);
+        customer.SetQuickBooksSetup(form.QuickBooksCustomerId, form.TaxSetupComplete, form.TaxSetupCompletedAt, userId, now);
 
         SyncAddresses(customer, form.Addresses, userId, now);
         SyncContacts(customer, form.Contacts, userId, now);

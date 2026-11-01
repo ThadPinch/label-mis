@@ -37,6 +37,19 @@ public class CustomerFormInput
     [Display(Name = "Notes")]
     public string? Notes { get; set; }
 
+    /// <summary>The customer's id in QuickBooks Online (Phase 1 sends it as CustomerRef).</summary>
+    [StringLength(100)]
+    [Display(Name = "QuickBooks customer ID")]
+    public string? QuickBooksCustomerId { get; set; }
+
+    /// <summary>The new-client (tax / resale) form is back; until then the customer's invoices wait.</summary>
+    [Display(Name = "Tax setup complete")]
+    public bool TaxSetupComplete { get; set; }
+
+    [DataType(DataType.Date)]
+    [Display(Name = "Completed on")]
+    public DateOnly? TaxSetupCompletedAt { get; set; }
+
     public List<AddressFormInput> Addresses { get; set; } = [];
 
     public List<ContactFormInput> Contacts { get; set; } = [];
@@ -60,7 +73,10 @@ public class CustomerFormInput
         SalesRepId,
         Notes,
         Addresses.Select(a => new AddressInput(a.Id, a.AddressType, a.Street1, a.Street2, a.City, a.State, a.Zip, a.Country, a.IsDefault)).ToList(),
-        Contacts.Select(c => new ContactInput(c.Id, c.FirstName, c.LastName, c.Email, c.Phone, c.Role, c.IsPrimary)).ToList());
+        Contacts.Select(c => new ContactInput(c.Id, c.FirstName, c.LastName, c.Email, c.Phone, c.Role, c.IsPrimary)).ToList(),
+        QuickBooksCustomerId,
+        TaxSetupComplete,
+        TaxSetupCompletedAt);
 
     public static CustomerFormInput FromEntity(Domain.Entities.Customer customer) => new()
     {
@@ -72,6 +88,9 @@ public class CustomerFormInput
         Status = customer.Status,
         SalesRepId = customer.SalesRepId,
         Notes = customer.Notes,
+        QuickBooksCustomerId = customer.QuickBooksCustomerId,
+        TaxSetupComplete = customer.TaxSetupComplete,
+        TaxSetupCompletedAt = customer.TaxSetupCompletedAt,
         Addresses = customer.Addresses.Select(a => new AddressFormInput
         {
             Id = a.Id,

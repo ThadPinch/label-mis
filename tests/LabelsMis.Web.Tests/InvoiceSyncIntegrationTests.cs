@@ -311,6 +311,26 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Readiness_NewCustomer_WaitsOnNewClientFormAndBillingContact_UntilSetUp()
+    {
+        var order = await SeedOrderAsync(quantity: 100, unitPrice: 1m, chargeAmount: null, customerSetUp: false);
+        var invoice = await _invoiceService.CreateFromSalesOrderAsync(order.Id);
+        await _invoiceService.SetBillBeforeShipAsync(invoice.Id, true);
+
+        (await _invoiceService.GetWaitingReasonsAsync(invoice.Id)).Should().Equal(
+            LabelsMis.Domain.Invoicing.CustomerBillingRules.NewClientFormBlocker,
+            LabelsMis.Domain.Invoicing.CustomerBillingRules.NoBillingContactBlocker);
+
+        var customer = await _db.Customers.SingleAsync(c => c.Id == order.CustomerId);
+        customer.SetQuickBooksSetup(null, true, null, TestUserId, DateTime.UtcNow);
+        _db.Contacts.Add(Contact.Create(Guid.NewGuid(), customer.Id, "Ann", "Payable", "ap@example.com",
+            null, "Accounts Payable", false, TestUserId, DateTime.UtcNow));
+        await _db.SaveChangesAsync();
+
+        (await _invoiceService.GetWaitingReasonsAsync(invoice.Id)).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task MarkOrderShipped_RefusedWhileALineHasShippedNothing()
     {
         var order = await SeedOrderAsync(quantity: 500, unitPrice: 0.40m, chargeAmount: null);
@@ -358,7 +378,8 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
         decimal? chargeAmount,
         bool withSpec = false,
         Guid? shippingMethodId = null,
-        decimal shippingCost = 0m)
+        decimal shippingCost = 0m,
+        bool customerSetUp = true)
     {
         var now = DateTime.UtcNow;
         var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
@@ -367,8 +388,16 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
         var stockId = Guid.NewGuid();
 
         _db.Suppliers.Add(Supplier.Create(supplierId, $"Sync Sup {suffix}", $"SS{suffix}"[..10], "Net 30", 7, null, TestUserId, now));
-        _db.Customers.Add(Customer.Create(customerId, $"Sync Customer {suffix}", $"SC{suffix}"[..10],
-            PaymentTerms.Net30, false, 0.45m, CustomerStatus.Active, null, null, TestUserId, now));
+        var customer = Customer.Create(customerId, $"Sync Customer {suffix}", $"SC{suffix}"[..10],
+            PaymentTerms.Net30, false, 0.45m, CustomerStatus.Active, null, null, TestUserId, now);
+        _db.Customers.Add(customer);
+        if (customerSetUp)
+        {
+            // Set up for QuickBooks (E7): tax form back and a Billing contact with an email.
+            customer.SetQuickBooksSetup($"QB-{suffix}", true, null, TestUserId, now);
+            _db.Contacts.Add(Contact.Create(Guid.NewGuid(), customerId, "Bea", "Biller", $"ap-{suffix}@example.com",
+                null, "Billing", true, TestUserId, now));
+        }
         _db.Stocks.Add(Stock.Create(stockId, $"ST{suffix}"[..10], "BOPP", "BOPP", "Acrylic", "PET", 2.3m, 13.5m,
             supplierId, null, 0.85m, 1000m, TestUserId, now));
 

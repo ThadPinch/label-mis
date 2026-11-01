@@ -25,6 +25,14 @@ public class Customer : MasterDataEntity
     /// printed on a customer-facing document.</summary>
     public string? Notes { get; private set; }
 
+    /// <summary>The customer's id in QuickBooks Online (Phase 1 sends it as <c>CustomerRef</c>).</summary>
+    public string? QuickBooksCustomerId { get; private set; }
+
+    /// <summary>The new-client form (tax / resale set-up in QuickBooks) is back. Until then the
+    /// customer's invoices wait. A human gate: QuickBooks applies the tax, LabelShop doesn't.</summary>
+    public bool TaxSetupComplete { get; private set; }
+    public DateOnly? TaxSetupCompletedAt { get; private set; }
+
     public IReadOnlyCollection<Address> Addresses => _addresses;
     public IReadOnlyCollection<Contact> Contacts => _contacts;
 
@@ -111,4 +119,27 @@ public class Customer : MasterDataEntity
 
     public void AddAddress(Address address) => _addresses.Add(address);
     public void AddContact(Contact contact) => _contacts.Add(contact);
+
+    /// <summary>Links the customer to QuickBooks and records whether the new-client (tax) form is
+    /// back. Ticking it without a date stamps today; unticking clears the date.</summary>
+    public void SetQuickBooksSetup(
+        string? quickBooksCustomerId,
+        bool taxSetupComplete,
+        DateOnly? taxSetupCompletedAt,
+        Guid modifiedById,
+        DateTime modifiedAt)
+    {
+        var id = string.IsNullOrWhiteSpace(quickBooksCustomerId) ? null : quickBooksCustomerId.Trim();
+        if (id is { Length: > 100 })
+        {
+            throw new ArgumentException("The QuickBooks customer id is at most 100 characters.", nameof(quickBooksCustomerId));
+        }
+
+        QuickBooksCustomerId = id;
+        TaxSetupComplete = taxSetupComplete;
+        TaxSetupCompletedAt = taxSetupComplete
+            ? taxSetupCompletedAt ?? DateOnly.FromDateTime(modifiedAt)
+            : null;
+        SetModified(modifiedById, modifiedAt);
+    }
 }

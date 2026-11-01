@@ -198,6 +198,10 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<string>("QuickBooksCustomerId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<Guid?>("SalesRepId")
                         .HasColumnType("uuid");
 
@@ -206,6 +210,14 @@ namespace LabelsMis.Infrastructure.Migrations
 
                     b.Property<bool>("TaxExempt")
                         .HasColumnType("boolean");
+
+                    b.Property<bool>("TaxSetupComplete")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateOnly?>("TaxSetupCompletedAt")
+                        .HasColumnType("date");
 
                     b.Property<Guid>("TenantId")
                         .ValueGeneratedOnAdd()
