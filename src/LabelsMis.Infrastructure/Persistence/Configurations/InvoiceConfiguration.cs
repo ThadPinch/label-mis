@@ -25,6 +25,8 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(i => i.Notes).HasMaxLength(4000);
         builder.Property(i => i.PdfFilePath).HasMaxLength(500);
         builder.Property(i => i.VoidReason).HasMaxLength(500);
+        builder.Property(i => i.NonBillable).HasDefaultValue(false);
+        builder.Property(i => i.NonBillableReason).HasMaxLength(500);
 
         builder.HasIndex(i => i.InvoiceNumber).IsUnique();
         builder.HasIndex(i => i.Status);

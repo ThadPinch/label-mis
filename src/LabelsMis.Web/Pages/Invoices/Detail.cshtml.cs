@@ -20,6 +20,7 @@ public class DetailModel(
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
     [BindProperty] public PaymentInput Payment { get; set; } = new(DateOnly.FromDateTime(DateTime.UtcNow), 0, PaymentMethod.Check, null, null);
     [BindProperty] public string? VoidReason { get; set; }
+    [BindProperty] public string? NonBillableReason { get; set; }
 
     /// <summary>Manual shipping for a draft invoice; blank = automatic (quote / shipments).</summary>
     [BindProperty]
@@ -57,6 +58,23 @@ public class DetailModel(
         try
         {
             await invoiceService.SetShippingOverrideAsync(Id, clear ? null : ShippingOverride, cancellationToken);
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return await ReloadAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>Closes the invoice without a QuickBooks record ($0 samples, internal reprints), or
+    /// reopens it (<paramref name="reopen"/>).</summary>
+    public async Task<IActionResult> OnPostNonBillableAsync(bool reopen, CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.Accounting)) return Forbid();
+        try
+        {
+            await invoiceService.SetNonBillableAsync(Id, !reopen, NonBillableReason, cancellationToken);
             return RedirectToPage(new { id = Id });
         }
         catch (Exception ex)

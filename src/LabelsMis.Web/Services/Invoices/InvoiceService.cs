@@ -23,7 +23,9 @@ public record InvoiceListItem(
     int ShippedLines,
     int TotalLines,
     Guid SalesOrderId,
-    string OrderNumber)
+    string OrderNumber,
+    bool NonBillable = false,
+    string? NonBillableReason = null)
 {
     public bool IsFullyShipped => TotalLines > 0 && ShippedLines >= TotalLines;
 }
@@ -149,9 +151,11 @@ public class InvoiceService(
 
         if (exported.HasValue)
         {
+            // Non-billable invoices are closed without a QuickBooks record: they sit with the
+            // exported ones, never on the Ready list.
             query = exported.Value
-                ? query.Where(i => i.QbExportedAt != null)
-                : query.Where(i => i.QbExportedAt == null);
+                ? query.Where(i => i.QbExportedAt != null || i.NonBillable)
+                : query.Where(i => i.QbExportedAt == null && !i.NonBillable);
         }
 
         if (!string.IsNullOrWhiteSpace(agingBucket))
@@ -200,7 +204,9 @@ public class InvoiceService(
                 i.QbExportedAt,
                 i.QbExportedById,
                 i.SalesOrderId,
-                OrderNumber = i.SalesOrder.OrderNumber
+                OrderNumber = i.SalesOrder.OrderNumber,
+                i.NonBillable,
+                i.NonBillableReason
             })
             .ToListAsync(cancellationToken);
 
@@ -248,7 +254,9 @@ public class InvoiceService(
                 progress.Shipped,
                 progress.Total,
                 r.SalesOrderId,
-                r.OrderNumber);
+                r.OrderNumber,
+                r.NonBillable,
+                r.NonBillableReason);
         }).ToList();
 
         return new PagedResult<InvoiceListItem>(items, page, pageSize, total);
@@ -701,6 +709,29 @@ public class InvoiceService(
         return InvoiceShippingRules.Resolve(null, quotedShipping, currentAmount, billing);
     }
 
+    /// <summary>Closes the invoice without a QuickBooks record (reason required), or reopens it.</summary>
+    public async Task SetNonBillableAsync(
+        Guid invoiceId,
+        bool nonBillable,
+        string? reason,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var invoice = await db.Invoices.SingleOrDefaultAsync(i => i.Id == invoiceId, cancellationToken)
+            ?? throw new InvalidOperationException("Invoice not found.");
+        if (nonBillable)
+        {
+            invoice.MarkNonBillable(reason ?? string.Empty, userId, now);
+        }
+        else
+        {
+            invoice.ClearNonBillable(userId, now);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task RecordPaymentAsync(
         Guid invoiceId,
         PaymentInput input,
@@ -780,7 +811,7 @@ public class InvoiceService(
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
         var invoices = await db.Invoices
-            .Where(i => invoiceIds.Contains(i.Id) && i.QbExportedAt == null && i.Status != InvoiceStatus.Void)
+            .Where(i => invoiceIds.Contains(i.Id) && i.QbExportedAt == null && i.Status != InvoiceStatus.Void && !i.NonBillable)
             .ToListAsync(cancellationToken);
 
         foreach (var invoice in invoices)
@@ -806,7 +837,7 @@ public class InvoiceService(
     {
         var counts = await db.Invoices.AsNoTracking()
             .Where(i => i.Status != InvoiceStatus.Void)
-            .GroupBy(i => i.QbExportedAt != null)
+            .GroupBy(i => i.QbExportedAt != null || i.NonBillable)
             .Select(g => new { Exported = g.Key, Count = g.Count() })
             .ToListAsync(cancellationToken);
 
@@ -829,7 +860,7 @@ public class InvoiceService(
         var asOf = DateOnly.FromDateTime(DateTime.UtcNow);
         var invoices = await db.Invoices.AsNoTracking()
             .Include(i => i.Customer)
-            .Where(i => i.BalanceDue > 0 && i.Status != InvoiceStatus.Void)
+            .Where(i => i.BalanceDue > 0 && i.Status != InvoiceStatus.Void && !i.NonBillable)
             .ToListAsync(cancellationToken);
 
         var rows = invoices
@@ -868,7 +899,7 @@ public class InvoiceService(
         var query = db.Invoices
             .Include(i => i.Customer)
             .Include(i => i.Lines)
-            .Where(i => i.InvoiceDate >= from && i.InvoiceDate <= to && i.Status != InvoiceStatus.Void);
+            .Where(i => i.InvoiceDate >= from && i.InvoiceDate <= to && i.Status != InvoiceStatus.Void && !i.NonBillable);
 
         if (!forceReexport)
         {
@@ -900,7 +931,7 @@ public class InvoiceService(
         var invoices = await db.Invoices
             .Include(i => i.Customer)
             .Include(i => i.Lines)
-            .Where(i => invoiceIds.Contains(i.Id) && i.Status != InvoiceStatus.Void)
+            .Where(i => invoiceIds.Contains(i.Id) && i.Status != InvoiceStatus.Void && !i.NonBillable)
             .OrderBy(i => i.InvoiceNumber)
             .ToListAsync(cancellationToken);
 

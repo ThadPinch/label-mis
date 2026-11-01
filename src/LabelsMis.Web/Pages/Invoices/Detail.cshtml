@@ -196,6 +196,36 @@
             }
         </div>
 
+        @if (invoice.NonBillable)
+        {
+            <div class="card border-secondary mb-2" id="non-billable-card">
+                <div class="card-header py-1 small fw-semibold">Non-billable</div>
+                <div class="card-body py-2 small">
+                    <div>@invoice.NonBillableReason</div>
+                    <div class="text-muted">Closed without a QuickBooks record@(invoice.NonBillableAt is { } nbAt ? $" · {nbAt.ToLocalTime():yyyy-MM-dd}" : "")</div>
+                    @if (Model.CanEdit)
+                    {
+                        <form method="post" asp-page-handler="NonBillable" class="mt-1">
+                            <input type="hidden" name="reopen" value="true" />
+                            <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Make billable again</button>
+                        </form>
+                    }
+                </div>
+            </div>
+        }
+        else if (Model.CanEdit && invoice.Status is InvoiceStatus.Draft or InvoiceStatus.Sent && invoice.QbExportedAt is null)
+        {
+            <div class="card mb-2" id="non-billable-card">
+                <div class="card-header py-1 small fw-semibold">Non-billable</div>
+                <div class="card-body py-2">
+                    <form method="post" asp-page-handler="NonBillable">
+                        <input asp-for="NonBillableReason" class="form-control form-control-sm mb-1" placeholder="Why (e.g. free sample)" required maxlength="500" />
+                        <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Close without a QuickBooks record</button>
+                    </form>
+                </div>
+            </div>
+        }
+
         @if (User.IsInRole("Admin") && invoice.Status != InvoiceStatus.Void && invoice.Status != InvoiceStatus.Paid)
         {
             <div class="card border-danger">

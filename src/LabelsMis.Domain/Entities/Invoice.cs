@@ -38,6 +38,13 @@ public class Invoice : EntityBase
     public string? PdfFilePath { get; private set; }
     public string? VoidReason { get; private set; }
 
+    /// <summary>Closed without a QuickBooks record (e.g. a $0 sample or an internal reprint): off
+    /// the Ready list, never exported. Reversible until something is paid or exported.</summary>
+    public bool NonBillable { get; private set; }
+    public string? NonBillableReason { get; private set; }
+    public DateTime? NonBillableAt { get; private set; }
+    public Guid? NonBillableById { get; private set; }
+
     public IReadOnlyCollection<InvoiceLine> Lines => _lines;
     public IReadOnlyCollection<Payment> Payments => _payments;
 
@@ -162,11 +169,55 @@ public class Invoice : EntityBase
         SetModified(modifiedById, modifiedAt);
     }
 
+    public void MarkNonBillable(string reason, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("Say why the invoice is non-billable.", nameof(reason));
+        }
+
+        if (Status is InvoiceStatus.Void)
+        {
+            throw new InvalidOperationException("Void invoices cannot be marked non-billable.");
+        }
+
+        if (QbExportedAt is not null)
+        {
+            throw new InvalidOperationException("This invoice is already in QuickBooks; unmark it exported first.");
+        }
+
+        if (Status is InvoiceStatus.Paid or InvoiceStatus.PartiallyPaid || BalanceDue != Total)
+        {
+            throw new InvalidOperationException("An invoice with payments cannot be non-billable.");
+        }
+
+        var trimmed = reason.Trim();
+        NonBillable = true;
+        NonBillableReason = trimmed.Length > 500 ? trimmed[..500] : trimmed;
+        NonBillableAt = modifiedAt;
+        NonBillableById = modifiedById;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    public void ClearNonBillable(Guid modifiedById, DateTime modifiedAt)
+    {
+        NonBillable = false;
+        NonBillableReason = null;
+        NonBillableAt = null;
+        NonBillableById = null;
+        SetModified(modifiedById, modifiedAt);
+    }
+
     public void MarkExported(DateTime exportedAt, Guid modifiedById, DateTime modifiedAt)
     {
         if (Status is InvoiceStatus.Void)
         {
             throw new InvalidOperationException("Void invoices cannot be marked exported.");
+        }
+
+        if (NonBillable)
+        {
+            throw new InvalidOperationException("Non-billable invoices are closed without a QuickBooks record.");
         }
 
         QbExportedAt = exportedAt;

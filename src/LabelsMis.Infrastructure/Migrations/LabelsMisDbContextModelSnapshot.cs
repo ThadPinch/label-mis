@@ -1341,6 +1341,21 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<Guid?>("ModifiedById")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("NonBillable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("NonBillableAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("NonBillableById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NonBillableReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
