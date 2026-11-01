@@ -1,6 +1,7 @@
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Fedex;
+using LabelsMis.Domain.Shipping;
 using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Services.Models;
@@ -75,7 +76,18 @@ public record ManualShipmentOrderView(
     string OrderNumber,
     string CustomerName,
     ShippingAddress DefaultShipTo,
-    IReadOnlyList<ManualShipmentLineView> Lines);
+    IReadOnlyList<ManualShipmentLineView> Lines,
+    string? ShippingMethodName = null,
+    ShippingMethodType? ShippingMethodType = null);
+
+/// <summary>How a shipment's billed shipping is derived: the order's method and the shop's settings.</summary>
+public record ShipmentBillingContext(
+    string? ShippingMethodName,
+    ShippingMethodType? ShippingMethodType,
+    ShippingBillingSettings Settings)
+{
+    public string Rule => ShippingBillingRules.Describe(ShippingMethodType, Settings);
+}
 
 public record ManualShipmentLineInput(Guid SalesOrderLineId, Guid? JobId, int QuantityShipped);
 
@@ -340,7 +352,9 @@ public class ShipmentService(
             order.OrderNumber,
             order.Customer.Name,
             defaultShipTo.Normalized(),
-            lineViews);
+            lineViews,
+            order.ShippingMethod?.Name,
+            order.ShippingMethod?.MethodType);
     }
 
     /// <summary>
@@ -414,6 +428,9 @@ public class ShipmentService(
         {
             db.ShipmentPackages.Add(package);
         }
+
+        var billing = await GetBillingContextAsync(salesOrderId, cancellationToken);
+        shipment.ComputeBilledShipping(billing.ShippingMethodType, billing.Settings);
 
         foreach (var line in shipLines)
         {
@@ -500,6 +517,8 @@ public class ShipmentService(
         }
 
         shipment.MarkShippedWithoutPackages(userId, now);
+        var billing = await GetBillingContextAsync(salesOrderId, cancellationToken);
+        shipment.ComputeBilledShipping(billing.ShippingMethodType, billing.Settings);
         db.Shipments.Add(shipment);
 
         var jobIds = readyLines.Where(l => l.JobId.HasValue).Select(l => l.JobId!.Value).Distinct().ToList();
@@ -530,8 +549,25 @@ public class ShipmentService(
         var userId = RequireUserId();
         var shipment = await db.Shipments.SingleOrDefaultAsync(s => s.Id == shipmentId, cancellationToken)
             ?? throw new InvalidOperationException("Shipment not found.");
-        shipment.SetCarrierCost(carrierCost, userId, DateTime.UtcNow);
+        var billing = await GetBillingContextAsync(shipment.SalesOrderId, cancellationToken);
+        shipment.SetCarrierCost(carrierCost, billing.ShippingMethodType, billing.Settings, userId, DateTime.UtcNow);
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>The order's shipping method and the shop's shipping-charge settings — everything
+    /// billed shipping is derived from.</summary>
+    public async Task<ShipmentBillingContext> GetBillingContextAsync(
+        Guid salesOrderId,
+        CancellationToken cancellationToken = default)
+    {
+        var method = await db.SalesOrders.AsNoTracking()
+            .Where(o => o.Id == salesOrderId && o.ShippingMethod != null)
+            .Select(o => new { o.ShippingMethod!.Name, o.ShippingMethod.MethodType })
+            .FirstOrDefaultAsync(cancellationToken);
+        var settings = await db.GeneralSettings.AsNoTracking()
+            .Select(g => new ShippingBillingSettings(g.LocalDeliveryFee, g.CarrierCostMultiplier))
+            .FirstOrDefaultAsync(cancellationToken) ?? ShippingBillingSettings.Default;
+        return new ShipmentBillingContext(method?.Name, method?.MethodType, settings);
     }
 
     public async Task<Shipment> CreateAsync(
@@ -676,6 +712,8 @@ public class ShipmentService(
         }
 
         shipment.MarkInTransit(totalCost, userId, now);
+        var billing = await GetBillingContextAsync(shipment.SalesOrderId, cancellationToken);
+        shipment.ComputeBilledShipping(billing.ShippingMethodType, billing.Settings);
         await UpdateSalesOrderStatusAsync(shipment.SalesOrderId, userId, now, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return shipment;

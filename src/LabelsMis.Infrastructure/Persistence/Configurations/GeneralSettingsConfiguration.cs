@@ -20,6 +20,11 @@ public class GeneralSettingsConfiguration : IEntityTypeConfiguration<GeneralSett
         builder.Property(s => s.Email).HasMaxLength(200);
         builder.Property(s => s.TaxRate).HasPrecision(9, 6).HasDefaultValue(0.0825m);
         builder.Property(s => s.DefaultMarkupPct).HasPrecision(9, 6).HasDefaultValue(GeneralSettings.DefaultMarkupPctFallback);
+        builder.Property(s => s.LocalDeliveryFee).HasMoneyPrecision()
+            .HasDefaultValue(Domain.Shipping.ShippingBillingSettings.DefaultLocalDeliveryFee);
+        builder.Property(s => s.CarrierCostMultiplier).HasPrecision(9, 4)
+            .HasDefaultValue(Domain.Shipping.ShippingBillingSettings.DefaultCarrierCostMultiplier);
+        builder.Ignore(s => s.ShippingBilling);
         builder.Property(s => s.Website).HasMaxLength(200);
         builder.Property(s => s.TermsText).HasMaxLength(2000);
         builder.Property(s => s.LogoContentType).HasMaxLength(100);

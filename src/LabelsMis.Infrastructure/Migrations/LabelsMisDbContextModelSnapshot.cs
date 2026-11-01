@@ -1124,6 +1124,12 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<decimal>("CarrierCostMultiplier")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(9, 4)
+                        .HasColumnType("numeric(9,4)")
+                        .HasDefaultValue(1.5m);
+
                     b.Property<string>("City")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -1148,6 +1154,12 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<string>("Email")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<decimal>("LocalDeliveryFee")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasDefaultValue(25m);
 
                     b.Property<byte[]>("LogoBytes")
                         .HasColumnType("bytea");
@@ -2964,6 +2976,10 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<decimal?>("BilledShipping")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<string>("BillingAccountNumber")
                         .HasMaxLength(50)

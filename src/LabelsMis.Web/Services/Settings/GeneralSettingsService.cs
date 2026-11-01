@@ -48,6 +48,18 @@ public class GeneralSettingsService(LabelsMisDbContext db, ICurrentUserService c
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>Shipping-charge settings: the local-delivery flat fee and the carrier cost multiplier.</summary>
+    public async Task UpdateShippingBillingAsync(
+        decimal localDeliveryFee,
+        decimal carrierCostMultiplier,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var settings = await GetOrCreateAsync(cancellationToken);
+        settings.UpdateShippingBilling(localDeliveryFee, carrierCostMultiplier, userId, DateTime.UtcNow);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task SetLogoAsync(byte[] logoBytes, string contentType, CancellationToken cancellationToken = default)
     {
         var userId = RequireUserId();

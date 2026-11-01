@@ -32,6 +32,14 @@
             <span asp-validation-for="Input.CarrierCost" class="text-danger"></span>
             <div class="form-text">What the carrier billed us for the whole shipment. Leave blank if not known yet (package costs below are used when entered); it can be added later on the shipment.</div>
         </div>
+        <div class="col-md-3">
+            <label class="form-label" for="billed-shipping-preview">Billed shipping</label>
+            <input id="billed-shipping-preview" class="form-control-plaintext fw-semibold" readonly tabindex="-1"
+                   data-method-type="@(Model.Billing?.ShippingMethodType?.ToString() ?? "")"
+                   data-delivery-fee="@((Model.Billing?.Settings.LocalDeliveryFee ?? 25m).ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                   data-multiplier="@((Model.Billing?.Settings.CarrierCostMultiplier ?? 1.5m).ToString(System.Globalization.CultureInfo.InvariantCulture))" />
+            <div class="form-text">@(Model.Billing?.ShippingMethodName ?? "No method on the order") · @Model.Billing?.Rule</div>
+        </div>
     </div>
 
     <fieldset class="border rounded p-3 mb-3">
@@ -170,6 +178,32 @@
 
 @section Scripts {
     <script>
+        // Read-only preview of what this shipment will bill (the server computes the stored value
+        // with the same rule): pickup / customer account $0, local delivery the flat fee, carrier
+        // shipments carrier cost × multiplier (blank cost falls back to the package costs).
+        (() => {
+            const out = document.getElementById('billed-shipping-preview');
+            const costInput = document.getElementById('Input_CarrierCost');
+            if (!out || !costInput) return;
+            const type = out.dataset.methodType;
+            const fee = Number(out.dataset.deliveryFee);
+            const mult = Number(out.dataset.multiplier);
+            const money = v => v.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+            const packageTotal = () => [...document.querySelectorAll('[name^="Input.Packages["][name$=".ShippingCost"]')]
+                .reduce((sum, el) => sum + (Number(el.value) || 0), 0);
+            const update = () => {
+                if (type === 'Pickup' || type === 'CustomerAccount') { out.value = money(0); return; }
+                if (type === 'Delivery') { out.value = money(fee); return; }
+                const typed = costInput.value.trim();
+                const cost = typed !== '' ? Number(typed) : (packageTotal() > 0 ? packageTotal() : NaN);
+                out.value = Number.isFinite(cost) ? money(Math.round((cost * mult + Number.EPSILON) * 100) / 100) : 'pending — enter the carrier cost';
+            };
+            document.addEventListener('input', e => {
+                if (e.target === costInput || e.target.name?.endsWith('.ShippingCost')) update();
+            });
+            update();
+        })();
+
         (() => {
             const container = document.getElementById('package-rows');
             const template = document.getElementById('package-template');

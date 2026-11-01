@@ -98,6 +98,20 @@
         {
             <div>Carrier cost: <span id="carrier-cost-value">@(Model.Detail.Shipment.CarrierCost?.ToString("C2") ?? "not entered")</span></div>
         }
+        <div class="mt-1">
+            Billed shipping:
+            @if (Model.Detail.Shipment.BilledShipping is { } billed)
+            {
+                <span class="fw-semibold" id="billed-shipping-value">@billed.ToString("C2")</span>
+            }
+            else
+            {
+                <span class="text-warning" id="billed-shipping-value">pending — enter the carrier cost</span>
+            }
+        </div>
+        <div class="text-muted">
+            Method: @(Model.Billing?.ShippingMethodName ?? "none on the order") · @Model.Billing?.Rule
+        </div>
     </div>
 </div>
 

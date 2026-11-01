@@ -1,5 +1,6 @@
 using LabelsMis.Domain.Common;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.Shipping;
 using LabelsMis.Domain.ValueObjects;
 
 namespace LabelsMis.Domain.Entities;
@@ -59,6 +60,12 @@ public class Shipment : EntityBase
     /// figure), entered when the shipment is recorded or later on the shipment page. Null until
     /// it is known; billed shipping for carrier shipments is derived from it.</summary>
     public decimal? CarrierCost { get; private set; }
+
+    /// <summary>What this shipment bills the customer for shipping, from the order's shipping
+    /// method and <see cref="CarrierCost"/> (<see cref="ShippingBillingRules"/>), rounded to cents.
+    /// Null while a carrier shipment's cost is unknown, and on shipments recorded before billed
+    /// shipping existed.</summary>
+    public decimal? BilledShipping { get; private set; }
 
     public IReadOnlyCollection<ShipmentPackage> Packages => _packages;
     public IReadOnlyCollection<ShipmentLine> Lines => _lines;
@@ -181,13 +188,25 @@ public class Shipment : EntityBase
         SetModified(modifiedById, modifiedAt);
     }
 
-    /// <summary>Enters or corrects the carrier's actual charge (null clears it).</summary>
-    public void SetCarrierCost(decimal? carrierCost, Guid modifiedById, DateTime modifiedAt)
+    /// <summary>Enters or corrects the carrier's actual charge (null clears it) and re-derives the
+    /// billed shipping under the order's method and the shop's settings.</summary>
+    public void SetCarrierCost(
+        decimal? carrierCost,
+        ShippingMethodType? methodType,
+        ShippingBillingSettings settings,
+        Guid modifiedById,
+        DateTime modifiedAt)
     {
         ValidateCarrierCost(carrierCost);
         CarrierCost = carrierCost;
+        ComputeBilledShipping(methodType, settings);
         SetModified(modifiedById, modifiedAt);
     }
+
+    /// <summary>Derives <see cref="BilledShipping"/> from the order's shipping method, the carrier
+    /// cost and the shop's settings. Called when the shipment is recorded and on every edit.</summary>
+    public void ComputeBilledShipping(ShippingMethodType? methodType, ShippingBillingSettings settings) =>
+        BilledShipping = ShippingBillingRules.BilledShipping(methodType, CarrierCost, settings);
 
     private static void ValidateCarrierCost(decimal? carrierCost)
     {

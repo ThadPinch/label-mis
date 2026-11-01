@@ -40,7 +40,9 @@ public class GeneralModel(GeneralSettingsService generalSettings) : PageModel
             Website = settings.Website,
             TermsText = settings.TermsText,
             TaxRatePercent = settings.TaxRate * 100m,
-            DefaultMarginPercent = PricingMath.MarkupToMarginPercent(settings.DefaultMarkupPct)
+            DefaultMarginPercent = PricingMath.MarkupToMarginPercent(settings.DefaultMarkupPct),
+            LocalDeliveryFee = settings.LocalDeliveryFee,
+            CarrierCostMultiplier = settings.CarrierCostMultiplier
         };
         LogoDataUri = BuildLogoDataUri(settings.LogoBytes, settings.LogoContentType);
     }
@@ -80,6 +82,7 @@ public class GeneralModel(GeneralSettingsService generalSettings) : PageModel
             Input.TermsText,
             Input.TaxRatePercent / 100m,
             PricingMath.MarginPercentToMarkup(Input.DefaultMarginPercent, current.DefaultMarkupPct)), cancellationToken);
+        await generalSettings.UpdateShippingBillingAsync(Input.LocalDeliveryFee, Input.CarrierCostMultiplier, cancellationToken);
 
         if (LogoUpload is not null)
         {
@@ -169,4 +172,12 @@ public class GeneralSettingsPageInput
     [Range(0, PricingMath.MaxFormMarginPercent)]
     [Display(Name = "Default margin %")]
     public decimal DefaultMarginPercent { get; set; } = PricingMath.MarkupToMarginPercent(Domain.Entities.GeneralSettings.DefaultMarkupPctFallback);
+
+    [Range(0, 100000)]
+    [Display(Name = "Local delivery fee")]
+    public decimal LocalDeliveryFee { get; set; } = Domain.Shipping.ShippingBillingSettings.DefaultLocalDeliveryFee;
+
+    [Range(0, 10)]
+    [Display(Name = "Carrier cost multiplier")]
+    public decimal CarrierCostMultiplier { get; set; } = Domain.Shipping.ShippingBillingSettings.DefaultCarrierCostMultiplier;
 }

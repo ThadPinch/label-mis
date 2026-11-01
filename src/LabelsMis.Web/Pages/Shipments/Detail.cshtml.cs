@@ -20,6 +20,7 @@ public class DetailModel(ShipmentService shipmentService, InvoiceService invoice
     public decimal? CarrierCost { get; set; }
 
     public ShipmentDetail? Detail { get; private set; }
+    public ShipmentBillingContext? Billing { get; private set; }
     public bool CanInvoice { get; private set; }
 
     /// <summary>Shipping staff record the carrier cost; accounting enters it from the WWEX bill.</summary>
@@ -58,6 +59,7 @@ public class DetailModel(ShipmentService shipmentService, InvoiceService invoice
     {
         Detail = await shipmentService.GetDetailAsync(Id, cancellationToken);
         if (Detail is null) return false;
+        Billing = await shipmentService.GetBillingContextAsync(Detail.Shipment.SalesOrderId, cancellationToken);
 
         CanInvoice = (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting))
             && Detail.Shipment.Status is ShipmentStatus.InTransit or ShipmentStatus.Delivered;

@@ -15,11 +15,13 @@ public class RecordModel(ShipmentService shipmentService) : PageModel
     [BindProperty] public RecordShipmentInput Input { get; set; } = new();
 
     public ManualShipmentOrderView? Order { get; private set; }
+    public ShipmentBillingContext? Billing { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         Order = await shipmentService.GetOrderForManualShipmentAsync(SalesOrderId, cancellationToken);
         if (Order is null) return NotFound();
+        Billing = await shipmentService.GetBillingContextAsync(SalesOrderId, cancellationToken);
 
         var shipTo = Order.DefaultShipTo;
         Input = new RecordShipmentInput
@@ -75,6 +77,7 @@ public class RecordModel(ShipmentService shipmentService) : PageModel
             ModelState.AddModelError(string.Empty, ex.Message);
             Order = await shipmentService.GetOrderForManualShipmentAsync(SalesOrderId, cancellationToken);
             if (Order is null) return NotFound();
+            Billing = await shipmentService.GetBillingContextAsync(SalesOrderId, cancellationToken);
             return Page();
         }
     }

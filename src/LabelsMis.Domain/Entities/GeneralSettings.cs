@@ -1,4 +1,5 @@
 using LabelsMis.Domain.Common;
+using LabelsMis.Domain.Shipping;
 
 namespace LabelsMis.Domain.Entities;
 
@@ -31,6 +32,14 @@ public class GeneralSettings : EntityBase
     public decimal DefaultMarkupPct { get; private set; } = DefaultMarkupPctFallback;
 
     public const decimal DefaultMarkupPctFallback = 0.55m;
+
+    /// <summary>Flat shipping billed for a local delivery.</summary>
+    public decimal LocalDeliveryFee { get; private set; } = ShippingBillingSettings.DefaultLocalDeliveryFee;
+
+    /// <summary>Carrier shipments bill the carrier's actual cost × this (1.5 = cost plus half).</summary>
+    public decimal CarrierCostMultiplier { get; private set; } = ShippingBillingSettings.DefaultCarrierCostMultiplier;
+
+    public ShippingBillingSettings ShippingBilling => new(LocalDeliveryFee, CarrierCostMultiplier);
 
     public byte[]? LogoBytes { get; private set; }
     public string? LogoContentType { get; private set; }
@@ -80,6 +89,27 @@ public class GeneralSettings : EntityBase
         TermsText = Normalize(termsText);
         TaxRate = taxRate;
         DefaultMarkupPct = defaultMarkupPct;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    public void UpdateShippingBilling(
+        decimal localDeliveryFee,
+        decimal carrierCostMultiplier,
+        Guid modifiedById,
+        DateTime modifiedAt)
+    {
+        if (localDeliveryFee < 0m)
+        {
+            throw new ArgumentOutOfRangeException(nameof(localDeliveryFee), "Local delivery fee cannot be negative.");
+        }
+
+        if (carrierCostMultiplier is < 0m or > 10m)
+        {
+            throw new ArgumentOutOfRangeException(nameof(carrierCostMultiplier), "Carrier cost multiplier must be between 0 and 10.");
+        }
+
+        LocalDeliveryFee = localDeliveryFee;
+        CarrierCostMultiplier = carrierCostMultiplier;
         SetModified(modifiedById, modifiedAt);
     }
 
