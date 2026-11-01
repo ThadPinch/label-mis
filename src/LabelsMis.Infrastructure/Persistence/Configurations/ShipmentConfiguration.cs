@@ -19,6 +19,7 @@ public class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
         builder.Property(s => s.BillingType).IsRequired();
         builder.Property(s => s.BillingAccountNumber).HasMaxLength(50);
         builder.Property(s => s.TotalShippingCost).HasMoneyPrecision();
+        builder.Property(s => s.CarrierCost).HasPrecision(18, 4);
 
         builder.Property(s => s.ShipFromName).HasMaxLength(200);
         builder.Property(s => s.ShipFromStreet1).HasMaxLength(200);

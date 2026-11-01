@@ -62,7 +62,8 @@ public class RecordModel(ShipmentService shipmentService) : PageModel
                 .Where(p => !string.IsNullOrWhiteSpace(p.TrackingNumber))
                 .Select(p => new ManualPackageInput(
                     p.WeightLb, p.LengthIn, p.WidthIn, p.HeightIn, p.DeclaredValue, p.TrackingNumber!.Trim(), p.ShippingCost))
-                .ToList());
+                .ToList(),
+            Input.CarrierCost);
 
         try
         {
@@ -83,6 +84,11 @@ public class RecordShipmentInput
 {
     public DateOnly ShipDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public Carrier Carrier { get; set; } = Carrier.Fedex;
+
+    /// <summary>The carrier's charge for the whole shipment (WWEX); blank = not known yet.</summary>
+    [System.ComponentModel.DataAnnotations.Range(0, 999999)]
+    public decimal? CarrierCost { get; set; }
+
     public string? ShipToName { get; set; }
     public string? ShipToStreet1 { get; set; }
     public string? ShipToStreet2 { get; set; }

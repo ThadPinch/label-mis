@@ -23,6 +23,15 @@
             <label asp-for="Input.Carrier" class="form-label">Carrier</label>
             <select asp-for="Input.Carrier" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.Carrier>()"></select>
         </div>
+        <div class="col-md-3">
+            <label asp-for="Input.CarrierCost" class="form-label">Carrier cost</label>
+            <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input asp-for="Input.CarrierCost" class="form-control" placeholder="WWEX cost" inputmode="decimal" />
+            </div>
+            <span asp-validation-for="Input.CarrierCost" class="text-danger"></span>
+            <div class="form-text">What the carrier billed us for the whole shipment. Leave blank if not known yet (package costs below are used when entered); it can be added later on the shipment.</div>
+        </div>
     </div>
 
     <fieldset class="border rounded p-3 mb-3">

@@ -69,6 +69,38 @@
     · Ship date: @Model.Detail.Shipment.ShipDate.ToString("yyyy-MM-dd")
 </p>
 
+@if (TempData["ShipmentStatus"] is string shipmentStatus)
+{
+    <div class="alert alert-success py-2 small">@shipmentStatus</div>
+}
+<div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
+
+<div class="card mb-3" id="shipment-billing">
+    <div class="card-header py-1 small fw-semibold">Shipping charges</div>
+    <div class="card-body py-2 small">
+        @if (Model.CanEditCarrierCost)
+        {
+            <form method="post" asp-page-handler="CarrierCost" class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label asp-for="CarrierCost" class="form-label small mb-0">Carrier cost (what the carrier billed us)</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">$</span>
+                        <input asp-for="CarrierCost" class="form-control" placeholder="Not entered" inputmode="decimal" />
+                    </div>
+                    <span asp-validation-for="CarrierCost" class="text-danger small"></span>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-primary w-100">Save</button>
+                </div>
+            </form>
+        }
+        else
+        {
+            <div>Carrier cost: <span id="carrier-cost-value">@(Model.Detail.Shipment.CarrierCost?.ToString("C2") ?? "not entered")</span></div>
+        }
+    </div>
+</div>
+
 <h2 class="h6">Lines</h2>
 <table class="table table-sm table-striped mb-3">
     <thead><tr><th>Product</th><th>Qty shipped</th></tr></thead>

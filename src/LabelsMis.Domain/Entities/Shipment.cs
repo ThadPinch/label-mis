@@ -55,6 +55,11 @@ public class Shipment : EntityBase
     public string? BillingAccountNumber { get; private set; }
     public decimal TotalShippingCost { get; private set; }
 
+    /// <summary>What the carrier actually charged for this shipment (the Worldwide Express
+    /// figure), entered when the shipment is recorded or later on the shipment page. Null until
+    /// it is known; billed shipping for carrier shipments is derived from it.</summary>
+    public decimal? CarrierCost { get; private set; }
+
     public IReadOnlyCollection<ShipmentPackage> Packages => _packages;
     public IReadOnlyCollection<ShipmentLine> Lines => _lines;
 
@@ -73,8 +78,10 @@ public class Shipment : EntityBase
         BillingType billingType,
         string? billingAccountNumber,
         Guid createdById,
-        DateTime createdAt)
+        DateTime createdAt,
+        decimal? carrierCost = null)
     {
+        ValidateCarrierCost(carrierCost);
         var snapshot = (shipFrom ?? ShippingAddress.Empty).Normalized();
         var toSnapshot = (shipTo ?? ShippingAddress.Empty).Normalized();
         var shipment = new Shipment
@@ -103,7 +110,8 @@ public class Shipment : EntityBase
             Status = ShipmentStatus.Pending,
             TotalDeclaredValue = totalDeclaredValue,
             BillingType = billingType,
-            BillingAccountNumber = string.IsNullOrWhiteSpace(billingAccountNumber) ? null : billingAccountNumber.Trim()
+            BillingAccountNumber = string.IsNullOrWhiteSpace(billingAccountNumber) ? null : billingAccountNumber.Trim(),
+            CarrierCost = carrierCost
         };
         shipment.SetCreated(id, createdById, createdAt);
         return shipment;
@@ -171,6 +179,22 @@ public class Shipment : EntityBase
         Status = ShipmentStatus.InTransit;
         TotalShippingCost = 0m;
         SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>Enters or corrects the carrier's actual charge (null clears it).</summary>
+    public void SetCarrierCost(decimal? carrierCost, Guid modifiedById, DateTime modifiedAt)
+    {
+        ValidateCarrierCost(carrierCost);
+        CarrierCost = carrierCost;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    private static void ValidateCarrierCost(decimal? carrierCost)
+    {
+        if (carrierCost < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(carrierCost), "Carrier cost cannot be negative.");
+        }
     }
 
     public void MarkDelivered(Guid modifiedById, DateTime modifiedAt)

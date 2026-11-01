@@ -2975,6 +2975,10 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<int>("Carrier")
                         .HasColumnType("integer");
 
+                    b.Property<decimal?>("CarrierCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 

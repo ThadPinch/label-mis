@@ -93,7 +93,8 @@ public record ManualShipmentInput(
     Carrier Carrier,
     ShippingAddress ShipTo,
     IReadOnlyList<ManualShipmentLineInput> Lines,
-    IReadOnlyList<ManualPackageInput> Packages);
+    IReadOnlyList<ManualPackageInput> Packages,
+    decimal? CarrierCost = null);
 
 public class ShipmentService(
     LabelsMisDbContext db,
@@ -376,6 +377,10 @@ public class ShipmentService(
         var declaredValue = input.Packages.Sum(p => p.DeclaredValue);
         var totalCost = input.Packages.Sum(p => p.ShippingCost);
 
+        // The carrier's charge for the whole shipment (WWEX); left blank it falls back to the
+        // per-package costs when those were typed, else stays unknown until entered later.
+        var carrierCost = input.CarrierCost ?? (totalCost > 0 ? totalCost : null);
+
         var shipment = Shipment.CreatePending(
             Guid.NewGuid(),
             shipmentNumber,
@@ -391,7 +396,8 @@ public class ShipmentService(
             BillingType.Sender,
             null,
             userId,
-            now);
+            now,
+            carrierCost);
 
         var packages = input.Packages.Select((pkg, index) =>
         {
@@ -513,6 +519,19 @@ public class ShipmentService(
         await db.SaveChangesAsync(cancellationToken);
 
         return shipment;
+    }
+
+    /// <summary>Enters or corrects the carrier's actual charge on a recorded shipment.</summary>
+    public async Task SetCarrierCostAsync(
+        Guid shipmentId,
+        decimal? carrierCost,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var shipment = await db.Shipments.SingleOrDefaultAsync(s => s.Id == shipmentId, cancellationToken)
+            ?? throw new InvalidOperationException("Shipment not found.");
+        shipment.SetCarrierCost(carrierCost, userId, DateTime.UtcNow);
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<Shipment> CreateAsync(
