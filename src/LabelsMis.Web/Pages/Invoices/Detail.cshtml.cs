@@ -31,6 +31,13 @@ public class DetailModel(
     public InvoiceDetail? Detail { get; private set; }
     public bool CanEdit { get; private set; }
 
+    /// <summary>Why this unexported, billable invoice isn't Ready for QuickBooks (empty = Ready).</summary>
+    public IReadOnlyList<string> WaitingReasons { get; private set; } = [];
+
+    /// <summary>The invoice is on the Ready / Waiting lists (not exported, non-billable or void).</summary>
+    public bool InQuickBooksQueue => Detail is { } d
+        && d.Invoice.QbExportedAt is null && !d.Invoice.NonBillable && d.Invoice.Status != InvoiceStatus.Void;
+
     /// <summary>This invoice is void and its order carries no live invoice — a replacement
     /// can be generated at the order's current prices.</summary>
     public bool CanGenerateReplacement { get; private set; }
@@ -42,8 +49,26 @@ public class DetailModel(
         if (Detail is null) return NotFound();
 
         ShippingOverride = Detail.Invoice.ShippingOverride;
+        WaitingReasons = await invoiceService.GetWaitingReasonsAsync(Id, cancellationToken);
         await LoadCanGenerateReplacementAsync(cancellationToken);
         return Page();
+    }
+
+    /// <summary>Flags the invoice Ready before the order ships (deposits, prepay, charge-only
+    /// orders), or clears the flag.</summary>
+    public async Task<IActionResult> OnPostBillBeforeShipAsync(bool enable, CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.Accounting)) return Forbid();
+        try
+        {
+            await invoiceService.SetBillBeforeShipAsync(Id, enable, cancellationToken);
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return await ReloadAsync(cancellationToken);
+        }
     }
 
     /// <summary>Sets the manual shipping override (Save) or clears it back to automatic (Clear).</summary>
@@ -89,6 +114,7 @@ public class DetailModel(
         Detail = await invoiceService.GetDetailAsync(Id, cancellationToken);
         if (Detail is null) return NotFound();
         CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting);
+        WaitingReasons = await invoiceService.GetWaitingReasonsAsync(Id, cancellationToken);
         await LoadCanGenerateReplacementAsync(cancellationToken);
         return Page();
     }
@@ -137,9 +163,7 @@ public class DetailModel(
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            Detail = await invoiceService.GetDetailAsync(Id, cancellationToken);
-            CanEdit = true;
-            return Page();
+            return await ReloadAsync(cancellationToken);
         }
     }
 
@@ -154,9 +178,7 @@ public class DetailModel(
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            Detail = await invoiceService.GetDetailAsync(Id, cancellationToken);
-            CanEdit = true;
-            return Page();
+            return await ReloadAsync(cancellationToken);
         }
     }
 
@@ -178,9 +200,7 @@ public class DetailModel(
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting);
-            await LoadCanGenerateReplacementAsync(cancellationToken);
-            return Page();
+            return await ReloadAsync(cancellationToken);
         }
     }
 }

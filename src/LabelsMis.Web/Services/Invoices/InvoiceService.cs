@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.Invoicing;
 using LabelsMis.Domain.Shipping;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Services.Models;
@@ -110,7 +111,9 @@ public class InvoiceService(
         string? sort,
         int page,
         int pageSize,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<Guid>? onlyIds = null,
+        IReadOnlyCollection<Guid>? excludeIds = null)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 5, 100);
@@ -124,6 +127,16 @@ public class InvoiceService(
         if (status.HasValue)
         {
             query = query.Where(i => i.Status == status.Value);
+        }
+
+        if (onlyIds is not null)
+        {
+            query = query.Where(i => onlyIds.Contains(i.Id));
+        }
+
+        if (excludeIds is not null && excludeIds.Count > 0)
+        {
+            query = query.Where(i => !excludeIds.Contains(i.Id));
         }
 
         if (customerId.HasValue)
@@ -694,19 +707,158 @@ public class InvoiceService(
                 .Where(o => o.Id == salesOrderId)
                 .Select(o => o.ShippingMethod == null ? (ShippingMethodType?)null : o.ShippingMethod.MethodType)
                 .FirstOrDefaultAsync(cancellationToken);
-            var settings = await db.GeneralSettings.AsNoTracking()
-                .Select(g => new ShippingBillingSettings(g.LocalDeliveryFee, g.CarrierCostMultiplier))
-                .FirstOrDefaultAsync(cancellationToken) ?? ShippingBillingSettings.Default;
-            billing = shipped.Select(s => new ShippedShipmentBilling(
-                    s.ShipmentNumber,
-                    s.BilledShipping ?? ShippingBillingRules.BilledShipping(
-                        methodType,
-                        s.CarrierCost ?? (s.TotalShippingCost > 0 ? s.TotalShippingCost : null),
-                        settings)))
+            var settings = await LoadShippingBillingSettingsAsync(cancellationToken);
+            billing = shipped
+                .Select(s => DeriveBilling(s.ShipmentNumber, s.BilledShipping, s.CarrierCost, s.TotalShippingCost, methodType, settings))
                 .ToList();
         }
 
         return InvoiceShippingRules.Resolve(null, quotedShipping, currentAmount, billing);
+    }
+
+    private async Task<ShippingBillingSettings> LoadShippingBillingSettingsAsync(CancellationToken cancellationToken) =>
+        await db.GeneralSettings.AsNoTracking()
+            .Select(g => new ShippingBillingSettings(g.LocalDeliveryFee, g.CarrierCostMultiplier))
+            .FirstOrDefaultAsync(cancellationToken) ?? ShippingBillingSettings.Default;
+
+    /// <summary>A shipped shipment's billed shipping; shipments recorded before billed shipping
+    /// existed are derived from the order's method and their carrier (or package) cost.</summary>
+    private static ShippedShipmentBilling DeriveBilling(
+        string shipmentNumber,
+        decimal? billedShipping,
+        decimal? carrierCost,
+        decimal totalShippingCost,
+        ShippingMethodType? methodType,
+        ShippingBillingSettings settings) =>
+        new(shipmentNumber, billedShipping ?? ShippingBillingRules.BilledShipping(
+            methodType,
+            carrierCost ?? (totalShippingCost > 0 ? totalShippingCost : null),
+            settings));
+
+    /// <summary>
+    /// Why each unexported, billable invoice is not ready for QuickBooks yet
+    /// (<see cref="InvoiceReadinessRules"/>); invoices with no reasons are Ready. Computed in
+    /// memory over the unexported set, which stays small.
+    /// </summary>
+    public Task<Dictionary<Guid, IReadOnlyList<string>>> GetWaitingReasonsAsync(
+        CancellationToken cancellationToken = default) =>
+        ComputeWaitingReasonsAsync(null, cancellationToken);
+
+    /// <summary>One invoice's waiting reasons; empty when it is Ready — or when it is exported,
+    /// non-billable or void, which callers check separately.</summary>
+    public async Task<IReadOnlyList<string>> GetWaitingReasonsAsync(
+        Guid invoiceId,
+        CancellationToken cancellationToken = default) =>
+        (await ComputeWaitingReasonsAsync([invoiceId], cancellationToken)).GetValueOrDefault(invoiceId) ?? [];
+
+    /// <summary>Ids of the given invoices (all unexported ones when null) that are Waiting: bulk
+    /// Mark exported and the CSV exports skip these and act only on the Ready list.</summary>
+    private async Task<HashSet<Guid>> WaitingIdsAsync(
+        IReadOnlyCollection<Guid>? invoiceIds,
+        CancellationToken cancellationToken) =>
+        (await ComputeWaitingReasonsAsync(invoiceIds, cancellationToken)).Keys.ToHashSet();
+
+    private async Task<Dictionary<Guid, IReadOnlyList<string>>> ComputeWaitingReasonsAsync(
+        IReadOnlyCollection<Guid>? invoiceIds,
+        CancellationToken cancellationToken)
+    {
+        var candidates = await db.Invoices.AsNoTracking()
+            .Where(i => i.Status != InvoiceStatus.Void && i.QbExportedAt == null && !i.NonBillable)
+            .Where(i => invoiceIds == null || invoiceIds.Contains(i.Id))
+            .Select(i => new
+            {
+                i.Id,
+                i.SalesOrderId,
+                i.CustomerId,
+                i.Status,
+                i.Total,
+                i.BillBeforeShip,
+                i.ShippingOverride,
+                i.ShippingAmount,
+                Quoted = i.SalesOrder.ShippingCost,
+                OrderStatus = i.SalesOrder.Status,
+                MethodType = i.SalesOrder.ShippingMethod == null ? (ShippingMethodType?)null : i.SalesOrder.ShippingMethod.MethodType
+            })
+            .ToListAsync(cancellationToken);
+        if (candidates.Count == 0)
+        {
+            return [];
+        }
+
+        var orderIds = candidates.Select(c => c.SalesOrderId).Distinct().ToList();
+        var progress = (await db.SalesOrderLines.AsNoTracking()
+                .Where(l => orderIds.Contains(l.SalesOrderId))
+                .Select(l => new
+                {
+                    l.SalesOrderId,
+                    l.Quantity,
+                    Shipped = db.ShipmentLines
+                        .Where(sl => sl.SalesOrderLineId == l.Id && sl.Shipment.Status != ShipmentStatus.Pending)
+                        .Sum(sl => (int?)sl.QuantityShipped) ?? 0
+                })
+                .ToListAsync(cancellationToken))
+            .GroupBy(l => l.SalesOrderId)
+            .ToDictionary(g => g.Key, g => (
+                Shipped: g.Count(x => x.Shipped >= x.Quantity),
+                Total: g.Count(),
+                Any: g.Any(x => x.Shipped > 0)));
+        var shipments = (await db.Shipments.AsNoTracking()
+                .Where(s => orderIds.Contains(s.SalesOrderId) && s.Status != ShipmentStatus.Pending)
+                .OrderBy(s => s.ShipmentNumber)
+                .Select(s => new { s.SalesOrderId, s.ShipmentNumber, s.BilledShipping, s.CarrierCost, s.TotalShippingCost })
+                .ToListAsync(cancellationToken))
+            .ToLookup(s => s.SalesOrderId);
+        var settings = await LoadShippingBillingSettingsAsync(cancellationToken);
+        var customerBlockers = await GetCustomerBlockersAsync(
+            candidates.Select(c => c.CustomerId).Distinct().ToList(), cancellationToken);
+
+        var result = new Dictionary<Guid, IReadOnlyList<string>>();
+        foreach (var c in candidates)
+        {
+            var (shippedLines, totalLines, anyShipped) = progress.GetValueOrDefault(c.SalesOrderId);
+            IReadOnlyList<string> pending = [];
+            if (c.Status == InvoiceStatus.Draft && c.ShippingOverride is null)
+            {
+                var billing = shipments[c.SalesOrderId]
+                    .Select(s => DeriveBilling(s.ShipmentNumber, s.BilledShipping, s.CarrierCost, s.TotalShippingCost, c.MethodType, settings))
+                    .ToList();
+                pending = InvoiceShippingRules.Resolve(null, c.Quoted, c.ShippingAmount, billing).PendingShipmentNumbers;
+            }
+
+            var reasons = InvoiceReadinessRules.WaitingReasons(new InvoiceReadinessFacts(
+                c.BillBeforeShip,
+                c.OrderStatus is SalesOrderStatus.Shipped or SalesOrderStatus.Invoiced or SalesOrderStatus.Closed,
+                shippedLines,
+                totalLines,
+                anyShipped,
+                c.Total,
+                pending,
+                customerBlockers.GetValueOrDefault(c.CustomerId) ?? []));
+            if (reasons.Count > 0)
+            {
+                result[c.Id] = reasons;
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>Customer-level reasons an invoice can't go to QuickBooks yet (filled in by E7).</summary>
+    private Task<Dictionary<Guid, IReadOnlyList<string>>> GetCustomerBlockersAsync(
+        IReadOnlyCollection<Guid> customerIds,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(new Dictionary<Guid, IReadOnlyList<string>>());
+
+    /// <summary>Flags the invoice ready for QuickBooks before the order ships (deposits, prepay).</summary>
+    public async Task SetBillBeforeShipAsync(
+        Guid invoiceId,
+        bool billBeforeShip,
+        CancellationToken cancellationToken = default)
+    {
+        var invoice = await db.Invoices.SingleOrDefaultAsync(i => i.Id == invoiceId, cancellationToken)
+            ?? throw new InvalidOperationException("Invoice not found.");
+        invoice.SetBillBeforeShip(billBeforeShip, RequireUserId(), DateTime.UtcNow);
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>Closes the invoice without a QuickBooks record (reason required), or reopens it.</summary>
@@ -804,15 +956,18 @@ public class InvoiceService(
         }
     }
 
-    /// <summary>Marks the given invoices as exported, skipping void or already-exported ones.
-    /// Returns how many were actually marked.</summary>
+    /// <summary>Marks the given invoices as exported, skipping void, non-billable, already-exported
+    /// and Waiting ones (bulk export acts only on the Ready list). Returns how many were marked.</summary>
     public async Task<int> MarkExportedAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken cancellationToken = default)
     {
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
-        var invoices = await db.Invoices
+        var waiting = await WaitingIdsAsync(invoiceIds, cancellationToken);
+        var invoices = (await db.Invoices
             .Where(i => invoiceIds.Contains(i.Id) && i.QbExportedAt == null && i.Status != InvoiceStatus.Void && !i.NonBillable)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .Where(i => !waiting.Contains(i.Id))
+            .ToList();
 
         foreach (var invoice in invoices)
         {
@@ -832,17 +987,23 @@ public class InvoiceService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>Global tab counts for the invoices page: non-void invoices not yet / already exported.</summary>
-    public async Task<(int Ready, int Exported)> GetExportCountsAsync(CancellationToken cancellationToken = default)
+    /// <summary>Global tab counts for the invoices page. Ready + Waiting = non-void, billable
+    /// invoices not yet exported; Exported = exported or closed as non-billable. Pass the
+    /// waiting set when the caller already computed it.</summary>
+    public async Task<(int Ready, int Waiting, int Exported)> GetExportCountsAsync(
+        IReadOnlyDictionary<Guid, IReadOnlyList<string>>? waitingReasons = null,
+        CancellationToken cancellationToken = default)
     {
         var counts = await db.Invoices.AsNoTracking()
             .Where(i => i.Status != InvoiceStatus.Void)
             .GroupBy(i => i.QbExportedAt != null || i.NonBillable)
             .Select(g => new { Exported = g.Key, Count = g.Count() })
             .ToListAsync(cancellationToken);
+        var waiting = (waitingReasons ?? await ComputeWaitingReasonsAsync(null, cancellationToken)).Count;
 
         return (
-            counts.FirstOrDefault(c => !c.Exported)?.Count ?? 0,
+            (counts.FirstOrDefault(c => !c.Exported)?.Count ?? 0) - waiting,
+            waiting,
             counts.FirstOrDefault(c => c.Exported)?.Count ?? 0);
     }
 
@@ -906,7 +1067,11 @@ public class InvoiceService(
             query = query.Where(i => i.QbExportedAt == null);
         }
 
-        var invoices = await query.OrderBy(i => i.InvoiceNumber).ToListAsync(cancellationToken);
+        // Unexported invoices go only from the Ready list; re-exports of exported ones are unaffected.
+        var waiting = await WaitingIdsAsync(null, cancellationToken);
+        var invoices = (await query.OrderBy(i => i.InvoiceNumber).ToListAsync(cancellationToken))
+            .Where(i => !waiting.Contains(i.Id))
+            .ToList();
         var content = BuildCsv(invoices);
 
         foreach (var invoice in invoices)
@@ -920,7 +1085,7 @@ public class InvoiceService(
     }
 
     /// <summary>Exports the given invoices to the QuickBooks CSV and marks them exported.
-    /// Void invoices are skipped.</summary>
+    /// Void, non-billable and Waiting invoices are skipped (only the Ready list exports).</summary>
     public async Task<(byte[] Content, string FileName, int InvoiceCount)> ExportSelectedCsvAsync(
         IReadOnlyCollection<Guid> invoiceIds,
         CancellationToken cancellationToken = default)
@@ -928,12 +1093,15 @@ public class InvoiceService(
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
 
-        var invoices = await db.Invoices
+        var waiting = await WaitingIdsAsync(invoiceIds, cancellationToken);
+        var invoices = (await db.Invoices
             .Include(i => i.Customer)
             .Include(i => i.Lines)
             .Where(i => invoiceIds.Contains(i.Id) && i.Status != InvoiceStatus.Void && !i.NonBillable)
             .OrderBy(i => i.InvoiceNumber)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .Where(i => !waiting.Contains(i.Id))
+            .ToList();
 
         var content = BuildCsv(invoices);
 

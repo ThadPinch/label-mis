@@ -45,6 +45,9 @@ public class Invoice : EntityBase
     public DateTime? NonBillableAt { get; private set; }
     public Guid? NonBillableById { get; private set; }
 
+    /// <summary>Ready for QuickBooks before the order ships (deposits, prepay, charge-only orders).</summary>
+    public bool BillBeforeShip { get; private set; }
+
     public IReadOnlyCollection<InvoiceLine> Lines => _lines;
     public IReadOnlyCollection<Payment> Payments => _payments;
 
@@ -196,6 +199,22 @@ public class Invoice : EntityBase
         NonBillableReason = trimmed.Length > 500 ? trimmed[..500] : trimmed;
         NonBillableAt = modifiedAt;
         NonBillableById = modifiedById;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    public void SetBillBeforeShip(bool billBeforeShip, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (Status is InvoiceStatus.Void)
+        {
+            throw new InvalidOperationException("Void invoices cannot be changed.");
+        }
+
+        if (QbExportedAt is not null)
+        {
+            throw new InvalidOperationException("This invoice is already in QuickBooks.");
+        }
+
+        BillBeforeShip = billBeforeShip;
         SetModified(modifiedById, modifiedAt);
     }
 

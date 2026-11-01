@@ -75,6 +75,27 @@
 }
 <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
 
+@if (Model.OrderProgress is { CanMarkShipped: true } progress)
+{
+    <div class="card border-warning mb-3" id="mark-order-shipped-card">
+        <div class="card-header py-1 small fw-semibold">@progress.OrderNumber isn't fully shipped</div>
+        <div class="card-body py-2 small">
+            @foreach (var line in progress.Lines.Where(l => l.Shipped < l.Ordered))
+            {
+                <div>Line @line.LineNumber (@line.Description): shipped @line.Shipped.ToString("N0") of @line.Ordered.ToString("N0")</div>
+            }
+            <div class="text-muted mb-1">If it under-ran and nothing more will ship, mark the order shipped so its invoice can bill.</div>
+            @if (Model.CanEditCarrierCost)
+            {
+                <form method="post" asp-page-handler="MarkOrderShipped"
+                      onsubmit="return confirm('Mark @progress.OrderNumber shipped? Nothing more will ship on it.');">
+                    <button type="submit" class="btn btn-sm btn-outline-success" id="mark-order-shipped">Mark order shipped</button>
+                </form>
+            }
+        </div>
+    </div>
+}
+
 <div class="card mb-3" id="shipment-billing">
     <div class="card-header py-1 small fw-semibold">Shipping charges</div>
     <div class="card-body py-2 small">

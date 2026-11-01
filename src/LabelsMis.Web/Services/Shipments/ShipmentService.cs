@@ -89,6 +89,22 @@ public record ShipmentBillingContext(
     public string Rule => ShippingBillingRules.Describe(ShippingMethodType, Settings);
 }
 
+/// <summary>How the shipment's order stands: per line, ordered vs shipped (non-pending shipments).</summary>
+public record OrderShipProgress(
+    Guid SalesOrderId,
+    string OrderNumber,
+    SalesOrderStatus Status,
+    IReadOnlyList<OrderShipProgressLine> Lines)
+{
+    /// <summary>Some line shipped short and the order isn't marked shipped: offer Mark order shipped.</summary>
+    public bool CanMarkShipped => Status < SalesOrderStatus.Shipped
+        && Lines.Count > 0
+        && Lines.All(l => l.Shipped > 0)
+        && Lines.Any(l => l.Shipped < l.Ordered);
+}
+
+public record OrderShipProgressLine(int LineNumber, string Description, int Ordered, int Shipped);
+
 public record ManualShipmentLineInput(Guid SalesOrderLineId, Guid? JobId, int QuantityShipped);
 
 public record ManualPackageInput(
@@ -544,6 +560,84 @@ public class ShipmentService(
         await invoiceService.SyncDraftShippingAsync(salesOrderId, cancellationToken);
         return shipment;
     }
+
+    /// <summary>
+    /// How far the order has shipped, per line, for the shipment page's Mark order shipped card.
+    /// </summary>
+    public async Task<OrderShipProgress?> GetOrderShipProgressAsync(
+        Guid salesOrderId,
+        CancellationToken cancellationToken = default)
+    {
+        var order = await db.SalesOrders.AsNoTracking()
+            .Where(o => o.Id == salesOrderId)
+            .Select(o => new { o.OrderNumber, o.Status })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (order is null)
+        {
+            return null;
+        }
+
+        var shippedByLine = await ShippedByLineAsync(salesOrderId, cancellationToken);
+        var lines = (await db.SalesOrderLines.AsNoTracking()
+                .Where(l => l.SalesOrderId == salesOrderId)
+                .OrderBy(l => l.LineNumber)
+                .Select(l => new { l.Id, l.LineNumber, Description = l.Description ?? l.Product.Description, l.Quantity })
+                .ToListAsync(cancellationToken))
+            .Select(l => new OrderShipProgressLine(l.LineNumber, l.Description, l.Quantity, shippedByLine.GetValueOrDefault(l.Id)))
+            .ToList();
+        return new OrderShipProgress(salesOrderId, order.OrderNumber, order.Status, lines);
+    }
+
+    /// <summary>
+    /// Marks the order Shipped although a line shipped short of its ordered quantity — an
+    /// under-run, which is normal in label printing. No new shipment is created; the order's
+    /// status moves to Shipped, which lets its invoice bill (E6). Every line must already have
+    /// shipped something on a recorded shipment.
+    /// </summary>
+    public async Task MarkOrderShippedAsync(Guid salesOrderId, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var order = await db.SalesOrders
+            .Include(o => o.Lines)
+            .SingleOrDefaultAsync(o => o.Id == salesOrderId, cancellationToken)
+            ?? throw new InvalidOperationException("Order not found.");
+        if (order.Status is SalesOrderStatus.Cancelled)
+        {
+            throw new InvalidOperationException("A cancelled order can't be marked shipped.");
+        }
+
+        if (order.Status >= SalesOrderStatus.Shipped)
+        {
+            return;
+        }
+
+        var shippedByLine = await ShippedByLineAsync(salesOrderId, cancellationToken);
+        var nothingShipped = order.Lines
+            .Where(l => shippedByLine.GetValueOrDefault(l.Id) <= 0)
+            .OrderBy(l => l.LineNumber)
+            .Select(l => l.LineNumber)
+            .ToList();
+        if (order.Lines.Count == 0)
+        {
+            throw new InvalidOperationException("This order has no lines to ship.");
+        }
+
+        if (nothingShipped.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Line {string.Join(", ", nothingShipped)} hasn't shipped anything yet — record a shipment for it first.");
+        }
+
+        order.AdvanceStatus(SalesOrderStatus.Shipped, userId, DateTime.UtcNow);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<Dictionary<Guid, int>> ShippedByLineAsync(Guid salesOrderId, CancellationToken cancellationToken) =>
+        await db.ShipmentLines.AsNoTracking()
+            .Where(l => l.Shipment.SalesOrderId == salesOrderId && l.Shipment.Status != ShipmentStatus.Pending)
+            .GroupBy(l => l.SalesOrderLineId)
+            .Select(g => new { SalesOrderLineId = g.Key, Quantity = g.Sum(l => l.QuantityShipped) })
+            .ToDictionaryAsync(x => x.SalesOrderLineId, x => x.Quantity, cancellationToken);
 
     /// <summary>Enters or corrects the carrier's actual charge on a recorded shipment.</summary>
     public async Task SetCarrierCostAsync(

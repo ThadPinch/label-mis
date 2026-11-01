@@ -15,6 +15,7 @@ namespace LabelsMis.Web.Pages.Invoices;
 public class IndexModel(InvoiceService invoiceService, LabelsMisDbContext db) : PageModel
 {
     public const string ReadyTab = "ready";
+    public const string WaitingTab = "waiting";
     public const string ExportedTab = "exported";
 
     [BindProperty(SupportsGet = true)] public string? Search { get; set; }
@@ -29,16 +30,28 @@ public class IndexModel(InvoiceService invoiceService, LabelsMisDbContext db) : 
 
     public Services.Models.PagedResult<InvoiceListItem> Result { get; private set; } = null!;
     public int ReadyCount { get; private set; }
+    public int WaitingCount { get; private set; }
     public int ExportedCount { get; private set; }
     public bool OnExportedTab => Tab == ExportedTab;
+    public bool OnWaitingTab => Tab == WaitingTab;
+    public bool OnReadyTab => !OnExportedTab && !OnWaitingTab;
+
+    /// <summary>Why each unexported invoice on the Waiting tab isn't ready for QuickBooks.</summary>
+    public IReadOnlyDictionary<Guid, IReadOnlyList<string>> WaitingReasons { get; private set; } =
+        new Dictionary<Guid, IReadOnlyList<string>>();
     public bool CanEdit => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting);
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
+        // Ready = unexported, billable and nothing waiting; Waiting = the rest of the unexported set.
+        var waiting = await invoiceService.GetWaitingReasonsAsync(cancellationToken);
+        WaitingReasons = waiting;
         Result = await invoiceService.ListAsync(
-            Search, Status, CustomerId, FromDate, ToDate, AgingBucket, OnExportedTab, Sort, PageNumber, 25, cancellationToken);
+            Search, Status, CustomerId, FromDate, ToDate, AgingBucket, OnExportedTab, Sort, PageNumber, 25, cancellationToken,
+            onlyIds: OnWaitingTab ? waiting.Keys.ToList() : null,
+            excludeIds: OnReadyTab ? waiting.Keys.ToList() : null);
 
-        (ReadyCount, ExportedCount) = await invoiceService.GetExportCountsAsync(cancellationToken);
+        (ReadyCount, WaitingCount, ExportedCount) = await invoiceService.GetExportCountsAsync(waiting, cancellationToken);
 
         ViewData["CustomerOptions"] = await db.Customers.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.Name)
             .Select(c => new SelectListItem(c.Name, c.Id.ToString())).ToListAsync(cancellationToken);
@@ -50,9 +63,11 @@ public class IndexModel(InvoiceService invoiceService, LabelsMisDbContext db) : 
         if (selectedIds.Count > 0)
         {
             var marked = await invoiceService.MarkExportedAsync(selectedIds, cancellationToken);
-            TempData["ExportMessage"] = marked == 1
+            var skipped = selectedIds.Distinct().Count() - marked;
+            TempData["ExportMessage"] = (marked == 1
                 ? "1 invoice marked as exported."
-                : $"{marked} invoices marked as exported.";
+                : $"{marked} invoices marked as exported.")
+                + (skipped > 0 ? $" {skipped} skipped (not on the Ready list)." : string.Empty);
         }
 
         return RedirectToPage(FilterRouteValues());

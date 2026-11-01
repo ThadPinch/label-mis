@@ -168,6 +168,42 @@
             </div>
         </div>
 
+        @if (Model.InQuickBooksQueue)
+        {
+            <div class="card mb-2 @(Model.WaitingReasons.Count == 0 ? "border-success" : "border-warning")" id="qb-readiness-card">
+                <div class="card-header py-1 small fw-semibold d-flex justify-content-between">
+                    <span>QuickBooks</span>
+                    @if (Model.WaitingReasons.Count == 0)
+                    {
+                        <span class="badge text-bg-success" id="qb-readiness">Ready</span>
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-warning" id="qb-readiness">Waiting</span>
+                    }
+                </div>
+                <div class="card-body py-2 small">
+                    @foreach (var reason in Model.WaitingReasons)
+                    {
+                        <div class="text-warning-emphasis waiting-reason">@reason</div>
+                    }
+                    @if (invoice.BillBeforeShip)
+                    {
+                        <div class="text-muted" id="bill-before-ship-on">Billing before the order ships.</div>
+                    }
+                    @if (Model.CanEdit)
+                    {
+                        <form method="post" asp-page-handler="BillBeforeShip" class="mt-1">
+                            <input type="hidden" name="enable" value="@(invoice.BillBeforeShip ? "false" : "true")" />
+                            <button type="submit" class="btn btn-sm btn-outline-secondary w-100" id="bill-before-ship-toggle">
+                                @(invoice.BillBeforeShip ? "Wait for shipping again" : "Bill before shipping")
+                            </button>
+                        </form>
+                    }
+                </div>
+            </div>
+        }
+
         <div class="card mb-2">
             <div class="card-header py-1 small fw-semibold">
                 Documents <span class="badge text-bg-secondary">@documents.Count</span>

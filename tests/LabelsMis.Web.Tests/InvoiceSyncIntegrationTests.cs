@@ -280,6 +280,48 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
         (await _db.Invoices.AsNoTracking().SingleAsync(i => i.Id == invoice.Id)).ShippingAmount.Should().Be(45m);
     }
 
+    [Fact]
+    public async Task Readiness_WaitsUntilShipped_UnderRunReadyOnceOrderMarkedShipped_BulkExportSkipsWaiting()
+    {
+        var pickup = await SeedMethodAsync(ShippingMethodType.Pickup);
+        var order = await SeedOrderAsync(quantity: 1000, unitPrice: 0.50m, chargeAmount: null,
+            shippingMethodId: pickup, shippingCost: 0m);
+        var invoice = await _invoiceService.CreateFromSalesOrderAsync(order.Id);
+        var shipments = new LabelsMis.Web.Services.Shipments.ShipmentService(
+            _db, new StubCurrentUserService(TestUserId), new DocumentNumberService(_db), null!, _invoiceService);
+
+        (await _invoiceService.GetWaitingReasonsAsync(invoice.Id)).Should().Equal("Not shipped yet (0 of 1 lines)");
+        (await _invoiceService.MarkExportedAsync([invoice.Id])).Should().Be(0, "bulk export acts only on Ready");
+
+        // Under-run: 950 of 1,000 went out. Still waiting (the order bills once, when shipped),
+        // and the reason says how to finish it.
+        var line = await _db.SalesOrderLines.SingleAsync(l => l.SalesOrderId == order.Id);
+        var shipment = await SeedShippedShipmentAsync(order.Id, ShippingMethodType.Pickup, carrierCost: null);
+        _db.ShipmentLines.Add(ShipmentLine.Create(Guid.NewGuid(), shipment.Id, line.Id, null, 950, TestUserId, DateTime.UtcNow));
+        await _db.SaveChangesAsync();
+        (await _invoiceService.GetWaitingReasonsAsync(invoice.Id)).Should().ContainSingle()
+            .Which.Should().Be($"Not shipped yet (0 of 1 lines). {LabelsMis.Domain.Invoicing.InvoiceReadinessRules.UnderRunHint}");
+        (await shipments.GetOrderShipProgressAsync(order.Id))!.CanMarkShipped.Should().BeTrue();
+
+        // The shop marks the order shipped: Ready, and bulk export now takes it.
+        await shipments.MarkOrderShippedAsync(order.Id);
+        (await _db.SalesOrders.AsNoTracking().SingleAsync(o => o.Id == order.Id)).Status.Should().Be(SalesOrderStatus.Shipped);
+        (await _invoiceService.GetWaitingReasonsAsync(invoice.Id)).Should().BeEmpty();
+        (await _invoiceService.MarkExportedAsync([invoice.Id])).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task MarkOrderShipped_RefusedWhileALineHasShippedNothing()
+    {
+        var order = await SeedOrderAsync(quantity: 500, unitPrice: 0.40m, chargeAmount: null);
+        var shipments = new LabelsMis.Web.Services.Shipments.ShipmentService(
+            _db, new StubCurrentUserService(TestUserId), new DocumentNumberService(_db), null!, _invoiceService);
+
+        var act = () => shipments.MarkOrderShippedAsync(order.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*hasn't shipped anything*");
+    }
+
     private async Task<Guid> SeedMethodAsync(ShippingMethodType type)
     {
         var id = Guid.NewGuid();

@@ -2,7 +2,7 @@
 @model LabelsMis.Web.Pages.Invoices.IndexModel
 @{
     ViewData["Title"] = "Invoices";
-    var showCheckboxes = !Model.OnExportedTab && Model.CanEdit;
+    var showCheckboxes = Model.OnReadyTab && Model.CanEdit;
     var route = Model.FilterRouteValues()
         .Where(kv => kv.Key != "pageNumber")
         .ToDictionary(kv => kv.Key, kv => (string?)kv.Value);
@@ -18,13 +18,19 @@
 
 <ul class="nav nav-tabs mb-3">
     <li class="nav-item">
-        <a class="nav-link @(Model.OnExportedTab ? "" : "active")"
+        <a class="nav-link @(Model.OnReadyTab ? "active" : "")" id="tab-ready"
            asp-page="Index" asp-all-route-data="@Model.FilterRouteValues(IndexModel.ReadyTab)">
             Ready to export <span class="badge rounded-pill text-bg-secondary">@Model.ReadyCount</span>
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link @(Model.OnExportedTab ? "active" : "")"
+        <a class="nav-link @(Model.OnWaitingTab ? "active" : "")" id="tab-waiting"
+           asp-page="Index" asp-all-route-data="@Model.FilterRouteValues(IndexModel.WaitingTab)">
+            Waiting <span class="badge rounded-pill text-bg-warning">@Model.WaitingCount</span>
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(Model.OnExportedTab ? "active" : "")" id="tab-exported"
            asp-page="Index" asp-all-route-data="@Model.FilterRouteValues(IndexModel.ExportedTab)">
             Exported / closed <span class="badge rounded-pill text-bg-secondary">@Model.ExportedCount</span>
         </a>
@@ -97,13 +103,17 @@
         {
             <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Exported", "exported", Model.Sort, route))</th>
         }
+        @if (Model.OnWaitingTab)
+        {
+            <th>Waiting for</th>
+        }
         <th></th>
     </tr>
     </thead>
     <tbody>
     @foreach (var item in Model.Result.Items)
     {
-        <tr>
+        <tr data-invoice-id="@item.Id">
             @if (showCheckboxes)
             {
                 <td>
@@ -141,6 +151,15 @@
                     }
                 </td>
             }
+            @if (Model.OnWaitingTab)
+            {
+                <td class="small waiting-reasons">
+                    @foreach (var reason in Model.WaitingReasons.GetValueOrDefault(item.Id) ?? [])
+                    {
+                        <div class="text-warning-emphasis">@reason</div>
+                    }
+                </td>
+            }
             <td class="text-end text-nowrap">
                 @if (Model.OnExportedTab && Model.CanEdit && !item.NonBillable)
                 {
@@ -160,7 +179,11 @@
 @if (!Model.Result.Items.Any())
 {
     <p class="text-muted">
-        @(Model.OnExportedTab ? "No exported invoices match the current filters." : "No invoices are waiting to be exported.")
+        @(Model.OnExportedTab
+            ? "No exported invoices match the current filters."
+            : Model.OnWaitingTab
+                ? "Nothing is waiting."
+                : "No invoices are ready to export.")
     </p>
 }
 

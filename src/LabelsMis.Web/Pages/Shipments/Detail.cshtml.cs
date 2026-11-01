@@ -24,6 +24,9 @@ public class DetailModel(ShipmentService shipmentService, InvoiceService invoice
     public ShipmentBillingContext? Billing { get; private set; }
     public bool CanInvoice { get; private set; }
 
+    /// <summary>The order's per-line shipped quantities (for Mark order shipped after an under-run).</summary>
+    public OrderShipProgress? OrderProgress { get; private set; }
+
     /// <summary>Shipping staff record the carrier cost; accounting enters it from the WWEX bill.</summary>
     public bool CanEditCarrierCost =>
         User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Shipping) || User.IsInRole(AppRoles.Accounting);
@@ -56,11 +59,33 @@ public class DetailModel(ShipmentService shipmentService, InvoiceService invoice
         }
     }
 
+    /// <summary>Under-run: a line shipped short and nothing more will ship. Moves the order to
+    /// Shipped without a new shipment so its invoice can bill.</summary>
+    public async Task<IActionResult> OnPostMarkOrderShippedAsync(CancellationToken cancellationToken)
+    {
+        if (!CanEditCarrierCost) return Forbid();
+        if (!await LoadAsync(cancellationToken)) return NotFound();
+        try
+        {
+            await shipmentService.MarkOrderShippedAsync(Detail!.Shipment.SalesOrderId, cancellationToken);
+            TempData["ShipmentStatus"] = $"Order {OrderProgress?.OrderNumber} marked shipped.";
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return Page();
+        }
+    }
+
     private async Task<bool> LoadAsync(CancellationToken cancellationToken)
     {
         Detail = await shipmentService.GetDetailAsync(Id, cancellationToken);
         if (Detail is null) return false;
         Billing = await shipmentService.GetBillingContextAsync(Detail.Shipment.SalesOrderId, cancellationToken);
+        OrderProgress = Detail.Shipment.Status is ShipmentStatus.Pending
+            ? null
+            : await shipmentService.GetOrderShipProgressAsync(Detail.Shipment.SalesOrderId, cancellationToken);
 
         CanInvoice = (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting))
             && Detail.Shipment.Status is ShipmentStatus.InTransit or ShipmentStatus.Delivered;
