@@ -79,6 +79,35 @@
                         <span asp-validation-for="WebWidthIn" class="text-danger small"></span>
                     </div>
                 </div>
+                @{
+                    var webUsageWarning = LabelsMis.Domain.Dies.DieWebUsage.Warning(Model.LabelAcrossIn, Model.LabelsAcross, Model.WebWidthIn);
+                }
+                <div id="die-web-usage-warning" class="alert alert-warning py-1 px-2 small mt-2 mb-0 @(webUsageWarning is null ? "d-none" : "")"
+                     data-threshold="@LabelsMis.Domain.Dies.DieWebUsage.LowUsageThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)">@webUsageWarning</div>
+                <script>
+                    (function () {
+                        const across = document.getElementById('LabelsAcross');
+                        const width = document.getElementById('LabelAcrossIn');
+                        const web = document.getElementById('WebWidthIn');
+                        const box = document.getElementById('die-web-usage-warning');
+                        if (!across || !width || !web || !box) return;
+                        const threshold = parseFloat(box.dataset.threshold);
+                        const fmt = n => String(Math.round(n * 1000) / 1000);
+                        function refresh() {
+                            const a = parseInt(across.value, 10), w = parseFloat(width.value), wb = parseFloat(web.value);
+                            const usage = a > 0 && w > 0 && wb > 0 ? (a * w) / wb : null;
+                            if (usage === null || usage >= threshold) {
+                                box.classList.add('d-none');
+                                box.textContent = '';
+                                return;
+                            }
+                            box.textContent = `${a} across × ${fmt(w)}" = ${fmt(a * w)}" uses only ${Math.round(usage * 100)}% of the ${fmt(wb)}" web. ` +
+                                'Check the die isn\u2019t entered sideways (across and around swapped).';
+                            box.classList.remove('d-none');
+                        }
+                        [across, width, web].forEach(el => el.addEventListener('input', refresh));
+                    })();
+                </script>
             </div>
         </div>
     </div>
