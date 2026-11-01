@@ -457,12 +457,29 @@ public class InvoiceService(
             ? 0m
             : Math.Round(subtotal * await GetTaxRateAsync(cancellationToken), 4, MidpointRounding.AwayFromZero);
 
+        // Per-line QuickBooks overrides (E9) survive the rebuild: product lines by their order
+        // line, charge lines by description.
+        var overrides = invoice.Lines
+            .Where(l => l.QbItemOverride is not null || l.QbClassOverride is not null)
+            .GroupBy(QbOverrideKey)
+            .ToDictionary(g => g.Key, g => (g.First().QbItemOverride, g.First().QbClassOverride));
+        foreach (var line in lines)
+        {
+            if (overrides.TryGetValue(QbOverrideKey(line), out var o))
+            {
+                line.SetQbOverrides(o.QbItemOverride, o.QbClassOverride, userId, now);
+            }
+        }
+
         db.InvoiceLines.RemoveRange(invoice.Lines);
         invoice.ReplaceLines(lines, taxAmount, shippingAmount, userId, now);
         db.InvoiceLines.AddRange(lines);
         await db.SaveChangesAsync(cancellationToken);
         return new InvoiceSyncResult(InvoiceSyncOutcome.Updated, invoice.InvoiceNumber);
     }
+
+    private static string QbOverrideKey(InvoiceLine line) =>
+        line.SalesOrderLineId is Guid orderLineId ? orderLineId.ToString() : "charge:" + line.Description;
 
     /// <summary>Builds the invoice lines for a full-order invoice: one per label line, then the
     /// order's non-label charges (die creation, design time).</summary>

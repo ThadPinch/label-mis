@@ -51,7 +51,7 @@ public class QuickBooksMappingService(LabelsMisDbContext db, ICurrentUserService
                 i.SalesOrderId,
                 Lines = i.Lines
                     .OrderBy(l => l.LineNumber)
-                    .Select(l => new { l.Id, l.LineNumber, l.SalesOrderLineId, l.Description })
+                    .Select(l => new { l.Id, l.LineNumber, l.SalesOrderLineId, l.Description, l.QbItemOverride, l.QbClassOverride })
                     .ToList()
             })
             .SingleOrDefaultAsync(cancellationToken);
@@ -88,8 +88,8 @@ public class QuickBooksMappingService(LabelsMisDbContext db, ICurrentUserService
         {
             var product = l.SalesOrderLineId is Guid lineId ? facts.GetValueOrDefault(lineId) : null;
             var mapped = product is not null
-                ? QuickBooksMappingRules.MapProductLine(product, mapping)
-                : QuickBooksMappingRules.MapChargeLine(l.Description, jobClass, mapping);
+                ? QuickBooksMappingRules.MapProductLine(product, mapping, l.QbItemOverride, l.QbClassOverride)
+                : QuickBooksMappingRules.MapChargeLine(l.Description, jobClass, mapping, l.QbItemOverride, l.QbClassOverride);
             return new InvoiceLineQbMapping(l.Id, l.LineNumber, product is not null, mapped);
         }).ToList();
 

@@ -1485,6 +1485,14 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<Guid?>("ModifiedById")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("QbClassOverride")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("QbItemOverride")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
 

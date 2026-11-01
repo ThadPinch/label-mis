@@ -348,6 +348,46 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task QuickBooksPreview_ShapesTheInvoice_AppliesOverrides_AndKeepsThemThroughAPriceEdit()
+    {
+        var order = await SeedOrderAsync(quantity: 1000, unitPrice: 0.12345m, chargeAmount: 75m);
+        var invoice = await _invoiceService.CreateFromSalesOrderAsync(order.Id);
+        var mapping = new LabelsMis.Web.Services.QuickBooks.QuickBooksMappingService(_db, new StubCurrentUserService(TestUserId));
+        var previews = new LabelsMis.Web.Services.QuickBooks.QuickBooksInvoiceService(_db, _invoiceService, mapping);
+
+        var preview = await previews.GetPreviewAsync(invoice.Id);
+
+        preview!.DocNumber.Should().Be(invoice.InvoiceNumber);
+        preview.QuickBooksCustomerId.Should().StartWith("QB-");
+        preview.BillingEmail.Should().StartWith("ap-");
+        preview.Terms.Should().Be("Net 30");
+        preview.Lines.Select(l => (l.Item, l.Class, l.Quantity, l.Rate, l.Amount)).Should().Equal(
+            ("Sales", "Roll Label", 1000, 0.1235m, 123.45m),
+            ("Die Creation", "Roll Label", 1, 75m, 75m));
+        preview.Total.Should().Be(198.45m + preview.Shipping.Amount);
+        preview.Warnings.Should().Contain(w => w.Contains("key the amount, not the rate"),
+            "the rate column keeps 4 decimals while the line total kept 1000 x 0.12345");
+        preview.Status.Should().Be("Waiting");
+        preview.Blockers.Should().Equal("Not shipped yet (0 of 1 lines)");
+        (await previews.GetPreviewAsync(Guid.NewGuid())).Should().BeNull();
+
+        // Override the charge line, then edit the order's price: the rebuilt draft keeps it.
+        var charge = await _db.InvoiceLines.SingleAsync(l => l.InvoiceId == invoice.Id && l.SalesOrderLineId == null);
+        charge.SetQbOverrides("Design", "Buyout", TestUserId, DateTime.UtcNow);
+        await _db.SaveChangesAsync();
+        var line = await _db.SalesOrderLines.SingleAsync(l => l.SalesOrderId == order.Id);
+        line.Update(1000, 0.2m, null, TestUserId, DateTime.UtcNow);
+        await _db.SaveChangesAsync();
+        await _invoiceService.SyncDraftFromSalesOrderAsync(order.Id);
+        _db.ChangeTracker.Clear();
+
+        preview = await previews.GetPreviewAsync(invoice.Id);
+        preview!.Lines[0].Amount.Should().Be(200m);
+        preview.Lines[1].Should().Match<LabelsMis.Web.Services.QuickBooks.QbPreviewLine>(l =>
+            l.Item == "Design" && l.Class == "Buyout" && l.ItemSource == "Override" && l.ItemOverride == "Design");
+    }
+
+    [Fact]
     public async Task MarkOrderShipped_RefusedWhileALineHasShippedNothing()
     {
         var order = await SeedOrderAsync(quantity: 500, unitPrice: 0.40m, chargeAmount: null);

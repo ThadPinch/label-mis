@@ -19,6 +19,27 @@ public class InvoiceLine : EntityBase
     public decimal LineTotal { get; private set; }
     public string? TaxCode { get; private set; }
 
+    /// <summary>QuickBooks item chosen by hand on the preview; null = the Setup → QuickBooks mapping.</summary>
+    public string? QbItemOverride { get; private set; }
+
+    /// <summary>QuickBooks class chosen by hand on the preview; null = the mapping's class rule.</summary>
+    public string? QbClassOverride { get; private set; }
+
+    /// <summary>Sets (or, with blank, clears) the line's QuickBooks item and class overrides.</summary>
+    public void SetQbOverrides(string? item, string? qbClass, Guid modifiedById, DateTime modifiedAt)
+    {
+        var trimmedItem = string.IsNullOrWhiteSpace(item) ? null : item.Trim();
+        var trimmedClass = string.IsNullOrWhiteSpace(qbClass) ? null : qbClass.Trim();
+        if (trimmedItem is { Length: > 100 } || trimmedClass is { Length: > 100 })
+        {
+            throw new ArgumentException("QuickBooks item and class names are at most 100 characters.");
+        }
+
+        QbItemOverride = trimmedItem;
+        QbClassOverride = trimmedClass;
+        SetModified(modifiedById, modifiedAt);
+    }
+
     public static InvoiceLine Create(
         Guid id,
         Guid invoiceId,

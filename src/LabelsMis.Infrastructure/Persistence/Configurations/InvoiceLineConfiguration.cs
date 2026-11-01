@@ -17,6 +17,8 @@ public class InvoiceLineConfiguration : IEntityTypeConfiguration<InvoiceLine>
         builder.Property(l => l.UnitPrice).HasMoneyPrecision();
         builder.Property(l => l.LineTotal).HasMoneyPrecision();
         builder.Property(l => l.TaxCode).HasMaxLength(20);
+        builder.Property(l => l.QbItemOverride).HasMaxLength(100);
+        builder.Property(l => l.QbClassOverride).HasMaxLength(100);
 
         builder.HasIndex(l => new { l.InvoiceId, l.LineNumber }).IsUnique();
 
