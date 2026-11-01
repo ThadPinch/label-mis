@@ -2103,6 +2103,18 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasPrecision(10, 4)
                         .HasColumnType("numeric(10,4)");
 
+                    b.Property<decimal?>("SpeedFpm3Separations")
+                        .HasPrecision(10, 4)
+                        .HasColumnType("numeric(10,4)");
+
+                    b.Property<decimal?>("SpeedFpm4Separations")
+                        .HasPrecision(10, 4)
+                        .HasColumnType("numeric(10,4)");
+
+                    b.Property<decimal?>("SpeedFpm5PlusSeparations")
+                        .HasPrecision(10, 4)
+                        .HasColumnType("numeric(10,4)");
+
                     b.Property<Guid>("TenantId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")

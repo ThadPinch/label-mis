@@ -67,6 +67,25 @@
         <label asp-for="SpeedFpm" class="form-label"></label>
         <input asp-for="SpeedFpm" class="form-control" />
     </div>
+    <div class="col-12">
+        <p class="text-muted small mb-0">Optional speed by separation count — the line's ink-set colours plus its white and spot hits (EPM 3, CMYK 4, EPMW + 1 white 4, CMYKW + 1 white 5). When the count's speed is set, estimates use it instead of Speed (fpm) and the white ink's own hit slowdown is not applied (the white pass is already counted). Leave blank to keep using Speed (fpm).</p>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="SpeedFpm3Separations" class="form-label"></label>
+        <input asp-for="SpeedFpm3Separations" class="form-control" />
+        <span asp-validation-for="SpeedFpm3Separations" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="SpeedFpm4Separations" class="form-label"></label>
+        <input asp-for="SpeedFpm4Separations" class="form-control" />
+        <span asp-validation-for="SpeedFpm4Separations" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="SpeedFpm5PlusSeparations" class="form-label"></label>
+        <input asp-for="SpeedFpm5PlusSeparations" class="form-control" />
+        <span asp-validation-for="SpeedFpm5PlusSeparations" class="text-danger"></span>
+    </div>
+    <div class="col-md-3"></div>
     <div class="col-md-3">
         <label asp-for="SetupMinutes" class="form-label"></label>
         <input asp-for="SetupMinutes" class="form-control" />

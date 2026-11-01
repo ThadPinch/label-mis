@@ -25,7 +25,10 @@ public record PressForm(
     decimal SpeedFpm,
     decimal SetupMinutes,
     decimal CostPerHour,
-    bool IsClickBased);
+    bool IsClickBased,
+    decimal? SpeedFpm3Separations = null,
+    decimal? SpeedFpm4Separations = null,
+    decimal? SpeedFpm5PlusSeparations = null);
 
 public class PressService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
@@ -82,7 +85,10 @@ public class PressService(LabelsMisDbContext db, ICurrentUserService currentUser
             form.CostPerHour,
             form.IsClickBased,
             userId,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            form.SpeedFpm3Separations,
+            form.SpeedFpm4Separations,
+            form.SpeedFpm5PlusSeparations);
         db.Presses.Add(press);
         await db.SaveChangesAsync(ct);
         return press;
@@ -110,6 +116,9 @@ public class PressService(LabelsMisDbContext db, ICurrentUserService currentUser
             form.SetupMinutes,
             form.CostPerHour,
             form.IsClickBased,
+            form.SpeedFpm3Separations,
+            form.SpeedFpm4Separations,
+            form.SpeedFpm5PlusSeparations,
             RequireUserId(),
             DateTime.UtcNow);
         await db.SaveChangesAsync(ct);

@@ -60,6 +60,18 @@ public class PressFormInput
     public decimal SpeedFpm { get; set; }
 
     [Range(0, 999999)]
+    [Display(Name = "Speed at 3 separations (fpm)")]
+    public decimal? SpeedFpm3Separations { get; set; }
+
+    [Range(0, 999999)]
+    [Display(Name = "Speed at 4 separations (fpm)")]
+    public decimal? SpeedFpm4Separations { get; set; }
+
+    [Range(0, 999999)]
+    [Display(Name = "Speed at 5+ separations (fpm)")]
+    public decimal? SpeedFpm5PlusSeparations { get; set; }
+
+    [Range(0, 999999)]
     [Display(Name = "Setup (minutes)")]
     public decimal SetupMinutes { get; set; }
 
@@ -87,7 +99,10 @@ public class PressFormInput
         SpeedFpm,
         SetupMinutes,
         CostPerHour,
-        IsClickBased);
+        IsClickBased,
+        SpeedFpm3Separations,
+        SpeedFpm4Separations,
+        SpeedFpm5PlusSeparations);
 
     public static PressFormInput FromEntity(Domain.Entities.Press press) => new()
     {
@@ -107,6 +122,9 @@ public class PressFormInput
         SpeedFpm = press.SpeedFpm,
         SetupMinutes = press.SetupMinutes,
         CostPerHour = press.CostPerHour,
-        IsClickBased = press.IsClickBased
+        IsClickBased = press.IsClickBased,
+        SpeedFpm3Separations = press.SpeedFpm3Separations,
+        SpeedFpm4Separations = press.SpeedFpm4Separations,
+        SpeedFpm5PlusSeparations = press.SpeedFpm5PlusSeparations
     };
 }

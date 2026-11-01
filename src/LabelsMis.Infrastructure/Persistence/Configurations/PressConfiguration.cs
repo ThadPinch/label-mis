@@ -22,6 +22,9 @@ public class PressConfiguration : IEntityTypeConfiguration<Press>
         builder.Property(p => p.MaxRepeatIn).HasDimensionPrecision();
         builder.Property(p => p.MinRepeatIn).HasDimensionPrecision();
         builder.Property(p => p.SpeedFpm).HasDimensionPrecision();
+        builder.Property(p => p.SpeedFpm3Separations).HasPrecision(10, 4);
+        builder.Property(p => p.SpeedFpm4Separations).HasPrecision(10, 4);
+        builder.Property(p => p.SpeedFpm5PlusSeparations).HasPrecision(10, 4);
         builder.Property(p => p.SetupMinutes).HasDimensionPrecision();
         builder.Property(p => p.CostPerHour).HasMoneyPrecision();
 

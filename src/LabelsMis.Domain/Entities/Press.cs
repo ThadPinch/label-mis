@@ -28,6 +28,18 @@ public class Press : MasterDataEntity
 
     public int MaxColors { get; private set; }
     public decimal SpeedFpm { get; private set; }
+
+    /// <summary>
+    /// Optional press speeds (fpm) by the line's separation count — ink-set colours plus white and
+    /// spot hits (EPM 3, CMYK 4, EPMW + 1 white 4, CMYKW + 1 white 5). The Indigo runs one
+    /// separation per cylinder revolution, so speed follows the count. When the count's speed is
+    /// set it replaces <see cref="SpeedFpm"/> and the white ink's own hit slowdown (the white pass
+    /// is already counted); when it is blank the estimate uses SpeedFpm exactly as before.
+    /// </summary>
+    public decimal? SpeedFpm3Separations { get; private set; }
+    public decimal? SpeedFpm4Separations { get; private set; }
+    public decimal? SpeedFpm5PlusSeparations { get; private set; }
+
     public decimal SetupMinutes { get; private set; }
     public decimal CostPerHour { get; private set; }
     public bool IsClickBased { get; private set; }
@@ -52,8 +64,12 @@ public class Press : MasterDataEntity
         decimal costPerHour,
         bool isClickBased,
         Guid createdById,
-        DateTime createdAt)
+        DateTime createdAt,
+        decimal? speedFpm3Separations = null,
+        decimal? speedFpm4Separations = null,
+        decimal? speedFpm5PlusSeparations = null)
     {
+        ValidateSeparationSpeeds(speedFpm3Separations, speedFpm4Separations, speedFpm5PlusSeparations);
         Validate(
             name,
             code,
@@ -89,7 +105,10 @@ public class Press : MasterDataEntity
             SpeedFpm = speedFpm,
             SetupMinutes = setupMinutes,
             CostPerHour = costPerHour,
-            IsClickBased = isClickBased
+            IsClickBased = isClickBased,
+            SpeedFpm3Separations = NormalizeSpeed(speedFpm3Separations),
+            SpeedFpm4Separations = NormalizeSpeed(speedFpm4Separations),
+            SpeedFpm5PlusSeparations = NormalizeSpeed(speedFpm5PlusSeparations)
         };
         press.SetCreated(id, createdById, createdAt);
         return press;
@@ -116,7 +135,10 @@ public class Press : MasterDataEntity
             costPerHour: 150m,
             isClickBased: true,
             createdById,
-            createdAt);
+            createdAt,
+            speedFpm3Separations: 131m,
+            speedFpm4Separations: 98m,
+            speedFpm5PlusSeparations: 72m);
 
     public void Update(
         string name,
@@ -136,9 +158,13 @@ public class Press : MasterDataEntity
         decimal setupMinutes,
         decimal costPerHour,
         bool isClickBased,
+        decimal? speedFpm3Separations,
+        decimal? speedFpm4Separations,
+        decimal? speedFpm5PlusSeparations,
         Guid modifiedById,
         DateTime modifiedAt)
     {
+        ValidateSeparationSpeeds(speedFpm3Separations, speedFpm4Separations, speedFpm5PlusSeparations);
         Validate(
             name,
             code,
@@ -173,8 +199,23 @@ public class Press : MasterDataEntity
         SetupMinutes = setupMinutes;
         CostPerHour = costPerHour;
         IsClickBased = isClickBased;
+        SpeedFpm3Separations = NormalizeSpeed(speedFpm3Separations);
+        SpeedFpm4Separations = NormalizeSpeed(speedFpm4Separations);
+        SpeedFpm5PlusSeparations = NormalizeSpeed(speedFpm5PlusSeparations);
         SetModified(modifiedById, modifiedAt);
     }
+
+    private static void ValidateSeparationSpeeds(decimal? speed3, decimal? speed4, decimal? speed5Plus)
+    {
+        if (speed3 < 0 || speed4 < 0 || speed5Plus < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(speed3), "Separation speeds cannot be negative.");
+        }
+    }
+
+    // A blank or 0 separation speed means "not set": the estimate falls back to SpeedFpm.
+    private static decimal? NormalizeSpeed(decimal? speed) =>
+        speed is > 0 ? speed : null;
 
     private static void Validate(
         string name,

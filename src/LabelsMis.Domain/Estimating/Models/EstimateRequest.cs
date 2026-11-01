@@ -38,4 +38,10 @@ public record EstimateRequest(
     IReadOnlyDictionary<int, decimal>? QuantityMarkupOverrides = null,
     // True when no active ink record supplies a click rate for InkSet. On a click-based press
     // the calculation then returns an error instead of costing the clicks at $0.
-    bool ClickRateMissing = false);
+    bool ClickRateMissing = false,
+    // Optional press speeds (fpm) by separation count (ink-set colours + white/spot hits). The
+    // count's speed, when set, replaces PressSpeedFpm and the white ink's hit slowdown; when
+    // null the run uses PressSpeedFpm and every ink slowdown exactly as before.
+    decimal? PressSpeedFpm3Separations = null,
+    decimal? PressSpeedFpm4Separations = null,
+    decimal? PressSpeedFpm5PlusSeparations = null);

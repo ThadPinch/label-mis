@@ -84,6 +84,11 @@ public class EstimateCalculationMapperIntegrationTests : IAsyncLifetime
         epmw.ClickRateMissing.Should().BeFalse();
         epmw.ClickRatePer1000.Should().Be(11.50m, "EPMW's process separations are the EPM three");
         new EstimatingService().Calculate(epm).Errors.Should().BeEmpty();
+
+        var press = await _db.Presses.AsNoTracking().SingleAsync(p => p.Id == Press.Indigo6800Id);
+        (epm.PressSpeedFpm3Separations, epm.PressSpeedFpm4Separations, epm.PressSpeedFpm5PlusSeparations)
+            .Should().Be((press.SpeedFpm3Separations, press.SpeedFpm4Separations, press.SpeedFpm5PlusSeparations),
+                "the press's separation speeds reach the engine");
     }
 
     private async Task RetireProcessInksAsync(params InkSet[] inkSets)

@@ -240,7 +240,10 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             line.MaxLabelsAcrossOverride,
             line.LabelOrientationOverride,
             line.QuantityMarkupOverrides,
-            ClickRateMissing: clickRate is null);
+            ClickRateMissing: clickRate is null,
+            PressSpeedFpm3Separations: press.SpeedFpm3Separations,
+            PressSpeedFpm4Separations: press.SpeedFpm4Separations,
+            PressSpeedFpm5PlusSeparations: press.SpeedFpm5PlusSeparations);
     }
 
     /// <summary>The process click rate per 1,000 for the ink set, or null when no active ink record
@@ -298,7 +301,7 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
                 .OrderBy(i => i.Code)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            var whiteSpec = BuildSpec(whiteInk, "White", line.WhiteHits, line.WhiteCoveragePct);
+            var whiteSpec = BuildSpec(whiteInk, "White", line.WhiteHits, line.WhiteCoveragePct, isWhite: true);
             if (whiteSpec is not null)
             {
                 specialInks.Add(whiteSpec);
@@ -334,7 +337,7 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
         return specialInks;
     }
 
-    private static SpecialInkSpec? BuildSpec(Ink? ink, string label, int hits, decimal coveragePct)
+    private static SpecialInkSpec? BuildSpec(Ink? ink, string label, int hits, decimal coveragePct, bool isWhite = false)
     {
         if (ink is null || hits <= 0)
         {
@@ -357,7 +360,8 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             ink.BottleCost,
             ink.BottleSizeMl,
             ink.MlPer1000SqIn,
-            speedOverride);
+            speedOverride,
+            isWhite);
     }
 
     public static string SerializeFinishingOperations(IReadOnlyList<FinishingOperationSelectionInput> operations) =>

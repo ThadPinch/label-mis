@@ -133,6 +133,114 @@ public class EstimatingServiceEpmTests
             ("Press run labor (slowed to 72 fpm for White)", 101.71m));
     }
 
+    /// <summary>The acceptance table in the EPM plan: with the WS6800's separation speeds
+    /// (131 / 98 / 72) the 10k cost totals are CMYK $476.70, EPM $427.57, CMYKW + 1 white $606.57
+    /// and EPMW + 1 white $549.25. Andrew printed .58 / .26 because he rounded the click line up;
+    /// his own JSON's click lines ($90.94) give these.</summary>
+    [Theory]
+    [InlineData(IndigoInkSet.CMYK, 0, 476.70, "Press run labor (4 separations at 98 fpm)", 74.71)]
+    [InlineData(IndigoInkSet.EPM, 0, 427.57, "Press run labor (3 separations at 131 fpm)", 55.90)]
+    [InlineData(IndigoInkSet.CMYKW, 1, 606.57, "Press run labor (5 separations at 72 fpm)", 101.71)]
+    [InlineData(IndigoInkSet.EPMW, 1, 549.25, "Press run labor (4 separations at 98 fpm)", 74.71)]
+    public void Calculate_AndrewsCanLabelOnSeparationSpeedPress_MatchesTheAcceptanceTotals(
+        IndigoInkSet inkSet, int whiteHits, double totalCost10k, string runDescription, double runCost10k)
+    {
+        var result = _sut.Calculate(WithWs6800SeparationSpeeds(CanLabel(inkSet, whiteHits)));
+
+        result.Errors.Should().BeEmpty();
+        var break10k = result.QuantityBreaks.Single(b => b.Quantity == 10000);
+        break10k.TotalCost.Should().Be((decimal)totalCost10k);
+        break10k.CostBreakdown.Single(i => i.Category == "Press run")
+            .Should().Match<EstimateLineItem>(i => i.Description == runDescription && i.LineCost == (decimal)runCost10k);
+    }
+
+    [Fact]
+    public void Calculate_EpmOnSeparationSpeedPress_IsAboutTenPercentBelowCmyk()
+    {
+        var cmyk = _sut.Calculate(WithWs6800SeparationSpeeds(CanLabel(IndigoInkSet.CMYK))).QuantityBreaks[1].TotalCost;
+        var epm = _sut.Calculate(WithWs6800SeparationSpeeds(CanLabel(IndigoInkSet.EPM))).QuantityBreaks[1].TotalCost;
+
+        (1m - epm / cmyk).Should().BeApproximately(0.103m, 0.001m, "Andrew's brief: EPM saves 10.3% at 10k");
+    }
+
+    /// <summary>A press with no separation speeds prices exactly as before: same totals, same
+    /// run lines (white still slows CMYKW/EPMW to 72) — the whole result is identical.</summary>
+    [Theory]
+    [InlineData(IndigoInkSet.CMYK, 0)]
+    [InlineData(IndigoInkSet.EPM, 0)]
+    [InlineData(IndigoInkSet.CMYKW, 1)]
+    [InlineData(IndigoInkSet.EPMW, 1)]
+    public void Calculate_PressWithoutSeparationSpeeds_BehavesExactlyAsBefore(IndigoInkSet inkSet, int whiteHits)
+    {
+        var request = CanLabel(inkSet, whiteHits);
+        request.PressSpeedFpm3Separations.Should().BeNull();
+
+        var result = _sut.Calculate(request);
+        var whiteSlowedTo72 = whiteHits > 0;
+
+        result.QuantityBreaks.Select(b => b.CostBreakdown.Single(i => i.Category == "Press run").Description)
+            .Should().AllBe(whiteSlowedTo72 ? "Press run labor (slowed to 72 fpm for White)" : "Press run labor");
+        result.QuantityBreaks.Select(b => b.RunTimeMinutes).Should().Equal(
+            whiteSlowedTo72 ? new[] { 20.89m, 63.82m, 254.56m } : new[] { 19.33m, 50.86m, 191.0m });
+    }
+
+    [Fact]
+    public void Calculate_OnlySomeSeparationSpeedsSet_UnsetCountFallsBackToPressSpeedAndWhiteSlowdown()
+    {
+        // Only the 3-separation speed is configured: EPM uses it, CMYKW + 1 white (5) does not.
+        var partial = (EstimateRequest r) => r with { PressSpeedFpm3Separations = 131m };
+
+        var epm = _sut.Calculate(partial(CanLabel(IndigoInkSet.EPM)));
+        var cmykw = _sut.Calculate(partial(CanLabel(IndigoInkSet.CMYKW, whiteHits: 1)));
+
+        epm.QuantityBreaks[1].TotalCost.Should().Be(427.57m);
+        cmykw.QuantityBreaks[1].TotalCost.Should().Be(606.57m);
+        cmykw.QuantityBreaks[1].CostBreakdown.Should().Contain(i =>
+            i.Description == "Press run labor (slowed to 72 fpm for White)");
+    }
+
+    [Fact]
+    public void Calculate_SeparationsCountWhiteAndSpotHits_AndCapAtTheFivePlusSpeed()
+    {
+        // EPMW with two white hits = 5 separations; CMYK + one spot hit = 5; CMYK + spot × 2 = 6 → 5+.
+        var twoWhites = _sut.Calculate(WithWs6800SeparationSpeeds(CanLabel(IndigoInkSet.EPMW, whiteHits: 2)));
+        var oneSpot = _sut.Calculate(WithWs6800SeparationSpeeds(CanLabel(IndigoInkSet.CMYK_PlusSpot) with
+        {
+            SpecialInks = [new SpecialInkSpec("Silver", 1, ClickRatePer1000, 1m, 0m, 0m, 0m)]
+        }));
+        var twoSpotHits = _sut.Calculate(WithWs6800SeparationSpeeds(CanLabel(IndigoInkSet.CMYK_PlusSpot) with
+        {
+            SpecialInks = [new SpecialInkSpec("Silver", 2, ClickRatePer1000, 1m, 0m, 0m, 0m)]
+        }));
+
+        RunLine(twoWhites).Should().Be("Press run labor (5 separations at 72 fpm)");
+        RunLine(oneSpot).Should().Be("Press run labor (5 separations at 72 fpm)");
+        RunLine(twoSpotHits).Should().Be("Press run labor (6 separations at 72 fpm)");
+    }
+
+    [Fact]
+    public void Calculate_SpotSlowerThanSeparationSpeed_StillSlowsTheRun()
+    {
+        // Only the white's slowdown is replaced by the count; a spot that is slower still governs.
+        var request = WithWs6800SeparationSpeeds(CanLabel(IndigoInkSet.CMYK_PlusSpot)) with
+        {
+            SpecialInks = [new SpecialInkSpec("Silver", 1, ClickRatePer1000, 1m, 0m, 0m, 0m, SpeedFpmOverride: 50m)]
+        };
+
+        RunLine(_sut.Calculate(request)).Should().Be("Press run labor (slowed to 50 fpm for Silver)");
+    }
+
+    private static string RunLine(EstimateResult result) =>
+        result.QuantityBreaks[1].CostBreakdown.Single(i => i.Category == "Press run").Description;
+
+    /// <summary>The WS6800's separation speeds as the migration backfills them on live.</summary>
+    internal static EstimateRequest WithWs6800SeparationSpeeds(EstimateRequest request) => request with
+    {
+        PressSpeedFpm3Separations = 131m,
+        PressSpeedFpm4Separations = 98m,
+        PressSpeedFpm5PlusSeparations = 72m
+    };
+
     /// <summary>The can-label request from Andrew's brief. The white runs in his JSON were priced on
     /// a $0.52/MSI stock; the plain runs on B7771 at $0.455/MSI.</summary>
     internal static EstimateRequest CanLabel(IndigoInkSet inkSet, int whiteHits = 0)
@@ -142,7 +250,7 @@ public class EstimatingServiceEpmTests
             {
                 // HP-IND-6800-W: $11.50/1,000 clicks, 6.5 mL per 1,000 sq in at 100%, $0.0136/mL,
                 // 72 fpm at one hit.
-                new("White", whiteHits, ClickRatePer1000, 1m, 150m, 11000m, 6.5m, 72m)
+                new("White", whiteHits, ClickRatePer1000, 1m, 150m, 11000m, 6.5m, 72m, IsWhite: true)
             }
             : [];
 
