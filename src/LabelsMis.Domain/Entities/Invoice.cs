@@ -25,6 +25,10 @@ public class Invoice : EntityBase
     public decimal Subtotal { get; private set; }
     public decimal TaxAmount { get; private set; }
     public decimal ShippingAmount { get; private set; }
+
+    /// <summary>Shipping set by hand on a draft invoice; when set it wins over the quoted and the
+    /// shipment-derived amounts. Null = automatic.</summary>
+    public decimal? ShippingOverride { get; private set; }
     public decimal Total { get; private set; }
     public decimal BalanceDue { get; private set; }
     public DateTime? QbExportedAt { get; private set; }
@@ -86,6 +90,37 @@ public class Invoice : EntityBase
         TaxAmount = taxAmount;
         ShippingAmount = shippingAmount;
         RecalculateTotals();
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>Sets (or with null clears) the manual shipping override. The caller re-applies the
+    /// resolved shipping amount afterwards.</summary>
+    public void SetShippingOverride(decimal? shippingOverride, Guid modifiedById, DateTime modifiedAt)
+    {
+        EnsureEditable();
+        if (shippingOverride < 0m)
+        {
+            throw new ArgumentOutOfRangeException(nameof(shippingOverride), "Shipping cannot be negative.");
+        }
+
+        ShippingOverride = shippingOverride;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    /// <summary>Replaces the shipping amount on a draft, unexported invoice, moving the total and
+    /// balance due by the difference (lines and payments are untouched).</summary>
+    public void ApplyShipping(decimal shippingAmount, Guid modifiedById, DateTime modifiedAt)
+    {
+        EnsureEditable();
+        var delta = shippingAmount - ShippingAmount;
+        if (delta == 0m)
+        {
+            return;
+        }
+
+        ShippingAmount = shippingAmount;
+        Total += delta;
+        BalanceDue += delta;
         SetModified(modifiedById, modifiedAt);
     }
 
@@ -161,6 +196,16 @@ public class Invoice : EntityBase
         if (Status is not InvoiceStatus.Draft)
         {
             throw new InvalidOperationException("Only draft invoices can be edited.");
+        }
+    }
+
+    /// <summary>Sent and QuickBooks-exported invoices are never rewritten.</summary>
+    private void EnsureEditable()
+    {
+        EnsureDraft();
+        if (QbExportedAt is not null)
+        {
+            throw new InvalidOperationException("Exported invoices cannot be edited.");
         }
     }
 }

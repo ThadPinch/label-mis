@@ -90,6 +90,7 @@ public class RecordShipmentInput
 
     /// <summary>The carrier's charge for the whole shipment (WWEX); blank = not known yet.</summary>
     [System.ComponentModel.DataAnnotations.Range(0, 999999)]
+    [System.ComponentModel.DataAnnotations.Display(Name = "Carrier cost")]
     public decimal? CarrierCost { get; set; }
 
     public string? ShipToName { get; set; }

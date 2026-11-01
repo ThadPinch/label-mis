@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.Shipping;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Services.Models;
 using Microsoft.EntityFrameworkCore;
@@ -46,7 +47,8 @@ public record InvoiceDetail(
     Guid SalesOrderId,
     string OrderNumber,
     IReadOnlyList<Payment> Payments,
-    IReadOnlyList<InvoiceDocumentInfo>? Documents = null);
+    IReadOnlyList<InvoiceDocumentInfo>? Documents = null,
+    LabelsMis.Domain.Shipping.InvoiceShippingResolution? Shipping = null);
 
 public record InvoicePdfResult(string InvoiceNumber, Guid SalesOrderId, byte[] Bytes);
 
@@ -286,13 +288,21 @@ public class InvoiceService(
             .Select(d => new InvoiceDocumentInfo(d.Id, d.OriginalFileName, d.FileSizeBytes, d.CreatedAt))
             .ToListAsync(cancellationToken);
 
+        var shipping = await ResolveShippingAsync(
+            invoice.SalesOrderId,
+            invoice.ShippingOverride,
+            invoice.SalesOrder.ShippingCost,
+            invoice.ShippingAmount,
+            cancellationToken);
+
         return new InvoiceDetail(
             invoice,
             invoice.Customer.Name,
             invoice.SalesOrderId,
             invoice.SalesOrder.OrderNumber,
             invoice.Payments.ToList(),
-            documents);
+            documents,
+            shipping);
     }
 
     /// <summary>
@@ -333,7 +343,8 @@ public class InvoiceService(
         var taxAmount = order.Customer.TaxExempt
             ? 0m
             : Math.Round(subtotal * await GetTaxRateAsync(cancellationToken), 4, MidpointRounding.AwayFromZero);
-        var shippingAmount = order.ShippingCost;
+        var shippingAmount = (await ResolveShippingAsync(
+            order.Id, null, order.ShippingCost, order.ShippingCost, cancellationToken)).Amount;
 
         var invoice = Invoice.CreateDraft(
             invoiceId,
@@ -402,24 +413,23 @@ public class InvoiceService(
             .SingleAsync(o => o.Id == salesOrderId, cancellationToken);
 
         List<InvoiceLine> lines;
-        decimal shippingAmount;
         if (invoice.ShipmentId is Guid shipmentId)
         {
             var shipment = await db.Shipments
                 .Include(s => s.Lines).ThenInclude(l => l.SalesOrderLine).ThenInclude(sl => sl.Product)
-                .Include(s => s.Packages)
                 .AsSplitQuery()
                 .SingleAsync(s => s.Id == shipmentId, cancellationToken);
             lines = BuildLinesFromShipment(invoice.Id, shipment, order, userId, now);
-            shippingAmount = shipment.TotalShippingCost > 0
-                ? shipment.TotalShippingCost
-                : shipment.Packages.Sum(p => p.ShippingCost);
         }
         else
         {
             lines = BuildLinesFromOrder(invoice.Id, order, userId, now);
-            shippingAmount = order.ShippingCost;
         }
+
+        // Shipping follows the same rule as a recorded shipment (E4): override, else the
+        // shipments' billed shipping, else the order's quote.
+        var shippingAmount = (await ResolveShippingAsync(
+            order.Id, invoice.ShippingOverride, order.ShippingCost, invoice.ShippingAmount, cancellationToken)).Amount;
 
         var subtotal = lines.Sum(l => l.LineTotal);
         var taxAmount = order.Customer.TaxExempt
@@ -526,7 +536,6 @@ public class InvoiceService(
             .Include(s => s.SalesOrder).ThenInclude(o => o.Customer)
             .Include(s => s.SalesOrder).ThenInclude(o => o.Charges)
             .Include(s => s.Lines).ThenInclude(l => l.SalesOrderLine).ThenInclude(sl => sl.Product)
-            .Include(s => s.Packages)
             .AsSplitQuery()
             .SingleAsync(s => s.Id == shipmentId, cancellationToken);
 
@@ -553,9 +562,12 @@ public class InvoiceService(
         var taxAmount = shipment.SalesOrder.Customer.TaxExempt
             ? 0m
             : Math.Round(subtotal * await GetTaxRateAsync(cancellationToken), 4, MidpointRounding.AwayFromZero);
-        var shippingAmount = shipment.TotalShippingCost > 0
-            ? shipment.TotalShippingCost
-            : shipment.Packages.Sum(p => p.ShippingCost);
+        var shippingAmount = (await ResolveShippingAsync(
+            shipment.SalesOrderId,
+            null,
+            shipment.SalesOrder.ShippingCost,
+            shipment.SalesOrder.ShippingCost,
+            cancellationToken)).Amount;
 
         var invoice = Invoice.CreateDraft(
             invoiceId,
@@ -581,6 +593,112 @@ public class InvoiceService(
         db.Invoices.Add(invoice);
         await db.SaveChangesAsync(cancellationToken);
         return invoice;
+    }
+
+    /// <summary>
+    /// Re-derives the shipping on the order's draft invoice after a shipment is recorded, shipped
+    /// or its carrier cost changes — no sales-order unlock involved. Only the shipping amount (and
+    /// so the total and balance) moves. Sent, paid and QB-exported invoices are never rewritten.
+    /// </summary>
+    public async Task<InvoiceSyncResult> SyncDraftShippingAsync(
+        Guid salesOrderId,
+        CancellationToken cancellationToken = default)
+    {
+        var invoice = await db.Invoices
+            .Include(i => i.SalesOrder)
+            .Where(i => i.SalesOrderId == salesOrderId && i.Status != InvoiceStatus.Void)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (invoice is null)
+        {
+            return new InvoiceSyncResult(InvoiceSyncOutcome.NoInvoice);
+        }
+
+        if (invoice.QbExportedAt is not null)
+        {
+            return new InvoiceSyncResult(InvoiceSyncOutcome.SkippedExported, invoice.InvoiceNumber);
+        }
+
+        if (invoice.Status is not InvoiceStatus.Draft)
+        {
+            return new InvoiceSyncResult(InvoiceSyncOutcome.SkippedSent, invoice.InvoiceNumber);
+        }
+
+        var resolution = await ResolveShippingAsync(
+            salesOrderId, invoice.ShippingOverride, invoice.SalesOrder.ShippingCost, invoice.ShippingAmount, cancellationToken);
+        invoice.ApplyShipping(resolution.Amount, RequireUserId(), DateTime.UtcNow);
+        await db.SaveChangesAsync(cancellationToken);
+        return new InvoiceSyncResult(InvoiceSyncOutcome.Updated, invoice.InvoiceNumber);
+    }
+
+    /// <summary>Sets or (with null) clears the manual shipping override on a draft invoice, then
+    /// re-applies the resolved shipping.</summary>
+    public async Task SetShippingOverrideAsync(
+        Guid invoiceId,
+        decimal? shippingOverride,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var invoice = await db.Invoices
+            .Include(i => i.SalesOrder)
+            .SingleOrDefaultAsync(i => i.Id == invoiceId, cancellationToken)
+            ?? throw new InvalidOperationException("Invoice not found.");
+
+        invoice.SetShippingOverride(shippingOverride, userId, now);
+        var resolution = await ResolveShippingAsync(
+            invoice.SalesOrderId, invoice.ShippingOverride, invoice.SalesOrder.ShippingCost, invoice.ShippingAmount, cancellationToken);
+        invoice.ApplyShipping(resolution.Amount, userId, now);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// The shipping a draft invoice for this order should carry (<see cref="InvoiceShippingRules"/>):
+    /// the override; else the order's shipped shipments' billed shipping; else the quote. Shipments
+    /// recorded before billed shipping existed are derived on the fly from the order's method and
+    /// their carrier cost (or package costs), exactly as a new shipment would be.
+    /// </summary>
+    private async Task<InvoiceShippingResolution> ResolveShippingAsync(
+        Guid salesOrderId,
+        decimal? manualOverride,
+        decimal quotedShipping,
+        decimal currentAmount,
+        CancellationToken cancellationToken)
+    {
+        if (manualOverride is not null)
+        {
+            return InvoiceShippingRules.Resolve(manualOverride, quotedShipping, currentAmount, []);
+        }
+
+        var shipped = await db.Shipments.AsNoTracking()
+            .Where(s => s.SalesOrderId == salesOrderId && s.Status != ShipmentStatus.Pending)
+            .OrderBy(s => s.ShipmentNumber)
+            .Select(s => new { s.ShipmentNumber, s.BilledShipping, s.CarrierCost, s.TotalShippingCost })
+            .ToListAsync(cancellationToken);
+
+        List<ShippedShipmentBilling> billing;
+        if (shipped.All(s => s.BilledShipping is not null))
+        {
+            billing = shipped.Select(s => new ShippedShipmentBilling(s.ShipmentNumber, s.BilledShipping)).ToList();
+        }
+        else
+        {
+            var methodType = await db.SalesOrders.AsNoTracking()
+                .Where(o => o.Id == salesOrderId)
+                .Select(o => o.ShippingMethod == null ? (ShippingMethodType?)null : o.ShippingMethod.MethodType)
+                .FirstOrDefaultAsync(cancellationToken);
+            var settings = await db.GeneralSettings.AsNoTracking()
+                .Select(g => new ShippingBillingSettings(g.LocalDeliveryFee, g.CarrierCostMultiplier))
+                .FirstOrDefaultAsync(cancellationToken) ?? ShippingBillingSettings.Default;
+            billing = shipped.Select(s => new ShippedShipmentBilling(
+                    s.ShipmentNumber,
+                    s.BilledShipping ?? ShippingBillingRules.BilledShipping(
+                        methodType,
+                        s.CarrierCost ?? (s.TotalShippingCost > 0 ? s.TotalShippingCost : null),
+                        settings)))
+                .ToList();
+        }
+
+        return InvoiceShippingRules.Resolve(null, quotedShipping, currentAmount, billing);
     }
 
     public async Task RecordPaymentAsync(

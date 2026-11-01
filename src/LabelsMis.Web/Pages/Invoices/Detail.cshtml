@@ -126,7 +126,42 @@
                 <hr class="my-1" />
                 <div class="d-flex justify-content-between"><span class="text-muted">Subtotal</span><span>@invoice.Subtotal.ToString("C2")</span></div>
                 <div class="d-flex justify-content-between"><span class="text-muted">Tax</span><span>@invoice.TaxAmount.ToString("C2")</span></div>
-                <div class="d-flex justify-content-between"><span class="text-muted">Shipping</span><span>@invoice.ShippingAmount.ToString("C2")</span></div>
+                <div class="d-flex justify-content-between"><span class="text-muted">Shipping</span><span id="invoice-shipping-amount">@invoice.ShippingAmount.ToString("C2")</span></div>
+                @if (invoice.Status == InvoiceStatus.Draft && invoice.QbExportedAt is null && Model.Detail.Shipping is { } shipping)
+                {
+                    <div class="text-end small @(shipping.IsPending ? "text-warning" : "text-muted")" id="invoice-shipping-source">
+                        @switch (shipping.Source)
+                        {
+                            case LabelsMis.Domain.Shipping.InvoiceShippingSource.Manual:
+                                @:Set by hand
+                                break;
+                            case LabelsMis.Domain.Shipping.InvoiceShippingSource.Shipments:
+                                @:Billed shipping from the order's shipments
+                                break;
+                            case LabelsMis.Domain.Shipping.InvoiceShippingSource.Pending:
+                                @:Pending carrier cost on @string.Join(", ", shipping.PendingShipmentNumbers) — enter it on the shipment
+                                break;
+                            default:
+                                @:Quoted on the order — replaced by billed shipping once it ships
+                                break;
+                        }
+                    </div>
+                    @if (Model.CanEdit)
+                    {
+                        <form method="post" asp-page-handler="Shipping" class="mt-1" id="invoice-shipping-form">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">Shipping $</span>
+                                <input asp-for="ShippingOverride" class="form-control" placeholder="automatic" inputmode="decimal" />
+                                <button type="submit" class="btn btn-outline-primary">Set</button>
+                                @if (invoice.ShippingOverride is not null)
+                                {
+                                    <button type="submit" name="clear" value="true" class="btn btn-outline-secondary">Automatic</button>
+                                }
+                            </div>
+                            <span asp-validation-for="ShippingOverride" class="text-danger small"></span>
+                        </form>
+                    }
+                }
                 <hr class="my-1" />
                 <div class="d-flex justify-content-between fw-semibold"><span>Total</span><span>@invoice.Total.ToString("C2")</span></div>
                 <div class="d-flex justify-content-between fw-semibold"><span>Balance due</span><span>@invoice.BalanceDue.ToString("C2")</span></div>

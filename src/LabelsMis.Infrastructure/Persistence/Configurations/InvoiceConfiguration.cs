@@ -18,6 +18,7 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(i => i.Subtotal).HasMoneyPrecision();
         builder.Property(i => i.TaxAmount).HasMoneyPrecision();
         builder.Property(i => i.ShippingAmount).HasMoneyPrecision();
+        builder.Property(i => i.ShippingOverride).HasPrecision(18, 4);
         builder.Property(i => i.Total).HasMoneyPrecision();
         builder.Property(i => i.BalanceDue).HasMoneyPrecision();
         builder.Property(i => i.QbInvoiceId).HasMaxLength(100);

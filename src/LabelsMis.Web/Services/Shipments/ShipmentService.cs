@@ -112,7 +112,8 @@ public class ShipmentService(
     LabelsMisDbContext db,
     ICurrentUserService currentUser,
     DocumentNumberService documentNumbers,
-    IFedexClient fedexClient)
+    IFedexClient fedexClient,
+    Invoices.InvoiceService invoiceService)
 {
     public async Task<PagedResult<ShipmentListItem>> ListAsync(
         string? search,
@@ -459,6 +460,8 @@ public class ShipmentService(
         await UpdateSalesOrderStatusAsync(salesOrderId, userId, now, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
+        // The draft invoice's shipping follows the shipments' billed shipping (no SO unlock).
+        await invoiceService.SyncDraftShippingAsync(salesOrderId, cancellationToken);
         return shipment;
     }
 
@@ -537,6 +540,8 @@ public class ShipmentService(
         await UpdateSalesOrderStatusAsync(salesOrderId, userId, now, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
+        // The draft invoice's shipping follows the shipments' billed shipping (no SO unlock).
+        await invoiceService.SyncDraftShippingAsync(salesOrderId, cancellationToken);
         return shipment;
     }
 
@@ -552,6 +557,7 @@ public class ShipmentService(
         var billing = await GetBillingContextAsync(shipment.SalesOrderId, cancellationToken);
         shipment.SetCarrierCost(carrierCost, billing.ShippingMethodType, billing.Settings, userId, DateTime.UtcNow);
         await db.SaveChangesAsync(cancellationToken);
+        await invoiceService.SyncDraftShippingAsync(shipment.SalesOrderId, cancellationToken);
     }
 
     /// <summary>The order's shipping method and the shop's shipping-charge settings — everything
@@ -713,9 +719,17 @@ public class ShipmentService(
 
         shipment.MarkInTransit(totalCost, userId, now);
         var billing = await GetBillingContextAsync(shipment.SalesOrderId, cancellationToken);
-        shipment.ComputeBilledShipping(billing.ShippingMethodType, billing.Settings);
+        // The labels' rated cost is the best carrier cost known so far; it stays editable on the
+        // shipment page for when the carrier's bill differs.
+        shipment.SetCarrierCost(
+            shipment.CarrierCost ?? (totalCost > 0 ? totalCost : null),
+            billing.ShippingMethodType,
+            billing.Settings,
+            userId,
+            now);
         await UpdateSalesOrderStatusAsync(shipment.SalesOrderId, userId, now, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+        await invoiceService.SyncDraftShippingAsync(shipment.SalesOrderId, cancellationToken);
         return shipment;
     }
 

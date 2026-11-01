@@ -21,6 +21,12 @@ public class DetailModel(
     [BindProperty] public PaymentInput Payment { get; set; } = new(DateOnly.FromDateTime(DateTime.UtcNow), 0, PaymentMethod.Check, null, null);
     [BindProperty] public string? VoidReason { get; set; }
 
+    /// <summary>Manual shipping for a draft invoice; blank = automatic (quote / shipments).</summary>
+    [BindProperty]
+    [System.ComponentModel.DataAnnotations.Range(0, 999999)]
+    [System.ComponentModel.DataAnnotations.Display(Name = "Shipping")]
+    public decimal? ShippingOverride { get; set; }
+
     public InvoiceDetail? Detail { get; private set; }
     public bool CanEdit { get; private set; }
 
@@ -34,6 +40,37 @@ public class DetailModel(
         Detail = await invoiceService.GetDetailAsync(Id, cancellationToken);
         if (Detail is null) return NotFound();
 
+        ShippingOverride = Detail.Invoice.ShippingOverride;
+        await LoadCanGenerateReplacementAsync(cancellationToken);
+        return Page();
+    }
+
+    /// <summary>Sets the manual shipping override (Save) or clears it back to automatic (Clear).</summary>
+    public async Task<IActionResult> OnPostShippingAsync(bool clear, CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.Accounting)) return Forbid();
+        if (!clear && !ModelState.IsValid)
+        {
+            return await ReloadAsync(cancellationToken);
+        }
+
+        try
+        {
+            await invoiceService.SetShippingOverrideAsync(Id, clear ? null : ShippingOverride, cancellationToken);
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return await ReloadAsync(cancellationToken);
+        }
+    }
+
+    private async Task<IActionResult> ReloadAsync(CancellationToken cancellationToken)
+    {
+        Detail = await invoiceService.GetDetailAsync(Id, cancellationToken);
+        if (Detail is null) return NotFound();
+        CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting);
         await LoadCanGenerateReplacementAsync(cancellationToken);
         return Page();
     }

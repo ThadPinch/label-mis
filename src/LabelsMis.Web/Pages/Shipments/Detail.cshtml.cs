@@ -17,6 +17,7 @@ public class DetailModel(ShipmentService shipmentService, InvoiceService invoice
     /// <summary>The carrier's actual charge (WWEX); blank clears it.</summary>
     [BindProperty]
     [System.ComponentModel.DataAnnotations.Range(0, 999999)]
+    [System.ComponentModel.DataAnnotations.Display(Name = "Carrier cost")]
     public decimal? CarrierCost { get; set; }
 
     public ShipmentDetail? Detail { get; private set; }

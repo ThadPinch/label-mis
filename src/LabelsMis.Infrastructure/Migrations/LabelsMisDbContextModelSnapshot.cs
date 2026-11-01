@@ -1369,6 +1369,10 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
 
+                    b.Property<decimal?>("ShippingOverride")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
