@@ -35,4 +35,7 @@ public record EstimateRequest(
     decimal MinimumMarginPct,
     int? MaxLabelsAcrossOverride = null,
     LabelOrientation? LabelOrientationOverride = null,
-    IReadOnlyDictionary<int, decimal>? QuantityMarkupOverrides = null);
+    IReadOnlyDictionary<int, decimal>? QuantityMarkupOverrides = null,
+    // True when no active ink record supplies a click rate for InkSet. On a click-based press
+    // the calculation then returns an error instead of costing the clicks at $0.
+    bool ClickRateMissing = false);

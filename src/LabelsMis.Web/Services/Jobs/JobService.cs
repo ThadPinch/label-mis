@@ -1379,7 +1379,9 @@ public class JobService(
         try
         {
             var input = ToEstimateLineInput(spec, quantityPlanned);
-            var request = await calculationMapper.BuildRequestAsync(customerId, input, cancellationToken);
+            // Planned times don't depend on click cost, so a missing ink record mustn't block them.
+            var request = await calculationMapper.BuildRequestAsync(customerId, input, cancellationToken)
+                with { ClickRateMissing = false };
             var result = estimatingService.Calculate(request);
             var quantityBreak = result.QuantityBreaks.FirstOrDefault();
             if (result.Errors.Count > 0 || quantityBreak is null)

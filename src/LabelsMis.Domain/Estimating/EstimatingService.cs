@@ -12,7 +12,9 @@ public class EstimatingService
         var errors = new List<string>();
 
         errors.AddRange(PressRules.ValidateQuantities(request.Quantities));
+        errors.AddRange(PressRules.ValidateClickRate(request));
         warnings.AddRange(PressRules.ValidateInkConfiguration(request));
+        warnings.AddRange(PressRules.ValidateFinishingMaterials(request));
 
         if (errors.Count > 0)
         {

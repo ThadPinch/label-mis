@@ -308,7 +308,9 @@ public class JobImpositionService(
             if (customerId is { } cid && spec.SubstrateId != Guid.Empty)
             {
                 var input = JobService.ToEstimateLineInput(spec, Math.Max(1, job.QuantityPlanned));
-                var request = await calculationMapper.BuildRequestAsync(cid, input, cancellationToken);
+                // The layout doesn't depend on click cost, so a missing ink record mustn't block it.
+                var request = await calculationMapper.BuildRequestAsync(cid, input, cancellationToken)
+                    with { ClickRateMissing = false };
                 var result = estimatingService.Calculate(request);
                 computed = result.Errors.Count == 0 ? result.Imposition : null;
             }

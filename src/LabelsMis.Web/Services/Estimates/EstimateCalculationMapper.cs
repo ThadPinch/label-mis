@@ -201,7 +201,8 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
                     material?.Id,
                     material?.WidthIn,
                     material?.CostPerMsi,
-                    material?.Code);
+                    material?.Code,
+                    MaterialExpected: op.OperationType is FinishingOperationType.Laminate or FinishingOperationType.Foil);
             })
             .ToList();
 
@@ -225,7 +226,7 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             press.SpeedFpm,
             press.IsClickBased,
             inkSet,
-            clickRate,
+            clickRate ?? 0m,
             specialInks,
             stock.Id,
             stock.WidthIn,
@@ -238,10 +239,14 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             MinimumMarginPct,
             line.MaxLabelsAcrossOverride,
             line.LabelOrientationOverride,
-            line.QuantityMarkupOverrides);
+            line.QuantityMarkupOverrides,
+            ClickRateMissing: clickRate is null);
     }
 
-    private async Task<decimal> GetClickRateAsync(
+    /// <summary>The process click rate per 1,000 for the ink set, or null when no active ink record
+    /// supplies one (a $0 rate counts as none). The engine turns null into an error on a
+    /// click-based press rather than pricing the clicks at $0.</summary>
+    private async Task<decimal?> GetClickRateAsync(
         InkSet inkSet,
         CancellationToken cancellationToken)
     {
@@ -263,7 +268,7 @@ public class EstimateCalculationMapper(LabelsMisDbContext db)
             rate = await LookupProcessClickRateAsync(InkSet.EPM, cancellationToken);
         }
 
-        return rate ?? 0m;
+        return rate is > 0m ? rate : null;
     }
 
     private async Task<decimal?> LookupProcessClickRateAsync(
