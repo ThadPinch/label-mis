@@ -396,6 +396,25 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task MarkOneExported_RecordsWhoAndWhen_WaitingNeedsExportAnyway()
+    {
+        var order = await SeedOrderAsync(quantity: 300, unitPrice: 1m, chargeAmount: null);
+        var invoice = await _invoiceService.CreateFromSalesOrderAsync(order.Id);
+
+        var refused = () => _invoiceService.MarkOneExportedAsync(invoice.Id, exportAnyway: false);
+        await refused.Should().ThrowAsync<InvalidOperationException>().WithMessage("*isn't ready for QuickBooks*Not shipped yet*");
+
+        var before = DateTime.UtcNow.AddSeconds(-1);
+        (await _invoiceService.MarkOneExportedAsync(invoice.Id, exportAnyway: true)).Should().Be(invoice.InvoiceNumber);
+        var exported = await _db.Invoices.AsNoTracking().SingleAsync(i => i.Id == invoice.Id);
+        exported.QbExportedById.Should().Be(TestUserId);
+        exported.QbExportedAt.Should().BeOnOrAfter(before);
+
+        var again = () => _invoiceService.MarkOneExportedAsync(invoice.Id, exportAnyway: true);
+        await again.Should().ThrowAsync<InvalidOperationException>().WithMessage("*already marked exported*");
+    }
+
+    [Fact]
     public async Task MarkOrderShipped_RefusedWhileALineHasShippedNothing()
     {
         var order = await SeedOrderAsync(quantity: 500, unitPrice: 0.40m, chargeAmount: null);

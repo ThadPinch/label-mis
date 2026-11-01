@@ -251,6 +251,32 @@
     </div>
 </div>
 
+@if (Model.CanEdit && p.Status is QbInvoiceStatus.Ready or QbInvoiceStatus.Waiting)
+{
+    <div class="card mb-2 @(p.IsReady ? "border-success" : "border-danger")" id="qb-mark-exported-card">
+        <div class="card-body py-2 small d-flex flex-wrap align-items-center gap-3">
+            <div class="flex-grow-1">
+                Keyed it into QuickBooks? Mark it exported — LabelShop records who and when, and it moves to
+                <strong>Exported / closed</strong>.
+            </div>
+            <form method="post" asp-page-handler="MarkExported" class="d-flex align-items-center gap-2 m-0" id="qb-mark-exported-form">
+                @if (p.IsReady)
+                {
+                    <button type="submit" class="btn btn-success" id="qb-mark-exported">Mark exported to QuickBooks</button>
+                }
+                else
+                {
+                    <div class="form-check m-0">
+                        <input class="form-check-input" type="checkbox" name="exportAnyway" value="true" id="qb-export-anyway" required />
+                        <label class="form-check-label" for="qb-export-anyway">It's already in QuickBooks — export anyway</label>
+                    </div>
+                    <button type="submit" class="btn btn-outline-danger" id="qb-mark-exported">Mark exported anyway</button>
+                }
+            </form>
+        </div>
+    </div>
+}
+
 @if (Model.CanEditOverrides)
 {
     <form id="qb-antiforgery" class="d-none">@Html.AntiForgeryToken()</form>

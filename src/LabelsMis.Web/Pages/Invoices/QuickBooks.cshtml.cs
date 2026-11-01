@@ -10,7 +10,7 @@ namespace LabelsMis.Web.Pages.Invoices;
 /// <summary>"Preview for QuickBooks" (E10): the invoice laid out like the QuickBooks invoice
 /// Sabrina keys, blockers in red at the top, per-line item / class dropdowns that save at once.</summary>
 [Authorize(Policy = TransactionPolicies.InvoicesRead)]
-public class QuickBooksModel(QuickBooksInvoiceService quickBooksInvoices) : PageModel
+public class QuickBooksModel(QuickBooksInvoiceService quickBooksInvoices, Services.Invoices.InvoiceService invoiceService) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
 
@@ -22,6 +22,25 @@ public class QuickBooksModel(QuickBooksInvoiceService quickBooksInvoices) : Page
     {
         Preview = await quickBooksInvoices.GetPreviewAsync(Id, cancellationToken);
         return Preview is null ? NotFound() : Page();
+    }
+
+    /// <summary>E11: the invoice is in QuickBooks — mark it exported (who and when are recorded)
+    /// and go back to the Ready list for the next one. A Waiting invoice needs "export anyway".</summary>
+    public async Task<IActionResult> OnPostMarkExportedAsync(bool exportAnyway, CancellationToken cancellationToken)
+    {
+        if (!CanEdit) return Forbid();
+        try
+        {
+            var invoiceNumber = await invoiceService.MarkOneExportedAsync(Id, exportAnyway, cancellationToken);
+            TempData["ExportMessage"] = $"{invoiceNumber} marked as exported to QuickBooks.";
+            return RedirectToPage("Index", new { Tab = IndexModel.ReadyTab });
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            Preview = await quickBooksInvoices.GetPreviewAsync(Id, cancellationToken);
+            return Preview is null ? NotFound() : Page();
+        }
     }
 
     /// <summary>Saves one line's item / class override (blank = back to the mapping). A fetch

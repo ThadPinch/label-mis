@@ -1010,6 +1010,39 @@ public class InvoiceService(
         return invoices.Count;
     }
 
+    /// <summary>
+    /// Marks one invoice exported from Preview for QuickBooks (E11) with the existing
+    /// <see cref="Invoice.MarkExported"/>, which records when and who (QbExportedAt /
+    /// QbExportedById). A Waiting invoice needs <paramref name="exportAnyway"/> — for one Sabrina
+    /// already keyed into QuickBooks despite a blocker. Returns the invoice number.
+    /// </summary>
+    public async Task<string> MarkOneExportedAsync(
+        Guid invoiceId,
+        bool exportAnyway,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var invoice = await db.Invoices.SingleOrDefaultAsync(i => i.Id == invoiceId, cancellationToken)
+            ?? throw new InvalidOperationException("Invoice not found.");
+        if (invoice.QbExportedAt is not null)
+        {
+            throw new InvalidOperationException($"{invoice.InvoiceNumber} is already marked exported.");
+        }
+
+        var waiting = await GetWaitingReasonsAsync(invoiceId, cancellationToken);
+        if (waiting.Count > 0 && !exportAnyway)
+        {
+            throw new InvalidOperationException(
+                $"{invoice.InvoiceNumber} isn't ready for QuickBooks ({string.Join("; ", waiting)}). " +
+                "If it is already in QuickBooks, tick \"export anyway\".");
+        }
+
+        invoice.MarkExported(now, userId, now);
+        await db.SaveChangesAsync(cancellationToken);
+        return invoice.InvoiceNumber;
+    }
+
     public async Task UnmarkExportedAsync(Guid invoiceId, CancellationToken cancellationToken = default)
     {
         var userId = RequireUserId();
