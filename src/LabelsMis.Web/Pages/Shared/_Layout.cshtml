@@ -90,6 +90,10 @@
                                     <ul class="dropdown-menu app-dropdown-menu">
                                         <li><h6 class="dropdown-header">Accounts receivable</h6></li>
                                         <li><a class="dropdown-item" asp-page="/Invoices/Index">Invoices</a></li>
+                                        @if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting))
+                                        {
+                                            <li><a class="dropdown-item" asp-page="/Settings/QuickBooks">QuickBooks mapping</a></li>
+                                        }
                                         <li><hr class="dropdown-divider" /></li>
                                         <li><a class="dropdown-item" asp-page="/Reports/Index">Finance reports</a></li>
                                         <li><a class="dropdown-item" asp-page="/Reports/Eva">Estimate vs Actual</a></li>
@@ -127,6 +131,7 @@
                                         <li><a class="dropdown-item" asp-page="/Settings/General">General settings</a></li>
                                         <li><a class="dropdown-item" asp-page="/Settings/Storage">Storage settings</a></li>
                                         <li><a class="dropdown-item" asp-page="/Settings/Email">Email settings</a></li>
+                                        <li><a class="dropdown-item" asp-page="/Settings/QuickBooks">QuickBooks mapping</a></li>
                                         <li><a class="dropdown-item" asp-page="/Users/Index">Users</a></li>
                                     }
                                 </ul>

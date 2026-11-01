@@ -331,6 +331,23 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task QuickBooksMapping_MapsProductChargeAndShippingLines()
+    {
+        var order = await SeedOrderAsync(quantity: 1000, unitPrice: 0.50m, chargeAmount: 75m);
+        var invoice = await _invoiceService.CreateFromSalesOrderAsync(order.Id);
+        var service = new LabelsMis.Web.Services.QuickBooks.QuickBooksMappingService(_db, new StubCurrentUserService(TestUserId));
+
+        var mapped = await service.MapInvoiceAsync(invoice.Id);
+
+        mapped!.Lines.Select(l => (l.LineNumber, l.IsProductLine, l.Mapping.Item, l.Mapping.Class)).Should().Equal(
+            (1, true, "Sales", "Roll Label"),
+            (2, false, "Die Creation", "Roll Label"));
+        mapped.Shipping.Item.Should().Be("Shipping");
+        mapped.JobClass.Should().Be("Roll Label");
+        (await service.MapInvoiceAsync(Guid.NewGuid())).Should().BeNull();
+    }
+
+    [Fact]
     public async Task MarkOrderShipped_RefusedWhileALineHasShippedNothing()
     {
         var order = await SeedOrderAsync(quantity: 500, unitPrice: 0.40m, chargeAmount: null);
