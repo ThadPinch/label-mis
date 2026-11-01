@@ -1,8 +1,8 @@
 # QuickBooks Phase 0 (Track E): design choices
 
-Status: **E1–E5 built** on `feature/epm-qb-phase0` (not pushed, not deployed). **E6 started**: the
-unfinished work is parked on the local branch `wip/e6-ready-waiting`. **E7–E11 and the optional E12
-are not started.** Their designs below are the decisions Thad approved on 2026-11-01. Written
+Status: **E1–E12 built** on `feature/epm-qb-phase0` (not pushed, not deployed). Every task has its
+own commit with the migration proof and test/smoke evidence in the body. E7–E11 follow the designs
+Thad approved on 2026-11-01; the E6 shipped-for-billing rule is his decision of the same day. Written
 2026-11-01 against `origin/main` @ eaa4447.
 
 Sources: Andrew's 2026-10-24 work-queue email (Track E + Appendix A) and
@@ -110,77 +110,133 @@ longer resets shipping to the quote.
   - are left out of AR aging.
 - No QuickBooks record is created. Whether QB needs one is an open question below.
 
-## E6: Ready vs Waiting (started, unfinished)
+## E6: Ready vs Waiting
 
-Rule: an invoice is **Ready** when all of these hold:
+An unexported, billable invoice is **Ready** when all of these hold, otherwise it is listed on the
+**Waiting** tab with its reasons (`InvoiceReadinessRules`):
 
-- the order has shipped or been picked up, **or** the invoice is flagged `BillBeforeShip`;
+- the order counts as shipped, **or** the invoice is flagged *Bill before shipping*;
 - total > 0;
-- it is not non-billable;
-- nothing blocks it.
+- nothing blocks it (carrier cost pending, customer blockers from E7).
 
-Everything else is listed on a **Waiting** tab with the reasons. The reasons on
-`wip/e6-ready-waiting` (`InvoiceReadinessRules`) are:
+**Shipped for billing** (Thad's decision): every line's shipped quantity ≥ its ordered quantity,
+**or** the sales order's own status is Shipped / Invoiced / Closed. A partial shipment does not make
+the invoice Ready: the order bills once, when it has all shipped, unless *Bill before shipping* is set.
 
-- "Not shipped yet (x of y lines)". This uses the same per-line test as today's "Shipped x/y"
-  column: a line counts as shipped when its shipped quantity ≥ its ordered quantity.
-- "Nothing on the order ships — use Bill before shipping" (charge-only orders).
-- "$0 total — close it as non-billable or add charges".
-- "Waiting on carrier cost (SHP-…)", from the E4 pending rule.
-- Customer blockers, which E7 fills in.
+**Under-runs.** Shipping 950 of 1,000 is normal, but it used to leave the order stuck: Record shipment
+moves the job to Shipped, so the order drops off *Ready to ship*, one-click *Mark shipped* refuses it,
+and the SO stays In production for ever. The shipment page now has a **Mark order shipped** card when
+a line shipped short (`ShipmentService.MarkOrderShippedAsync`: no new shipment, SO → Shipped; refused
+while any line has shipped nothing; Admin / Shipping / Accounting). The Waiting reason says how:
+"Not shipped yet (0 of 1 lines). If it under-ran, open its shipment and use Mark order shipped".
 
-Still to do: the `AddInvoiceBillBeforeShip` migration (bool, NOT NULL, default false), the
-Index tabs, the Bill-before-shipping toggle on the invoice page, and making bulk Mark exported and
-CSV export work only from Ready. Then tests, the Up → Down → Up proof and a smoke test.
+Reasons listed on Waiting:
 
-**Design point to settle before finishing:** the quantity test leaves a line that was
-**under-run** (shipped below the ordered quantity, which is normal in label printing) waiting
-forever. The alternative is to count a line as shipped once any non-pending shipment covers it,
-or once the SO reaches Shipped / Invoiced / Closed. Partial shipments raise the same question.
+- "Not shipped yet (x of y lines)" (+ the under-run hint once something has shipped);
+- "Nothing on the order ships — use Bill before shipping" (charge-only orders);
+- "$0 total — close it as non-billable or add charges";
+- "Waiting on carrier cost (SHP-…)" (the E4 pending rule);
+- the E7 customer blockers.
 
-## E7–E11: approved design (not started)
+Invoices page: **Ready to export / Waiting / Exported – closed** tabs with counts; checkboxes only on
+Ready. Bulk *Mark exported*, *Export selected* (CSV) and the date-range CSV export act only on Ready
+invoices (re-exporting already-exported ones is unchanged); the bulk message says how many were
+skipped. The invoice page has a QuickBooks card (Ready / Waiting + reasons) with the *Bill before
+shipping* toggle (Admin / Accounting). Migration `AddInvoiceBillBeforeShip` (bool, default false).
 
-- **E7: Customer QB fields.**
-  - New customer fields: `QuickBooksCustomerId` (text, nullable), `TaxSetupComplete` (bool) and
-    `TaxSetupCompletedAt` (date). They go on the customer edit form.
-  - Blockers:
-    - "Waiting on new-client form" while tax setup is not complete;
-    - "No billing contact with email" when no contact has the Billing role and an email address.
-  - These plug into `GetCustomerBlockersAsync`, which E6 already stubs.
-- **E8: Setup → QuickBooks mapping.**
-  - One QB item per line type:
-    - Sales (product lines);
-    - Shipping;
-    - Design, Rush and Die Creation (these are `SalesOrderCharge` lines today).
-  - Class rule:
-    - substrate `OUTSOURCED` → Buyout;
-    - shrink stock → Shrink Sleeves;
-    - otherwise Roll Label;
-    - charge lines inherit the job's class.
-  - A pure domain helper returns `(item, class)` for any invoice line.
-  - Store QB **names** now. Phase 1 adds the QB ids (`ItemRef` / `ClassRef`) next to them.
-  - Charge lines don't have a type today. The mapping will match the charge description against
-    keywords that can be edited in Setup, or add a charge type. Decide this once the business
-    question below is answered.
-- **E9: QB-shaped view model and a JSON endpoint per invoice.**
-  - The model holds:
-    - `DocNumber` = the LabelShop invoice number;
-    - the customer (name + QB id);
-    - the PO (`CustomerPoNumber`);
-    - one row per line: item, class, description, **quantity ordered**, unit price, amount;
-    - the shipping line;
-    - terms and due date;
-    - ship-to and bill-to addresses;
-    - the billing email;
-    - the blockers.
-  - Each invoice line gets nullable `QbItemOverride` / `QbClassOverride`, applied when set.
-- **E10: "Preview for QuickBooks" page.** It renders the E9 model like a QB invoice, shows
-  blockers in red at the top, and has inline dropdowns for the per-line overrides. Sabrina keys
-  from this page until Phase 1.
-- **E11: Mark exported from the preview.** It reuses `Invoice.MarkExported`, which already
-  records who and when (`QbExportedAt`, `QbExportedById`). The existing CSV export stays as it is.
-- **E12 (optional):** a warning on the die form when labels across × label width uses less than
-  60% of the web width.
+## E7: Customer QuickBooks fields and blockers
+
+- `Customer.QuickBooksCustomerId` (text, 100), `TaxSetupComplete` + `TaxSetupCompletedAt` (date) on
+  the customer form. Ticking without a date stamps today; unticking clears the date.
+- Blockers: "Waiting on new-client form (tick Tax setup complete on the customer)" and "No billing
+  contact with email (add a contact with role Billing on the customer)".
+- Contact roles are free text, so a billing contact is one whose role contains a billing word:
+  billing / bill / invoice(s) / accounting / accounts payable / A/P / AP. The role inputs now suggest
+  Billing, Purchasing, Art / proofs, Shipping. The billing email (primary first) is what the preview
+  shows.
+- **Deploy-day backfill** (migration `AddCustomerQuickBooksSetup`): customers with at least one
+  invoice already marked exported are set up, dated by their first export — they went through the
+  new-client form long ago. Without it every existing invoice would jump to Waiting. Customers never
+  exported stay gated. Only rows still false are touched, so a re-run changes nothing.
+
+## E8: Setup → QuickBooks mapping
+
+`/settings/quickbooks` (Admin and Accounting; linked from Finance and Setup → Administration). Stored
+in a new single-row table `QuickBooksSettings`; until the first save the defaults live in code.
+
+- One QB item per line type: Sales (product lines), Shipping, Design, Rush, Die Creation. Class names:
+  Roll Label, Shrink Sleeves, Buyout. QB **names** only; Phase 1 adds ItemRef / ClassRef ids.
+- Class rule (`QuickBooksMappingRules`): a product line on the buyout substrate code (default
+  `OUTSOURCED`, case-insensitive) or an outsourced line → Buyout; a shrink stock → Shrink Sleeves;
+  else Roll Label. The substrate is the line's spec stock, else the product's. Charge **and shipping**
+  lines inherit the job's class = the order's **first** product line (Roll Label when there is none).
+- **Charges have no type**, so the least invasive classifier is the description: an editable keyword
+  list per type (defaults: die, tooling, plate / rush, expedite / design, art, artwork, proof). A
+  keyword matches the start of any word (`die` matches "Die creation" and "diecut"), checked Die
+  Creation → Rush → Design; no match → Sales, with a warning on the preview. No schema change on
+  charges; the per-line override (E9/E10) fixes misfits.
+- The page shows the E3 local delivery fee and carrier multiplier read-only, linked to General settings.
+- `QuickBooksMappingService.MapInvoiceAsync` returns (item, class, and why) for every invoice line and
+  the shipping line.
+
+## E9: QuickBooks-shaped model and JSON
+
+`QuickBooksInvoiceService.GetPreviewAsync`, also at `GET /invoices/{id}/quickbooks.json` (same
+`InvoicesRead` policy as the invoice pages; 404 for an unknown id). It holds DocNumber (= INV #),
+status (Ready / Waiting / Exported / Non-billable / Void), invoice date, terms (LabelShop's) and due
+date, customer name + QB id, PO, order, billing email, ship-to (the order's, else the customer's
+default shipping, else billing address) and bill-to, the lines (item, class and why, description,
+**quantity ordered**, rate, amount), the shipping line, lines total and total **before tax**,
+LabelShop's subtotal / tax / total for reference, blockers, warnings, exported at / by, and the
+dropdown options.
+
+- **Amount = what LabelShop bills** (the line total in cents), so the QB invoice matches LabelShop's
+  subtotal. The SO line keeps 4 decimals on the rate, so 2,500 × 0.12345 is stored as rate 0.1235 with
+  a line total of 308.625: the preview then warns "2,500 × 0.1235 = $308.75, but LabelShop bills
+  $308.63 — key the amount, not the rate". A shipment-born invoice billing a different quantity is
+  re-priced at the ordered quantity and warned.
+- Warnings, not blockers: rate precision, charge with no keyword match, customer not linked to QB.
+- `InvoiceLine.QbItemOverride` / `QbClassOverride` (migration `AddInvoiceLineQbOverrides`) are applied
+  by the mapping and survive a draft rebuilt from the order (product lines by order line, charges by
+  description).
+
+## E10: Preview for QuickBooks
+
+`/invoices/{id}/quickbooks`, reached from *Preview for QuickBooks* on the invoice and *QB preview* on
+the Ready / Waiting lists. Laid out like the QB invoice form: customer (+ QB id, link), customer
+email, terms, dates, bill-to / ship-to, invoice no., P.O. number, the lines, the shipping line and the
+total before tax, with *copy* buttons on the values Sabrina types. Blockers are a red box at the top,
+warnings yellow. Each line has item and class dropdowns that save at once (fetch, no reload); *Back to
+mapping* clears an override; changing one never pins the other. Locked once exported, non-billable or
+void.
+
+## E11: Mark exported from the preview
+
+*Mark exported to QuickBooks* on a Ready invoice; a Waiting invoice only offers *Mark exported anyway*
+behind a required "It's already in QuickBooks" checkbox (the server refuses without it and lists the
+reasons). It reuses `Invoice.MarkExported`, which already recorded when and who — `QbExportedAt` and
+`QbExportedById` existed before this branch, so no migration — and returns to the Ready list with
+"INV-… marked as exported to QuickBooks." The existing CSV exports are unchanged.
+
+## E12: Die web-usage warning
+
+The die form warns when labels across × label width covers under 60% of the die's web width ("3
+across × 2.5 in = 7.5 in uses only 58% of the 13 in web. Check the die isn't entered sideways…"),
+rendered from the saved values and live as the fields change. It never blocks a save.
+
+## Migrations added after E5 (all additive; Up → Down → Up proven locally)
+
+| Migration | Change | Existing rows |
+|---|---|---|
+| `AddInvoiceBillBeforeShip` | `Invoice.BillBeforeShip` bool NOT NULL DEFAULT false | false: wait for shipping as before |
+| `AddCustomerQuickBooksSetup` | `Customer.QuickBooksCustomerId` varchar(100), `TaxSetupComplete` bool DEFAULT false, `TaxSetupCompletedAt` date | backfill: customers with an exported invoice → set up, dated by first export |
+| `AddQuickBooksSettings` | new table `QuickBooksSettings` | none (no seed row; defaults in code) |
+| `AddInvoiceLineQbOverrides` | `InvoiceLine.QbItemOverride`, `QbClassOverride` varchar(100) | null = use the mapping |
+
+Startup on production: `MigrateAsync` applies the four in order; only `AddCustomerQuickBooksSetup`
+writes data (one guarded UPDATE over Customer joined to an aggregate of exported invoices). The
+seeders don't touch Customer, Invoice, InvoiceLine or QuickBooksSettings (`MasterDataSeeder` returns
+early once the press and shipping methods exist).
 
 ## Phase 1 compatibility (Appendix A)
 
@@ -188,6 +244,8 @@ or once the SO reaches Shipped / Invoiced / Closed. Partial shipments raise the 
   Before each create, Phase 1 queries `Invoice WHERE DocNumber = …`, so the push is idempotent and
   catches invoices Sabrina already keyed by hand.
 - Quantity = quantity **ordered**, not shipped. That is what Sabrina keys today.
+- Item / class: the E8 mapping, with the per-line overrides from E9/E10. Phase 1 maps the stored names
+  to `ItemRef` / `ClassRef` ids.
 - Unit price precision: LabelShop keeps 4 or more decimals on big-run lines. If QBO rounds the
   rate, Phase 1 sends `Amount` (or adds a rounding line) so the totals match. The preview should
   show both the amount and the rate.
@@ -212,24 +270,38 @@ or once the SO reaches Shipped / Invoiced / Closed. Partial shipments raise the 
 1. **Carrier markup: always 1.5× with no minimum?** What's built is a single multiplier setting
    (1.5) with no minimum and no per-customer or per-carrier exception. A minimum charge would be one
    more setting.
-2. **Terms precedence: LabelShop vs QuickBooks.** LabelShop stores `Customer.Terms` (default
-   Net 30). Which wins when that differs from the customer's terms in QB? E9 would show LabelShop's
-   terms and due date. If QB's terms win, the preview should say so instead of showing a due date.
-3. **Where does the resale certificate live?** LabelShop has a `TaxExempt` flag on the customer but
-   nowhere to keep the certificate. Phase 0 only adds the `TaxSetupComplete` flag (E7). If the
-   certificate should be stored in LabelShop, that means a document upload on the customer.
+2. **Terms precedence: LabelShop vs QuickBooks.** The preview shows LabelShop's `Customer.Terms`
+   (default Net 30) and due date. If QB's terms win, the preview should say so instead.
+3. **Where does the resale certificate live?** LabelShop has `TaxExempt` and now `TaxSetupComplete`,
+   but nowhere to keep the certificate itself (that would be a document upload on the customer).
 4. **Do $0 samples need a QB record?** What's built: no. A non-billable invoice closes without one
-   (E5), and the E6 rule keeps $0 invoices out of Ready. If QB does need a $0 record, $0 invoices
-   should go to Ready instead.
-5. **Are Design, Rush and Die Creation always separate charge lines?** E8 assumes they are, with
-   one QB item per line type. If they are sometimes folded into the label price, mapping by line
-   type can't separate them.
+   (E5), and $0 invoices wait with "close it as non-billable or add charges".
+5. **Are Design, Rush and Die Creation always separate charge lines?** E8 assumes so and classifies
+   them by keywords in the description; anything else falls to Sales with a warning.
 
-Questions that came up while building:
+Decided while building (tell Andrew):
 
-6. **Partial shipments and under-runs.** Should an order be billed when its first shipment goes,
-   or only when everything has shipped? And does a line shipped short of the ordered quantity count
-   as shipped? (See the E6 design point above.)
-7. **Older shipments.** For shipments recorded before E2, billed shipping is worked out from their
-   package cost × 1.5 when the order ships by carrier. Is that acceptable for the drafts open at
-   deploy time? The alternative is to leave those at the quoted amount.
+6. **Partial shipments and under-runs** (Thad): bill when the order is fully shipped — every line
+   shipped in full, or the order marked Shipped. Under-runs are finished with *Mark order shipped* on
+   the shipment page.
+7. **Older shipments.** Shipments recorded before E2 get billed shipping worked out from their package
+   cost × 1.5 when the order ships by carrier. The alternative is leaving those drafts at the quote.
+
+New questions:
+
+8. **Deploy day, customers.** Customers with an exported invoice were marked tax-setup complete; the
+   rest wait on the new-client form. Right cut-off?
+9. **Deploy day, billing contacts.** Every customer without a contact whose role says billing / AP /
+   accounting and has an email will have its invoices on Waiting until one is added. Should the
+   primary contact's email count as a fallback instead?
+10. **QuickBooks names.** Are the item names (Sales, Shipping, Design, Rush, Die Creation), the class
+    names (Roll Label, Shrink Sleeves, Buyout) and the `OUTSOURCED` substrate code exactly as in QB /
+    LabelShop? Sabrina can change them on Setup → QuickBooks mapping.
+11. **Classes on mixed orders and shipping.** Charges and the shipping line take the first product
+    line's class. Is that right when an order mixes roll labels and shrink sleeves, and should the
+    shipping line carry a class at all?
+12. **Rate precision.** Sales-order prices with 5 decimals are stored with 4, while the invoice keeps
+    the exact line total (the preview says "key the amount, not the rate"). Should the SO form round
+    prices to 4 decimals up front?
+13. **Die warning threshold.** The 12 oz example (8" × 1-up on a 13" web) uses 61.5%, so the 60% rule
+    doesn't flag it. Raise the threshold to 65–70%?
