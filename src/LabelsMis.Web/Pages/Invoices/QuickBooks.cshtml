@@ -1,0 +1,338 @@
+@page "/invoices/{id:guid}/quickbooks"
+@model LabelsMis.Web.Pages.Invoices.QuickBooksModel
+@using LabelsMis.Web.Services.QuickBooks
+@{
+    ViewData["Title"] = $"QuickBooks preview · {Model.Preview?.DocNumber}";
+    ViewData["BackNav"] = new BackNavModel();
+}
+
+@if (Model.Preview is null) { <p>Not found.</p>; return; }
+
+@{
+    var p = Model.Preview;
+    var statusBadge = p.Status switch
+    {
+        QbInvoiceStatus.Ready => "text-bg-success",
+        QbInvoiceStatus.Waiting => "text-bg-warning",
+        QbInvoiceStatus.Exported => "text-bg-primary",
+        _ => "text-bg-secondary"
+    };
+
+    IEnumerable<string> Options(IReadOnlyList<string> known, string current) =>
+        known.Contains(current) ? known : known.Append(current);
+}
+
+@functions {
+    private static string AddressText(QbAddress? a) =>
+        a is null
+            ? string.Empty
+            : string.Join("\n", new[]
+            {
+                a.Name,
+                a.Line1,
+                a.Line2,
+                string.Join(" ", new[] { string.IsNullOrWhiteSpace(a.City) ? null : a.City + ",", a.State, a.Zip }.Where(x => !string.IsNullOrWhiteSpace(x)))
+            }.Where(x => !string.IsNullOrWhiteSpace(x)));
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+    <div>
+        <h1 class="h4 mb-0">
+            Preview for QuickBooks
+            <span class="badge @statusBadge align-middle" id="qb-status">@p.Status</span>
+        </h1>
+        <div class="text-muted small">
+            Key this into QuickBooks as shown. Invoice <a asp-page="Detail" asp-route-id="@p.InvoiceId">@p.DocNumber</a>
+            &middot; Sales order <a asp-page="/SalesOrders/Edit" asp-route-id="@p.SalesOrderId">@p.OrderNumber</a>
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <a asp-page="Detail" asp-route-id="@p.InvoiceId" class="btn btn-sm btn-outline-secondary">Open invoice</a>
+        <a href="/invoices/@p.InvoiceId/quickbooks.json" class="btn btn-sm btn-outline-secondary" target="_blank">JSON</a>
+    </div>
+</div>
+
+<div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
+@if (TempData["QuickBooksPreviewStatus"] is string previewStatus)
+{
+    <div class="alert alert-success py-2 small" id="qb-preview-status">@previewStatus</div>
+}
+
+@if (p.Blockers.Count > 0)
+{
+    <div class="alert alert-danger py-2 mb-2" id="qb-blockers">
+        <div class="fw-semibold">Not ready for QuickBooks</div>
+        <ul class="mb-0 small">
+            @foreach (var blocker in p.Blockers)
+            {
+                <li>@blocker</li>
+            }
+        </ul>
+    </div>
+}
+
+@if (p.ExportedAt is { } exportedAt)
+{
+    <div class="alert alert-primary py-2 mb-2 small" id="qb-exported">
+        Exported to QuickBooks @exportedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")@(p.ExportedBy is null ? "" : $" by {p.ExportedBy}").
+    </div>
+}
+
+@if (p.Warnings.Count > 0)
+{
+    <div class="alert alert-warning py-2 mb-2" id="qb-warnings">
+        <ul class="mb-0 small">
+            @foreach (var warning in p.Warnings)
+            {
+                <li>@warning</li>
+            }
+        </ul>
+    </div>
+}
+
+<div class="card mb-2" id="qb-invoice">
+    <div class="card-body small">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="text-muted">Customer</div>
+                <div class="fw-semibold">
+                    <span id="qb-customer">@p.CustomerName</span>
+                    <button type="button" class="btn btn-link btn-sm p-0 align-baseline qb-copy" data-copy="@p.CustomerName" title="Copy">copy</button>
+                </div>
+                <div class="text-muted">
+                    QuickBooks id: <span id="qb-customer-id">@(p.QuickBooksCustomerId ?? "not linked")</span>
+                    &middot; <a asp-page="/Customers/Edit" asp-route-id="@p.CustomerId">customer</a>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted">Customer email</div>
+                @if (p.BillingEmail is not null)
+                {
+                    <div>
+                        <span id="qb-billing-email">@p.BillingEmail</span>
+                        <button type="button" class="btn btn-link btn-sm p-0 align-baseline qb-copy" data-copy="@p.BillingEmail" title="Copy">copy</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-danger" id="qb-billing-email">No billing contact</div>
+                }
+            </div>
+            <div class="col-md-4">
+                <div class="row g-1">
+                    <div class="col-6 text-muted">Terms</div><div class="col-6" id="qb-terms">@p.Terms</div>
+                    <div class="col-6 text-muted">Invoice date</div><div class="col-6" id="qb-txn-date">@p.TxnDate.ToString("MM/dd/yyyy")</div>
+                    <div class="col-6 text-muted">Due date</div><div class="col-6" id="qb-due-date">@p.DueDate.ToString("MM/dd/yyyy")</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted">Bill to</div>
+                <div style="white-space: pre-line" id="qb-bill-to">@(p.BillTo is null ? "—" : AddressText(p.BillTo))</div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted">Ship to</div>
+                <div style="white-space: pre-line" id="qb-ship-to">@(p.ShipTo is null ? "—" : AddressText(p.ShipTo))</div>
+            </div>
+            <div class="col-md-4">
+                <div class="row g-1">
+                    <div class="col-6 text-muted">Invoice no.</div>
+                    <div class="col-6">
+                        <span class="fw-semibold" id="qb-doc-number">@p.DocNumber</span>
+                        <button type="button" class="btn btn-link btn-sm p-0 align-baseline qb-copy" data-copy="@p.DocNumber" title="Copy">copy</button>
+                    </div>
+                    <div class="col-6 text-muted">P.O. Number</div>
+                    <div class="col-6">
+                        <span id="qb-po">@(p.CustomerPoNumber ?? "—")</span>
+                        @if (p.CustomerPoNumber is not null)
+                        {
+                            <button type="button" class="btn btn-link btn-sm p-0 align-baseline qb-copy" data-copy="@p.CustomerPoNumber" title="Copy">copy</button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <table class="table table-sm align-middle small mb-0" id="qb-lines">
+        <thead class="table-light">
+        <tr>
+            <th style="width: 2rem">#</th>
+            <th style="width: 13rem">Product/Service</th>
+            <th>Description</th>
+            <th class="text-end">Qty</th>
+            <th class="text-end">Rate</th>
+            <th class="text-end">Amount</th>
+            <th style="width: 12rem">Class</th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var line in p.Lines)
+        {
+            <tr class="qb-line" data-line-id="@line.InvoiceLineId">
+                <td>@line.LineNumber</td>
+                <td>
+                    @if (Model.CanEditOverrides)
+                    {
+                        <select class="form-select form-select-sm qb-item" data-override="@line.ItemOverride" aria-label="QuickBooks item for line @line.LineNumber">
+                            @if (line.ItemOverride is not null)
+                            {
+                                <option value="">↺ Back to mapping</option>
+                            }
+                            @foreach (var option in Options(p.ItemOptions, line.Item))
+                            {
+                                <option value="@option" selected="@(option == line.Item)">@option</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <span class="qb-item-text">@line.Item</span>
+                    }
+                    <div class="text-muted qb-item-source">@line.ItemSource</div>
+                </td>
+                <td>
+                    @line.Description
+                    <button type="button" class="btn btn-link btn-sm p-0 align-baseline qb-copy" data-copy="@line.Description" title="Copy">copy</button>
+                </td>
+                <td class="text-end">@line.Quantity.ToString("N0")</td>
+                <td class="text-end">@line.Rate.ToString("0.00####")</td>
+                <td class="text-end">
+                    <span class="qb-amount">@line.Amount.ToString("N2")</span>
+                    <button type="button" class="btn btn-link btn-sm p-0 align-baseline qb-copy" data-copy="@line.Amount.ToString("0.00")" title="Copy">copy</button>
+                </td>
+                <td>
+                    @if (Model.CanEditOverrides)
+                    {
+                        <select class="form-select form-select-sm qb-class" data-override="@line.ClassOverride" aria-label="QuickBooks class for line @line.LineNumber">
+                            @if (line.ClassOverride is not null)
+                            {
+                                <option value="">↺ Back to mapping</option>
+                            }
+                            @foreach (var option in Options(p.ClassOptions, line.Class))
+                            {
+                                <option value="@option" selected="@(option == line.Class)">@option</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <span class="qb-class-text">@line.Class</span>
+                    }
+                    <div class="text-muted qb-class-source">@line.ClassSource</div>
+                </td>
+            </tr>
+        }
+        <tr id="qb-shipping-line">
+            <td></td>
+            <td>@p.Shipping.Item<div class="text-muted">Shipping</div></td>
+            <td>Shipping</td>
+            <td></td>
+            <td></td>
+            <td class="text-end">
+                @p.Shipping.Amount.ToString("N2")
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline qb-copy" data-copy="@p.Shipping.Amount.ToString("0.00")" title="Copy">copy</button>
+            </td>
+            <td>@p.Shipping.Class<div class="text-muted">Job's class</div></td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="card-body small border-top">
+        <div class="row">
+            <div class="col-md-7 text-muted">
+                Don't key tax: QuickBooks applies the customer's tax / resale set-up to the ship-to address.
+                LabelShop reference: subtotal @p.LabelShopSubtotal.ToString("C2") · tax @p.LabelShopTax.ToString("C2") · total @p.LabelShopTotal.ToString("C2").
+            </div>
+            <div class="col-md-5">
+                <div class="d-flex justify-content-between"><span class="text-muted">Lines</span><span id="qb-lines-total">@p.LinesTotal.ToString("C2")</span></div>
+                <div class="d-flex justify-content-between"><span class="text-muted">Shipping</span><span>@p.Shipping.Amount.ToString("C2")</span></div>
+                <div class="d-flex justify-content-between fw-semibold"><span>Total before tax</span><span id="qb-total">@p.Total.ToString("C2")</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Model.CanEditOverrides)
+{
+    <form id="qb-antiforgery" class="d-none">@Html.AntiForgeryToken()</form>
+}
+
+<script>
+    (function () {
+        document.querySelectorAll('.qb-copy').forEach(button => {
+            button.addEventListener('click', () => {
+                const text = button.dataset.copy || '';
+                const done = () => { const old = button.textContent; button.textContent = 'copied'; setTimeout(() => { button.textContent = old; }, 1200); };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(done, () => {});
+                }
+            });
+        });
+
+        const antiforgery = document.querySelector('#qb-antiforgery input[name="__RequestVerificationToken"]');
+        if (!antiforgery) return;
+
+        function ensureResetOption(select, isOverride) {
+            const reset = select.querySelector('option[value=""]');
+            if (isOverride && !reset) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = '↺ Back to mapping';
+                select.insertBefore(option, select.firstChild);
+            } else if (!isOverride && reset) {
+                reset.remove();
+            }
+        }
+
+        function setSelected(select, value) {
+            if (![...select.options].some(o => o.value === value)) {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value;
+                select.appendChild(option);
+            }
+            select.value = value;
+        }
+
+        document.querySelectorAll('tr.qb-line').forEach(row => {
+            const itemSelect = row.querySelector('select.qb-item');
+            const classSelect = row.querySelector('select.qb-class');
+            if (!itemSelect || !classSelect) return;
+
+            async function save(changed) {
+                const body = new URLSearchParams();
+                body.set('__RequestVerificationToken', antiforgery.value);
+                body.set('lineId', row.dataset.lineId);
+                body.set('item', changed === itemSelect ? itemSelect.value : (itemSelect.dataset.override || ''));
+                body.set('qbClass', changed === classSelect ? classSelect.value : (classSelect.dataset.override || ''));
+                row.classList.remove('table-success', 'table-danger');
+                const response = await fetch(window.location.pathname + '?handler=Override', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    row.classList.add('table-danger');
+                    row.title = result.error || 'Could not save';
+                    return;
+                }
+
+                const itemOverride = result.itemSource === 'Override';
+                const classOverride = result.classSource === 'Override';
+                itemSelect.dataset.override = itemOverride ? result.item : '';
+                classSelect.dataset.override = classOverride ? result.class : '';
+                ensureResetOption(itemSelect, itemOverride);
+                ensureResetOption(classSelect, classOverride);
+                setSelected(itemSelect, result.item);
+                setSelected(classSelect, result.class);
+                row.querySelector('.qb-item-source').textContent = result.itemSource;
+                row.querySelector('.qb-class-source').textContent = result.classSource;
+                row.classList.add('table-success');
+                row.dataset.saved = String(Number(row.dataset.saved || '0') + 1);
+            }
+
+            itemSelect.addEventListener('change', () => save(itemSelect));
+            classSelect.addEventListener('change', () => save(classSelect));
+        });
+    })();
+</script>

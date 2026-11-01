@@ -89,8 +89,38 @@ public static class QbInvoiceStatus
 public class QuickBooksInvoiceService(
     LabelsMisDbContext db,
     InvoiceService invoiceService,
-    QuickBooksMappingService mappingService)
+    QuickBooksMappingService mappingService,
+    ICurrentUserService currentUser)
 {
+    /// <summary>Sets (blank clears) one line's QuickBooks item / class override from the preview.
+    /// Refused once the invoice is exported, non-billable or void.</summary>
+    public async Task<InvoiceLineQbMapping> SetLineOverridesAsync(
+        Guid invoiceId,
+        Guid invoiceLineId,
+        string? item,
+        string? qbClass,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = currentUser.UserId ?? throw new InvalidOperationException("User is not authenticated.");
+        var invoice = await db.Invoices.AsNoTracking()
+            .Where(i => i.Id == invoiceId)
+            .Select(i => new { i.Status, i.NonBillable, i.QbExportedAt })
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new InvalidOperationException("Invoice not found.");
+        if (invoice.Status == InvoiceStatus.Void || invoice.NonBillable || invoice.QbExportedAt is not null)
+        {
+            throw new InvalidOperationException("Only invoices waiting for QuickBooks can be changed.");
+        }
+
+        var line = await db.InvoiceLines.SingleOrDefaultAsync(l => l.Id == invoiceLineId && l.InvoiceId == invoiceId, cancellationToken)
+            ?? throw new InvalidOperationException("Invoice line not found.");
+        line.SetQbOverrides(item, qbClass, userId, DateTime.UtcNow);
+        await db.SaveChangesAsync(cancellationToken);
+
+        var mapped = await mappingService.MapInvoiceAsync(invoiceId, cancellationToken);
+        return mapped!.Lines.Single(l => l.InvoiceLineId == invoiceLineId);
+    }
+
     public async Task<QbInvoicePreview?> GetPreviewAsync(Guid invoiceId, CancellationToken cancellationToken = default)
     {
         var invoice = await db.Invoices.AsNoTracking()

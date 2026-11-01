@@ -169,6 +169,10 @@
                         <button type="submit" class="btn btn-sm btn-outline-secondary">Unmark exported</button>
                     </form>
                 }
+                @if (!Model.OnExportedTab)
+                {
+                    <a href="/invoices/@item.Id/quickbooks" class="btn btn-sm btn-outline-secondary">QB preview</a>
+                }
                 <a asp-page="Detail" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Open</a>
             </td>
         </tr>

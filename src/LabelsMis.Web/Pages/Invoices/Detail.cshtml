@@ -33,7 +33,10 @@
             }
         </div>
     </div>
-    <a asp-page-handler="Pdf" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-secondary">Download invoice</a>
+    <div class="d-flex gap-2">
+        <a href="/invoices/@Model.Id/quickbooks" class="btn btn-sm btn-primary" id="qb-preview-link">Preview for QuickBooks</a>
+        <a asp-page-handler="Pdf" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-secondary">Download invoice</a>
+    </div>
 </div>
 
 <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>

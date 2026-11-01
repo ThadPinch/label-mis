@@ -353,7 +353,7 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
         var order = await SeedOrderAsync(quantity: 1000, unitPrice: 0.12345m, chargeAmount: 75m);
         var invoice = await _invoiceService.CreateFromSalesOrderAsync(order.Id);
         var mapping = new LabelsMis.Web.Services.QuickBooks.QuickBooksMappingService(_db, new StubCurrentUserService(TestUserId));
-        var previews = new LabelsMis.Web.Services.QuickBooks.QuickBooksInvoiceService(_db, _invoiceService, mapping);
+        var previews = new LabelsMis.Web.Services.QuickBooks.QuickBooksInvoiceService(_db, _invoiceService, mapping, new StubCurrentUserService(TestUserId));
 
         var preview = await previews.GetPreviewAsync(invoice.Id);
 
@@ -371,10 +371,11 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
         preview.Blockers.Should().Equal("Not shipped yet (0 of 1 lines)");
         (await previews.GetPreviewAsync(Guid.NewGuid())).Should().BeNull();
 
-        // Override the charge line, then edit the order's price: the rebuilt draft keeps it.
-        var charge = await _db.InvoiceLines.SingleAsync(l => l.InvoiceId == invoice.Id && l.SalesOrderLineId == null);
-        charge.SetQbOverrides("Design", "Buyout", TestUserId, DateTime.UtcNow);
-        await _db.SaveChangesAsync();
+        // Override the charge line from the preview, then edit the order's price: the rebuilt draft keeps it.
+        var charge = await _db.InvoiceLines.AsNoTracking().SingleAsync(l => l.InvoiceId == invoice.Id && l.SalesOrderLineId == null);
+        var saved = await previews.SetLineOverridesAsync(invoice.Id, charge.Id, "Design", "Buyout");
+        saved.Mapping.Item.Should().Be("Design");
+        saved.Mapping.ClassSource.Should().Be("Override");
         var line = await _db.SalesOrderLines.SingleAsync(l => l.SalesOrderId == order.Id);
         line.Update(1000, 0.2m, null, TestUserId, DateTime.UtcNow);
         await _db.SaveChangesAsync();
@@ -385,6 +386,13 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
         preview!.Lines[0].Amount.Should().Be(200m);
         preview.Lines[1].Should().Match<LabelsMis.Web.Services.QuickBooks.QbPreviewLine>(l =>
             l.Item == "Design" && l.Class == "Buyout" && l.ItemSource == "Override" && l.ItemOverride == "Design");
+
+        // Once exported, the preview refuses changes.
+        var exported = await _db.Invoices.SingleAsync(i => i.Id == invoice.Id);
+        exported.MarkExported(DateTime.UtcNow, TestUserId, DateTime.UtcNow);
+        await _db.SaveChangesAsync();
+        var act = () => previews.SetLineOverridesAsync(invoice.Id, preview.Lines[1].InvoiceLineId, null, null);
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
