@@ -1417,3 +1417,49 @@ body {
 .so-lines-table > tbody > tr:last-child > * {
   border-bottom: 0;
 }
+
+/* ==========================================================================
+   Job files panel (Jobs/Detail → _JobFilesPanel)
+   Fixed layout: the sized columns never grow, the File column takes the rest
+   and wraps, so the table can't spill past its card. Below min-width the
+   .table-responsive wrapper scrolls instead.
+   ========================================================================== */
+.job-files-table {
+  table-layout: fixed;
+  min-width: 32rem;
+}
+
+/* Wide enough for the longest category label plus the select's chevron padding. */
+.job-files-col-category {
+  width: 10.75rem;
+}
+
+/* Date on one line, time wraps beneath it; the uploader email wraps below both. */
+.job-files-col-uploaded {
+  width: 6.5rem;
+}
+
+.job-files-col-size {
+  width: 4.75rem;
+}
+
+.job-files-col-actions {
+  width: 4rem;
+}
+
+/* The widest cards (xxl container) have room for date, time and a typical email on one line. */
+@media (min-width: 1400px) {
+  .job-files-col-uploaded {
+    width: 10.5rem;
+  }
+}
+
+/* Notes clamp to two lines; the full text is in the title. */
+.job-files-note {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
