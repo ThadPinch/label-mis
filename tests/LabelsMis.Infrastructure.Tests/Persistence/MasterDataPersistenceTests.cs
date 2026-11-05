@@ -61,7 +61,7 @@ public class MasterDataPersistenceTests : IAsyncLifetime
         customer.AddAddress(Address.Create(Guid.NewGuid(), id, AddressType.Billing, "123 Main St", null,
             "Chicago", "IL", "60601", "US", true, TestUserId, now));
         customer.AddContact(Contact.Create(Guid.NewGuid(), id, "Jane", "Doe", "jane@acme.com", null,
-            "Buyer", true, TestUserId, now));
+            "Buyer", true, true, TestUserId, now));
 
         _db.Customers.Add(customer);
         await _db.SaveChangesAsync();
@@ -73,7 +73,7 @@ public class MasterDataPersistenceTests : IAsyncLifetime
 
         loaded.Name.Should().Be("Acme Labels");
         loaded.Addresses.Should().HaveCount(1);
-        loaded.Contacts.Should().HaveCount(1);
+        loaded.Contacts.Should().ContainSingle().Which.IsBillingContact.Should().BeTrue();
     }
 
     [Fact]

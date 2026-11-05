@@ -340,12 +340,17 @@ public class EditModel(
         {
             var customer = await customerService.GetByIdAsync(Order.CustomerId, cancellationToken);
             CustomerTerms = customer?.Terms;
-            CustomerContacts = (customer?.Contacts ?? [])
+            var contacts = customer?.Contacts ?? [];
+            CustomerContacts = contacts
                 .Where(c => !string.IsNullOrWhiteSpace(c.Email))
-                .OrderByDescending(c => c.IsPrimary)
+                .OrderByDescending(c => c.IsBillingContact)
+                .ThenByDescending(c => c.IsPrimary)
                 .Select(c => (c.FullName, c.Email!))
                 .ToList();
-            DefaultInvoiceEmail = CustomerContacts.Select(c => c.Email).FirstOrDefault();
+            // Invoices go to the billing contact (else the primary contact), as in the QuickBooks preview.
+            DefaultInvoiceEmail = Domain.Invoicing.CustomerBillingRules.BillingEmail(
+                    contacts.Select(c => new Domain.Invoicing.BillingContactFacts(c.IsBillingContact, c.Email, c.IsPrimary)))
+                ?? CustomerContacts.Select(c => c.Email).FirstOrDefault();
         }
     }
 

@@ -16,5 +16,6 @@ public class ContactConfiguration : IEntityTypeConfiguration<Contact>
         builder.Property(c => c.Email).HasMaxLength(256);
         builder.Property(c => c.Phone).HasMaxLength(50);
         builder.Property(c => c.Role).HasMaxLength(100);
+        builder.Property(c => c.IsBillingContact).HasDefaultValue(false);
     }
 }

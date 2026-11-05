@@ -75,7 +75,8 @@
         </div>
         <div class="col-12 form-text mt-1">
             Until the new-client (tax / resale) form is back, this customer's invoices wait with
-            "Waiting on new-client form". Invoices also wait until a contact with role <strong>Billing</strong> has an email.
+            "Waiting on new-client form". Invoices go to the contact ticked <strong>Billing</strong> — or the
+            primary contact when none is — and wait until one of them has an email.
         </div>
     </div>
 </fieldset>
@@ -179,9 +180,13 @@
                     <input asp-for="Contacts[i].Role" class="form-control form-control-sm" list="contact-role-options" />
                 </div>
                 <div class="col-12 col-md-1 align-self-end">
-                    <div class="form-check mb-1">
+                    <div class="form-check mb-0">
                         <input asp-for="Contacts[i].IsPrimary" class="form-check-input" />
-                        <label asp-for="Contacts[i].IsPrimary" class="form-check-label small"></label>
+                        <label asp-for="Contacts[i].IsPrimary" class="form-check-label small">Primary</label>
+                    </div>
+                    <div class="form-check mb-1">
+                        <input asp-for="Contacts[i].IsBillingContact" class="form-check-input" />
+                        <label asp-for="Contacts[i].IsBillingContact" class="form-check-label small" title="Invoices go to this contact">Billing</label>
                     </div>
                 </div>
             </div>
@@ -266,10 +271,15 @@
                 <input name="Input.Contacts[__INDEX__].Role" id="Input_Contacts___INDEX___Role" class="form-control form-control-sm" list="contact-role-options" />
             </div>
             <div class="col-12 col-md-1 align-self-end">
-                <div class="form-check mb-1">
+                <div class="form-check mb-0">
                     <input type="hidden" name="Input.Contacts[__INDEX__].IsPrimary" value="false" />
                     <input name="Input.Contacts[__INDEX__].IsPrimary" id="Input_Contacts___INDEX___IsPrimary" class="form-check-input" type="checkbox" value="true" />
                     <label class="form-check-label small" for="Input_Contacts___INDEX___IsPrimary">Primary</label>
+                </div>
+                <div class="form-check mb-1">
+                    <input type="hidden" name="Input.Contacts[__INDEX__].IsBillingContact" value="false" />
+                    <input name="Input.Contacts[__INDEX__].IsBillingContact" id="Input_Contacts___INDEX___IsBillingContact" class="form-check-input" type="checkbox" value="true" />
+                    <label class="form-check-label small" for="Input_Contacts___INDEX___IsBillingContact" title="Invoices go to this contact">Billing</label>
                 </div>
             </div>
         </div>
@@ -277,7 +287,7 @@
 </template>
 
 <datalist id="contact-role-options">
-    <option value="Billing"></option>
+    <option value="Accounts payable"></option>
     <option value="Purchasing"></option>
     <option value="Art / proofs"></option>
     <option value="Shipping"></option>

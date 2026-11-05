@@ -111,11 +111,15 @@
                     <div>
                         <span id="qb-billing-email">@p.BillingEmail</span>
                         <button type="button" class="btn btn-link btn-sm p-0 align-baseline qb-copy" data-copy="@p.BillingEmail" title="Copy">copy</button>
+                        @if (p.BillingEmailIsPrimaryFallback)
+                        {
+                            <span class="text-muted small" id="qb-billing-email-source">(primary contact)</span>
+                        }
                     </div>
                 }
                 else
                 {
-                    <div class="text-danger" id="qb-billing-email">No billing contact</div>
+                    <div class="text-danger" id="qb-billing-email">No billing email</div>
                 }
             </div>
             <div class="col-md-4">

@@ -17,6 +17,10 @@ public class Contact : EntityBase
     public string? Role { get; private set; }
     public bool IsPrimary { get; private set; }
 
+    /// <summary>Invoices go to this contact's email (QuickBooks preview, Email invoice). With no
+    /// contact ticked, the primary contact's email stands in. Role is a free-text label only.</summary>
+    public bool IsBillingContact { get; private set; }
+
     public string FullName => $"{FirstName} {LastName}".Trim();
 
     public static Contact Create(
@@ -28,6 +32,7 @@ public class Contact : EntityBase
         string? phone,
         string? role,
         bool isPrimary,
+        bool isBillingContact,
         Guid createdById,
         DateTime createdAt)
     {
@@ -49,7 +54,8 @@ public class Contact : EntityBase
             Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim(),
             Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(),
             Role = string.IsNullOrWhiteSpace(role) ? null : role.Trim(),
-            IsPrimary = isPrimary
+            IsPrimary = isPrimary,
+            IsBillingContact = isBillingContact
         };
         contact.SetCreated(id, createdById, createdAt);
         return contact;
@@ -62,6 +68,7 @@ public class Contact : EntityBase
         string? phone,
         string? role,
         bool isPrimary,
+        bool isBillingContact,
         Guid modifiedById,
         DateTime modifiedAt)
     {
@@ -81,6 +88,7 @@ public class Contact : EntityBase
         Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
         Role = string.IsNullOrWhiteSpace(role) ? null : role.Trim();
         IsPrimary = isPrimary;
+        IsBillingContact = isBillingContact;
         SetModified(modifiedById, modifiedAt);
     }
 }

@@ -220,7 +220,7 @@ public class JobShippingIntegrationTests : IAsyncLifetime
         customer.SetQuickBooksSetup($"QB-{suffix}", true, null, TestUserId, now);
         _db.Customers.Add(customer);
         _db.Contacts.Add(Contact.Create(Guid.NewGuid(), customerId, "Bea", "Biller", $"ap-{suffix}@example.com",
-            null, "Billing", true, TestUserId, now));
+            null, "Billing", true, true, TestUserId, now));
         _db.Stocks.Add(Stock.Create(stockId, $"ST{suffix}"[..10], "BOPP", "BOPP", "Acrylic", "PET", 2.3m, 13.5m,
             supplierId, null, 0.85m, 1000m, TestUserId, now));
         var product = Product.Create(

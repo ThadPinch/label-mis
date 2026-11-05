@@ -874,7 +874,8 @@ public class InvoiceService(
     }
 
     /// <summary>Customer-level reasons an invoice can't go to QuickBooks yet (E7): the new-client
-    /// form isn't back, or no Billing contact has an email (<see cref="CustomerBillingRules"/>).</summary>
+    /// form isn't back, or neither a Billing contact nor the primary contact has an email
+    /// (<see cref="CustomerBillingRules"/>).</summary>
     private async Task<Dictionary<Guid, IReadOnlyList<string>>> GetCustomerBlockersAsync(
         IReadOnlyCollection<Guid> customerIds,
         CancellationToken cancellationToken)
@@ -885,7 +886,7 @@ public class InvoiceService(
             {
                 c.Id,
                 c.TaxSetupComplete,
-                Contacts = c.Contacts.Select(ct => new BillingContactFacts(ct.Role, ct.Email, ct.IsPrimary)).ToList()
+                Contacts = c.Contacts.Select(ct => new BillingContactFacts(ct.IsBillingContact, ct.Email, ct.IsPrimary)).ToList()
             })
             .ToListAsync(cancellationToken);
 

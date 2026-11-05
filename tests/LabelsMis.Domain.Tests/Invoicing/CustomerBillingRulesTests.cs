@@ -9,46 +9,67 @@ public class CustomerBillingRulesTests
     private static readonly Guid UserId = Guid.NewGuid();
     private static readonly DateTime Now = new(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc);
 
-    [Theory]
-    [InlineData("Billing", true)]
-    [InlineData("billing / AP", true)]
-    [InlineData("Accounts Payable", true)]
-    [InlineData("A/P", true)]
-    [InlineData("Invoices", true)]
-    [InlineData("Accounting", true)]
-    [InlineData("Purchasing", false)]
-    [InlineData("Approver", false)]
-    [InlineData(null, false)]
-    [InlineData("  ", false)]
-    public void IsBillingRole_MatchesBillingWords(string? role, bool expected)
-    {
-        CustomerBillingRules.IsBillingRole(role).Should().Be(expected);
-    }
-
     [Fact]
-    public void BillingEmail_PrefersThePrimaryBillingContactWithAnEmail()
+    public void ChooseBillingEmail_PrefersThePrimaryBillingContactWithAnEmail()
     {
-        var email = CustomerBillingRules.BillingEmail([
-            new BillingContactFacts("Purchasing", "buyer@x.com", true),
-            new BillingContactFacts("Billing", null, true),
-            new BillingContactFacts("Billing", "ap@x.com", false),
-            new BillingContactFacts("Billing", " lead-ap@x.com ", true)
+        var choice = CustomerBillingRules.ChooseBillingEmail([
+            new BillingContactFacts(false, "buyer@x.com", true),
+            new BillingContactFacts(true, null, true),
+            new BillingContactFacts(true, "ap@x.com", false),
+            new BillingContactFacts(true, " lead-ap@x.com ", true)
         ]);
 
-        email.Should().Be("lead-ap@x.com");
+        choice.Should().Be(new BillingEmailChoice("lead-ap@x.com", BillingEmailSource.BillingContact));
     }
 
     [Fact]
-    public void Blockers_NewClient_WaitsOnTheFormAndABillingContact()
+    public void ChooseBillingEmail_NoBillingContactWithAnEmail_FallsBackToThePrimaryContact()
     {
-        CustomerBillingRules.Blockers(false, [new BillingContactFacts("Purchasing", "buyer@x.com", true)])
+        var choice = CustomerBillingRules.ChooseBillingEmail([
+            new BillingContactFacts(true, "  ", false),
+            new BillingContactFacts(false, "other@x.com", false),
+            new BillingContactFacts(false, "owner@x.com", true)
+        ]);
+
+        choice.Should().Be(new BillingEmailChoice("owner@x.com", BillingEmailSource.PrimaryContact));
+        choice!.IsPrimaryFallback.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ChooseBillingEmail_NeitherABillingNorAPrimaryContactWithAnEmail_IsNull()
+    {
+        CustomerBillingRules.ChooseBillingEmail([
+            new BillingContactFacts(false, "other@x.com", false),
+            new BillingContactFacts(false, null, true)
+        ]).Should().BeNull();
+    }
+
+    [Fact]
+    public void Blockers_NewClient_WaitsOnTheFormAndABillingEmail()
+    {
+        CustomerBillingRules.Blockers(false, [new BillingContactFacts(false, "buyer@x.com", false)])
             .Should().Equal(CustomerBillingRules.NewClientFormBlocker, CustomerBillingRules.NoBillingContactBlocker);
     }
 
-    [Fact]
-    public void Blockers_SetUpCustomer_HasNone()
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Blockers_SetUpCustomer_WithABillingOrPrimaryEmail_HasNone(bool isBillingContact, bool isPrimary)
     {
-        CustomerBillingRules.Blockers(true, [new BillingContactFacts("Billing", "ap@x.com", false)]).Should().BeEmpty();
+        CustomerBillingRules.Blockers(true, [new BillingContactFacts(isBillingContact, "ap@x.com", isPrimary)])
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ContactCreateAndUpdate_CarryTheBillingTick()
+    {
+        var contact = Contact.Create(Guid.NewGuid(), Guid.NewGuid(), "Kim", "Wilson", "kim@x.com", null,
+            "Brand Strategy", false, true, UserId, Now);
+        contact.IsBillingContact.Should().BeTrue();
+
+        contact.Update("Kim", "Wilson", "kim@x.com", null, "Brand Strategy", false, false, UserId, Now);
+
+        contact.IsBillingContact.Should().BeFalse();
     }
 
     [Fact]

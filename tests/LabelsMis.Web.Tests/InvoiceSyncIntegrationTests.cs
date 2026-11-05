@@ -324,10 +324,40 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
         var customer = await _db.Customers.SingleAsync(c => c.Id == order.CustomerId);
         customer.SetQuickBooksSetup(null, true, null, TestUserId, DateTime.UtcNow);
         _db.Contacts.Add(Contact.Create(Guid.NewGuid(), customer.Id, "Ann", "Payable", "ap@example.com",
-            null, "Accounts Payable", false, TestUserId, DateTime.UtcNow));
+            null, "Accounts Payable", false, true, TestUserId, DateTime.UtcNow));
         await _db.SaveChangesAsync();
 
         (await _invoiceService.GetWaitingReasonsAsync(invoice.Id)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Readiness_NoBillingContact_PrimaryContactsEmailStandsIn_WithAWarningOnThePreview()
+    {
+        var order = await SeedOrderAsync(quantity: 100, unitPrice: 1m, chargeAmount: null, customerSetUp: false);
+        var invoice = await _invoiceService.CreateFromSalesOrderAsync(order.Id);
+        await _invoiceService.SetBillBeforeShipAsync(invoice.Id, true);
+        var customer = await _db.Customers.SingleAsync(c => c.Id == order.CustomerId);
+        customer.SetQuickBooksSetup("QB-PRIMARY", true, null, TestUserId, DateTime.UtcNow);
+        // A role that reads like billing no longer counts: only the Billing tick does.
+        _db.Contacts.Add(Contact.Create(Guid.NewGuid(), customer.Id, "Pat", "Buyer", "buyer@example.com",
+            null, "Billing", false, false, TestUserId, DateTime.UtcNow));
+        await _db.SaveChangesAsync();
+
+        (await _invoiceService.GetWaitingReasonsAsync(invoice.Id)).Should()
+            .Equal(LabelsMis.Domain.Invoicing.CustomerBillingRules.NoBillingContactBlocker);
+
+        _db.Contacts.Add(Contact.Create(Guid.NewGuid(), customer.Id, "Pia", "Primary", "owner@example.com",
+            null, "Owner", true, false, TestUserId, DateTime.UtcNow));
+        await _db.SaveChangesAsync();
+        _db.ChangeTracker.Clear();
+
+        (await _invoiceService.GetWaitingReasonsAsync(invoice.Id)).Should().BeEmpty();
+        var mapping = new LabelsMis.Web.Services.QuickBooks.QuickBooksMappingService(_db, new StubCurrentUserService(TestUserId));
+        var previews = new LabelsMis.Web.Services.QuickBooks.QuickBooksInvoiceService(_db, _invoiceService, mapping, new StubCurrentUserService(TestUserId));
+        var preview = await previews.GetPreviewAsync(invoice.Id);
+        preview!.BillingEmail.Should().Be("owner@example.com");
+        preview.BillingEmailIsPrimaryFallback.Should().BeTrue();
+        preview.Warnings.Should().Contain(w => w.StartsWith("No contact is ticked Billing"));
     }
 
     [Fact]
@@ -480,7 +510,7 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
             // Set up for QuickBooks (E7): tax form back and a Billing contact with an email.
             customer.SetQuickBooksSetup($"QB-{suffix}", true, null, TestUserId, now);
             _db.Contacts.Add(Contact.Create(Guid.NewGuid(), customerId, "Bea", "Biller", $"ap-{suffix}@example.com",
-                null, "Billing", true, TestUserId, now));
+                null, "Billing", true, true, TestUserId, now));
         }
         _db.Stocks.Add(Stock.Create(stockId, $"ST{suffix}"[..10], "BOPP", "BOPP", "Acrylic", "PET", 2.3m, 13.5m,
             supplierId, null, 0.85m, 1000m, TestUserId, now));

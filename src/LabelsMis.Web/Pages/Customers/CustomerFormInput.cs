@@ -73,7 +73,7 @@ public class CustomerFormInput
         SalesRepId,
         Notes,
         Addresses.Select(a => new AddressInput(a.Id, a.AddressType, a.Street1, a.Street2, a.City, a.State, a.Zip, a.Country, a.IsDefault)).ToList(),
-        Contacts.Select(c => new ContactInput(c.Id, c.FirstName, c.LastName, c.Email, c.Phone, c.Role, c.IsPrimary)).ToList(),
+        Contacts.Select(c => new ContactInput(c.Id, c.FirstName, c.LastName, c.Email, c.Phone, c.Role, c.IsPrimary, c.IsBillingContact)).ToList(),
         QuickBooksCustomerId,
         TaxSetupComplete,
         TaxSetupCompletedAt);
@@ -111,7 +111,8 @@ public class CustomerFormInput
             Email = c.Email,
             Phone = c.Phone,
             Role = c.Role,
-            IsPrimary = c.IsPrimary
+            IsPrimary = c.IsPrimary,
+            IsBillingContact = c.IsBillingContact
         }).ToList()
     };
 }
@@ -179,4 +180,8 @@ public class ContactFormInput
 
     [Display(Name = "Primary contact")]
     public bool IsPrimary { get; set; } = true;
+
+    /// <summary>Invoices go to this contact's email.</summary>
+    [Display(Name = "Billing")]
+    public bool IsBillingContact { get; set; }
 }

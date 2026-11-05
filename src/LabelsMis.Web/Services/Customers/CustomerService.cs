@@ -42,7 +42,8 @@ public record ContactInput(
     string? Email,
     string? Phone,
     string? Role,
-    bool IsPrimary);
+    bool IsPrimary,
+    bool IsBillingContact = false);
 
 public record CustomerForm(
     string Name,
@@ -191,6 +192,7 @@ public class CustomerService(LabelsMisDbContext db, ICurrentUserService currentU
                 contact.Phone,
                 contact.Role,
                 contact.IsPrimary,
+                contact.IsBillingContact,
                 userId,
                 now));
         }
@@ -304,6 +306,7 @@ public class CustomerService(LabelsMisDbContext db, ICurrentUserService currentU
                     input.Phone,
                     input.Role,
                     input.IsPrimary,
+                    input.IsBillingContact,
                     userId,
                     now);
             }
@@ -318,6 +321,7 @@ public class CustomerService(LabelsMisDbContext db, ICurrentUserService currentU
                     input.Phone,
                     input.Role,
                     input.IsPrimary,
+                    input.IsBillingContact,
                     userId,
                     now);
                 customer.AddContact(contact);

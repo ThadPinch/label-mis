@@ -69,7 +69,9 @@ public record QbInvoicePreview(
     DateTime? ExportedAt,
     string? ExportedBy,
     IReadOnlyList<string> ItemOptions,
-    IReadOnlyList<string> ClassOptions)
+    IReadOnlyList<string> ClassOptions,
+    /// <summary>No contact is ticked Billing, so <see cref="BillingEmail"/> is the primary contact's.</summary>
+    bool BillingEmailIsPrimaryFallback = false)
 {
     public bool IsReady => Status == QbInvoiceStatus.Ready;
     public bool CanEditOverrides => Status is QbInvoiceStatus.Ready or QbInvoiceStatus.Waiting;
@@ -197,6 +199,14 @@ public class QuickBooksInvoiceService(
             warnings.Add($"Not linked to a QuickBooks customer yet — find \"{invoice.Customer.Name}\" in QuickBooks and add its id on the customer.");
         }
 
+        var billingEmail = CustomerBillingRules.ChooseBillingEmail(
+            invoice.Customer.Contacts.Select(c => new BillingContactFacts(c.IsBillingContact, c.Email, c.IsPrimary)));
+        if (billingEmail is { IsPrimaryFallback: true })
+        {
+            warnings.Add($"No contact is ticked Billing — using the primary contact's email ({billingEmail.Email}). "
+                + "Tick Billing on the customer's accounts-payable contact if invoices go to someone else.");
+        }
+
         var status = invoice.Status == InvoiceStatus.Void
             ? QbInvoiceStatus.Void
             : invoice.NonBillable
@@ -252,7 +262,7 @@ public class QuickBooksInvoiceService(
             invoice.SalesOrder.CustomerPoNumber,
             invoice.SalesOrderId,
             invoice.SalesOrder.OrderNumber,
-            CustomerBillingRules.BillingEmail(customer.Contacts.Select(c => new BillingContactFacts(c.Role, c.Email, c.IsPrimary))),
+            billingEmail?.Email,
             shipTo,
             billingAddress,
             lines,
@@ -267,6 +277,7 @@ public class QuickBooksInvoiceService(
             invoice.QbExportedAt,
             exportedBy,
             mapped.Mapping.Items,
-            mapped.Mapping.Classes);
+            mapped.Mapping.Classes,
+            billingEmail?.IsPrimaryFallback ?? false);
     }
 }
