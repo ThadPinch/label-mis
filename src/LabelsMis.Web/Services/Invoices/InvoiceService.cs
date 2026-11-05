@@ -803,10 +803,19 @@ public class InvoiceService(
         }
 
         var orderIds = candidates.Select(c => c.SalesOrderId).Distinct().ToList();
+        // Jobs production already moved to Shipped/Closed: on a line that shipped nothing on a
+        // recorded shipment they are why the order looks unshipped, so the reason names them.
+        var shippedJobsByLine = (await db.Jobs.AsNoTracking()
+                .Where(j => orderIds.Contains(j.SalesOrderLine.SalesOrderId) && j.Status >= JobStatus.Shipped)
+                .OrderBy(j => j.JobNumber)
+                .Select(j => new { j.SalesOrderLineId, j.JobNumber })
+                .ToListAsync(cancellationToken))
+            .ToLookup(j => j.SalesOrderLineId, j => j.JobNumber);
         var progress = (await db.SalesOrderLines.AsNoTracking()
                 .Where(l => orderIds.Contains(l.SalesOrderId))
                 .Select(l => new
                 {
+                    l.Id,
                     l.SalesOrderId,
                     l.Quantity,
                     Shipped = db.ShipmentLines
@@ -818,7 +827,10 @@ public class InvoiceService(
             .ToDictionary(g => g.Key, g => (
                 Shipped: g.Count(x => x.Shipped >= x.Quantity),
                 Total: g.Count(),
-                Any: g.Any(x => x.Shipped > 0)));
+                Any: g.Any(x => x.Shipped > 0),
+                Unrecorded: (IReadOnlyList<string>)g.Where(x => x.Shipped == 0)
+                    .SelectMany(x => shippedJobsByLine[x.Id])
+                    .ToList()));
         var shipments = (await db.Shipments.AsNoTracking()
                 .Where(s => orderIds.Contains(s.SalesOrderId) && s.Status != ShipmentStatus.Pending)
                 .OrderBy(s => s.ShipmentNumber)
@@ -832,7 +844,7 @@ public class InvoiceService(
         var result = new Dictionary<Guid, IReadOnlyList<string>>();
         foreach (var c in candidates)
         {
-            var (shippedLines, totalLines, anyShipped) = progress.GetValueOrDefault(c.SalesOrderId);
+            var (shippedLines, totalLines, anyShipped, unrecordedJobs) = progress.GetValueOrDefault(c.SalesOrderId);
             IReadOnlyList<string> pending = [];
             if (c.Status == InvoiceStatus.Draft && c.ShippingOverride is null)
             {
@@ -850,7 +862,8 @@ public class InvoiceService(
                 anyShipped,
                 c.Total,
                 pending,
-                customerBlockers.GetValueOrDefault(c.CustomerId) ?? []));
+                customerBlockers.GetValueOrDefault(c.CustomerId) ?? [],
+                unrecordedJobs));
             if (reasons.Count > 0)
             {
                 result[c.Id] = reasons;

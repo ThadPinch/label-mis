@@ -8,6 +8,7 @@ using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Services.Estimates;
 using LabelsMis.Web.Services.Models;
 using LabelsMis.Web.Services.Rolls;
+using LabelsMis.Web.Services.Shipments;
 using Microsoft.EntityFrameworkCore;
 
 namespace LabelsMis.Web.Services.Jobs;
@@ -28,7 +29,10 @@ public record JobListItem(
     /// <summary>An imposed PDF exists for the job (pre-press has run the imposition).</summary>
     bool IsImposed = false,
     /// <summary>The imposed PDF predates the product's current artwork.</summary>
-    bool ImposedIsStale = false);
+    bool ImposedIsStale = false,
+    /// <summary>The order ships only by recording the shipment with packages (method flag, or no
+    /// method): the list offers Record shipment instead of Mark shipped.</summary>
+    bool ShipmentRecordRequired = false);
 
 /// <summary>Vendor facts for an outsourced job, shown on the job page and ticket instead of press info.</summary>
 public record JobOutsourceInfo(
@@ -174,6 +178,18 @@ public record JobActionPanel(
     /// <summary>Message from a failed submit, shown at the top of the popup when it is
     /// re-rendered in place (fetch) instead of redirecting back to the list.</summary>
     public string? Error { get; init; }
+
+    public Guid SalesOrderId { get; init; }
+    public string? ShippingMethodName { get; init; }
+
+    /// <summary>The order ships only by recording the shipment with packages, so a Rewound job's
+    /// popup records counts and points at Record shipment instead of marking it shipped.</summary>
+    public bool ShipmentRecordRequired { get; init; }
+
+    /// <summary>The viewer can record shipments (set by the page; the service doesn't know roles).</summary>
+    public bool CanShip { get; init; }
+
+    public bool ShipsByRecordOnly => ShipmentRecordRequired && Status == JobStatus.Rewound;
 }
 
 public class JobService(
@@ -182,7 +198,8 @@ public class JobService(
     DocumentNumberService documentNumbers,
     EstimateCalculationMapper calculationMapper,
     EstimatingService estimatingService,
-    RollService rollService)
+    RollService rollService,
+    ShipmentService shipmentService)
 {
     /// <summary>Job statuses considered "live" — still moving through production.</summary>
     public static readonly IReadOnlyList<JobStatus> LiveStatuses =
@@ -302,7 +319,8 @@ public class JobService(
                 j.SalesOrderLine.SalesOrder.OrderNumber,
                 j.IsOutsourced,
                 j.ImposedArtworkFilePath != null,
-                j.ImposedArtworkFilePath != null && !j.ImposedIsManual && j.ImposedFromArtworkFilePath != j.Product.ArtworkFilePath))
+                j.ImposedArtworkFilePath != null && !j.ImposedIsManual && j.ImposedFromArtworkFilePath != j.Product.ArtworkFilePath,
+                j.SalesOrderLine.SalesOrder.ShippingMethod == null || j.SalesOrderLine.SalesOrder.ShippingMethod.RequiresShipmentRecord))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<JobListItem>(items, page, pageSize, total);
@@ -917,7 +935,10 @@ public class JobService(
         }
     }
 
-    public async Task SetJobStatusAsync(
+    /// <summary>The job page's status dropdown (any direction). Setting a not-yet-shipped job to
+    /// Shipped or Closed follows the same shipment rule as Mark shipped.</summary>
+    /// <returns>The package-less shipment recorded for the job, if one was.</returns>
+    public async Task<Shipment?> SetJobStatusAsync(
         Guid jobId,
         JobStatus status,
         CancellationToken cancellationToken = default)
@@ -925,9 +946,11 @@ public class JobService(
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
         var job = await db.Jobs.Include(j => j.Operations).SingleAsync(j => j.Id == jobId, cancellationToken);
+        var shipment = await RecordShipmentIfShippingAsync(job, status, cancellationToken);
         job.SetStatus(status, userId, now);
         CompletePassedOperations(job, status, userId, now);
         await db.SaveChangesAsync(cancellationToken);
+        return shipment;
     }
 
     /// <summary>Counts of jobs in each of the supplied statuses (for the production stage nav).</summary>
@@ -956,8 +979,11 @@ public class JobService(
         return result;
     }
 
-    /// <summary>Advances a job forward to the given status (used by the production stage pages).</summary>
-    public async Task AdvanceJobStatusAsync(
+    /// <summary>Advances a job forward to the given status (production stage pages, the job page's
+    /// next-step button). Moving it to Shipped records its shipment first —
+    /// see <see cref="RecordShipmentIfShippingAsync"/>.</summary>
+    /// <returns>The package-less shipment recorded for the job, if one was.</returns>
+    public async Task<Shipment?> AdvanceJobStatusAsync(
         Guid jobId,
         JobStatus target,
         CancellationToken cancellationToken = default)
@@ -965,10 +991,30 @@ public class JobService(
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
         var job = await db.Jobs.Include(j => j.Operations).SingleAsync(j => j.Id == jobId, cancellationToken);
+        if (target <= job.Status)
+        {
+            throw new InvalidOperationException("Job status can only move forward.");
+        }
+
+        var shipment = await RecordShipmentIfShippingAsync(job, target, cancellationToken);
         job.AdvanceStatus(target, userId, now);
         CompletePassedOperations(job, target, userId, now);
         await db.SaveChangesAsync(cancellationToken);
+        return shipment;
     }
+
+    /// <summary>
+    /// A job moving to Shipped (or Closed) from production must leave a recorded shipment behind,
+    /// or its order never counts as shipped and the invoice waits forever. On a hand-off method
+    /// (pickup, delivery, customer account) the job's line goes on a package-less shipment
+    /// automatically; a method that needs the shipment record refuses with
+    /// <see cref="ShipmentRecordRequiredException"/>, leaving the job where it is. A line that
+    /// already shipped in full needs nothing.
+    /// </summary>
+    private async Task<Shipment?> RecordShipmentIfShippingAsync(Job job, JobStatus target, CancellationToken cancellationToken) =>
+        target >= JobStatus.Shipped && job.Status < JobStatus.Shipped
+            ? await shipmentService.RecordJobShippedAsync(job.Id, cancellationToken)
+            : null;
 
     /// <summary>
     /// Builds the job action popup for a job's current stage: the finishing task list when the
@@ -987,6 +1033,7 @@ public class JobService(
         var job = await db.Jobs.AsNoTracking()
             .Include(j => j.Product).ThenInclude(p => p.Substrate)
             .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.Customer)
+            .Include(j => j.SalesOrderLine).ThenInclude(l => l.SalesOrder).ThenInclude(o => o.ShippingMethod)
             .Include(j => j.Operations).ThenInclude(o => o.TimeEntries)
             .AsSplitQuery()
             .SingleOrDefaultAsync(j => j.Id == jobId, cancellationToken);
@@ -1104,7 +1151,12 @@ public class JobService(
             showRollClaim,
             counts,
             tasks,
-            rolls);
+            rolls)
+        {
+            SalesOrderId = job.SalesOrderLine.SalesOrderId,
+            ShippingMethodName = job.SalesOrderLine.SalesOrder.ShippingMethod?.Name,
+            ShipmentRecordRequired = job.SalesOrderLine.SalesOrder.ShippingMethod?.RequiresShipmentRecord ?? true
+        };
     }
 
     /// <summary>
@@ -1121,9 +1173,11 @@ public class JobService(
 
     /// <summary>
     /// The action popup's submit: claims roll usage when entered, records the stage operation's
-    /// counts/time, then advances the job to its next status.
+    /// counts/time, then advances the job to its next status — unless <paramref name="advance"/> is
+    /// false (a Rewound job on an order that ships by Record shipment only records its counts).
     /// </summary>
-    public async Task RecordAndAdvanceAsync(
+    /// <returns>The package-less shipment recorded when the advance shipped the job, if any.</returns>
+    public async Task<Shipment?> RecordAndAdvanceAsync(
         Guid jobId,
         Guid operationId,
         int goodCount,
@@ -1133,6 +1187,7 @@ public class JobService(
         decimal actualMinutes,
         string? rollBarcode,
         decimal? consumedLf,
+        bool advance = true,
         CancellationToken cancellationToken = default)
     {
         // A half-filled claim should error (inside RecordRollUsageAsync), not silently skip.
@@ -1147,14 +1202,18 @@ public class JobService(
                 operationId, goodCount, wasteCount, downtimeMinutes, downtimeReason, actualMinutes, cancellationToken);
         }
 
+        if (!advance)
+        {
+            return null;
+        }
+
         var status = await db.Jobs.AsNoTracking()
             .Where(j => j.Id == jobId)
             .Select(j => j.Status)
             .SingleAsync(cancellationToken);
-        if (NextStep(status) is { } step)
-        {
-            await AdvanceJobStatusAsync(jobId, step.Next, cancellationToken);
-        }
+        return NextStep(status) is { } step
+            ? await AdvanceJobStatusAsync(jobId, step.Next, cancellationToken)
+            : null;
     }
 
     /// <summary>

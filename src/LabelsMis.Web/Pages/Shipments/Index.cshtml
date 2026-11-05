@@ -83,6 +83,11 @@
                                 @if (Model.CanShip)
                                 {
                                     <a asp-page="/Shipments/Record" asp-route-salesOrderId="@order.SalesOrderId" class="btn btn-sm btn-success text-nowrap">Record shipment</a>
+                                }
+                                @* Methods that need the shipment record (FedEx, or no method) have no
+                                   package-less one-click: their shipping charge comes from the carrier cost. *@
+                                @if (Model.CanShip && !order.RequiresShipmentRecord)
+                                {
                                     var markLabel = order.IsPickup ? "Mark picked up" : "Mark shipped";
                                     var markConfirm = order.IsPickup
                                         ? "Are you sure you want to mark this order picked up without a package?"

@@ -28,11 +28,13 @@ public class IndexModel(JobService jobService, LabelsMisDbContext db) : PageMode
     public Services.Models.PagedResult<JobListItem> Result { get; private set; } = null!;
     public bool CanEdit { get; private set; }
     public bool CanAdvance { get; private set; }
+    public bool CanShip { get; private set; }
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler);
         CanAdvance = CanUserAdvance();
+        CanShip = CanUserShip();
 
         JobStatus? singleStatus = null;
         IReadOnlyCollection<JobStatus>? includeStatuses = null;
@@ -72,7 +74,7 @@ public class IndexModel(JobService jobService, LabelsMisDbContext db) : PageMode
         }
 
         var panel = await jobService.GetActionPanelAsync(jobId, cancellationToken);
-        return panel is null ? NotFound() : Partial("_JobActionPanel", panel);
+        return panel is null ? NotFound() : Partial("_JobActionPanel", panel with { CanShip = CanUserShip() });
     }
 
     /// <summary>The popup's main submit: roll claim + counts/time, then advance the job.</summary>
@@ -87,6 +89,7 @@ public class IndexModel(JobService jobService, LabelsMisDbContext db) : PageMode
         string? rollBarcode,
         decimal? consumedLf,
         string? returnUrl,
+        bool recordOnly,
         CancellationToken cancellationToken)
     {
         if (!CanUserAdvance())
@@ -96,9 +99,17 @@ public class IndexModel(JobService jobService, LabelsMisDbContext db) : PageMode
 
         try
         {
-            await jobService.RecordAndAdvanceAsync(
+            var shipment = await jobService.RecordAndAdvanceAsync(
                 jobId, operationId, goodCount, wasteCount, downtimeMinutes, downtimeReason,
-                actualMinutes, rollBarcode, consumedLf, cancellationToken);
+                actualMinutes, rollBarcode, consumedLf, advance: !recordOnly, cancellationToken: cancellationToken);
+            if (recordOnly)
+            {
+                TempData["JobActionMessage"] = "Counts recorded. The job is marked shipped when its shipment is recorded.";
+            }
+            else if (shipment is not null)
+            {
+                TempData["JobActionMessage"] = $"Marked shipped and recorded on shipment {shipment.ShipmentNumber} (no packages).";
+            }
         }
         catch (Exception ex)
         {
@@ -162,4 +173,7 @@ public class IndexModel(JobService jobService, LabelsMisDbContext db) : PageMode
 
     private bool CanUserAdvance() =>
         User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler) || User.IsInRole(AppRoles.Operator);
+
+    private bool CanUserShip() =>
+        User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Shipping);
 }

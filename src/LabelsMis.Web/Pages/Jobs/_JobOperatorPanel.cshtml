@@ -129,12 +129,27 @@
                 }
             }
 
-            @if (Model.CanAdvanceStage)
+            @if (Model.ShipsByRecordOnly)
             {
-                var buttonLabel = showCounts
-                    ? $"Record & {char.ToLowerInvariant(step.Label[0])}{step.Label[1..]}"
-                    : step.Label;
+                <div class="alert alert-info py-2 small mb-2" id="ships-by-record-only">
+                    Ships by @(Model.Shipping!.ShippingMethodName ?? "carrier (no shipping method set)"): the job is
+                    marked shipped when the shipment is recorded with its packages, tracking and carrier cost
+                    @(Model.CanShip ? "— use Record shipment below." : "on Shipments → Ready to ship.")
+                </div>
+            }
+
+            @if (Model.CanAdvanceStage && !(Model.ShipsByRecordOnly && !showCounts))
+            {
+                var buttonLabel = Model.ShipsByRecordOnly
+                    ? "Record counts"
+                    : showCounts
+                        ? $"Record & {char.ToLowerInvariant(step.Label[0])}{step.Label[1..]}"
+                        : step.Label;
                 <form method="post" asp-page-handler="RecordAndAdvance" class="row g-2 align-items-end">
+                    @if (Model.ShipsByRecordOnly)
+                    {
+                        <input type="hidden" name="RecordOnly" value="true" />
+                    }
                     @if (showCounts && countsView is not null)
                     {
                         <input type="hidden" name="OperationId" value="@countsView.Id" />
@@ -186,7 +201,7 @@
                     }
                 </form>
             }
-            else
+            else if (!Model.ShipsByRecordOnly)
             {
                 <p class="text-muted mb-0">Next: @step.Label</p>
             }

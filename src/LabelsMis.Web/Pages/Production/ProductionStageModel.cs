@@ -66,7 +66,14 @@ public abstract class ProductionStageModel(JobService jobService) : PageModel, I
 
         if (NextStatus is { } next)
         {
-            await jobService.AdvanceJobStatusAsync(jobId, next, cancellationToken);
+            try
+            {
+                await jobService.AdvanceJobStatusAsync(jobId, next, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                TempData["JobActionError"] = ex.Message;
+            }
         }
 
         return RedirectToStage();
@@ -81,7 +88,7 @@ public abstract class ProductionStageModel(JobService jobService) : PageModel, I
         }
 
         var panel = await jobService.GetActionPanelAsync(jobId, cancellationToken);
-        return panel is null ? NotFound() : Partial("_JobActionPanel", panel);
+        return panel is null ? NotFound() : Partial("_JobActionPanel", panel with { CanShip = CanUserShip() });
     }
 
     /// <summary>The popup's main submit: roll claim + counts/time, then advance the job.</summary>
@@ -96,6 +103,7 @@ public abstract class ProductionStageModel(JobService jobService) : PageModel, I
         string? rollBarcode,
         decimal? consumedLf,
         string? returnUrl,
+        bool recordOnly,
         CancellationToken cancellationToken)
     {
         if (!CanUserAdvance())
@@ -105,9 +113,17 @@ public abstract class ProductionStageModel(JobService jobService) : PageModel, I
 
         try
         {
-            await jobService.RecordAndAdvanceAsync(
+            var shipment = await jobService.RecordAndAdvanceAsync(
                 jobId, operationId, goodCount, wasteCount, downtimeMinutes, downtimeReason,
-                actualMinutes, rollBarcode, consumedLf, cancellationToken);
+                actualMinutes, rollBarcode, consumedLf, advance: !recordOnly, cancellationToken: cancellationToken);
+            if (recordOnly)
+            {
+                TempData["JobActionMessage"] = "Counts recorded. The job is marked shipped when its shipment is recorded.";
+            }
+            else if (shipment is not null)
+            {
+                TempData["JobActionMessage"] = $"Marked shipped and recorded on shipment {shipment.ShipmentNumber} (no packages).";
+            }
         }
         catch (Exception ex)
         {
@@ -202,4 +218,7 @@ public abstract class ProductionStageModel(JobService jobService) : PageModel, I
 
     protected bool CanUserAdvance() =>
         User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler) || User.IsInRole(AppRoles.Operator);
+
+    protected bool CanUserShip() =>
+        User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Shipping);
 }

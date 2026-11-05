@@ -6,6 +6,7 @@ using LabelsMis.Web.Pages.Production;
 using LabelsMis.Web.Services.Artwork;
 using LabelsMis.Web.Services.Jobs;
 using LabelsMis.Web.Services.Rolls;
+using LabelsMis.Web.Services.Shipments;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -21,6 +22,7 @@ public class DetailModel(
     RollService rollService,
     JobImpositionService impositionService,
     JobFileService jobFileService,
+    ShipmentService shipmentService,
     LabelsMisDbContext db) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
@@ -33,6 +35,9 @@ public class DetailModel(
     [BindProperty] public DowntimeReasonCode? DowntimeReason { get; set; }
     [BindProperty] public decimal ActualMinutes { get; set; }
     [BindProperty] public decimal? ConsumedLf { get; set; }
+    /// <summary>Record &amp; advance without the advance: a Rewound job on an order that ships by
+    /// Record shipment saves its counts and waits for the shipment.</summary>
+    [BindProperty] public bool RecordOnly { get; set; }
     [BindProperty] public string? RollBarcode { get; set; }
     [BindProperty] public string? OrderNotes { get; set; }
     [BindProperty] public string? JobNotes { get; set; }
@@ -59,6 +64,18 @@ public class DetailModel(
     public bool CanChangeStatus { get; private set; }
     public bool CanShip { get; private set; }
     public string? ErrorMessage { get; private set; }
+    public string? StatusMessage { get; private set; }
+
+    /// <summary>The job's order line against its recorded shipments, and how its method ships.</summary>
+    public JobShippingState? Shipping { get; private set; }
+
+    /// <summary>Rewound on an order that ships only by Record shipment: no Mark shipped here.</summary>
+    public bool ShipsByRecordOnly =>
+        Detail?.Job.Status == JobStatus.Rewound && Shipping?.RequiresShipmentRecord == true;
+
+    /// <summary>Shipped/Closed with nothing recorded on a shipment: the order can't count as shipped.</summary>
+    public bool MarkedShippedWithoutShipment =>
+        Detail is not null && Shipping?.IsMarkedShippedWithoutShipment(Detail.Job.Status) == true;
 
     public IReadOnlyList<FinishingTaskView> FinishingTasks { get; private set; } = [];
 
@@ -143,8 +160,49 @@ public class DetailModel(
     public async Task<IActionResult> OnPostSetStatusAsync(CancellationToken cancellationToken)
     {
         if (!CanChangeStatusForUser()) return Forbid();
-        await jobService.SetJobStatusAsync(Id, StatusInput, cancellationToken);
-        return RedirectToPage(new { id = Id });
+        try
+        {
+            var shipment = await jobService.SetJobStatusAsync(Id, StatusInput, cancellationToken);
+            SetShippedMessage(shipment);
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            await LoadPageAsync(cancellationToken);
+            return Page();
+        }
+    }
+
+    /// <summary>Puts right a job production marked shipped before a shipment was recorded for it:
+    /// on a hand-off method, records the package-less shipment it should have had (the job's status
+    /// doesn't change). Methods that need packages go through Record shipment instead.</summary>
+    public async Task<IActionResult> OnPostRecordMissingShipmentAsync(CancellationToken cancellationToken)
+    {
+        if (!CanOperateForUser() && !CanChangeStatusForUser() && !CanShipForUser()) return Forbid();
+        try
+        {
+            var shipment = await shipmentService.RecordJobShippedAsync(Id, cancellationToken);
+            TempData["JobShipMessage"] = shipment is null
+                ? "Nothing left to record — the line has already shipped."
+                : $"Recorded shipment {shipment.ShipmentNumber} (no packages) for this job.";
+            return RedirectToPage(new { id = Id });
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            await LoadPageAsync(cancellationToken);
+            return Page();
+        }
+    }
+
+    private void SetShippedMessage(Domain.Entities.Shipment? shipment)
+    {
+        if (shipment is not null)
+        {
+            TempData["JobShipMessage"] = $"Marked shipped and recorded on shipment {shipment.ShipmentNumber} (no packages"
+                + (shipment.BilledShipping is { } billed ? $", {billed:C} shipping" : string.Empty) + ").";
+        }
     }
 
     public async Task<IActionResult> OnPostClockOnAsync(CancellationToken cancellationToken) =>
@@ -186,7 +244,7 @@ public class DetailModel(
             if (detail is null) return NotFound();
             if (ProductionStages.NextStep(detail.Job.Status) is { } step)
             {
-                await jobService.AdvanceJobStatusAsync(Id, step.Next, cancellationToken);
+                SetShippedMessage(await jobService.AdvanceJobStatusAsync(Id, step.Next, cancellationToken));
             }
             return RedirectToPage(new { id = Id });
         }
@@ -482,9 +540,12 @@ public class DetailModel(
         CanEdit = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler);
         CanOperate = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Operator);
         CanChangeStatus = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler);
-        CanShip = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Shipping);
+        CanShip = CanShipForUser();
+        StatusMessage = TempData["JobShipMessage"] as string;
         Detail = await jobService.GetDetailAsync(Id, cancellationToken);
         if (Detail is null) return;
+
+        Shipping = await shipmentService.GetJobShippingStateAsync(Id, cancellationToken);
 
         TicketDetail = await jobService.GetTicketDetailAsync(Id, cancellationToken);
         OrderJobs = await jobService.GetOrderJobsAsync(Id, cancellationToken);
@@ -674,11 +735,17 @@ public class DetailModel(
                     OperationId, GoodCount, WasteCount, DowntimeMinutes, DowntimeReason, ActualMinutes, cancellationToken);
             }
 
+            if (RecordOnly)
+            {
+                TempData["JobShipMessage"] = "Counts recorded. The job is marked shipped when its shipment is recorded.";
+                return RedirectToPage(new { id = Id });
+            }
+
             var detail = await jobService.GetDetailAsync(Id, cancellationToken);
             if (detail is null) return NotFound();
             if (ProductionStages.NextStep(detail.Job.Status) is { } step)
             {
-                await jobService.AdvanceJobStatusAsync(Id, step.Next, cancellationToken);
+                SetShippedMessage(await jobService.AdvanceJobStatusAsync(Id, step.Next, cancellationToken));
             }
 
             return RedirectToPage(new { id = Id });
@@ -696,4 +763,7 @@ public class DetailModel(
 
     private bool CanChangeStatusForUser() =>
         User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Scheduler);
+
+    private bool CanShipForUser() =>
+        User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Shipping);
 }

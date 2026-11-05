@@ -31,6 +31,33 @@ public class InvoiceReadinessRulesTests
     }
 
     [Fact]
+    public void WaitingReasons_JobMarkedShippedWithoutAShipment_NamesTheJobAndTheFix()
+    {
+        InvoiceReadinessRules.WaitingReasons(Facts(shippedLines: 0, totalLines: 1, unrecorded: ["JOB-2026-00588"]))
+            .Should().Equal("Not shipped yet (0 of 1 lines). JOB-2026-00588 was marked shipped with no shipment "
+                + $"recorded — {InvoiceReadinessRules.UnrecordedShipmentHint}");
+    }
+
+    [Fact]
+    public void WaitingReasons_SeveralUnrecordedJobsAndAnUnderRun_KeepsBothHints()
+    {
+        var reason = InvoiceReadinessRules.WaitingReasons(
+                Facts(shippedLines: 0, totalLines: 3, anyShipped: true, unrecorded: ["JOB-1", "JOB-2"]))
+            .Should().ContainSingle().Subject;
+
+        reason.Should().StartWith("Not shipped yet (0 of 3 lines). JOB-1, JOB-2 were marked shipped")
+            .And.EndWith(InvoiceReadinessRules.UnderRunHint);
+    }
+
+    [Fact]
+    public void WaitingReasons_UnrecordedJobsOnAnOrderThatCountsAsShipped_IsReady()
+    {
+        InvoiceReadinessRules.WaitingReasons(
+                Facts(shippedLines: 0, totalLines: 1, orderMarkedShipped: true, unrecorded: ["JOB-1"]))
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void WaitingReasons_UnderRunOrderMarkedShipped_IsReady()
     {
         InvoiceReadinessRules.WaitingReasons(Facts(shippedLines: 0, totalLines: 1, anyShipped: true, orderMarkedShipped: true))
@@ -92,9 +119,10 @@ public class InvoiceReadinessRulesTests
         bool billBeforeShip = false,
         decimal total = 100m,
         IReadOnlyList<string>? pending = null,
-        IReadOnlyList<string>? customerBlockers = null) =>
+        IReadOnlyList<string>? customerBlockers = null,
+        IReadOnlyList<string>? unrecorded = null) =>
         new(billBeforeShip, orderMarkedShipped, shippedLines, totalLines, anyShipped, total,
-            pending ?? [], customerBlockers ?? []);
+            pending ?? [], customerBlockers ?? [], unrecorded);
 
     private static Invoice Draft() => Invoice.CreateDraft(
         Guid.NewGuid(), "INV-T-6", Guid.NewGuid(), Guid.NewGuid(), null,

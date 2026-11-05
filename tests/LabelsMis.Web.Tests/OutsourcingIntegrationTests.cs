@@ -49,7 +49,9 @@ public class OutsourcingIntegrationTests : IAsyncLifetime
 
         var user = new StubCurrentUserService(TestUserId);
         var numbers = new DocumentNumberService(_db);
-        _jobs = new JobService(_db, user, numbers, new EstimateCalculationMapper(_db), new EstimatingService(), new RollService(_db, user, numbers));
+        // These tests never move a job to Shipped, so the shipment recorder isn't needed.
+        _jobs = new JobService(_db, user, numbers, new EstimateCalculationMapper(_db), new EstimatingService(),
+            new RollService(_db, user, numbers), shipmentService: null!);
         _outsourcing = new OutsourceService(_db, user, _jobs);
     }
 

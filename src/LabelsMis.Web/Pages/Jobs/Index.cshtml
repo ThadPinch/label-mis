@@ -23,6 +23,10 @@
 {
     <div class="alert alert-danger">@actionError</div>
 }
+@if (TempData["JobActionMessage"] is string actionMessage)
+{
+    <div class="alert alert-success py-2">@actionMessage</div>
+}
 
 <form method="get" class="row g-2 mb-3">
     <input type="hidden" asp-for="Sort" />
@@ -90,7 +94,23 @@
             <td class="text-nowrap">@(item.ScheduledForDate?.ToString("yyyy-MM-dd") ?? "—")</td>
             <td class="text-end">@item.QuantityOrdered.ToString("N0")</td>
             <td class="text-end text-nowrap">
-                @if (Model.CanAdvance && LabelsMis.Web.Services.Jobs.JobService.NextStep(item.Status) is { } step)
+                @if (item.Status == LabelsMis.Domain.Enums.JobStatus.Rewound && item.ShipmentRecordRequired)
+                {
+                    @* Ships by Record shipment (packages, tracking, carrier cost): no Mark shipped here.
+                       Production can still record the packing counts. *@
+                    @if (Model.CanShip)
+                    {
+                        <a asp-page="/Shipments/Record" asp-route-salesOrderId="@item.SalesOrderId" class="btn btn-sm btn-success">Record shipment</a>
+                    }
+                    @if (Model.CanAdvance)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                data-action-panel="?handler=ActionPanel&jobId=@item.Id">
+                            Record counts…
+                        </button>
+                    }
+                }
+                else if (Model.CanAdvance && LabelsMis.Web.Services.Jobs.JobService.NextStep(item.Status) is { } step)
                 {
                     <button type="button" class="btn btn-sm btn-primary"
                             data-action-panel="?handler=ActionPanel&jobId=@item.Id">

@@ -94,6 +94,46 @@ else
     {
         <div class="alert alert-danger">@Model.ErrorMessage</div>
     }
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+    {
+        <div class="alert alert-success py-2" id="job-ship-message">@Model.StatusMessage</div>
+    }
+    @if (Model.MarkedShippedWithoutShipment && Model.Shipping is { } unrecorded)
+    {
+        @* Marked shipped from production before any shipment was recorded for the line: the order
+           can't count as shipped, so its invoice waits. Offer the fix that fits the method. *@
+        <div class="alert alert-warning py-2 d-flex flex-wrap justify-content-between align-items-center gap-2" id="job-unrecorded-shipment">
+            <div>
+                <strong>Marked @Model.Detail.Job.Status.ToString().ToLowerInvariant(), but no shipment was recorded.</strong>
+                @unrecorded.OrderNumber can't count as shipped, so its invoice waits on "Not shipped yet".
+                @if (unrecorded.RequiresShipmentRecord)
+                {
+                    <span>It ships by @(unrecorded.ShippingMethodName ?? "carrier (no method set)") — record the shipment with its packages, tracking and carrier cost.</span>
+                }
+                else
+                {
+                    <span>It ships by @unrecorded.ShippingMethodName — record it as a package-less shipment.</span>
+                }
+            </div>
+            @if (unrecorded.RequiresShipmentRecord)
+            {
+                @if (Model.CanShip)
+                {
+                    <a asp-page="/Shipments/Record" asp-route-salesOrderId="@unrecorded.SalesOrderId" class="btn btn-sm btn-success text-nowrap">Record shipment</a>
+                }
+                else
+                {
+                    <span class="small text-muted">Ask shipping to record it (Shipments → Record shipment).</span>
+                }
+            }
+            else if (Model.CanAdvanceStage || Model.CanShip)
+            {
+                <form method="post" asp-page-handler="RecordMissingShipment" class="m-0">
+                    <button type="submit" class="btn btn-sm btn-success text-nowrap">Record shipment now</button>
+                </form>
+            }
+        </div>
+    }
 
     @if (Model.Detail.Job.IsOutsourced && Model.Detail.Outsource is { } outsource)
     {

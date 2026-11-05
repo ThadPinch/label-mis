@@ -57,7 +57,36 @@ public record ReadyToShipOrder(
     bool IsPickup,
     int ReadyItemCount,
     int TotalItemCount,
-    IReadOnlyList<ReadyJobRef> ReadyJobs);
+    IReadOnlyList<ReadyJobRef> ReadyJobs,
+    /// <summary>The order's method needs the shipment recorded with packages (or it has no method):
+    /// no one-click Mark shipped.</summary>
+    bool RequiresShipmentRecord = false);
+
+/// <summary>Where a job's order line stands for shipping: what the job page and the jobs list need
+/// to offer Mark shipped, Record shipment, or the fix for a job marked shipped with no shipment.</summary>
+public record JobShippingState(
+    Guid SalesOrderId,
+    string OrderNumber,
+    string? ShippingMethodName,
+    bool RequiresShipmentRecord,
+    int QuantityOrdered,
+    int QuantityShipped)
+{
+    public int QuantityRemaining => Math.Max(0, QuantityOrdered - QuantityShipped);
+
+    /// <summary>Production moved the job to Shipped/Closed but nothing for its line is on a recorded
+    /// shipment, so the order can't count as shipped and its invoice waits.</summary>
+    public bool IsMarkedShippedWithoutShipment(JobStatus jobStatus) =>
+        jobStatus >= JobStatus.Shipped && QuantityShipped == 0 && QuantityOrdered > 0;
+}
+
+/// <summary>Production tried to mark a job shipped on an order whose shipping method needs the
+/// shipment recorded (packages, tracking, carrier cost) on Shipments → Record shipment.</summary>
+public sealed class ShipmentRecordRequiredException(Guid salesOrderId, string message)
+    : InvalidOperationException(message)
+{
+    public Guid SalesOrderId { get; } = salesOrderId;
+}
 
 public record ManualShipmentAddress(Guid Id, string Label);
 
@@ -291,7 +320,8 @@ public class ShipmentService(
                     .Where(j => j.Status == JobStatus.Rewound && j.SalesOrderLine.SalesOrderId == o.Id)
                     .OrderBy(j => j.JobNumber)
                     .Select(j => new ReadyJobRef(j.Id, j.JobNumber))
-                    .ToList()))
+                    .ToList(),
+                o.ShippingMethod == null || o.ShippingMethod.RequiresShipmentRecord))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<ReadyToShipOrder>(items, page, pageSize, total);
@@ -334,7 +364,12 @@ public class ShipmentService(
                 .FirstOrDefault();
             var shippedQty = shipped.GetValueOrDefault(l.Id);
             var remaining = Math.Max(0, l.Quantity - shippedQty);
-            var ready = job is not null && job.Status == JobStatus.Rewound && remaining > 0;
+            // Ready: the job is at Rewound, or production already moved it to Shipped/Closed while
+            // nothing for the line was ever recorded on a shipment (so the order can be put right).
+            // A line that shipped short on a recorded shipment is an under-run — it is finished
+            // with Mark order shipped, not shipped a second time.
+            var ready = job is not null && remaining > 0
+                && (job.Status == JobStatus.Rewound || (job.Status >= JobStatus.Shipped && shippedQty == 0));
             return new ManualShipmentLineView(
                 l.Id, l.LineNumber, l.Product.Description, l.Quantity, shippedQty, remaining, job?.Id, ready);
         }).ToList();
@@ -481,10 +516,18 @@ public class ShipmentService(
         return shipment;
     }
 
+    /// <summary>A package-less shipment of the order this recent is added to rather than starting a
+    /// new one, so lines marked shipped one at a time on the same day go out as one shipment — one
+    /// local delivery fee, not one per line. A rolling window, so a late-afternoon hand-off doesn't
+    /// split at the UTC date line.</summary>
+    public static readonly TimeSpan PackagelessShipmentWindow = TimeSpan.FromHours(12);
+
     /// <summary>
     /// Marks an order shipped without packages or tracking (pickups and other hand-offs):
-    /// creates a package-less shipment for every ready line's remaining quantity, advances the
-    /// jobs to Shipped, and rolls up the sales-order status.
+    /// records every ready line's remaining quantity on a package-less shipment (the order's one from
+    /// the last <see cref="PackagelessShipmentWindow"/> when there is one), advances the jobs to
+    /// Shipped, and rolls up the sales-order status. Refused when the order's method needs the
+    /// shipment recorded with packages.
     /// </summary>
     public async Task<Shipment> MarkShippedAsync(Guid salesOrderId, CancellationToken cancellationToken = default)
     {
@@ -493,6 +536,12 @@ public class ShipmentService(
 
         var order = await GetOrderForManualShipmentAsync(salesOrderId, cancellationToken)
             ?? throw new InvalidOperationException("Order not found.");
+
+        if (await RequiresShipmentRecordAsync(salesOrderId, cancellationToken))
+        {
+            throw new ShipmentRecordRequiredException(
+                salesOrderId, ShipmentRecordRequiredMessage(order.OrderNumber, order.ShippingMethodName));
+        }
 
         var readyLines = order.Lines.Where(l => l.IsReady && l.QuantityRemaining > 0).ToList();
         if (readyLines.Count == 0)
@@ -507,26 +556,7 @@ public class ShipmentService(
             throw new InvalidOperationException("All items must be ready before the order can be marked shipped without packages.");
         }
 
-        var shipFrom = await GetCompanyShipFromAsync(cancellationToken);
-        var shipmentNumber = await documentNumbers.NextShipmentNumberAsync(cancellationToken);
-
-        var shipment = Shipment.CreatePending(
-            Guid.NewGuid(),
-            shipmentNumber,
-            salesOrderId,
-            DateOnly.FromDateTime(now),
-            Carrier.Other,
-            null,
-            null,
-            shipFrom,
-            order.DefaultShipTo,
-            shipToAddressId: null,
-            totalDeclaredValue: 0m,
-            BillingType.Sender,
-            null,
-            userId,
-            now);
-
+        var shipment = await GetOrStartPackagelessShipmentAsync(salesOrderId, order.DefaultShipTo, userId, now, cancellationToken);
         foreach (var line in readyLines)
         {
             var shipmentLine = ShipmentLine.Create(
@@ -535,10 +565,8 @@ public class ShipmentService(
             db.ShipmentLines.Add(shipmentLine);
         }
 
-        shipment.MarkShippedWithoutPackages(userId, now);
         var billing = await GetBillingContextAsync(salesOrderId, cancellationToken);
         shipment.ComputeBilledShipping(billing.ShippingMethodType, billing.Settings);
-        db.Shipments.Add(shipment);
 
         var jobIds = readyLines.Where(l => l.JobId.HasValue).Select(l => l.JobId!.Value).Distinct().ToList();
         if (jobIds.Count > 0)
@@ -558,6 +586,145 @@ public class ShipmentService(
 
         // The draft invoice's shipping follows the shipments' billed shipping (no SO unlock).
         await invoiceService.SyncDraftShippingAsync(salesOrderId, cancellationToken);
+        return shipment;
+    }
+
+    /// <summary>
+    /// Production marked a job shipped (job page, jobs list, status dropdown). On an order whose
+    /// method doesn't need a shipment record, records the job's unshipped quantity on a package-less
+    /// shipment (the order's one from the last <see cref="PackagelessShipmentWindow"/> when there is
+    /// one), then rolls up the order status and the draft invoice's shipping. Moving the job's own
+    /// status is the caller's job. Also how a job marked shipped before this rule is put right.
+    /// </summary>
+    /// <returns>The shipment the job went on, or null when its line has nothing left to ship.</returns>
+    /// <exception cref="ShipmentRecordRequiredException">The method needs the shipment recorded with
+    /// packages, tracking and carrier cost — as does an order with no method, which bills as a
+    /// carrier shipment.</exception>
+    public async Task<Shipment?> RecordJobShippedAsync(Guid jobId, CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var state = await GetJobShippingStateAsync(jobId, cancellationToken)
+            ?? throw new InvalidOperationException("Job not found.");
+        if (state.QuantityRemaining == 0)
+        {
+            return null;
+        }
+
+        if (state.RequiresShipmentRecord)
+        {
+            throw new ShipmentRecordRequiredException(
+                state.SalesOrderId, ShipmentRecordRequiredMessage(state.OrderNumber, state.ShippingMethodName));
+        }
+
+        var lineId = await db.Jobs.AsNoTracking()
+            .Where(j => j.Id == jobId)
+            .Select(j => j.SalesOrderLineId)
+            .SingleAsync(cancellationToken);
+        var shipTo = (await GetOrderForManualShipmentAsync(state.SalesOrderId, cancellationToken))!.DefaultShipTo;
+        var shipment = await GetOrStartPackagelessShipmentAsync(state.SalesOrderId, shipTo, userId, now, cancellationToken);
+        var shipmentLine = ShipmentLine.Create(
+            Guid.NewGuid(), shipment.Id, lineId, jobId, state.QuantityRemaining, userId, now);
+        shipment.AddLine(shipmentLine);
+        db.ShipmentLines.Add(shipmentLine);
+
+        var billing = await GetBillingContextAsync(state.SalesOrderId, cancellationToken);
+        shipment.ComputeBilledShipping(billing.ShippingMethodType, billing.Settings);
+        await db.SaveChangesAsync(cancellationToken);
+
+        // Roll up the order status after the line is persisted, so the query sees this shipment.
+        await UpdateSalesOrderStatusAsync(state.SalesOrderId, userId, now, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        await invoiceService.SyncDraftShippingAsync(state.SalesOrderId, cancellationToken);
+        return shipment;
+    }
+
+    /// <summary>The job's order line against its recorded (non-pending) shipments, and whether the
+    /// order's method lets Mark shipped record the shipment by itself.</summary>
+    public async Task<JobShippingState?> GetJobShippingStateAsync(Guid jobId, CancellationToken cancellationToken = default)
+    {
+        var row = await db.Jobs.AsNoTracking()
+            .Where(j => j.Id == jobId)
+            .Select(j => new
+            {
+                j.SalesOrderLineId,
+                j.SalesOrderLine.SalesOrderId,
+                j.SalesOrderLine.SalesOrder.OrderNumber,
+                MethodName = j.SalesOrderLine.SalesOrder.ShippingMethod == null
+                    ? null
+                    : j.SalesOrderLine.SalesOrder.ShippingMethod.Name,
+                RequiresRecord = j.SalesOrderLine.SalesOrder.ShippingMethod == null
+                    || j.SalesOrderLine.SalesOrder.ShippingMethod.RequiresShipmentRecord,
+                j.SalesOrderLine.Quantity
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (row is null)
+        {
+            return null;
+        }
+
+        var shipped = await db.ShipmentLines.AsNoTracking()
+            .Where(l => l.SalesOrderLineId == row.SalesOrderLineId && l.Shipment.Status != ShipmentStatus.Pending)
+            .SumAsync(l => (int?)l.QuantityShipped, cancellationToken) ?? 0;
+        return new JobShippingState(
+            row.SalesOrderId, row.OrderNumber, row.MethodName, row.RequiresRecord, row.Quantity, shipped);
+    }
+
+    /// <summary>Whether the order is shipped only by recording the shipment with packages: its
+    /// method says so, or it has no method (billed as a carrier shipment).</summary>
+    public async Task<bool> RequiresShipmentRecordAsync(Guid salesOrderId, CancellationToken cancellationToken = default) =>
+        await db.SalesOrders.AsNoTracking()
+            .Where(o => o.Id == salesOrderId)
+            .Select(o => o.ShippingMethod == null || o.ShippingMethod.RequiresShipmentRecord)
+            .SingleOrDefaultAsync(cancellationToken);
+
+    public static string ShipmentRecordRequiredMessage(string orderNumber, string? shippingMethodName) =>
+        shippingMethodName is null
+            ? $"{orderNumber} has no shipping method, so it ships as a carrier shipment: it's marked shipped when the shipment is recorded with its packages, tracking and carrier cost (Shipments → Record shipment)."
+            : $"{orderNumber} ships by {shippingMethodName}: it's marked shipped when the shipment is recorded with its packages, tracking and carrier cost (Shipments → Record shipment).";
+
+    /// <summary>The order's package-less shipment from the last <see cref="PackagelessShipmentWindow"/>
+    /// (tracked, lines loaded), else a new one already marked shipped without packages and added to
+    /// the context.</summary>
+    private async Task<Shipment> GetOrStartPackagelessShipmentAsync(
+        Guid salesOrderId,
+        ShippingAddress shipTo,
+        Guid userId,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var since = now - PackagelessShipmentWindow;
+        var recent = await db.Shipments
+            .Include(s => s.Lines)
+            .Where(s => s.SalesOrderId == salesOrderId
+                && s.Status == ShipmentStatus.InTransit
+                && !s.Packages.Any()
+                && s.CreatedAt >= since)
+            .OrderByDescending(s => s.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (recent is not null)
+        {
+            return recent;
+        }
+
+        var shipment = Shipment.CreatePending(
+            Guid.NewGuid(),
+            await documentNumbers.NextShipmentNumberAsync(cancellationToken),
+            salesOrderId,
+            DateOnly.FromDateTime(now),
+            Carrier.Other,
+            null,
+            null,
+            await GetCompanyShipFromAsync(cancellationToken),
+            shipTo,
+            shipToAddressId: null,
+            totalDeclaredValue: 0m,
+            BillingType.Sender,
+            null,
+            userId,
+            now);
+        shipment.MarkShippedWithoutPackages(userId, now);
+        db.Shipments.Add(shipment);
         return shipment;
     }
 
