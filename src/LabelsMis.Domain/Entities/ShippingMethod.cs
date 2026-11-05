@@ -27,6 +27,17 @@ public class ShippingMethod : MasterDataEntity
     /// (e.g. FedEx's price is only an estimate until the carrier cost is entered).</summary>
     public string? Notes { get; private set; }
 
+    /// <summary>Orders on this method are marked shipped only by recording the shipment (packages,
+    /// tracking, carrier cost) on Shipments → Record shipment; production's Mark shipped is refused.
+    /// Off, Mark shipped records a package-less shipment by itself (pickup, local delivery, customer
+    /// account), so the order and its invoice still see it shipped.</summary>
+    public bool RequiresShipmentRecord { get; private set; }
+
+    /// <summary>The flag a method gets when none is chosen: carrier methods need the shipment record
+    /// (their billed shipping comes from its carrier cost); hand-offs don't.</summary>
+    public static bool DefaultRequiresShipmentRecord(ShippingMethodType methodType) =>
+        methodType == ShippingMethodType.Fedex;
+
     public static ShippingMethod Create(
         Guid id,
         string name,
@@ -35,7 +46,8 @@ public class ShippingMethod : MasterDataEntity
         bool requiresAddress,
         Guid createdById,
         DateTime createdAt,
-        string? notes = null)
+        string? notes = null,
+        bool? requiresShipmentRecord = null)
     {
         Validate(name, price);
 
@@ -45,7 +57,8 @@ public class ShippingMethod : MasterDataEntity
             MethodType = methodType,
             Price = price,
             RequiresAddress = requiresAddress,
-            Notes = NormalizeNotes(notes)
+            Notes = NormalizeNotes(notes),
+            RequiresShipmentRecord = requiresShipmentRecord ?? DefaultRequiresShipmentRecord(methodType)
         };
         method.SetCreated(id, createdById, createdAt);
         return method;
@@ -56,6 +69,7 @@ public class ShippingMethod : MasterDataEntity
         ShippingMethodType methodType,
         decimal price,
         bool requiresAddress,
+        bool requiresShipmentRecord,
         string? notes,
         Guid modifiedById,
         DateTime modifiedAt)
@@ -66,6 +80,7 @@ public class ShippingMethod : MasterDataEntity
         MethodType = methodType;
         Price = price;
         RequiresAddress = requiresAddress;
+        RequiresShipmentRecord = requiresShipmentRecord;
         Notes = NormalizeNotes(notes);
         SetModified(modifiedById, modifiedAt);
     }

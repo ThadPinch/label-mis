@@ -30,9 +30,41 @@ public class ShippingMethodTests
             DateTime.UtcNow, "  flat fee  ");
         method.Notes.Should().Be("flat fee");
 
-        method.Update("Courier", ShippingMethodType.Delivery, 25m, true, "   ", UserId, DateTime.UtcNow);
+        method.Update("Courier", ShippingMethodType.Delivery, 25m, true, false, "   ", UserId, DateTime.UtcNow);
 
         method.Notes.Should().BeNull();
+    }
+
+    [Fact]
+    public void CreateDefaults_OnlyCarrierMethodsNeedAShipmentRecord()
+    {
+        var defaults = ShippingMethod.CreateDefaults(UserId, DateTime.UtcNow).ToList();
+
+        defaults.Where(m => m.RequiresShipmentRecord).Select(m => m.Id).Should().Equal(ShippingMethod.FedexId);
+    }
+
+    [Theory]
+    [InlineData(ShippingMethodType.Pickup, false)]
+    [InlineData(ShippingMethodType.Delivery, false)]
+    [InlineData(ShippingMethodType.Fedex, true)]
+    [InlineData(ShippingMethodType.CustomerAccount, false)]
+    public void Create_WithoutAFlag_DefaultsTheShipmentRecordFromTheType(ShippingMethodType type, bool expected)
+    {
+        var method = ShippingMethod.Create(Guid.NewGuid(), "M", type, 0m, true, UserId, DateTime.UtcNow);
+
+        method.RequiresShipmentRecord.Should().Be(expected);
+    }
+
+    [Fact]
+    public void CreateAndUpdate_AnExplicitShipmentRecordFlag_Wins()
+    {
+        var method = ShippingMethod.Create(Guid.NewGuid(), "UPS", ShippingMethodType.Fedex, 0m, true, UserId,
+            DateTime.UtcNow, requiresShipmentRecord: false);
+        method.RequiresShipmentRecord.Should().BeFalse();
+
+        method.Update("UPS", ShippingMethodType.Fedex, 0m, true, true, null, UserId, DateTime.UtcNow);
+
+        method.RequiresShipmentRecord.Should().BeTrue();
     }
 
     [Fact]

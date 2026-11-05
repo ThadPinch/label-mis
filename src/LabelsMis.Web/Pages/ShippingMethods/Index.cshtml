@@ -33,6 +33,7 @@
             <th class="text-end">Price</th>
             <th>Notes</th>
             <th>Address</th>
+            <th>Mark shipped</th>
             <th>Active</th>
             <th></th>
         </tr>
@@ -46,6 +47,7 @@
             <td class="text-end">@item.Price.ToString("C2")</td>
             <td class="small text-muted">@item.Notes</td>
             <td>@(item.RequiresAddress ? "Required" : "Not needed")</td>
+            <td>@(item.RequiresShipmentRecord ? "Record shipment" : "Records it automatically")</td>
             <td>@(item.IsActive ? "Yes" : "No")</td>
             <td class="text-end text-nowrap">
                 <a asp-page="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">@(Model.CanEdit ? "Edit" : "View")</a>

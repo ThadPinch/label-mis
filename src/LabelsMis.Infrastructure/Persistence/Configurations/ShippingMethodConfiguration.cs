@@ -16,6 +16,7 @@ public class ShippingMethodConfiguration : IEntityTypeConfiguration<ShippingMeth
         builder.Property(m => m.Price).HasMoneyPrecision();
         builder.Property(m => m.RequiresAddress).IsRequired().HasDefaultValue(true);
         builder.Property(m => m.Notes).HasMaxLength(ShippingMethod.NotesMaxLength);
+        builder.Property(m => m.RequiresShipmentRecord).HasDefaultValue(false);
 
         builder.HasIndex(m => m.Name).IsUnique();
     }

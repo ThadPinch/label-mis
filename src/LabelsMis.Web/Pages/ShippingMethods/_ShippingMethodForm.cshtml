@@ -31,4 +31,14 @@
         <label asp-for="RequiresAddress" class="form-check-label"></label>
         <div class="form-text">Uncheck for methods like pickup where no ship-to address is needed — the address fields are hidden on estimates and orders.</div>
     </div>
+    <div class="col-12 form-check ms-1">
+        <input asp-for="RequiresShipmentRecord" class="form-check-input" />
+        <label asp-for="RequiresShipmentRecord" class="form-check-label"></label>
+        <div class="form-text">
+            Checked (carriers like FedEx): production can't mark these jobs shipped — they wait on
+            Shipping → Ready to ship until the shipment is recorded with its packages, tracking and carrier
+            cost, which is what the shipping charge is billed from. Unchecked (pickup, local delivery,
+            customer account): <strong>Mark shipped</strong> records a shipment by itself.
+        </div>
+    </div>
 </div>

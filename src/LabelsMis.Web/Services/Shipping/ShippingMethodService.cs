@@ -8,10 +8,11 @@ namespace LabelsMis.Web.Services.Shipping;
 
 public record ShippingMethodListItem(
     Guid Id, string Name, ShippingMethodType MethodType, decimal Price, bool RequiresAddress, bool IsActive,
-    string? Notes = null);
+    string? Notes = null, bool RequiresShipmentRecord = false);
 
 public record ShippingMethodForm(
-    string Name, ShippingMethodType MethodType, decimal Price, bool RequiresAddress, string? Notes = null);
+    string Name, ShippingMethodType MethodType, decimal Price, bool RequiresAddress, string? Notes = null,
+    bool RequiresShipmentRecord = false);
 
 public class ShippingMethodService(LabelsMisDbContext db, ICurrentUserService currentUser)
 {
@@ -30,7 +31,7 @@ public class ShippingMethodService(LabelsMisDbContext db, ICurrentUserService cu
         query = query.OrderBy(m => m.MethodType).ThenBy(m => m.Name);
         var total = await query.CountAsync(ct);
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(m => new ShippingMethodListItem(m.Id, m.Name, m.MethodType, m.Price, m.RequiresAddress, m.IsActive, m.Notes))
+            .Select(m => new ShippingMethodListItem(m.Id, m.Name, m.MethodType, m.Price, m.RequiresAddress, m.IsActive, m.Notes, m.RequiresShipmentRecord))
             .ToListAsync(ct);
         return new PagedResult<ShippingMethodListItem>(items, page, pageSize, total);
     }
@@ -44,7 +45,7 @@ public class ShippingMethodService(LabelsMisDbContext db, ICurrentUserService cu
         await db.ShippingMethods.AsNoTracking()
             .Where(m => m.IsActive || (includeId != null && m.Id == includeId))
             .OrderBy(m => m.MethodType).ThenBy(m => m.Name)
-            .Select(m => new ShippingMethodListItem(m.Id, m.Name, m.MethodType, m.Price, m.RequiresAddress, m.IsActive, m.Notes))
+            .Select(m => new ShippingMethodListItem(m.Id, m.Name, m.MethodType, m.Price, m.RequiresAddress, m.IsActive, m.Notes, m.RequiresShipmentRecord))
             .ToListAsync(ct);
 
     public async Task<ShippingMethod> CreateAsync(ShippingMethodForm form, CancellationToken ct = default)
@@ -58,7 +59,8 @@ public class ShippingMethodService(LabelsMisDbContext db, ICurrentUserService cu
             form.RequiresAddress,
             userId,
             DateTime.UtcNow,
-            form.Notes);
+            form.Notes,
+            form.RequiresShipmentRecord);
         db.ShippingMethods.Add(method);
         await db.SaveChangesAsync(ct);
         return method;
@@ -68,7 +70,8 @@ public class ShippingMethodService(LabelsMisDbContext db, ICurrentUserService cu
     {
         var method = await db.ShippingMethods.FirstOrDefaultAsync(m => m.Id == id, ct)
             ?? throw new InvalidOperationException("Shipping method not found.");
-        method.Update(form.Name, form.MethodType, form.Price, form.RequiresAddress, form.Notes, RequireUserId(), DateTime.UtcNow);
+        method.Update(form.Name, form.MethodType, form.Price, form.RequiresAddress, form.RequiresShipmentRecord, form.Notes,
+            RequireUserId(), DateTime.UtcNow);
         await db.SaveChangesAsync(ct);
     }
 
