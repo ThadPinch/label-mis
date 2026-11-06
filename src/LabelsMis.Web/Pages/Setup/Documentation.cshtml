@@ -19,6 +19,7 @@
             <div class="docs-sidebar-inner">
                 <p class="docs-nav-heading">Release notes</p>
                 <ul class="docs-nav-list">
+                    <li><a class="docs-nav-link" href="#whats-new-november">What's new — November 2026</a></li>
                     <li><a class="docs-nav-link" href="#whats-new">What's new — July 2026</a></li>
                 </ul>
                 <p class="docs-nav-heading">Master data</p>
@@ -43,6 +44,31 @@
         </nav>
 
         <div class="docs-content">
+            <section class="docs-section" id="whats-new-november">
+                <h2 class="docs-section-title">What's new — November 2026</h2>
+                <p>
+                    Invoices now get ready for QuickBooks on their own as orders ship. LabelShop still doesn't
+                    connect to QuickBooks: Accounting keys each Ready invoice in from its <strong>QB preview</strong>,
+                    or exports a CSV. See <a href="#invoicing">Invoicing</a> and <a href="#shipping">Shipping</a>.
+                </p>
+
+                <h3 class="docs-subtitle">Invoices &amp; QuickBooks</h3>
+                <ul class="docs-list">
+                    <li><strong>Ready to export / Waiting / Exported / closed</strong> tabs. An invoice is Ready once its order has shipped and nothing blocks it; Waiting lists the reasons (not shipped yet, $0 total, carrier cost pending, customer not set up).</li>
+                    <li><strong>QB preview</strong> — each invoice laid out like the QuickBooks invoice form (items, classes, bill-to / ship-to, terms) with copy buttons, then <strong>Mark exported to QuickBooks</strong>.</li>
+                    <li><strong>Shipping is billed from the shipments</strong> — no more unlocking the order to type it in: pickup and customer account $0, local delivery a flat fee, carrier shipments the carrier cost × a multiplier (General settings).</li>
+                    <li><strong>Bill before shipping</strong> for deposits and prepay, and <strong>Non-billable</strong> for $0 samples.</li>
+                    <li><strong>Customer set-up for billing</strong> — <strong>Tax setup complete</strong> (the new-client form is back) and a <strong>Billing</strong> tick on the contact who receives invoices (the primary contact stands in when none is ticked). The Billing tick replaces typing "Billing" into a contact's role.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Shipping</h3>
+                <ul class="docs-list">
+                    <li><strong>Mark shipped always leaves a shipment behind</strong>, so the order and its invoice see it shipped. On pickup, delivery and customer-account orders it records the shipment by itself; FedEx orders are shipped with <strong>Record shipment</strong> (packages, tracking, carrier cost). Each shipping method has a <strong>Needs a shipment record</strong> setting.</li>
+                    <li><strong>Jobs marked shipped earlier without a shipment</strong> show a warning on the job page with the fix, and the invoice's Waiting reason names the job.</li>
+                    <li><strong>Mark order shipped</strong> on a shipment finishes an order that under-ran (shipped short).</li>
+                </ul>
+            </section>
+
             <section class="docs-section" id="whats-new">
                 <h2 class="docs-section-title">What's new — July 2026</h2>
                 <p>
@@ -158,6 +184,9 @@
                     <li>Enter <strong>default margin %</strong> if this customer uses a standard gross margin on estimates; new customers start at the shop default from Settings → General.</li>
                     <li>Add at least one <strong>billing</strong> and one <strong>shipping</strong> address when you will ship or invoice.</li>
                     <li>Assign a <strong>sales rep</strong> and primary <strong>contact</strong> when applicable.</li>
+                    <li>Tick <strong>Billing</strong> on the contact who receives invoices (accounts payable). When no contact is ticked, invoices go to the <strong>primary</strong> contact. A contact's <strong>role</strong> is only a label.</li>
+                    <li>Tick <strong>Tax setup complete</strong> once the new-client (tax / resale) form is back. Until then the customer's invoices wait on "Waiting on new-client form".</li>
+                    <li>The <strong>QuickBooks customer ID</strong> is shown on each invoice's QB preview to help find the customer in QuickBooks; nothing checks it against QuickBooks.</li>
                 </ul>
 
                 <h3 class="docs-subtitle">Usage</h3>
@@ -456,6 +485,19 @@
                     <li>Jobs must progress through production to the <strong>Rewound</strong> (ready-to-ship) stage to appear here.</li>
                     <li>The <strong>ship-from address</strong> is taken from your company address in <a asp-page="/Settings/General">General settings</a> — set it before shipping.</li>
                     <li>The order's customer needs a <strong>shipping address</strong> for the ship-to selection.</li>
+                    <li>Each <a asp-page="/ShippingMethods/Index">shipping method</a> says whether it <strong>needs a shipment record</strong> — see below. FedEx does; Pickup, Delivery and Customer account don't.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">How a job gets marked shipped</h3>
+                <p>
+                    An order counts as shipped — and its invoice can go to QuickBooks — only when its items are on a
+                    recorded shipment. A job's status alone isn't enough. So <strong>Mark shipped</strong> works
+                    differently depending on the order's shipping method:
+                </p>
+                <ul class="docs-list">
+                    <li><strong>Methods that don't need a shipment record</strong> (pickup, local delivery, customer account): <strong>Mark shipped</strong> on the job page or the Jobs list records a shipment without packages by itself. Jobs on the same order marked shipped within 12 hours go on one shipment, so a local delivery is billed one fee, not one per line.</li>
+                    <li><strong>Methods that need a shipment record</strong> (FedEx), and <strong>orders with no shipping method</strong>: there is no Mark shipped. Production can still <strong>Record counts</strong>; the job waits at Ready to ship until shipping uses <strong>Record shipment</strong> with the packages, tracking numbers and carrier cost.</li>
+                    <li>Setting a job to <strong>Shipped</strong> or <strong>Closed</strong> from the status dropdown follows the same rule.</li>
                 </ul>
 
                 <h3 class="docs-subtitle">Recording a shipment</h3>
@@ -472,6 +514,20 @@
                     <li>For hand-offs with no packages or tracking, use <strong>Mark shipped</strong> on the Ready to Ship tab — it creates a package-less shipment for all ready items, advances the jobs, and rolls up the order.</li>
                     <li>Orders on a <strong>pickup</strong> shipping method show <strong>Mark picked up</strong> instead.</li>
                     <li>The button is disabled until <strong>every item on the order is ready</strong>; partial orders go through the Record shipment form. An "Unmark" is not needed — the shipment appears in history like any other.</li>
+                    <li>It isn't offered on orders whose shipping method needs a shipment record — use <strong>Record shipment</strong>.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Shipping charges</h3>
+                <ul class="docs-list">
+                    <li>The price on a shipping method is the <strong>quote</strong> used on estimates and orders. The invoice bills what each shipment works out to:</li>
+                    <li><strong>Pickup</strong> and <strong>Customer account</strong> (shipped on the customer's own carrier account): $0. <strong>Local delivery</strong>: the flat fee in <a asp-page="/Settings/General">General settings</a>. <strong>Carrier</strong> (FedEx, or no method): the shipment's carrier cost × the carrier multiplier in General settings.</li>
+                    <li>A carrier shipment recorded without a carrier cost holds its invoice on "Waiting on carrier cost" — enter the cost on the shipment's <strong>Shipping charges</strong> card when the bill arrives.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Short shipments and jobs marked shipped without a shipment</h3>
+                <ul class="docs-list">
+                    <li><strong>Under-runs</strong> — if a line shipped short (950 of 1,000), open its shipment and use <strong>Mark order shipped</strong>; the order then counts as shipped.</li>
+                    <li><strong>Jobs marked shipped before a shipment was recorded</strong> (how Mark shipped worked before November 2026) show a warning on the job page: <strong>Record shipment now</strong> for hand-off methods, or <strong>Record shipment</strong> for FedEx orders, which now accepts those lines. The invoice's Waiting reason names the job.</li>
                 </ul>
 
                 <h3 class="docs-subtitle">Usage</h3>
@@ -495,21 +551,34 @@
                     <a class="docs-section-action" asp-page="/Invoices/Index">Open invoices</a>
                 </div>
                 <p>
-                    Invoices are generated <strong>from a shipment</strong>. An order appears on the Invoices page only
-                    after an invoice has been created — shipping an order does not invoice it automatically.
+                    Every sales order gets a <strong>draft invoice</strong> when it is created. The draft follows the
+                    order: price edits rebuild it, and its shipping follows the order's recorded shipments. LabelShop
+                    does not connect to QuickBooks — Accounting moves each invoice into QuickBooks by hand or by CSV,
+                    then marks it exported.
                 </p>
 
-                <h3 class="docs-subtitle">Generating an invoice</h3>
+                <h3 class="docs-subtitle">Ready to export vs Waiting</h3>
+                <p>An invoice is on <strong>Ready to export</strong> when all of these hold:</p>
                 <ul class="docs-list">
-                    <li>Open a shipment that is <strong>In transit</strong> or <strong>Delivered</strong> and click <strong>Generate invoice</strong> (Admin or Accounting roles).</li>
-                    <li>The invoice copies the shipped lines, quantities, and unit prices from the sales order. Tax is applied at the configured rate unless the customer is <strong>tax exempt</strong>; shipping cost is carried over.</li>
-                    <li>Due date is calculated from the customer's payment <strong>terms</strong>.</li>
+                    <li>The order has <strong>shipped</strong> — every line is on a recorded shipment in full, or the order was marked shipped after an under-run — or the invoice is set to <strong>Bill before shipping</strong> (deposits, prepay).</li>
+                    <li>The total is above <strong>$0</strong> (close $0 samples as <strong>Non-billable</strong>).</li>
+                    <li>No shipment is still <strong>waiting on its carrier cost</strong>.</li>
+                    <li>The customer is set up: <strong>Tax setup complete</strong> is ticked and there is a <strong>billing email</strong> — the contact ticked Billing, else the primary contact.</li>
                 </ul>
+                <p>Anything else is on <strong>Waiting</strong>, with each reason listed and what to do about it.</p>
+
+                <h3 class="docs-subtitle">Moving an invoice into QuickBooks</h3>
+                <ol class="docs-list docs-list--ordered">
+                    <li>On <strong>Ready to export</strong>, open an invoice's <strong>QB preview</strong>. It is laid out like the QuickBooks invoice form — customer, billing email, terms, bill-to / ship-to, P.O., each line with its QuickBooks item and class, and the shipping line — with copy buttons. Fix an item or class from its dropdown.</li>
+                    <li>Key the invoice into QuickBooks, then click <strong>Mark exported to QuickBooks</strong>.</li>
+                    <li>Or tick several Ready invoices and <strong>Export to QuickBooks</strong> to download a CSV (they are marked exported, with who/when recorded); <strong>Mark selected as exported</strong> does the same without a download, and <strong>Unmark exported</strong> reverses a mistake.</li>
+                    <li>An invoice already keyed into QuickBooks that is still on Waiting can be closed from its QB preview with <strong>Mark exported anyway</strong>.</li>
+                </ol>
 
                 <h3 class="docs-subtitle">Usage</h3>
                 <ul class="docs-list">
-                    <li>The invoices page is split into <strong>Ready to export</strong> and <strong>Exported</strong> tabs; filter by status, customer, date, or AR aging bucket within either.</li>
-                    <li>Check invoices and <strong>Export to QuickBooks</strong> (downloads the CSV and marks them exported, with who/when recorded) or <strong>Mark selected as exported</strong> without a download; <strong>Unmark exported</strong> reverses a mistake.</li>
+                    <li>QuickBooks item names, class names and the charge keywords are set on <a asp-page="/Settings/QuickBooks">Setup → QuickBooks mapping</a>.</li>
+                    <li>Due date is calculated from the customer's payment <strong>terms</strong>; tax is applied at the configured rate unless the customer is <strong>tax exempt</strong>.</li>
                     <li>Record <strong>payments</strong> and <strong>void</strong> invoices from the invoice detail page.</li>
                     <li>The <strong>sales tax rate</strong> applied to new invoices is set in <a asp-page="/Settings/General">General settings</a>; tax-exempt customers are never taxed.</li>
                     <li>Access to all invoice pages requires the <strong>Accounting</strong> role.</li>

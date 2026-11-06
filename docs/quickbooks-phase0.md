@@ -1,6 +1,6 @@
 # QuickBooks Phase 0 (Track E): design choices
 
-Status: **E1–E12 built** on `feature/epm-qb-phase0` (not pushed, not deployed). Every task has its
+Status: **E1–E12 built** on `feature/epm-qb-phase0`, merged to `main` and deployed. Every task has its
 own commit with the migration proof and test/smoke evidence in the body. E7–E11 follow the designs
 Thad approved on 2026-11-01; the E6 shipped-for-billing rule is his decision of the same day. Written
 2026-11-01 against `origin/main` @ eaa4447.
@@ -150,10 +150,9 @@ shipping* toggle (Admin / Accounting). Migration `AddInvoiceBillBeforeShip` (boo
   the customer form. Ticking without a date stamps today; unticking clears the date.
 - Blockers: "Waiting on new-client form (tick Tax setup complete on the customer)" and "No billing
   contact with email (add a contact with role Billing on the customer)".
-- Contact roles are free text, so a billing contact is one whose role contains a billing word:
-  billing / bill / invoice(s) / accounting / accounts payable / A/P / AP. The role inputs now suggest
-  Billing, Purchasing, Art / proofs, Shipping. The billing email (primary first) is what the preview
-  shows.
+- ~~Contact roles are free text, so a billing contact is one whose role contains a billing word~~ —
+  superseded 2026-11-05 by the **Billing** checkbox on contacts (see "After Phase 0" below). The
+  role-word rule survives only in the migration that ticked the box on the contacts it matched.
 - **Deploy-day backfill** (migration `AddCustomerQuickBooksSetup`): customers with at least one
   invoice already marked exported are set up, dated by their first export — they went through the
   new-client form long ago. Without it every existing invoice would jump to Waiting. Customers never
@@ -238,6 +237,70 @@ writes data (one guarded UPDATE over Customer joined to an aggregate of exported
 seeders don't touch Customer, Invoice, InvoiceLine or QuickBooksSettings (`MasterDataSeeder` returns
 early once the press and shipping methods exist).
 
+## After Phase 0 (2026-11-05): shipments for Mark shipped, Billing contact
+
+Branch `feature/ship-gate-billing-contact`. Prompted by Accounting finding nearly every invoice on
+Waiting after Phase 0 deployed. Two causes:
+
+- **Production's Mark shipped never recorded a shipment.** The job page / jobs list advanced the job
+  to Shipped, but E6 counts an order as shipped only from recorded shipments, so those orders stayed
+  In production and their invoices waited with no way out (Record shipment only took Rewound jobs,
+  Mark order shipped refuses a line that shipped nothing).
+- **Billing contacts were found by matching words in the free-text Role**, which nobody could see.
+
+### Mark shipped records the shipment (or sends the order to Record shipment)
+
+- `ShippingMethod.RequiresShipmentRecord` (Setup → Shipping methods, "Needs a shipment record").
+  Defaults from the type: FedEx on; Pickup, Delivery, Customer account off. **An order with no
+  method counts as on** — it bills as a carrier shipment (E4), so it needs the carrier cost
+  (Thad, 2026-11-05).
+- Moving a job to Shipped or Closed from below Shipped — job page next step, Record & mark shipped,
+  jobs-list popup, status dropdown — goes through `JobService.RecordShipmentIfShippingAsync` →
+  `ShipmentService.RecordJobShippedAsync`:
+  - method off: the line's unshipped quantity goes on a package-less shipment, then the order
+    status rolls up and the draft invoice's shipping syncs. Lines of one order marked shipped within
+    `PackagelessShipmentWindow` (12 h, rolling, so it doesn't split at the UTC date line) share one
+    shipment → one local delivery fee. The Shipments one-click Mark shipped uses the same window;
+  - method on: `ShipmentRecordRequiredException`, the job stays Rewound. The UI offers **Record
+    counts** (production keeps its packing counts) and **Record shipment** (Shipping/Admin) instead,
+    and the Shipments one-click isn't offered;
+  - the line already shipped in full: no shipment, the job just moves.
+- Jobs already at Shipped/Closed with **nothing** for their line on a recorded shipment (the old
+  Mark shipped): Record shipment now accepts those lines, the job page shows a warning with
+  **Record shipment now** (method off) or **Record shipment** (method on), and the invoice's
+  waiting reason names the job ("JOB-… was marked shipped with no shipment recorded — record the
+  shipment from the job page"). A line that shipped *short* on a recorded shipment is still not
+  re-offered — that is an under-run, finished with Mark order shipped.
+
+### Billing contact
+
+- `Contact.IsBillingContact`, a **Billing** checkbox next to Primary. Role is only a label.
+- `CustomerBillingRules.ChooseBillingEmail`: the Billing contact with an email (primary first), else
+  the **primary contact's** email (Thad, 2026-11-05). The invoice waits ("No billing email …") only
+  when neither exists. The QB preview marks a fallback "(primary contact)" and warns; the sales
+  order's Email invoice defaults to the same address.
+- Fixed with it: rows added with Add contact / Add address saved Primary / Default unticked even when
+  ticked (the hidden `false` twin preceded the checkbox and the binder takes the first value).
+
+### Migrations (all on the branch; Up → Down → Up proven)
+
+| Migration | Change | Existing rows |
+|---|---|---|
+| `AddShippingMethodRequiresShipmentRecord` | `ShippingMethod.RequiresShipmentRecord` bool DEFAULT false | true on MethodType 2 (FedEx) |
+| `AddContactIsBillingContact` | `Contact.IsBillingContact` bool DEFAULT false | ticked on exactly the contacts the retired role-word rule matched (21-case fixture, 0 mismatches) |
+| `BackfillPrimaryContactForBilling` | data only | a customer with no Billing/primary contact with an email and exactly one emailed contact gets that contact as primary (14-case fixture, 0 mismatches) |
+
+### Deploy-day effect
+
+- No invoice moves from Ready to Waiting: billing-word contacts keep billing through the checkbox.
+- Invoices waiting only on the billing contact move to Ready where a primary contact with an email
+  exists or the primary backfill creates one. Customers with several emailed contacts and none
+  primary or Billing keep waiting until someone ticks one.
+- Production loses Mark shipped on FedEx and no-method orders the moment it lands; those go through
+  Record shipment (a tracking number per package; drop-ships use the vendor's tracking and freight).
+- Jobs marked shipped the old way stay as they are until someone uses the job page's fix (or Bill
+  before shipping / Mark exported anyway on the invoice). Nothing creates shipments on deploy.
+
 ## Phase 1 compatibility (Appendix A)
 
 - `DocNumber` = the LabelShop invoice number (`INV-2026-00xxx`, within QBO's 21-character limit).
@@ -291,9 +354,8 @@ New questions:
 
 8. **Deploy day, customers.** Customers with an exported invoice were marked tax-setup complete; the
    rest wait on the new-client form. Right cut-off?
-9. **Deploy day, billing contacts.** Every customer without a contact whose role says billing / AP /
-   accounting and has an email will have its invoices on Waiting until one is added. Should the
-   primary contact's email count as a fallback instead?
+9. **Deploy day, billing contacts.** ~~Should the primary contact's email count as a fallback?~~
+   Answered by Thad 2026-11-05: yes — see "After Phase 0" below.
 10. **QuickBooks names.** Are the item names (Sales, Shipping, Design, Rush, Die Creation), the class
     names (Roll Label, Shrink Sleeves, Buyout) and the `OUTSOURCED` substrate code exactly as in QB /
     LabelShop? Sabrina can change them on Setup → QuickBooks mapping.
