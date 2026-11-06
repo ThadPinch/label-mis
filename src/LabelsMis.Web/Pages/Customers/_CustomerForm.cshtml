@@ -236,8 +236,10 @@
             </div>
             <div class="col-6 col-md-2 align-self-end">
                 <div class="form-check mb-1">
-                    <input type="hidden" name="Input.Addresses[__INDEX__].IsDefault" value="false" />
+                    @* The checkbox comes before its hidden "false" twin: the binder takes the first
+                       posted value, so a twin in front made a ticked box on a new row save unticked. *@
                     <input name="Input.Addresses[__INDEX__].IsDefault" id="Input_Addresses___INDEX___IsDefault" class="form-check-input" type="checkbox" value="true" />
+                    <input type="hidden" name="Input.Addresses[__INDEX__].IsDefault" value="false" />
                     <label class="form-check-label small" for="Input_Addresses___INDEX___IsDefault">Default</label>
                 </div>
             </div>
@@ -272,13 +274,13 @@
             </div>
             <div class="col-12 col-md-1 align-self-end">
                 <div class="form-check mb-0">
-                    <input type="hidden" name="Input.Contacts[__INDEX__].IsPrimary" value="false" />
                     <input name="Input.Contacts[__INDEX__].IsPrimary" id="Input_Contacts___INDEX___IsPrimary" class="form-check-input" type="checkbox" value="true" />
+                    <input type="hidden" name="Input.Contacts[__INDEX__].IsPrimary" value="false" />
                     <label class="form-check-label small" for="Input_Contacts___INDEX___IsPrimary">Primary</label>
                 </div>
                 <div class="form-check mb-1">
-                    <input type="hidden" name="Input.Contacts[__INDEX__].IsBillingContact" value="false" />
                     <input name="Input.Contacts[__INDEX__].IsBillingContact" id="Input_Contacts___INDEX___IsBillingContact" class="form-check-input" type="checkbox" value="true" />
+                    <input type="hidden" name="Input.Contacts[__INDEX__].IsBillingContact" value="false" />
                     <label class="form-check-label small" for="Input_Contacts___INDEX___IsBillingContact" title="Invoices go to this contact">Billing</label>
                 </div>
             </div>
