@@ -1,0 +1,17 @@
+@* A job's route as a row of dots: done (filled), the current step (ringed, pulsing when someone is
+   clocked on), upcoming (hollow). Hover a dot for the step name. *@
+@using LabelsMis.Domain.Jobs
+@model JobFloorLocation
+<span class="floor-route" role="img" aria-label="@Model.StepsDone of @Model.Route.Count steps done">
+    @foreach (var step in Model.Route)
+    {
+        var state = step.State.ToString().ToLowerInvariant();
+        var stateText = step.State switch
+        {
+            FloorStepState.Done => "done",
+            FloorStepState.Current => step.Running ? "in progress now" : "current step",
+            _ => "to do"
+        };
+        <i class="floor-step floor-step-@state@(step.Running ? " is-running" : "")" title="@step.Label — @stateText"></i>
+    }
+</span>

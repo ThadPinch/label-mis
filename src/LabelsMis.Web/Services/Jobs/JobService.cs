@@ -1663,16 +1663,24 @@ public class JobService(
     private static string GetOperationTypeLabel(
         JobOperation operation,
         IReadOnlyDictionary<Guid, FinishingOperation> finishing) =>
-        operation.OperationType switch
+        OperationLabel(operation.OperationType, operation.EquipmentId, finishing);
+
+    /// <summary>The label a route step shows: the finishing operation's description for finishing
+    /// steps, the step type otherwise. Shared with the floor board (<see cref="JobFloorService"/>).</summary>
+    internal static string OperationLabel(
+        JobOperationType type,
+        Guid? equipmentId,
+        IReadOnlyDictionary<Guid, FinishingOperation> finishing) =>
+        type switch
         {
             JobOperationType.Press => "Press",
-            JobOperationType.Finishing when operation.EquipmentId is Guid finId
+            JobOperationType.Finishing when equipmentId is Guid finId
                 && finishing.TryGetValue(finId, out var fin) => fin.Description,
             JobOperationType.Finishing => "Finishing",
             JobOperationType.Inspection => "QC inspection",
             JobOperationType.Pack => "Pack",
             JobOperationType.Ship => "Ship",
-            _ => operation.OperationType.ToString()
+            _ => type.ToString()
         };
 
     private async Task<JobActualCostResult> CalculateActualCostAsync(Job job, CancellationToken cancellationToken)

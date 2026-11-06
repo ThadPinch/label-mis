@@ -1,0 +1,60 @@
+@* One job card on the floor board. data-search feeds the find box (job-floor.js); data-urgency
+   feeds the due chips. *@
+@using LabelsMis.Domain.Jobs
+@model LabelsMis.Web.Pages.Jobs.FloorCardModel
+@{
+    var j = Model.Job;
+    var loc = j.Location;
+    var urgency = JobDue.Classify(j.DueDate, Model.Today);
+    var classes = "floor-card"
+        + (urgency == DueUrgency.Overdue ? " is-overdue" : "")
+        + (loc.IsRunning ? " is-running" : "")
+        + (loc.NeedsAttention ? " needs-attention" : "");
+    var (prefix, tail) = LabelsMis.Web.Pages.Jobs.FloorText.SplitNumber(j.JobNumber);
+}
+<article class="@classes" id="job-@j.Id" data-job-id="@j.Id" data-urgency="@urgency.ToString().ToLowerInvariant()"
+         data-search="@LabelsMis.Web.Pages.Jobs.FloorText.For(j)">
+    <header class="floor-card-head">
+        <a class="floor-card-number" asp-page="Detail" asp-route-id="@j.Id" title="Open @j.JobNumber"><span class="jn-prefix">@prefix</span>@tail</a>
+        @if (!string.IsNullOrWhiteSpace(j.Notes))
+        {
+            <span class="floor-note" title="@j.Notes" aria-label="Job notes">✎</span>
+        }
+        <partial name="_FloorDue" model="new LabelsMis.Web.Pages.Jobs.FloorDueModel(j.DueDate, Model.Today, j.ScheduledForDate)" />
+    </header>
+    <div class="floor-card-customer" title="@j.CustomerName">@j.CustomerName</div>
+    <div class="floor-card-product" title="@j.ProductDescription">@j.ProductDescription</div>
+    <div class="floor-card-refs">
+        <a asp-page="/SalesOrders/Edit" asp-route-id="@j.SalesOrderId" title="Sales order">@j.OrderNumber</a>
+        @if (!string.IsNullOrWhiteSpace(j.CustomerPoNumber))
+        {
+            <span class="floor-po" title="Customer PO">PO @j.CustomerPoNumber</span>
+        }
+    </div>
+    <div class="floor-where">
+        <span class="floor-where-text">
+            @if (loc.NeedsAttention)
+            {
+                <span class="floor-attn" aria-hidden="true">▲</span>
+            }
+            @loc.Where
+        </span>
+        @if (loc.Detail is { } detail)
+        {
+            <span class="floor-where-detail">@detail</span>
+        }
+        @if (loc.IsRunning)
+        {
+            <span class="floor-running" title="Clocked on now"><span class="floor-running-dot" aria-hidden="true"></span>@(loc.RunningBy ?? "In progress")</span>
+        }
+    </div>
+    <div class="floor-card-bottom">
+        <span class="floor-card-progress">
+            <partial name="_FloorRoute" model="loc" />
+            <span class="floor-qty" title="Ordered quantity">@j.QuantityOrdered.ToString("N0")</span>
+        </span>
+        <span class="floor-card-actions">
+            <partial name="_FloorActions" model="Model" />
+        </span>
+    </div>
+</article>

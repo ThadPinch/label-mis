@@ -1,0 +1,104 @@
+@* The floor as a table: live jobs (all of them, find box filters in the browser) or history
+   (Shipped / Closed / All, paged and searched on the server). *@
+@using LabelsMis.Domain.Jobs
+@using LabelsMis.Web.Pages.Shared
+@model LabelsMis.Web.Pages.Jobs.IndexModel
+@{
+    var route = Model.RouteWith();
+    route.Remove("view");
+    route["view"] = "list";
+}
+
+@if (Model.Jobs.Count == 0)
+{
+    <div class="floor-empty">
+        @if (Model.IsHistory)
+        {
+            <strong>No jobs match these filters.</strong>
+        }
+        else
+        {
+            <strong>Nothing on the floor@(Model.SelectedStage is { } s ? $" in {JobFloorLocator.StageLabel(s)}" : "").</strong>
+        }
+    </div>
+}
+else
+{
+    <div class="floor-list-wrap">
+        <table class="table floor-list align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Job #", "number", Model.Sort, route))</th>
+                    <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Where it is", "where", Model.Sort, route))</th>
+                    <th class="floor-list-progress">Progress</th>
+                    <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer", "customer", Model.Sort, route))</th>
+                    <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Product", "product", Model.Sort, route))</th>
+                    <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Order", "order", Model.Sort, route))</th>
+                    <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Due", "due", Model.Sort, route))</th>
+                    <th class="text-end">@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Qty", "qty", Model.Sort, route))</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var j in Model.Jobs)
+                {
+                    var loc = j.Location;
+                    var urgency = JobDue.Classify(j.DueDate, Model.Today);
+                    var card = new LabelsMis.Web.Pages.Jobs.FloorCardModel(j, Model.CanAdvance, Model.CanShip, Model.Today);
+                    <tr id="job-@j.Id" data-job-id="@j.Id" data-urgency="@urgency.ToString().ToLowerInvariant()"
+                        data-stage="@LabelsMis.Web.Pages.Jobs.FloorText.StageKey(j.Status)" data-search="@LabelsMis.Web.Pages.Jobs.FloorText.For(j)"
+                        class="@(urgency == DueUrgency.Overdue ? "is-overdue" : null)">
+                        <td class="text-nowrap">
+                            @{ var (jnPrefix, jnTail) = LabelsMis.Web.Pages.Jobs.FloorText.SplitNumber(j.JobNumber); }
+                            <a class="floor-card-number" asp-page="Detail" asp-route-id="@j.Id"><span class="jn-prefix">@jnPrefix</span>@jnTail</a>
+                            @if (!string.IsNullOrWhiteSpace(j.Notes))
+                            {
+                                <span class="floor-note" title="@j.Notes" aria-label="Job notes">✎</span>
+                            }
+                        </td>
+                        <td class="floor-list-where stage-@LabelsMis.Web.Pages.Jobs.FloorText.StageKey(j.Status)">
+                            <span class="floor-stage-badge">@loc.StageLabel</span>
+                            <span class="floor-where-text">
+                                @if (loc.NeedsAttention)
+                                {
+                                    <span class="floor-attn" aria-hidden="true">▲</span>
+                                }
+                                @loc.Where
+                            </span>
+                            @if (loc.Detail is { } detail)
+                            {
+                                <span class="floor-where-detail">@detail</span>
+                            }
+                            @if (loc.IsRunning)
+                            {
+                                <span class="floor-running" title="Clocked on now"><span class="floor-running-dot" aria-hidden="true"></span>@(loc.RunningBy ?? "In progress")</span>
+                            }
+                        </td>
+                        <td class="floor-list-progress"><partial name="_FloorRoute" model="loc" /></td>
+                        <td>@j.CustomerName</td>
+                        <td class="floor-list-product">@j.ProductDescription</td>
+                        <td class="text-nowrap">
+                            <a asp-page="/SalesOrders/Edit" asp-route-id="@j.SalesOrderId">@j.OrderNumber</a>
+                            @if (!string.IsNullOrWhiteSpace(j.CustomerPoNumber))
+                            {
+                                <div class="floor-po">PO @j.CustomerPoNumber</div>
+                            }
+                        </td>
+                        <td class="text-nowrap"><partial name="_FloorDue" model="new LabelsMis.Web.Pages.Jobs.FloorDueModel(j.DueDate, Model.Today, j.ScheduledForDate)" /></td>
+                        <td class="text-end">@j.QuantityOrdered.ToString("N0")</td>
+                        <td class="text-end text-nowrap floor-row-actions"><partial name="_FloorActions" model="card" /></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="floor-filter-empty" hidden>No jobs match the find box.</div>
+    </div>
+
+    @if (Model.History is { } history)
+    {
+        @await Html.PartialAsync("Shared/_Pager", new PagerModel(history.Page, history.TotalPages, history.TotalCount)
+        {
+            Extra = route
+        })
+    }
+}

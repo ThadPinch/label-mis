@@ -1,0 +1,23 @@
+@* Due-date chip for a floor card / list row: Overdue (red), today/tomorrow (amber), this week, later. *@
+@using LabelsMis.Domain.Jobs
+@model LabelsMis.Web.Pages.Jobs.FloorDueModel
+@{
+    var urgency = JobDue.Classify(Model.DueDate, Model.Today);
+    var due = Model.DueDate;
+    var title = due is { } d ? $"Due {d:dddd, MMM d, yyyy}" : "No due date on the order";
+    if (Model.ScheduledForDate is { } scheduled)
+    {
+        title += $" · scheduled {scheduled:ddd MMM d}";
+    }
+    var text = urgency switch
+    {
+        DueUrgency.None => "No due date",
+        DueUrgency.Overdue => $"{Model.Today.DayNumber - due!.Value.DayNumber}d late",
+        DueUrgency.Today => "Due today",
+        DueUrgency.Tomorrow => "Due tomorrow",
+        DueUrgency.ThisWeek => $"Due {due!.Value:ddd M/d}",
+        _ => $"Due {due!.Value:MMM d}"
+    };
+}
+<span class="floor-due floor-due-@urgency.ToString().ToLowerInvariant()" title="@title">@if (urgency == DueUrgency.Overdue)
+    {<span aria-hidden="true">▲ </span>}@text</span>

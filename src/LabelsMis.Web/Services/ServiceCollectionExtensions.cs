@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using LabelsMis.Domain.Estimating;
 using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Background;
@@ -30,6 +31,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddWebServices(this IServiceCollection services)
     {
         services.AddHttpContextAccessor();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<ClientClock>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<CustomerService>();
         services.AddScoped<SupplierService>();
@@ -49,6 +52,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SalesOrderService>();
         services.AddScoped<SalesOrderDocumentService>();
         services.AddScoped<JobService>();
+        services.AddScoped<JobFloorService>();
+        services.AddScoped<Search.GlobalSearchService>();
         services.AddScoped<JobImpositionService>();
         services.AddScoped<JobFileService>();
         services.AddSingleton<ImpositionPdfGenerator>();

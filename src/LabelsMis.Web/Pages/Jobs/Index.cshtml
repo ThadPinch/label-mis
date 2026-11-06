@@ -1,135 +1,200 @@
 @page "/jobs"
 @model LabelsMis.Web.Pages.Jobs.IndexModel
+@using LabelsMis.Domain.Enums
+@using LabelsMis.Domain.Jobs
+@using LabelsMis.Web.Pages.Jobs
 @{
     ViewData["Title"] = "Jobs";
-    var route = new Dictionary<string, string?>
-    {
-        ["Search"] = Model.Search,
-        ["StatusFilter"] = Model.StatusFilter,
-        ["CustomerId"] = Model.CustomerId?.ToString(),
-        ["PressId"] = Model.PressId?.ToString(),
-        ["DueFrom"] = Model.DueFrom?.ToString("yyyy-MM-dd"),
-        ["DueTo"] = Model.DueTo?.ToString("yyyy-MM-dd"),
-        ["ScheduledDate"] = Model.ScheduledDate?.ToString("yyyy-MM-dd"),
-        ["Sort"] = Model.Sort
-    };
+    ViewData["FluidMain"] = true;
+    var view = Model.IsBoard ? "board" : "list";
+    var liveSelected = !Model.IsHistory && Model.SelectedStage is null;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="h3 mb-0">Jobs</h1>
-</div>
+<div class="floor" id="floor" data-live="@(Model.IsHistory ? "false" : "true")" data-view="@view">
+    <div class="floor-toolbar">
+        <div class="floor-title">
+            <h1>Jobs</h1>
+            <span class="floor-subtitle">
+                @if (Model.IsHistory)
+                {
+                    @($"{Model.History?.TotalCount ?? 0:N0} job(s) in history")
+                }
+                else
+                {
+                    <span id="floor-live-count">@Model.LiveCount</span>@(" live jobs on the floor")
+                }
+            </span>
+        </div>
 
-@if (TempData["JobActionError"] is string actionError)
-{
-    <div class="alert alert-danger">@actionError</div>
-}
-@if (TempData["JobActionMessage"] is string actionMessage)
-{
-    <div class="alert alert-success py-2">@actionMessage</div>
-}
+        <div class="floor-find">
+            <svg class="floor-find-icon" aria-hidden="true"><use href="#si-search" /></svg>
+            <input type="search" id="floor-find" name="Search" form="floor-filters" value="@Model.Search" class="form-control"
+                   placeholder="@(Model.IsHistory ? "Search job, customer, product, order, PO… then Enter" : "Find a job — number, customer, product, order, PO, SKU…")"
+                   aria-label="Find a job" autocomplete="off" spellcheck="false" />
+            <span class="floor-find-count" id="floor-find-count" aria-live="polite"></span>
+        </div>
 
-<form method="get" class="row g-2 mb-3">
-    <input type="hidden" asp-for="Sort" />
-    <div class="col-md-2">
-        <input asp-for="Search" class="form-control" placeholder="Search job, customer, product" />
-    </div>
-    <div class="col-md-2">
-        <select asp-for="StatusFilter" class="form-select">
-            <option value="live">Live statuses</option>
-            <option value="all">All statuses</option>
-            @foreach (var s in Enum.GetValues<LabelsMis.Domain.Enums.JobStatus>())
+        <div class="floor-toolbar-actions">
+            <div class="btn-group btn-group-sm floor-view-toggle" role="group" aria-label="View">
+                <a class="btn btn-outline-secondary @(Model.IsBoard ? "active" : "")" href="@Model.Href(("view", "board"), ("StatusFilter", Model.IsHistory ? "live" : Model.StatusFilter), ("pageNumber", null))"
+                   aria-pressed="@(Model.IsBoard ? "true" : "false")">Board</a>
+                <a class="btn btn-outline-secondary @(!Model.IsBoard ? "active" : "")" href="@Model.Href(("view", "list"))"
+                   aria-pressed="@(!Model.IsBoard ? "true" : "false")">List</a>
+            </div>
+            @if (!Model.IsHistory)
             {
-                <option value="@s">@s</option>
+                <button type="button" class="btn btn-sm btn-outline-secondary floor-refresh" id="floor-refresh" title="Refresh now (the board also refreshes itself every minute)">
+                    <svg class="floor-refresh-icon" aria-hidden="true"><use href="#si-refresh" /></svg>
+                    <span id="floor-updated">Updated just now</span>
+                </button>
+                <div class="form-check form-switch floor-auto mb-0" title="Refresh the board every minute">
+                    <input class="form-check-input" type="checkbox" role="switch" id="floor-auto" checked />
+                    <label class="form-check-label" for="floor-auto">Auto</label>
+                </div>
             }
-        </select>
+        </div>
     </div>
-    <div class="col-md-2">
-        <select asp-for="CustomerId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["CustomerOptions"]!)">
-            <option value="">All customers</option>
-        </select>
-    </div>
-    <div class="col-md-2">
-        <select asp-for="PressId" class="form-select" asp-items="@((IEnumerable<SelectListItem>)ViewData["PressOptions"]!)">
-            <option value="">All presses</option>
-        </select>
-    </div>
-    <div class="col-md-1">
-        <input asp-for="DueFrom" class="form-control" type="date" placeholder="Due from" />
-    </div>
-    <div class="col-md-1">
-        <input asp-for="DueTo" class="form-control" type="date" />
-    </div>
-    <div class="col-md-1">
-        <input asp-for="ScheduledDate" class="form-control" type="date" title="Scheduled date" />
-    </div>
-    <div class="col-md-1">
-        <button type="submit" class="btn btn-outline-secondary w-100">Filter</button>
-    </div>
-</form>
 
-<table class="table table-striped align-middle">
-    <thead>
-        <tr>
-            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Job #", "number", Model.Sort, route))</th>
-            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Order", "order", Model.Sort, route))</th>
-            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Customer", "customer", Model.Sort, route))</th>
-            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Product", "product", Model.Sort, route))</th>
-            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Status", "status", Model.Sort, route))</th>
-            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Due", "due", Model.Sort, route))</th>
-            <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Scheduled", "scheduled", Model.Sort, route))</th>
-            <th class="text-end">@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Qty", "qty", Model.Sort, route))</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-    @foreach (var item in Model.Result.Items)
+    @if (TempData["JobActionError"] is string actionError)
     {
-        <tr>
-            <td class="text-nowrap"><a asp-page="Detail" asp-route-id="@item.Id">@item.JobNumber</a></td>
-            <td class="text-nowrap"><a asp-page="/SalesOrders/Edit" asp-route-id="@item.SalesOrderId">@item.OrderNumber</a></td>
-            <td>@item.CustomerName</td>
-            <td>@item.ProductDescription</td>
-            <td class="text-nowrap">@item.Status @if (item.IsOutsourced) { <span class="badge text-bg-info">Outsourced</span> }</td>
-            <td class="text-nowrap">@(item.DueDate?.ToString("yyyy-MM-dd") ?? "—")</td>
-            <td class="text-nowrap">@(item.ScheduledForDate?.ToString("yyyy-MM-dd") ?? "—")</td>
-            <td class="text-end">@item.QuantityOrdered.ToString("N0")</td>
-            <td class="text-end text-nowrap">
-                @if (item.Status == LabelsMis.Domain.Enums.JobStatus.Rewound && item.ShipmentRecordRequired)
-                {
-                    @* Ships by Record shipment (packages, tracking, carrier cost): no Mark shipped here.
-                       Production can still record the packing counts. *@
-                    @if (Model.CanShip)
-                    {
-                        <a asp-page="/Shipments/Record" asp-route-salesOrderId="@item.SalesOrderId" class="btn btn-sm btn-success">Record shipment</a>
-                    }
-                    @if (Model.CanAdvance)
-                    {
-                        <button type="button" class="btn btn-sm btn-outline-primary"
-                                data-action-panel="?handler=ActionPanel&jobId=@item.Id">
-                            Record counts…
-                        </button>
-                    }
-                }
-                else if (Model.CanAdvance && LabelsMis.Web.Services.Jobs.JobService.NextStep(item.Status) is { } step)
-                {
-                    <button type="button" class="btn btn-sm btn-primary"
-                            data-action-panel="?handler=ActionPanel&jobId=@item.Id">
-                        @step.Label…
-                    </button>
-                }
-                <a asp-page="Ticket" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary">Ticket</a>
-            </td>
-        </tr>
+        <div class="alert alert-danger py-2 mb-2">@actionError</div>
     }
-    </tbody>
-</table>
+    @if (TempData["JobActionMessage"] is string actionMessage)
+    {
+        <div class="alert alert-success py-2 mb-2">@actionMessage</div>
+    }
+
+    <form method="get" id="floor-filters" class="floor-filters">
+        <input type="hidden" name="view" value="@view" />
+        <input type="hidden" name="StatusFilter" value="@Model.StatusFilter" />
+        @if (!string.IsNullOrWhiteSpace(Model.Sort))
+        {
+            <input type="hidden" name="Sort" value="@Model.Sort" />
+        }
+
+        <nav class="floor-stages" id="floor-stages" aria-label="Stages">
+            <a class="floor-stage-tab @(liveSelected ? "active" : "")" href="@Model.Href(("StatusFilter", "live"), ("pageNumber", null), ("view", Model.IsHistory ? "board" : view))">
+                All live <span class="floor-stage-count">@Model.LiveCount</span>
+            </a>
+            @foreach (var stage in IndexModel.BoardStages)
+            {
+                var count = Model.StageCounts.GetValueOrDefault(stage);
+                var late = Model.LateByStage.GetValueOrDefault(stage);
+                var active = Model.SelectedStage == stage;
+                <a class="floor-stage-tab stage-@FloorText.StageKey(stage) @(active ? "active" : "") @(count == 0 ? "is-empty" : "")"
+                   href="@Model.Href(("StatusFilter", active ? "live" : stage.ToString()), ("pageNumber", null), ("view", Model.IsHistory ? "board" : view))"
+                   title="@(active ? "Show every live stage" : $"Only {JobFloorLocator.StageLabel(stage)}")">
+                    <span class="floor-stage-swatch" aria-hidden="true"></span>@JobFloorLocator.StageLabel(stage)
+                    <span class="floor-stage-count">@count</span>
+                    @if (late > 0)
+                    {
+                        <span class="floor-stage-late" title="@late past due">▲@late</span>
+                    }
+                </a>
+            }
+            <span class="floor-stage-sep" aria-hidden="true"></span>
+            @foreach (var (key, label) in new[] { ("Shipped", "Shipped"), ("Closed", "Closed"), ("all", "All jobs") })
+            {
+                var active = string.Equals(Model.StatusFilter, key, StringComparison.OrdinalIgnoreCase);
+                <a class="floor-stage-tab floor-stage-history @(active ? "active" : "")" href="@Model.Href(("StatusFilter", key), ("view", "list"), ("pageNumber", null))">@label</a>
+            }
+        </nav>
+
+        <div class="floor-filter-controls">
+            @if (!Model.IsHistory)
+            {
+                <div class="floor-due-chips" role="group" aria-label="Filter by due date">
+                    <button type="button" class="floor-chip floor-chip-overdue" data-due-filter="overdue" aria-pressed="false">Overdue <span data-due-count="overdue"></span></button>
+                    <button type="button" class="floor-chip" data-due-filter="today" aria-pressed="false">Due today <span data-due-count="today"></span></button>
+                    <button type="button" class="floor-chip" data-due-filter="week" aria-pressed="false">Next 7 days <span data-due-count="week"></span></button>
+                </div>
+            }
+            <select name="CustomerId" class="form-select form-select-sm floor-select" data-autosubmit aria-label="Customer">
+                <option value="">All customers</option>
+                @foreach (var c in Model.CustomerOptions)
+                {
+                    <option value="@c.Value" selected="@(c.Value == Model.CustomerId?.ToString())">@c.Text</option>
+                }
+            </select>
+            @if (Model.PressOptions.Count > 1 || Model.PressId is not null)
+            {
+                <select name="PressId" class="form-select form-select-sm floor-select" data-autosubmit aria-label="Press">
+                    <option value="">All presses</option>
+                    @foreach (var p in Model.PressOptions)
+                    {
+                        <option value="@p.Value" selected="@(p.Value == Model.PressId?.ToString())">@p.Text</option>
+                    }
+                </select>
+            }
+            <details class="floor-more" data-active="@(Model.HasMoreFilters ? "true" : null)">
+                <summary class="btn btn-sm btn-outline-secondary">Dates@(Model.HasMoreFilters ? " •" : "")</summary>
+                <div class="floor-more-panel">
+                    <label class="form-label small mb-1" for="DueFrom">Due between</label>
+                    <div class="d-flex gap-1 mb-2">
+                        <input asp-for="DueFrom" type="date" class="form-control form-control-sm" />
+                        <input asp-for="DueTo" type="date" class="form-control form-control-sm" aria-label="Due to" />
+                    </div>
+                    <label class="form-label small mb-1" for="ScheduledDate">Scheduled for</label>
+                    <input asp-for="ScheduledDate" type="date" class="form-control form-control-sm mb-2" />
+                    <div class="d-flex justify-content-between gap-2">
+                        <a class="btn btn-sm btn-link px-0" href="@Model.Href(("DueFrom", null), ("DueTo", null), ("ScheduledDate", null), ("pageNumber", null))">Clear dates</a>
+                        <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+                    </div>
+                </div>
+            </details>
+            @if (Model.CustomerId is not null || Model.PressId is not null || Model.HasMoreFilters)
+            {
+                <a class="btn btn-sm btn-link floor-clear" href="@Model.Href(("CustomerId", null), ("PressId", null), ("DueFrom", null), ("DueTo", null), ("ScheduledDate", null), ("pageNumber", null))">Clear filters</a>
+            }
+        </div>
+    </form>
+
+    <div class="floor-results" id="floor-results">
+        @if (Model.IsBoard)
+        {
+            <div class="floor-board @(Model.SelectedStage is not null ? "is-single" : "")" id="floor-board">
+                @foreach (var col in Model.Columns)
+                {
+                    var key = FloorText.StageKey(col.Status);
+                    <section class="floor-col stage-@key" data-stage="@key" aria-label="@col.Label">
+                        <header class="floor-col-head">
+                            <a class="floor-col-title" asp-page="@col.StagePage" title="Open the @col.Label stage page">@col.Label</a>
+                            <span class="floor-col-count" data-col-count>@col.Jobs.Count</span>
+                            @if (col.LateCount > 0)
+                            {
+                                <span class="floor-col-late" title="@col.LateCount past due">▲ @col.LateCount late</span>
+                            }
+                            @if (col.Status == JobStatus.Outsourced)
+                            {
+                                <a class="floor-col-link" asp-page="/Production/Outsourced" title="Vendor queue: everything out for outsourcing">Vendor queue →</a>
+                            }
+                        </header>
+                        <div class="floor-col-body">
+                            @foreach (var job in col.Jobs)
+                            {
+                                <partial name="_FloorCard" model="new FloorCardModel(job, Model.CanAdvance, Model.CanShip, Model.Today)" />
+                            }
+                            <div class="floor-col-empty" hidden="@(col.Jobs.Count > 0)">
+                                @(col.Jobs.Count > 0 ? "No matches here" : "Nothing here")
+                            </div>
+                        </div>
+                    </section>
+                }
+            </div>
+        }
+        else
+        {
+            <partial name="_FloorList" model="Model" />
+        }
+    </div>
+</div>
 
 <partial name="_JobActionModalHost" />
 
-@await Html.PartialAsync("Shared/_Pager", new PagerModel(
-    Model.Result.Page,
-    Model.Result.TotalPages,
-    Model.Result.TotalCount)
-{
-    Extra = route
-})
+@section Styles {
+    <link rel="stylesheet" href="~/css/job-floor.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script src="~/js/job-floor.js" asp-append-version="true"></script>
+}

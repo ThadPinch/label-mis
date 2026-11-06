@@ -1,0 +1,25 @@
+@* The next-step / shipping / ticket buttons for one job, shared by board cards and list rows.
+   Same rules as the stage pages: a Rewound job on an order that ships by Record shipment gets
+   Record shipment (Shipping/Admin) and Record counts (production) instead of Mark shipped. *@
+@using LabelsMis.Domain.Enums
+@using LabelsMis.Web.Services.Jobs
+@model LabelsMis.Web.Pages.Jobs.FloorCardModel
+@{
+    var j = Model.Job;
+}
+@if (j.Status == JobStatus.Rewound && j.ShipmentRecordRequired)
+{
+    @if (Model.CanShip)
+    {
+        <a asp-page="/Shipments/Record" asp-route-salesOrderId="@j.SalesOrderId" class="btn btn-sm btn-success">Record shipment</a>
+    }
+    @if (Model.CanAdvance)
+    {
+        <button type="button" class="btn btn-sm btn-outline-primary" data-action-panel="?handler=ActionPanel&jobId=@j.Id">Record counts…</button>
+    }
+}
+else if (Model.CanAdvance && JobService.NextStep(j.Status) is { } step)
+{
+    <button type="button" class="btn btn-sm btn-primary" data-action-panel="?handler=ActionPanel&jobId=@j.Id">@step.Label…</button>
+}
+<a asp-page="Ticket" asp-route-id="@j.Id" class="btn btn-sm btn-outline-secondary floor-ticket" title="Print the job ticket" aria-label="Job ticket"><svg aria-hidden="true"><use href="#si-job" /></svg><span class="floor-ticket-text">Ticket</span></a>
