@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<ClientClock>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<PublicUrlService>();
         services.AddScoped<CustomerService>();
         services.AddScoped<SupplierService>();
         services.AddScoped<StockService>();

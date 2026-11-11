@@ -7,6 +7,7 @@ using LabelsMis.Web.Services;
 using LabelsMis.Web.Pdf;
 using LabelsMis.Web.Services.Estimates;
 using LabelsMis.Web.Services.Invoices;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
@@ -24,6 +25,27 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddWebServices();
 builder.Services.AddMasterDataAuthorization();
+builder.Services.Configure<AppUrlOptions>(builder.Configuration.GetSection(AppUrlOptions.SectionName));
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    // The host terminates TLS at its edge and hands the app plain http. Without the forwarded
+    // protocol the app believes every request is http: no Secure cookies, no HSTS header, and
+    // http:// in every absolute link it builds (login redirects, OAuth redirect URIs).
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedProto;
+    // The edge's addresses are not published, so the header is accepted from any upstream.
+    // The container is reachable only through that edge.
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+if (!builder.Environment.IsDevelopment())
+{
+    // Local runs are plain http://localhost, where a Secure cookie would never come back.
+    builder.Services.ConfigureApplicationCookie(options => options.Cookie.SecurePolicy = CookieSecurePolicy.Always);
+}
+
+// Not Always: antiforgery throws on any plain-http request when it is, and the host's health check
+// calls /Account/Login over plain http from inside the network.
+builder.Services.AddAntiforgery(options => options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest);
 builder.Services.Configure<EstimateOptions>(builder.Configuration.GetSection(EstimateOptions.SectionName));
 builder.Services.Configure<JobOptions>(builder.Configuration.GetSection(JobOptions.SectionName));
 builder.Services.Configure<InvoiceOptions>(builder.Configuration.GetSection(InvoiceOptions.SectionName));
@@ -66,6 +88,9 @@ if (IsEfDesignTime())
 {
     return;
 }
+
+// First in the pipeline: everything after it (HSTS, cookies, redirects) reads the request scheme.
+app.UseForwardedHeaders();
 
 if (!app.Environment.IsDevelopment())
 {
