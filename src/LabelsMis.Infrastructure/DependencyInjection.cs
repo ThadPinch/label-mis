@@ -1,11 +1,13 @@
 using LabelsMis.Domain.Email;
 using LabelsMis.Domain.Fedex;
+using LabelsMis.Domain.Security;
 using LabelsMis.Infrastructure.Email;
 using LabelsMis.Infrastructure.Fedex;
 using LabelsMis.Domain.Storage;
 using LabelsMis.Infrastructure.Storage;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
+using LabelsMis.Infrastructure.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -58,6 +60,9 @@ public static class DependencyInjection
             throw new InvalidOperationException(
                 "Production FedEx client is not configured. Set Fedex:UseSandbox to true for local development.");
         }
+
+        services.Configure<SecretOptions>(configuration.GetSection(SecretOptions.SectionName));
+        services.AddSingleton<ISecretProtector, AesGcmSecretProtector>();
 
         services.AddScoped<IFileStorageClient, FileStorageService>();
         services.AddScoped<LocalFileStorageClient>();

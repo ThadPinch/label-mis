@@ -5,6 +5,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>LabelsMis.Web</RootNamespace>
+    <!-- Development-only secrets (Secrets:Key) live outside the repo: dotnet user-secrets set "Secrets:Key" ... -->
+    <UserSecretsId>labels-mis-web-dev</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
