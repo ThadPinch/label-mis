@@ -186,7 +186,7 @@
                         </tr>
                         <tr data-check="po-field">
                             <td>
-                                <span class="badge @(check.PoNumberField is not null ? "text-bg-success" : "text-bg-danger")">@(check.PoNumberField is not null ? "Found" : "Missing")</span>
+                                <span class="badge @(check.PoNumberField is not null ? "text-bg-success" : "text-bg-warning")">@(check.PoNumberField is not null ? "Found" : check.CustomFields.Count > 0 ? "Not found" : "Not listed")</span>
                             </td>
                             <td>Custom field for the PO number</td>
                             <td class="small text-muted">
@@ -196,11 +196,11 @@
                                 }
                                 else if (check.CustomFields.Count > 0)
                                 {
-                                    <text>None of the invoice custom fields is named like a PO number (found: @string.Join(", ", check.CustomFields.Select(f => f.Enabled ? f.Name : $"{f.Name}, switched off"))). Add a text field called "P.O. Number" under Custom fields in QuickBooks.</text>
+                                    <text>None of the custom fields QuickBooks lists for invoices is named like a PO number (listed: @string.Join(", ", check.CustomFields.Select(f => f.Enabled ? f.Name : $"{f.Name}, switched off"))).</text>
                                 }
                                 else
                                 {
-                                    <text>QuickBooks reports no custom fields on invoices. Add a text field called "P.O. Number" under Custom fields in QuickBooks.</text>
+                                    <text>QuickBooks lists no invoice custom field for this company. A field made in its current Custom fields screen does not appear in this list, so this row can't confirm where the PO number goes.</text>
                                 }
                             </td>
                         </tr>
@@ -208,8 +208,8 @@
                 </table>
                 <p class="small mb-0 @(check.ReadyForInvoices ? "text-success" : "text-danger")" id="qb-company-check-verdict">
                     @(check.ReadyForInvoices
-                        ? "This company is set up the way LabelShop's invoices need."
-                        : "Invoices can't be sent until the rows marked Off or Missing are fixed in QuickBooks. Then press Test connection.")
+                        ? "Invoice numbers and classes are set up the way LabelShop's invoices need."
+                        : "Invoices can't be sent until custom transaction numbers and class tracking (one per row) are on in QuickBooks. Then press Test connection.")
                 </p>
             }
         </div>

@@ -50,6 +50,88 @@ public class QuickBooksCompanyCheckTests
     }
 
     [Fact]
+    public void ReadyForInvoices_DoesNotWaitOnThePoField()
+    {
+        // Preferences lists only legacy custom fields, so a missing one proves nothing.
+        var check = QuickBooksCompanyCheck.FromPreferences(Preferences());
+
+        check.PoNumberField.Should().BeNull();
+        check.ReadyForInvoices.Should().BeTrue();
+    }
+
+    /// <summary>What the sandbox company really answered (trimmed to the sections the check reads).
+    /// It has a "P.O. Number" invoice field made in the current Custom fields screen, and none of
+    /// it shows: all three legacy fields are off and no names are listed.</summary>
+    private const string SandboxCompanyAnswer = """
+        {
+          "Preferences": {
+            "AccountingInfoPrefs": {
+              "UseAccountNumbers": false,
+              "TrackDepartments": false,
+              "ClassTrackingPerTxn": false,
+              "ClassTrackingPerTxnLine": true,
+              "FirstMonthOfFiscalYear": "January",
+              "TaxYearMonth": "January",
+              "TaxForm": "6",
+              "CustomerTerminology": "Customers"
+            },
+            "SalesFormsPrefs": {
+              "CustomField": [
+                {
+                  "CustomField": [
+                    {
+                      "Name": "SalesFormsPrefs.UseSalesCustom3",
+                      "Type": "BooleanType",
+                      "BooleanValue": false
+                    },
+                    {
+                      "Name": "SalesFormsPrefs.UseSalesCustom1",
+                      "Type": "BooleanType",
+                      "BooleanValue": false
+                    },
+                    {
+                      "Name": "SalesFormsPrefs.UseSalesCustom2",
+                      "Type": "BooleanType",
+                      "BooleanValue": false
+                    }
+                  ]
+                }
+              ],
+              "CustomTxnNumbers": true,
+              "AllowShipping": false,
+              "DefaultTerms": {
+                "value": "3"
+              }
+            },
+            "TaxPrefs": {
+              "UsingSalesTax": true,
+              "TaxGroupCodeRef": {
+                "value": "2"
+              }
+            }
+          }
+        }
+        """;
+
+    [Fact]
+    public void FromPreferences_WithTheSandboxCompanysRealAnswer_ReadsItsSwitches()
+    {
+        var check = QuickBooksCompanyCheck.FromPreferences(SandboxCompanyAnswer);
+
+        check.Should().Satisfy<QuickBooksCompanyCheck>(c =>
+        {
+            c.CustomTransactionNumbers.Should().BeTrue();
+            c.ClassTrackingPerLine.Should().BeTrue();
+            c.ClassTrackingPerTransaction.Should().BeFalse();
+            c.SalesTaxOn.Should().BeTrue();
+            c.AutomatedSalesTax.Should().BeFalse("this company's TaxPrefs has no PartnerTaxEnabled");
+            c.CustomFields.Should().BeEmpty();
+            c.PoNumberField.Should().BeNull();
+            c.ReadyForInvoices.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void ClassTrackingPerTransaction_IsNotTheSameAsPerLine()
     {
         var check = QuickBooksCompanyCheck.FromPreferences(
@@ -72,7 +154,6 @@ public class QuickBooksCompanyCheckTests
 
         check.PoNumberField.Should().BeNull();
         check.CustomFields.Should().ContainSingle().Which.Enabled.Should().BeFalse();
-        check.ReadyForInvoices.Should().BeFalse();
     }
 
     [Fact]

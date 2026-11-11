@@ -21,14 +21,17 @@ public sealed partial record QuickBooksCompanyCheck(
     private static readonly JsonSerializerOptions StoredJson = new(JsonSerializerDefaults.Web);
 
     /// <summary>The custom field that holds the customer's PO number, when one is switched on and
-    /// named like one ("P.O. Number", "PO #", "Purchase Order").</summary>
+    /// named like one ("P.O. Number", "PO #", "Purchase Order"). Null does not mean the company has
+    /// none: Preferences lists only the three legacy fields, and a field made in QuickBooks' current
+    /// Custom fields screen is not reported there (seen on the sandbox company).</summary>
     [JsonIgnore]
     public QuickBooksCustomFieldSlot? PoNumberField =>
         CustomFields.FirstOrDefault(f => f.Enabled && LooksLikePoNumber(f.Name));
 
-    /// <summary>Everything an invoice push needs is switched on.</summary>
+    /// <summary>The two switches an invoice push can't work without are on. The PO field is left
+    /// out because Preferences can't be trusted to list it.</summary>
     [JsonIgnore]
-    public bool ReadyForInvoices => CustomTransactionNumbers && ClassTrackingPerLine && PoNumberField is not null;
+    public bool ReadyForInvoices => CustomTransactionNumbers && ClassTrackingPerLine;
 
     /// <summary>The compact form kept on the connection row.</summary>
     public string ToJson() => JsonSerializer.Serialize(this, StoredJson);

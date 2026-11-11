@@ -4,8 +4,8 @@ Phase 0 (`quickbooks-phase0.md`) built the invoice the way QuickBooks wants it a
 Phase 1 sends that invoice to QuickBooks through Intuit's API. This file describes what is built so far and what
 still has to be checked against a real sandbox company.
 
-**Built: the connection (tasks Q1 to Q7).** Nothing is sent to QuickBooks yet. Mapping by QuickBooks id, customer
-matching and the push itself come next.
+**Built: the connection (tasks Q1 to Q7), and the sandbox checks are answered (Q8).** The app itself sends nothing
+to QuickBooks yet. Mapping by QuickBooks id, customer matching and the push come next.
 
 ## Configuration
 
@@ -70,8 +70,9 @@ Intuit's token service also answers `invalid_grant` during some of its own outag
 
 Connect and Test read QuickBooks' Preferences and keep the result on the connection row, so the page never waits on
 Intuit just to be shown. Four rows: custom transaction numbers, class tracking with one class per row, sales tax, and
-which invoice custom field is named like a PO number. The API can reach only the three legacy text custom fields;
-their names are set in the QuickBooks screens.
+the custom field named like a PO number when QuickBooks lists one. The verdict depends on the first two only.
+Preferences lists just the three legacy text custom fields. A field made in QuickBooks' current Custom fields screen
+is not reported there, so the PO row can read "Not listed" for a company that has one (the sandbox company does).
 
 ### Activity log
 
@@ -102,31 +103,66 @@ URLs, which carry company ids and query text.
 New code calls QuickBooks through `QuickBooksGateway`, not through `IQuickBooksApiClient` directly: the gateway is
 what supplies the token and writes the log row.
 
-## Not verified against a real company yet
+## Checked against Intuit's sandbox (2026-11-11)
 
-The connection has been exercised end to end against a local stand-in for Intuit, not against Intuit itself. Open
-until the sandbox company is connected:
+The connection has run against the sandbox company with real Development keys: the consent screen, the code
+exchange, the company and Preferences reads, and about sixty API calls through the gateway. The Preferences names
+the company check reads (`CustomTxnNumbers`, `ClassTrackingPerTxnLine`, `ClassTrackingPerTxn`, `UsingSalesTax`) are
+the ones the sandbox returns.
 
-- The whole round trip with real keys (consent screen, code exchange, refresh, revoke).
-- Two of the Preferences names the company check reads: class tracking (`AccountingInfoPrefs.ClassTrackingPerTxnLine`
-  and `ClassTrackingPerTxn`) and `TaxPrefs.UsingSalesTax`. They are written from the API's Preferences object as
-  remembered, not from a page read while building this. `SalesFormsPrefs.CustomTxnNumbers`,
-  `TaxPrefs.PartnerTaxEnabled` and the custom field arrays are taken from Intuit's own pages. A wrong name shows up
-  as an "Off" row, since the parser reads anything missing as off.
-- Whether a custom field created in QuickBooks' current Custom fields screen appears among the three legacy fields.
+A token refresh has also run against Intuit, made the way the daily keep-alive makes it: a new one-hour token came
+back and the next read used it. Disconnect and a second Connect have run too: Intuit accepted the revoke, and the
+company linked again.
+
+Not yet exercised against Intuit itself, only against a local stand-in: a refresh set off by an expired token or by
+a 401 answer (the same call, reached another way), the keep-alive on its own timer, and the refresh token changing
+over days.
 
 ## Sandbox checks (task Q8)
 
-Each decides a detail of the push. Answers and a saved response per check go here once the sandbox is connected.
+Run 2026-11-11 against "Sandbox Company US ef89" (QuickBooks Plus, US). Each answer decides a detail of the push.
+The request and the answer of every call are kept with the project's smoke scripts (`q8/responses/`, outside the
+repo). The test invoices in the sandbox have numbers starting `LSQ8-`.
 
 | # | Check | Answer |
 |---|---|---|
-| 1 | Tax: lines marked `TAX`, no amount sent, ship-to sent. Is tax calculated? Is a tax-exempt customer left untaxed? What does a line with no tax code get? Can the item's own taxable setting be read? | open |
-| 2 | Rate precision: a 7-decimal rate versus quantity and amount with no rate. What does QuickBooks store and show? | open |
-| 3 | Invoice numbers: custom transaction numbers on and off; what a duplicate does. | open |
-| 4 | Terms: when none are sent, does QuickBooks use the customer's own? | open |
-| 5 | PO number: read the field's id from Preferences, write it on an invoice, see it on the form. | open |
-| 6 | Class on every line, including the shipping line. | open |
-| 7 | "Send later" plus billing email: does the invoice show in QuickBooks' send queue? Does the send call use the company's template? | open |
-| 8 | `requestid`: does a repeated create return the first invoice? | open |
-| 9 | Void and update with the sync token. | open |
+| 1 | Tax | **Not settled here.** This sandbox company has sales tax on but no `TaxPrefs.PartnerTaxEnabled`, the flag Intuit documents for its automated sales tax engine, so the automated-tax questions need another company. What this one shows: a line sent with no tax code is stored `NON`, even for an item whose own `Taxable` is true. `TAX` lines get no tax unless the invoice names a tax code (`TxnTaxDetail.TxnTaxCodeRef`); with one named, 8% was charged, and it was charged for a customer marked not taxable too. A `TotalTax` we send is kept as sent. `Item.Taxable` can be read. |
+| 2 | Rate precision | `Line.Amount` is required (error 2020 without it). When Qty and UnitPrice are both sent, Amount must equal Qty × UnitPrice rounded half up to the cent, or the invoice is refused (6070). It is not recalculated. UnitPrice is kept to 7 decimals; a 9-decimal rate was rounded to 7. Qty and Amount with no UnitPrice is accepted, and no UnitPrice comes back. |
+| 3 | Invoice numbers | With custom transaction numbers on, our `DocNumber` is kept. A second invoice with the same number is refused (6140) and the message names the existing transaction id. An invoice sent with no number is created with none. Looking an invoice up by `DocNumber` works. Not tested with custom numbers off: the company check requires them on. |
+| 4 | Terms | With no terms sent, the invoice's terms field stays empty and the due date follows the customer's own terms (Net 15 gave 15 days). A customer with no terms gets the company default (30 days here). Terms sent on the invoice win over the customer's. |
+| 5 | PO number | **Solved for a field made in QuickBooks' current Custom fields screen.** Such a field has its own id (`1000000001` for "P.O. Number" in the sandbox company) and is invisible to plain calls: Preferences does not list it, and a plain read returns no `CustomField`. With `include=enhancedAllCustomFields` on the URL, a read or a query returns it (id, name, value); a create or a sparse update carrying `CustomField: [{DefinitionId, Type: "StringType", StringValue}]` sets it (the name is not needed); and it prints on the invoice as "P.O. Number". This works on Intuit's free tier. Without the parameter the same create succeeds and the value is silently dropped. A sparse update that sends no `CustomField` keeps the value. The id can be learned without the paid Custom Fields API: query recent invoices with the parameter and collect the fields that come back (only an invoice with a value shows the field). The legacy ids "1" to "3" are a different thing: a value written to `DefinitionId` "1" is stored and read back by plain calls, but it is not printed. Not tested: a company whose PO field is a legacy one, which Preferences would list. |
+| 6 | Class on every line | `ClassRef` is kept on every line, including a line standing in for shipping. A line with no class is accepted, so LabelShop has to insist on one itself. |
+| 7 | Send later | `EmailStatus: NeedToSend` is kept when the invoice carries `BillEmail`. Without `BillEmail` the create is refused (6000), even for a customer with an email on file. **Not run:** the send call, which emails someone, and a look at QuickBooks' own send queue. |
+| 8 | `requestid` | A repeated create with the same id returns the first invoice, also when the body has changed: the new body is ignored. A refused create does not use the id up; a corrected body with the same id is created. |
+| 9 | Update and void | A sparse update with `Id` and `SyncToken` replaces the lines and raises the sync token. A stale token is refused (5010). Void (`operation=void`) zeroes the amounts and the balance, sets the private note to "Voided", keeps the number, and the invoice can still be queried. Not tested: voiding an invoice that has a payment. |
+
+### What the answers change
+
+- **Rate.** Send Qty and UnitPrice only when Qty × UnitPrice, rounded half up to the cent, equals LabelShop's line
+  amount. Otherwise send Qty and Amount with no UnitPrice. .NET rounds half to even unless told otherwise, so the
+  comparison needs `MidpointRounding.AwayFromZero`. This replaces the earlier reading that QuickBooks recalculates
+  the amount from the rate.
+- **Numbers.** Always send `DocNumber`. Error 6140 means the number is already there: link to it through the lookup.
+- **`requestid`.** It has to change when the payload changes, or a retry after an edit gets the old invoice back.
+  Reusing it after a refusal is safe.
+- **Send later.** Always send `BillEmail` with the flag.
+- **Classes.** QuickBooks does not require a class per line; LabelShop's own blocker does.
+- **Terms.** Sending none lets the customer's QuickBooks terms set the due date.
+- **PO number.** Every invoice create, update, read and lookup carries `include=enhancedAllCustomFields`. The
+  gateway's reads and queries have to take URL parameters for that; today only writes do. The field's id is a
+  per-company setting. The company check should find it by looking at recent invoices with the parameter, and
+  fall back to the legacy fields Preferences lists. When no invoice carries a PO number yet there is nothing to
+  find: fill the box in by hand on one invoice, then test again.
+- **Tax.** Without automated sales tax, tax appears only when the invoice names a tax code, and the customer's
+  not-taxable flag is not applied for us. What a company on automated sales tax does is still to be checked.
+
+### Still open
+
+- Tax on a company that has automated sales tax (the real company's Preferences will say whether it does).
+- The PO number on a company whose field is one of the three legacy ones.
+- The send call and QuickBooks' send queue.
+- Voiding an invoice that has a payment.
+
+Seen and not explained: the sandbox invoices made before the P.O. Number box was first filled in by hand in the
+QuickBooks screen print in QuickBooks' older layout, and the three made after it print in the newer one, whether
+or not the call carried the parameter. Which layout an invoice prints in is not something the API call sets.
