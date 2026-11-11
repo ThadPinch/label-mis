@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Invoicing;
+using LabelsMis.Domain.Security;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Web.Services.QuickBooks;
 using LabelsMis.Web.Services.Settings;
@@ -9,12 +11,26 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace LabelsMis.Web.Pages.Settings;
 
-/// <summary>Setup → QuickBooks mapping: QB item per line type, class names and the class rule,
-/// and the keywords that classify charge lines. Accounting keeps it, so Admin and Accounting.</summary>
+/// <summary>Setup → QuickBooks: the connection to the QuickBooks company, and the mapping (QB item
+/// per line type, class names and the class rule, the keywords that classify charge lines).
+/// Accounting keeps it, so Admin and Accounting; the Intuit app keys are Admin only.</summary>
 [Authorize(Roles = AppRoles.Admin + "," + AppRoles.Accounting)]
-public class QuickBooksModel(QuickBooksMappingService mappingService, GeneralSettingsService generalSettings) : PageModel
+public class QuickBooksModel(
+    QuickBooksMappingService mappingService,
+    GeneralSettingsService generalSettings,
+    QuickBooksConnectionService connectionService,
+    Services.ClientClock clock) : PageModel
 {
     [BindProperty] public QuickBooksMappingInput Input { get; set; } = new();
+
+    public QuickBooksConnectionView Connection { get; private set; } = QuickBooksConnectionView.Empty(null);
+
+    /// <summary>The Intuit app keys are the developer's; everyone else on the page only connects.</summary>
+    public bool CanEditKeys => User.IsInRole(AppRoles.Admin);
+
+    /// <summary>A stored UTC time as the person at the screen reads it.</summary>
+    public string Local(DateTime? utc, string format = "MMM d, yyyy h:mm tt") =>
+        utc is { } value ? clock.ToLocal(value).ToString(format) : string.Empty;
 
     /// <summary>The E3 shipping settings, shown read-only with a link (Admin edits them).</summary>
     public decimal LocalDeliveryFee { get; private set; }
@@ -24,14 +40,43 @@ public class QuickBooksModel(QuickBooksMappingService mappingService, GeneralSet
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Input = QuickBooksMappingInput.From(await mappingService.GetMappingAsync(cancellationToken));
-        await LoadShippingAsync(cancellationToken);
+        await LoadAsync(cancellationToken);
+    }
+
+    /// <summary>Saves the Intuit app keys. Binds its three fields by name and ignores ModelState,
+    /// which also holds the mapping form's (unposted) required fields.</summary>
+    public async Task<IActionResult> OnPostSaveKeysAsync(
+        [FromForm(Name = "Keys.Environment")] QuickBooksEnvironment environment,
+        [FromForm(Name = "Keys.ClientId")] string? clientId,
+        [FromForm(Name = "Keys.ClientSecret")] string? clientSecret,
+        CancellationToken cancellationToken)
+    {
+        if (!CanEditKeys)
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var dropped = await connectionService.SaveCredentialsAsync(
+                environment, clientId ?? string.Empty, clientSecret, cancellationToken);
+            TempData["QuickBooksConnectionStatus"] = dropped
+                ? "Intuit app keys saved. The company link was dropped because the app or environment changed; connect again."
+                : "Intuit app keys saved.";
+        }
+        catch (Exception ex) when (ex is ArgumentException or SecretProtectionException)
+        {
+            TempData["QuickBooksConnectionError"] = ex.Message;
+        }
+
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
-            await LoadShippingAsync(cancellationToken);
+            await LoadAsync(cancellationToken);
             return Page();
         }
 
@@ -42,7 +87,7 @@ public class QuickBooksModel(QuickBooksMappingService mappingService, GeneralSet
         catch (ArgumentException ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            await LoadShippingAsync(cancellationToken);
+            await LoadAsync(cancellationToken);
             return Page();
         }
 
@@ -50,8 +95,9 @@ public class QuickBooksModel(QuickBooksMappingService mappingService, GeneralSet
         return RedirectToPage();
     }
 
-    private async Task LoadShippingAsync(CancellationToken cancellationToken)
+    private async Task LoadAsync(CancellationToken cancellationToken)
     {
+        Connection = await connectionService.GetViewAsync(cancellationToken);
         var settings = await generalSettings.GetAsync(cancellationToken);
         LocalDeliveryFee = settings?.LocalDeliveryFee ?? Domain.Shipping.ShippingBillingSettings.Default.LocalDeliveryFee;
         CarrierCostMultiplier = settings?.CarrierCostMultiplier ?? Domain.Shipping.ShippingBillingSettings.Default.CarrierCostMultiplier;

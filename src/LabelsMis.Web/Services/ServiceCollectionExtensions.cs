@@ -74,6 +74,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GeneralSettingsService>();
         services.AddScoped<Services.QuickBooks.QuickBooksMappingService>();
         services.AddScoped<Services.QuickBooks.QuickBooksInvoiceService>();
+        services.AddScoped<Services.QuickBooks.QuickBooksConnectionService>();
         services.AddScoped<ArtworkService>();
         services.AddScoped<Pdfs.TempPdfStorage>();
         services.AddScoped<Dashboard.DashboardService>();

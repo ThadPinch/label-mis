@@ -24,6 +24,15 @@ public sealed class ClientClock(IHttpContextAccessor httpContextAccessor, TimePr
         }
     }
 
+    /// <summary>A stored UTC time in the browser's zone (server local time as a fallback).</summary>
+    public DateTime ToLocal(DateTime utc)
+    {
+        var asUtc = DateTime.SpecifyKind(utc, DateTimeKind.Utc);
+        return TimeZone is { } zone
+            ? TimeZoneInfo.ConvertTimeFromUtc(asUtc, zone)
+            : asUtc.ToLocalTime();
+    }
+
     private TimeZoneInfo? TimeZone
     {
         get

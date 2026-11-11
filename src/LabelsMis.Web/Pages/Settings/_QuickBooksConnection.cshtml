@@ -1,0 +1,119 @@
+@using LabelsMis.Domain.Enums
+@model LabelsMis.Web.Pages.Settings.QuickBooksModel
+@{
+    var c = Model.Connection;
+    var (stateText, stateClass) = c.State switch
+    {
+        QuickBooksConnectionState.Connected => ("Connected", "text-bg-success"),
+        QuickBooksConnectionState.NeedsReconnect => ("Reconnect needed", "text-bg-danger"),
+        QuickBooksConnectionState.NotConnected => ("Not connected", "text-bg-secondary"),
+        _ => ("Not set up", "text-bg-secondary")
+    };
+    var company = string.IsNullOrWhiteSpace(c.CompanyName) ? "a QuickBooks company" : c.CompanyName;
+}
+<section class="border rounded p-3 mb-4" id="qb-connection">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h2 class="h5 mb-0">Connection</h2>
+        <span class="badge @stateClass" id="qb-connection-state">@stateText</span>
+        @if (c.HasCredentials && c.Environment == QuickBooksEnvironment.Sandbox)
+        {
+            <span class="badge text-bg-warning" id="qb-connection-sandbox">Sandbox: test company, not the real books</span>
+        }
+    </div>
+
+    @if (TempData["QuickBooksConnectionStatus"] is string connectionStatus)
+    {
+        <div class="alert alert-success py-2" id="qb-connection-saved">@connectionStatus</div>
+    }
+    @if (TempData["QuickBooksConnectionError"] is string connectionError)
+    {
+        <div class="alert alert-danger py-2" id="qb-connection-error">@connectionError</div>
+    }
+
+    @if (!c.CanStoreSecrets)
+    {
+        <div class="alert alert-warning py-2" id="qb-key-missing">
+            QuickBooks can't be connected on this server yet: @c.KeyProblem
+            LabelShop stores the QuickBooks sign-in encrypted, and the encryption key is the
+            <code>Secrets__Key</code> setting on the server (32 random bytes, base64).
+        </div>
+    }
+
+    @switch (c.State)
+    {
+        case QuickBooksConnectionState.Connected:
+            <p class="mb-2" id="qb-connection-summary">
+                Connected to <strong>@company</strong>
+                <span class="text-muted">(company ID @c.RealmId)</span>
+                since @Model.Local(c.ConnectedAt)@(c.ConnectedBy is null ? "" : $", by {c.ConnectedBy}").
+            </p>
+            @if (c.ReconnectBy is not null)
+            {
+                <p class="small text-muted mb-2">
+                    QuickBooks keeps this sign-in alive while LabelShop uses it; LabelShop refreshes it daily.
+                    Without a refresh it would lapse on @Model.Local(c.ReconnectBy, "MMM d, yyyy").
+                    Last refreshed @Model.Local(c.LastRefreshedAt).
+                </p>
+            }
+            break;
+        case QuickBooksConnectionState.NeedsReconnect:
+            <p class="mb-2" id="qb-connection-summary">
+                QuickBooks stopped accepting the saved sign-in for <strong>@company</strong>
+                on @Model.Local(c.LastErrorAt). Connect again to carry on.
+            </p>
+            break;
+        case QuickBooksConnectionState.NotConnected:
+            <p class="mb-2" id="qb-connection-summary">
+                The Intuit app keys are saved. No QuickBooks company is connected yet.
+            </p>
+            break;
+        default:
+            <p class="mb-2" id="qb-connection-summary">
+                LabelShop needs the keys of its Intuit developer app before it can connect to QuickBooks.
+                @(Model.CanEditKeys ? "Enter them below." : "An admin enters them on this page.")
+            </p>
+            break;
+    }
+
+    @if (!string.IsNullOrWhiteSpace(c.LastError))
+    {
+        <p class="small text-danger mb-2" id="qb-connection-last-error">
+            Last problem (@Model.Local(c.LastErrorAt)): @c.LastError
+        </p>
+    }
+
+    @if (Model.CanEditKeys)
+    {
+        <details id="qb-keys" open="@(c.HasCredentials ? null : "open")">
+            <summary class="small">Intuit app keys</summary>
+            <form method="post" asp-page-handler="SaveKeys" id="qb-keys-form" class="mt-2" autocomplete="off">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label for="Keys_Environment" class="form-label small mb-0">Keys are for</label>
+                        <select id="Keys_Environment" name="Keys.Environment" class="form-select form-select-sm">
+                            <option value="Sandbox" selected="@(c.Environment == QuickBooksEnvironment.Sandbox)">Sandbox (Development keys)</option>
+                            <option value="Production" selected="@(c.Environment == QuickBooksEnvironment.Production)">Production</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="Keys_ClientId" class="form-label small mb-0">Client ID</label>
+                        <input id="Keys_ClientId" name="Keys.ClientId" class="form-control form-control-sm" maxlength="200" value="@c.ClientId" />
+                    </div>
+                    <div class="col-md-4">
+                        <label for="Keys_ClientSecret" class="form-label small mb-0">Client secret</label>
+                        <input id="Keys_ClientSecret" name="Keys.ClientSecret" type="password" class="form-control form-control-sm" maxlength="200"
+                               autocomplete="new-password"
+                               placeholder="@(c.HasCredentials ? $"(unchanged{(c.ClientSecretTail.Length > 0 ? ", ends " + c.ClientSecretTail : "")})" : "")" />
+                    </div>
+                    <div class="col-md-1">
+                        <button type="submit" class="btn btn-sm btn-outline-primary w-100" disabled="@(!c.CanStoreSecrets)">Save</button>
+                    </div>
+                </div>
+                <div class="form-text">
+                    From developer.intuit.com: the app's <em>Keys and credentials</em> page. Development keys open sandbox
+                    companies only; Production keys open the real company. Leave the secret blank to keep the saved one.
+                </div>
+            </form>
+        </details>
+    }
+</section>

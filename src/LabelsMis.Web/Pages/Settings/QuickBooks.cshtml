@@ -1,10 +1,14 @@
 @page "/settings/quickbooks"
 @model LabelsMis.Web.Pages.Settings.QuickBooksModel
 @{
-    ViewData["Title"] = "QuickBooks mapping";
+    ViewData["Title"] = "QuickBooks";
     ViewData["BackNav"] = new BackNavModel();
 }
-<h1 class="h3 mb-1">QuickBooks mapping</h1>
+<h1 class="h3 mb-3">QuickBooks</h1>
+
+<partial name="_QuickBooksConnection" model="Model" />
+
+<h2 class="h5 mb-1" id="qb-mapping">Mapping</h2>
 <p class="text-muted">
     How an invoice line becomes a QuickBooks line on <em>Preview for QuickBooks</em>. Use the names exactly as they
     appear in QuickBooks. Any line's item or class can still be changed on the preview.
