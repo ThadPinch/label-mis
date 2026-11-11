@@ -47,8 +47,8 @@
             <section class="docs-section" id="whats-new-november">
                 <h2 class="docs-section-title">What's new — November 2026</h2>
                 <p>
-                    Invoices now get ready for QuickBooks on their own as orders ship. LabelShop still doesn't
-                    connect to QuickBooks: Accounting keys each Ready invoice in from its <strong>QB preview</strong>,
+                    Invoices now get ready for QuickBooks on their own as orders ship. LabelShop doesn't send them
+                    to QuickBooks yet: Accounting keys each Ready invoice in from its <strong>QB preview</strong>,
                     or exports a CSV. See <a href="#invoicing">Invoicing</a> and <a href="#shipping">Shipping</a>.
                 </p>
 
@@ -63,6 +63,7 @@
                 <ul class="docs-list">
                     <li><strong>Ready to export / Waiting / Exported / closed</strong> tabs. An invoice is Ready once its order has shipped and nothing blocks it; Waiting lists the reasons (not shipped yet, $0 total, carrier cost pending, customer not set up).</li>
                     <li><strong>QB preview</strong> — each invoice laid out like the QuickBooks invoice form (items, classes, bill-to / ship-to, terms) with copy buttons, then <strong>Mark exported to QuickBooks</strong>.</li>
+                    <li><strong>QuickBooks connection (being set up)</strong> — <a asp-page="/Settings/QuickBooks">Setup → QuickBooks</a> has a new <strong>Connection</strong> card that links LabelShop to the QuickBooks company, checks the company's settings and keeps an activity log. Nothing is sent to QuickBooks yet, so keep moving invoices across as before.</li>
                     <li><strong>Shipping is billed from the shipments</strong> — no more unlocking the order to type it in: pickup and customer account $0, local delivery a flat fee, carrier shipments the carrier cost × a multiplier (General settings).</li>
                     <li><strong>Bill before shipping</strong> for deposits and prepay, and <strong>Non-billable</strong> for $0 samples.</li>
                     <li><strong>Customer set-up for billing</strong> — <strong>Tax setup complete</strong> (the new-client form is back) and a <strong>Billing</strong> tick on the contact who receives invoices (the primary contact stands in when none is ticked). The Billing tick replaces typing "Billing" into a contact's role.</li>
@@ -560,7 +561,7 @@
                 <p>
                     Every sales order gets a <strong>draft invoice</strong> when it is created. The draft follows the
                     order: price edits rebuild it, and its shipping follows the order's recorded shipments. LabelShop
-                    does not connect to QuickBooks — Accounting moves each invoice into QuickBooks by hand or by CSV,
+                    does not send invoices to QuickBooks yet — Accounting moves each invoice into QuickBooks by hand or by CSV,
                     then marks it exported.
                 </p>
 
@@ -584,7 +585,8 @@
 
                 <h3 class="docs-subtitle">Usage</h3>
                 <ul class="docs-list">
-                    <li>QuickBooks item names, class names and the charge keywords are set on <a asp-page="/Settings/QuickBooks">Setup → QuickBooks mapping</a>.</li>
+                    <li>QuickBooks item names, class names and the charge keywords are set on <a asp-page="/Settings/QuickBooks">Setup → QuickBooks</a>.</li>
+                    <li>The <strong>Connection</strong> card at the top of that page links LabelShop to the QuickBooks company (Admin or Accounting; the person connecting must be an admin in QuickBooks too). Connecting sends nothing by itself, and <strong>Activity log</strong> lists every call LabelShop makes to QuickBooks.</li>
                     <li>Due date is calculated from the customer's payment <strong>terms</strong>; tax is applied at the configured rate unless the customer is <strong>tax exempt</strong>.</li>
                     <li>Record <strong>payments</strong> and <strong>void</strong> invoices from the invoice detail page.</li>
                     <li>The <strong>sales tax rate</strong> applied to new invoices is set in <a asp-page="/Settings/General">General settings</a>; tax-exempt customers are never taxed.</li>
