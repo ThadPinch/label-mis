@@ -1,5 +1,6 @@
 using LabelsMis.Domain.Email;
 using LabelsMis.Domain.Fedex;
+using LabelsMis.Domain.QuickBooks;
 using LabelsMis.Domain.Security;
 using LabelsMis.Infrastructure.Email;
 using LabelsMis.Infrastructure.Fedex;
@@ -7,6 +8,7 @@ using LabelsMis.Domain.Storage;
 using LabelsMis.Infrastructure.Storage;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Infrastructure.Persistence;
+using LabelsMis.Infrastructure.QuickBooks;
 using LabelsMis.Infrastructure.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -63,6 +65,12 @@ public static class DependencyInjection
 
         services.Configure<SecretOptions>(configuration.GetSection(SecretOptions.SectionName));
         services.AddSingleton<ISecretProtector, AesGcmSecretProtector>();
+
+        services.Configure<QuickBooksOptions>(configuration.GetSection(QuickBooksOptions.SectionName));
+        // The factory's default loggers write every request URL, which here carries company ids and
+        // query text. The API client logs the resource name, status and Intuit's trace id itself.
+        services.AddHttpClient<IQuickBooksAuthClient, IntuitAuthClient>().RemoveAllLoggers();
+        services.AddHttpClient<IQuickBooksApiClient, QuickBooksApiClient>().RemoveAllLoggers();
 
         services.AddScoped<IFileStorageClient, FileStorageService>();
         services.AddScoped<LocalFileStorageClient>();
