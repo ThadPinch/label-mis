@@ -2501,6 +2501,13 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasMaxLength(8)
                         .HasColumnType("character varying(8)");
 
+                    b.Property<string>("CompanyCheckJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTime?>("CompanyCheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("CompanyName")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -2553,6 +2560,9 @@ namespace LabelsMis.Infrastructure.Migrations
 
                     b.Property<string>("RefreshTokenProtected")
                         .HasColumnType("text");
+
+                    b.Property<DateTime?>("RefusedSince")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("TenantId")
                         .ValueGeneratedOnAdd()

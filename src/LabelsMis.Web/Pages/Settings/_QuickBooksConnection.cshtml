@@ -10,6 +10,8 @@
         _ => ("Not set up", "text-bg-secondary")
     };
     var company = string.IsNullOrWhiteSpace(c.CompanyName) ? "a QuickBooks company" : c.CompanyName;
+    var check = c.CompanyCheck;
+    var redirectUri = Model.RedirectUri;
 }
 <section class="border rounded p-3 mb-4" id="qb-connection">
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
@@ -50,22 +52,31 @@
             </p>
             @if (c.ReconnectBy is not null)
             {
-                <p class="small text-muted mb-2">
+                <p class="small text-muted mb-2" id="qb-connection-keepalive">
                     QuickBooks keeps this sign-in alive while LabelShop uses it; LabelShop refreshes it daily.
                     Without a refresh it would lapse on @Model.Local(c.ReconnectBy, "MMM d, yyyy").
                     Last refreshed @Model.Local(c.LastRefreshedAt).
+                </p>
+            }
+            @if (c.RefusedSince is not null)
+            {
+                <p class="small text-danger mb-2" id="qb-connection-refused">
+                    QuickBooks refused the saved sign-in on @Model.Local(c.RefusedSince). That also happens during Intuit
+                    outages, so LabelShop tries once more a few minutes later before asking for a reconnect.
                 </p>
             }
             break;
         case QuickBooksConnectionState.NeedsReconnect:
             <p class="mb-2" id="qb-connection-summary">
                 QuickBooks stopped accepting the saved sign-in for <strong>@company</strong>
-                on @Model.Local(c.LastErrorAt). Connect again to carry on.
+                on @Model.Local(c.LastErrorAt). Connect again to carry on. If Intuit was having an outage,
+                <em>Try the saved sign-in again</em> may be all it takes.
             </p>
             break;
         case QuickBooksConnectionState.NotConnected:
             <p class="mb-2" id="qb-connection-summary">
                 The Intuit app keys are saved. No QuickBooks company is connected yet.
+                <em>Connect to QuickBooks</em> opens Intuit's sign-in; a QuickBooks admin picks the company and approves.
             </p>
             break;
         default:
@@ -81,6 +92,127 @@
         <p class="small text-danger mb-2" id="qb-connection-last-error">
             Last problem (@Model.Local(c.LastErrorAt)): @c.LastError
         </p>
+    }
+
+    @if (c.HasCredentials)
+    {
+        <div class="d-flex flex-wrap gap-2 mb-3" id="qb-connection-actions">
+            @if (c.State != QuickBooksConnectionState.Connected)
+            {
+                <form method="post" asp-page-handler="Connect">
+                    <button type="submit" class="btn btn-sm btn-primary" id="qb-connect" disabled="@(!c.CanStoreSecrets)">
+                        @(c.State == QuickBooksConnectionState.NeedsReconnect ? "Connect again" : "Connect to QuickBooks")
+                    </button>
+                </form>
+            }
+            @if (c.IsLinked)
+            {
+                <form method="post" asp-page-handler="Test">
+                    <button type="submit" class="btn btn-sm btn-outline-primary" id="qb-test">
+                        @(c.State == QuickBooksConnectionState.NeedsReconnect ? "Try the saved sign-in again" : "Test connection")
+                    </button>
+                </form>
+                <form method="post" asp-page-handler="Disconnect"
+                      onsubmit="return confirm('Disconnect LabelShop from QuickBooks? Invoices already in QuickBooks stay there. The Intuit app keys stay saved.');">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" id="qb-disconnect">Disconnect</button>
+                </form>
+            }
+        </div>
+    }
+
+    @if (c.IsLinked)
+    {
+        <div class="border-top pt-3 mb-3" id="qb-company-check">
+            <div class="d-flex flex-wrap align-items-baseline gap-2 mb-2">
+                <h3 class="h6 mb-0">Company check</h3>
+                <span class="small text-muted" id="qb-company-checked-at">
+                    @(check is null ? "Not read yet. Test connection reads it." : $"Read from QuickBooks {Model.Local(c.CompanyCheckedAt)}. Test connection reads it again.")
+                </span>
+            </div>
+            @if (check is not null)
+            {
+                <table class="table table-sm align-middle mb-1" id="qb-company-check-table">
+                    <tbody>
+                        <tr data-check="custom-numbers">
+                            <td class="text-nowrap" style="width: 1%">
+                                <span class="badge @(check.CustomTransactionNumbers ? "text-bg-success" : "text-bg-danger")">@(check.CustomTransactionNumbers ? "On" : "Off")</span>
+                            </td>
+                            <td>Custom transaction numbers</td>
+                            <td class="small text-muted">
+                                @(check.CustomTransactionNumbers
+                                    ? "QuickBooks keeps LabelShop's invoice number."
+                                    : "QuickBooks would number invoices itself. Turn on under Account and settings, Sales, Sales form content.")
+                            </td>
+                        </tr>
+                        <tr data-check="class-per-line">
+                            <td>
+                                <span class="badge @(check.ClassTrackingPerLine ? "text-bg-success" : "text-bg-danger")">@(check.ClassTrackingPerLine ? "On" : "Off")</span>
+                            </td>
+                            <td>Class tracking, one class per row</td>
+                            <td class="small text-muted">
+                                @if (check.ClassTrackingPerLine)
+                                {
+                                    <text>Each invoice line carries its own class.</text>
+                                }
+                                else if (check.ClassTrackingPerTransaction)
+                                {
+                                    <text>Classes are on, but one per whole transaction. Change it to one per row under Account and settings, Advanced, Categories.</text>
+                                }
+                                else
+                                {
+                                    <text>Turn on class tracking, one per row, under Account and settings, Advanced, Categories.</text>
+                                }
+                            </td>
+                        </tr>
+                        <tr data-check="sales-tax">
+                            <td>
+                                <span class="badge @(check.SalesTaxOn ? "text-bg-success" : "text-bg-warning")">@(check.SalesTaxOn ? "On" : "Off")</span>
+                            </td>
+                            <td>Sales tax</td>
+                            <td class="small text-muted">
+                                @if (!check.SalesTaxOn)
+                                {
+                                    <text>QuickBooks will not add tax to invoices until sales tax is set up in it.</text>
+                                }
+                                else if (check.AutomatedSalesTax)
+                                {
+                                    <text>QuickBooks works the tax out itself from the ship-to address.</text>
+                                }
+                                else
+                                {
+                                    <text>On, without QuickBooks' automated calculation.</text>
+                                }
+                            </td>
+                        </tr>
+                        <tr data-check="po-field">
+                            <td>
+                                <span class="badge @(check.PoNumberField is not null ? "text-bg-success" : "text-bg-danger")">@(check.PoNumberField is not null ? "Found" : "Missing")</span>
+                            </td>
+                            <td>Custom field for the PO number</td>
+                            <td class="small text-muted">
+                                @if (check.PoNumberField is { } po)
+                                {
+                                    <text>"@po.Name" (custom field @po.DefinitionId).</text>
+                                }
+                                else if (check.CustomFields.Count > 0)
+                                {
+                                    <text>None of the invoice custom fields is named like a PO number (found: @string.Join(", ", check.CustomFields.Select(f => f.Enabled ? f.Name : $"{f.Name}, switched off"))). Add a text field called "P.O. Number" under Custom fields in QuickBooks.</text>
+                                }
+                                else
+                                {
+                                    <text>QuickBooks reports no custom fields on invoices. Add a text field called "P.O. Number" under Custom fields in QuickBooks.</text>
+                                }
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="small mb-0 @(check.ReadyForInvoices ? "text-success" : "text-danger")" id="qb-company-check-verdict">
+                    @(check.ReadyForInvoices
+                        ? "This company is set up the way LabelShop's invoices need."
+                        : "Invoices can't be sent until the rows marked Off or Missing are fixed in QuickBooks. Then press Test connection.")
+                </p>
+            }
+        </div>
     }
 
     @if (Model.CanEditKeys)
@@ -113,6 +245,10 @@
                 <div class="form-text">
                     From developer.intuit.com: the app's <em>Keys and credentials</em> page. Development keys open sandbox
                     companies only; Production keys open the real company. Leave the secret blank to keep the saved one.
+                    @if (redirectUri.Length > 0)
+                    {
+                        <span id="qb-redirect-uri">The same Intuit app must list this redirect URI, exactly: <code>@redirectUri</code></span>
+                    }
                 </div>
             </form>
         </details>

@@ -8,6 +8,8 @@
 
 @if (Model.Preview is null) { <p>Not found.</p>; return; }
 
+@await Component.InvokeAsync("QuickBooksAlert")
+
 @{
     var p = Model.Preview;
     var statusBadge = p.Status switch

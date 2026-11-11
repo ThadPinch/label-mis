@@ -18,7 +18,13 @@ public class QuickBooksConnection : EntityBase
     /// leaves with a token that dies on the way.</summary>
     public static readonly TimeSpan AccessTokenSkew = TimeSpan.FromMinutes(2);
 
+    /// <summary>How long QuickBooks may keep refusing the saved sign-in before LabelShop stops and
+    /// asks for a reconnect. Intuit's token service also answers "invalid_grant" during some of its
+    /// own outages, so a single refusal is not proof the connection is gone.</summary>
+    public static readonly TimeSpan RefusalGrace = TimeSpan.FromMinutes(10);
+
     public const int MaxErrorLength = 1000;
+    public const int MaxCompanyCheckLength = 4000;
 
     private QuickBooksConnection()
     {
@@ -51,6 +57,15 @@ public class QuickBooksConnection : EntityBase
     public bool NeedsReconnect { get; private set; }
     public string? LastError { get; private set; }
     public DateTime? LastErrorAt { get; private set; }
+
+    /// <summary>When QuickBooks first refused the refresh token now on file. Cleared by the next
+    /// refresh that works.</summary>
+    public DateTime? RefusedSince { get; private set; }
+
+    /// <summary>The last company check, as <c>QuickBooksCompanyCheck.ToJson</c> wrote it: a handful
+    /// of on/off settings and custom field names, no records.</summary>
+    public string? CompanyCheckJson { get; private set; }
+    public DateTime? CompanyCheckedAt { get; private set; }
 
     public bool HasCredentials =>
         !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecretProtected);
@@ -87,8 +102,13 @@ public class QuickBooksConnection : EntityBase
         && AccessTokenExpiresAt is { } expires
         && expires - AccessTokenSkew > now;
 
+    /// <summary>Time for the background refresh: a day since the last one, or a refusal that has
+    /// waited out <see cref="RefusalGrace"/> and is due its second try.</summary>
     public bool KeepAliveDue(DateTime now) =>
-        IsConnected && (LastRefreshedAt is not { } last || now - last >= KeepAliveInterval);
+        IsConnected
+        && (LastRefreshedAt is not { } last
+            || now - last >= KeepAliveInterval
+            || (RefusedSince is { } since && now - since >= RefusalGrace));
 
     /// <summary>Saves the Intuit app keys. A blank secret keeps the one on file. Returns true when
     /// the company link was dropped: tokens belong to the app (client ID) and environment that
@@ -164,6 +184,8 @@ public class QuickBooksConnection : EntityBase
         if (!sameCompany)
         {
             CompanyName = null;
+            CompanyCheckJson = null;
+            CompanyCheckedAt = null;
         }
 
         AccessTokenProtected = accessTokenProtected;
@@ -175,6 +197,7 @@ public class QuickBooksConnection : EntityBase
         ConnectedById = connectedById;
         LastRefreshedAt = connectedAt;
         NeedsReconnect = false;
+        RefusedSince = null;
         LastError = null;
         LastErrorAt = null;
         SetModified(connectedById, connectedAt);
@@ -205,6 +228,7 @@ public class QuickBooksConnection : EntityBase
         RefreshTokenHardExpiresAt = refreshTokenHardExpiresAt ?? RefreshTokenHardExpiresAt;
         LastRefreshedAt = refreshedAt;
         NeedsReconnect = false;
+        RefusedSince = null;
         LastError = null;
         LastErrorAt = null;
     }
@@ -212,6 +236,45 @@ public class QuickBooksConnection : EntityBase
     public void SetCompanyName(string? companyName)
     {
         CompanyName = string.IsNullOrWhiteSpace(companyName) ? null : companyName.Trim();
+    }
+
+    /// <summary>Keeps the result of a company check so the settings page can show it without
+    /// asking QuickBooks on every visit.</summary>
+    public void StoreCompanyCheck(string json, DateTime checkedAt)
+    {
+        if (!IsLinked)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(json) || json.Length > MaxCompanyCheckLength)
+        {
+            throw new ArgumentException("The company check result is empty or too long to keep.");
+        }
+
+        CompanyCheckJson = json;
+        CompanyCheckedAt = checkedAt;
+    }
+
+    /// <summary>QuickBooks refused the refresh token. The first refusal only starts the clock and
+    /// the connection stays up; a refusal that comes <see cref="RefusalGrace"/> or more after the
+    /// first ends it. Returns true when a reconnect is now needed.</summary>
+    public bool RecordRefreshRefusal(string reason, DateTime at)
+    {
+        if (!IsLinked)
+        {
+            return false;
+        }
+
+        if (RefusedSince is { } since && at - since >= RefusalGrace)
+        {
+            MarkNeedsReconnect(reason, at);
+            return true;
+        }
+
+        RefusedSince ??= at;
+        RecordError(reason, at);
+        return false;
     }
 
     /// <summary>Forgets the company and its tokens; the app keys stay.</summary>
@@ -257,8 +320,11 @@ public class QuickBooksConnection : EntityBase
         ConnectedById = null;
         LastRefreshedAt = null;
         NeedsReconnect = false;
+        RefusedSince = null;
         LastError = null;
         LastErrorAt = null;
+        CompanyCheckJson = null;
+        CompanyCheckedAt = null;
     }
 
     private static void RequireToken(string value, string kind)

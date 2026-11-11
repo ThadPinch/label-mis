@@ -24,6 +24,7 @@ public class QuickBooksConnectionConfiguration : IEntityTypeConfiguration<QuickB
         builder.Property(c => c.RefreshTokenProtected);
         builder.Property(c => c.NeedsReconnect).IsRequired().HasDefaultValue(false);
         builder.Property(c => c.LastError).HasMaxLength(QuickBooksConnection.MaxErrorLength);
+        builder.Property(c => c.CompanyCheckJson).HasMaxLength(QuickBooksConnection.MaxCompanyCheckLength);
 
         builder.HasOne<ApplicationUser>()
             .WithMany()

@@ -368,4 +368,141 @@ public class QuickBooksConnectionTests
     {
         WithCredentials().ReconnectBy.Should().BeNull();
     }
+
+    [Fact]
+    public void RecordRefreshRefusal_TheFirstTime_KeepsTheConnectionAndStartsTheClock()
+    {
+        var connection = Connected();
+
+        var ended = connection.RecordRefreshRefusal("invalid_grant", Now.AddHours(2));
+
+        ended.Should().BeFalse();
+        connection.Should().Satisfy<QuickBooksConnection>(c =>
+        {
+            c.State.Should().Be(QuickBooksConnectionState.Connected);
+            c.RefusedSince.Should().Be(Now.AddHours(2));
+            c.LastError.Should().Be("invalid_grant");
+            c.RefreshTokenProtected.Should().Be("enc-refresh");
+        });
+    }
+
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(9, false)]
+    [InlineData(10, true)]
+    [InlineData(600, true)]
+    public void RecordRefreshRefusal_Again_EndsTheConnectionOnlyAfterTheGrace(int minutesLater, bool expected)
+    {
+        var connection = Connected();
+        var first = Now.AddHours(2);
+        connection.RecordRefreshRefusal("invalid_grant", first);
+
+        var ended = connection.RecordRefreshRefusal("invalid_grant", first.AddMinutes(minutesLater));
+
+        ended.Should().Be(expected);
+        connection.NeedsReconnect.Should().Be(expected);
+        connection.RefusedSince.Should().Be(first);
+    }
+
+    [Fact]
+    public void RecordRefreshRefusal_WhenNeverLinked_DoesNothing()
+    {
+        var connection = WithCredentials();
+
+        connection.RecordRefreshRefusal("invalid_grant", Now).Should().BeFalse();
+        connection.RefusedSince.Should().BeNull();
+    }
+
+    [Fact]
+    public void StoreRefreshedTokens_AfterARefusal_ClearsTheClock()
+    {
+        var connection = Connected();
+        connection.RecordRefreshRefusal("invalid_grant", Now.AddHours(2));
+
+        connection.StoreRefreshedTokens("enc-access-2", Now.AddHours(4), "enc-refresh-2", Now.AddDays(101), null, Now.AddHours(3));
+
+        connection.RefusedSince.Should().BeNull();
+        connection.LastError.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(5, false)]
+    [InlineData(10, true)]
+    public void KeepAliveDue_WithARefusalPending_ComesDueWhenTheGraceIsOver(int minutesSinceRefusal, bool expected)
+    {
+        var connection = Connected();
+        var refusedAt = Now.AddHours(2);
+        connection.RecordRefreshRefusal("invalid_grant", refusedAt);
+
+        connection.KeepAliveDue(refusedAt.AddMinutes(minutesSinceRefusal)).Should().Be(expected);
+    }
+
+    [Fact]
+    public void StoreCompanyCheck_KeepsTheResultAndWhen()
+    {
+        var connection = Connected();
+
+        connection.StoreCompanyCheck("{\"customTransactionNumbers\":true}", Now.AddMinutes(1));
+
+        connection.CompanyCheckJson.Should().Be("{\"customTransactionNumbers\":true}");
+        connection.CompanyCheckedAt.Should().Be(Now.AddMinutes(1));
+    }
+
+    [Fact]
+    public void StoreCompanyCheck_WhenNotLinked_KeepsNothing()
+    {
+        var connection = WithCredentials();
+
+        connection.StoreCompanyCheck("{}", Now);
+
+        connection.CompanyCheckJson.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void StoreCompanyCheck_WithNothingToKeep_Throws(string json)
+    {
+        var connection = Connected();
+
+        var act = () => connection.StoreCompanyCheck(json, Now);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Connect_ToADifferentCompany_ForgetsTheOldCompanyCheck()
+    {
+        var connection = Connected();
+        connection.StoreCompanyCheck("{}", Now);
+
+        connection.Connect("5555", "enc-access-2", Now.AddHours(1), "enc-refresh-2", Now.AddDays(100), null, User, Now);
+
+        connection.CompanyCheckJson.Should().BeNull();
+        connection.CompanyCheckedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public void Connect_ToTheSameCompany_KeepsItsCompanyCheck()
+    {
+        var connection = Connected();
+        connection.StoreCompanyCheck("{}", Now);
+
+        connection.Connect("9341", "enc-access-2", Now.AddHours(1), "enc-refresh-2", Now.AddDays(100), null, User, Now);
+
+        connection.CompanyCheckJson.Should().Be("{}");
+    }
+
+    [Fact]
+    public void Disconnect_ForgetsTheCompanyCheckAndAnyRefusal()
+    {
+        var connection = Connected();
+        connection.StoreCompanyCheck("{}", Now);
+        connection.RecordRefreshRefusal("invalid_grant", Now);
+
+        connection.Disconnect(User, Now);
+
+        connection.CompanyCheckJson.Should().BeNull();
+        connection.RefusedSince.Should().BeNull();
+    }
 }

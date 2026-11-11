@@ -76,6 +76,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<Services.QuickBooks.QuickBooksInvoiceService>();
         services.AddScoped<Services.QuickBooks.QuickBooksConnectionService>();
         services.AddSingleton<Services.QuickBooks.QuickBooksSyncLogger>();
+        services.AddSingleton<Services.QuickBooks.QuickBooksTokenService>();
+        services.AddScoped<Services.QuickBooks.QuickBooksGateway>();
         services.AddScoped<ArtworkService>();
         services.AddScoped<Pdfs.TempPdfStorage>();
         services.AddScoped<Dashboard.DashboardService>();
@@ -83,6 +85,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<Reports.EvaService>();
         services.AddHostedService<ShipmentTrackingPoller>();
         services.AddHostedService<TempPdfPurgeService>();
+        services.AddHostedService<QuickBooksKeepAliveService>();
         return services;
     }
 

@@ -8,6 +8,8 @@
         .ToDictionary(kv => kv.Key, kv => (string?)kv.Value);
 }
 
+@await Component.InvokeAsync("QuickBooksAlert")
+
 <div class="d-flex justify-content-between mb-3">
     <h1 class="h3 mb-0">Invoices</h1>
     @if (Model.CanEdit)
