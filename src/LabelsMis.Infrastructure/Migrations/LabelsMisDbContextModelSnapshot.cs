@@ -2662,6 +2662,83 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.ToTable("QuickBooksSettings", "public");
                 });
 
+            modelBuilder.Entity("LabelsMis.Domain.Entities.QuickBooksSyncLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Automatic")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("DurationMs")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int?>("HttpStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IntuitTid")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ModifiedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("QuickBooksId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<bool>("Succeeded")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("TenantId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000001"));
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("ModifiedById");
+
+                    b.ToTable("QuickBooksSyncLog", "public");
+                });
+
             modelBuilder.Entity("LabelsMis.Domain.Entities.Receipt", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5136,6 +5213,20 @@ namespace LabelsMis.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("LabelsMis.Domain.Entities.QuickBooksSettings", b =>
+                {
+                    b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ModifiedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("LabelsMis.Domain.Entities.QuickBooksSyncLog", b =>
                 {
                     b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()

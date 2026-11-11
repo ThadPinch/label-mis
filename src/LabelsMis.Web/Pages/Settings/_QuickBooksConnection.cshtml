@@ -19,6 +19,7 @@
         {
             <span class="badge text-bg-warning" id="qb-connection-sandbox">Sandbox: test company, not the real books</span>
         }
+        <a asp-page="/Settings/QuickBooksLog" class="small ms-auto" id="qb-log-link">Activity log</a>
     </div>
 
     @if (TempData["QuickBooksConnectionStatus"] is string connectionStatus)
