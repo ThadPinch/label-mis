@@ -25,6 +25,9 @@ public class PublicUrlService(IOptions<AppUrlOptions> options, IHttpContextAcces
         }
     }
 
+    /// <summary>True when the address comes from configuration rather than from the request.</summary>
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(options.Value.PublicBaseUrl);
+
     public string Absolute(string path) => PublicUrl.Combine(BaseUrl, path);
 }
 

@@ -51,6 +51,10 @@ public class QuickBooksModel(
         }
     }
 
+    /// <summary>Whether that address comes from the <c>App__PublicBaseUrl</c> setting. Shown beside
+    /// it, because a misnamed setting is silently ignored and the page's own address is used instead.</summary>
+    public bool PublicAddressConfigured => publicUrl.IsConfigured;
+
     /// <summary>A stored UTC time as the person at the screen reads it.</summary>
     public string Local(DateTime? utc, string format = "MMM d, yyyy h:mm tt") =>
         utc is { } value ? clock.ToLocal(value).ToString(format) : string.Empty;

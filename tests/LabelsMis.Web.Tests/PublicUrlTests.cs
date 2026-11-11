@@ -1,4 +1,6 @@
 using LabelsMis.Web.Services;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 
 namespace LabelsMis.Web.Tests;
 
@@ -47,5 +49,18 @@ public class PublicUrlTests
     public void Combine_JoinsWithExactlyOneSlash(string baseUrl, string path)
     {
         PublicUrl.Combine(baseUrl, path).Should().Be("https://mis.heyluckylabel.com/quickbooks/callback");
+    }
+
+    [Theory]
+    [InlineData("https://mis.heyluckylabel.com", true)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    [InlineData(null, false)]
+    public void IsConfigured_SaysWhetherTheAddressComesFromConfiguration(string? configured, bool expected)
+    {
+        var service = new PublicUrlService(
+            Options.Create(new AppUrlOptions { PublicBaseUrl = configured }), new HttpContextAccessor());
+
+        service.IsConfigured.Should().Be(expected);
     }
 }

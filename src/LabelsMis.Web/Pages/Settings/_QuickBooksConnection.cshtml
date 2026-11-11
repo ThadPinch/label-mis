@@ -248,6 +248,11 @@
                     @if (redirectUri.Length > 0)
                     {
                         <span id="qb-redirect-uri">The same Intuit app must list this redirect URI, exactly: <code>@redirectUri</code></span>
+                        <span id="qb-public-address-source">
+                            @(Model.PublicAddressConfigured
+                                ? "It is built from the App__PublicBaseUrl setting on this server."
+                                : "App__PublicBaseUrl is not set on this server, so it is built from the address of this page.")
+                        </span>
                     }
                 </div>
             </form>
