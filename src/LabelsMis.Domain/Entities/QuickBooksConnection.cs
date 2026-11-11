@@ -38,8 +38,9 @@ public class QuickBooksConnection : EntityBase
     /// can show which secret is saved.</summary>
     public string ClientSecretTail { get; private set; } = string.Empty;
 
-    /// <summary>Intuit's id for the connected company.</summary>
-    public string? RealmId { get; private set; }
+    /// <summary>Intuit's id for the connected company (its realm id), encrypted like the tokens:
+    /// Intuit's security rules ask for it to be stored encrypted.</summary>
+    public string? RealmIdProtected { get; private set; }
     public string? CompanyName { get; private set; }
     public string? AccessTokenProtected { get; private set; }
     public DateTime? AccessTokenExpiresAt { get; private set; }
@@ -71,7 +72,7 @@ public class QuickBooksConnection : EntityBase
         !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecretProtected);
 
     /// <summary>A company has been authorised and its refresh token is on file.</summary>
-    public bool IsLinked => RealmId is not null && RefreshTokenProtected is not null;
+    public bool IsLinked => RealmIdProtected is not null && RefreshTokenProtected is not null;
 
     public bool IsConnected => IsLinked && !NeedsReconnect;
 
@@ -137,7 +138,7 @@ public class QuickBooksConnection : EntityBase
         // tokens already issued.
         var appChanged = HasCredentials
             && (environment != Environment || !string.Equals(clientId, ClientId, StringComparison.Ordinal));
-        var dropped = appChanged && RealmId is not null;
+        var dropped = appChanged && RealmIdProtected is not null;
         if (dropped)
         {
             ClearLink();
@@ -155,9 +156,12 @@ public class QuickBooksConnection : EntityBase
         return dropped;
     }
 
-    /// <summary>Records a completed authorisation: the company and its first set of tokens.</summary>
+    /// <summary>Records a completed authorisation: the company and its first set of tokens.
+    /// <paramref name="sameCompany"/> says whether it is the company already on the row. The caller
+    /// has to say, because the row holds the company's id encrypted and can't compare.</summary>
     public void Connect(
-        string realmId,
+        string realmIdProtected,
+        bool sameCompany,
         string accessTokenProtected,
         DateTime accessTokenExpiresAt,
         string refreshTokenProtected,
@@ -171,7 +175,7 @@ public class QuickBooksConnection : EntityBase
             throw new InvalidOperationException("Save the Intuit client ID and secret before connecting.");
         }
 
-        if (string.IsNullOrWhiteSpace(realmId))
+        if (string.IsNullOrWhiteSpace(realmIdProtected))
         {
             throw new ArgumentException("QuickBooks did not say which company was connected.");
         }
@@ -179,8 +183,7 @@ public class QuickBooksConnection : EntityBase
         RequireToken(accessTokenProtected, "access");
         RequireToken(refreshTokenProtected, "refresh");
 
-        var sameCompany = string.Equals(RealmId, realmId.Trim(), StringComparison.Ordinal);
-        RealmId = realmId.Trim();
+        RealmIdProtected = realmIdProtected;
         if (!sameCompany)
         {
             CompanyName = null;
@@ -309,7 +312,7 @@ public class QuickBooksConnection : EntityBase
 
     private void ClearLink()
     {
-        RealmId = null;
+        RealmIdProtected = null;
         CompanyName = null;
         AccessTokenProtected = null;
         AccessTokenExpiresAt = null;

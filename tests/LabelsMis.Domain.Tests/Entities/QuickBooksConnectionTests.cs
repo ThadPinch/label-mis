@@ -16,11 +16,17 @@ public class QuickBooksConnectionTests
         return connection;
     }
 
+    /// <summary>The company's id as the service hands it over: already encrypted. Encrypting the
+    /// same id twice gives two different texts, which is why Connect is told whether the company
+    /// is the same one.</summary>
+    private const string Realm = "enc-realm-9341";
+    private const string RealmAgain = "enc-realm-9341-second-encryption";
+
     private static QuickBooksConnection Connected(DateTime? at = null)
     {
         var when = at ?? Now;
         var connection = WithCredentials();
-        connection.Connect("9341", "enc-access", when.AddHours(1), "enc-refresh", when.AddDays(100), when.AddYears(5), User, when);
+        connection.Connect(Realm, false, "enc-access", when.AddHours(1), "enc-refresh", when.AddDays(100), when.AddYears(5), User, when);
         return connection;
     }
 
@@ -114,7 +120,7 @@ public class QuickBooksConnectionTests
         connection.Should().Satisfy<QuickBooksConnection>(c =>
         {
             c.State.Should().Be(QuickBooksConnectionState.NotConnected);
-            c.RealmId.Should().BeNull();
+            c.RealmIdProtected.Should().BeNull();
             c.RefreshTokenProtected.Should().BeNull();
             c.AccessTokenProtected.Should().BeNull();
         });
@@ -125,20 +131,20 @@ public class QuickBooksConnectionTests
     {
         var connection = QuickBooksConnection.Create(User, Now);
 
-        var act = () => connection.Connect("9341", "a", Now.AddHours(1), "r", Now.AddDays(100), null, User, Now);
+        var act = () => connection.Connect(Realm, false, "a", Now.AddHours(1), "r", Now.AddDays(100), null, User, Now);
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*client ID and secret*");
     }
 
     [Theory]
     [InlineData("", "a", "r", "*which company*")]
-    [InlineData("9341", "", "r", "*access token*")]
-    [InlineData("9341", "a", " ", "*refresh token*")]
+    [InlineData("enc-realm", "", "r", "*access token*")]
+    [InlineData("enc-realm", "a", " ", "*refresh token*")]
     public void Connect_WithAnIncompleteAnswerFromQuickBooks_Throws(string realmId, string access, string refresh, string message)
     {
         var connection = WithCredentials();
 
-        var act = () => connection.Connect(realmId, access, Now.AddHours(1), refresh, Now.AddDays(100), null, User, Now);
+        var act = () => connection.Connect(realmId, false, access, Now.AddHours(1), refresh, Now.AddDays(100), null, User, Now);
 
         act.Should().Throw<ArgumentException>().WithMessage(message);
     }
@@ -151,7 +157,7 @@ public class QuickBooksConnectionTests
         connection.Should().Satisfy<QuickBooksConnection>(c =>
         {
             c.State.Should().Be(QuickBooksConnectionState.Connected);
-            c.RealmId.Should().Be("9341");
+            c.RealmIdProtected.Should().Be(Realm);
             c.ConnectedAt.Should().Be(Now);
             c.ConnectedById.Should().Be(User);
             c.LastRefreshedAt.Should().Be(Now);
@@ -167,7 +173,7 @@ public class QuickBooksConnectionTests
         var connection = Connected();
         connection.MarkNeedsReconnect("QuickBooks refused the saved sign-in.", Now.AddDays(1));
 
-        connection.Connect("9341", "enc-access-2", Now.AddDays(1).AddHours(1), "enc-refresh-2", Now.AddDays(101), null, User, Now.AddDays(1));
+        connection.Connect(RealmAgain, true, "enc-access-2", Now.AddDays(1).AddHours(1), "enc-refresh-2", Now.AddDays(101), null, User, Now.AddDays(1));
 
         connection.Should().Satisfy<QuickBooksConnection>(c =>
         {
@@ -183,7 +189,7 @@ public class QuickBooksConnectionTests
         var connection = Connected();
         connection.SetCompanyName("Sandbox Company US ef89");
 
-        connection.Connect("7777", "a", Now.AddHours(1), "r", Now.AddDays(100), null, User, Now);
+        connection.Connect("enc-realm-of-another-company", false, "a", Now.AddHours(1), "r", Now.AddDays(100), null, User, Now);
 
         connection.CompanyName.Should().BeNull();
     }
@@ -194,9 +200,10 @@ public class QuickBooksConnectionTests
         var connection = Connected();
         connection.SetCompanyName("Sandbox Company US ef89");
 
-        connection.Connect("9341", "a", Now.AddHours(1), "r", Now.AddDays(100), null, User, Now);
+        connection.Connect(RealmAgain, true, "a", Now.AddHours(1), "r", Now.AddDays(100), null, User, Now);
 
         connection.CompanyName.Should().Be("Sandbox Company US ef89");
+        connection.RealmIdProtected.Should().Be(RealmAgain);
     }
 
     [Fact]
@@ -297,7 +304,7 @@ public class QuickBooksConnectionTests
             c.State.Should().Be(QuickBooksConnectionState.NeedsReconnect);
             c.IsConnected.Should().BeFalse();
             c.CompanyName.Should().Be("Sandbox Company US ef89");
-            c.RealmId.Should().Be("9341");
+            c.RealmIdProtected.Should().Be(Realm);
             c.AccessTokenProtected.Should().BeNull();
             c.LastError.Should().Be("QuickBooks refused the saved sign-in.");
             c.LastErrorAt.Should().Be(Now.AddDays(3));
@@ -326,7 +333,7 @@ public class QuickBooksConnectionTests
         connection.Should().Satisfy<QuickBooksConnection>(c =>
         {
             c.State.Should().Be(QuickBooksConnectionState.NotConnected);
-            c.RealmId.Should().BeNull();
+            c.RealmIdProtected.Should().BeNull();
             c.CompanyName.Should().BeNull();
             c.RefreshTokenProtected.Should().BeNull();
             c.ConnectedAt.Should().BeNull();
@@ -349,7 +356,7 @@ public class QuickBooksConnectionTests
     public void ReconnectBy_IsWhicheverLimitComesFirst()
     {
         var connection = WithCredentials();
-        connection.Connect("9341", "a", Now.AddHours(1), "r", Now.AddDays(100), Now.AddDays(40), User, Now);
+        connection.Connect(Realm, false, "a", Now.AddHours(1), "r", Now.AddDays(100), Now.AddDays(40), User, Now);
 
         connection.ReconnectBy.Should().Be(Now.AddDays(40));
     }
@@ -358,7 +365,7 @@ public class QuickBooksConnectionTests
     public void ReconnectBy_WithoutAHardLimit_IsTheRollingExpiry()
     {
         var connection = WithCredentials();
-        connection.Connect("9341", "a", Now.AddHours(1), "r", Now.AddDays(100), null, User, Now);
+        connection.Connect(Realm, false, "a", Now.AddHours(1), "r", Now.AddDays(100), null, User, Now);
 
         connection.ReconnectBy.Should().Be(Now.AddDays(100));
     }
@@ -476,7 +483,7 @@ public class QuickBooksConnectionTests
         var connection = Connected();
         connection.StoreCompanyCheck("{}", Now);
 
-        connection.Connect("5555", "enc-access-2", Now.AddHours(1), "enc-refresh-2", Now.AddDays(100), null, User, Now);
+        connection.Connect("enc-realm-of-another-company", false, "enc-access-2", Now.AddHours(1), "enc-refresh-2", Now.AddDays(100), null, User, Now);
 
         connection.CompanyCheckJson.Should().BeNull();
         connection.CompanyCheckedAt.Should().BeNull();
@@ -488,7 +495,7 @@ public class QuickBooksConnectionTests
         var connection = Connected();
         connection.StoreCompanyCheck("{}", Now);
 
-        connection.Connect("9341", "enc-access-2", Now.AddHours(1), "enc-refresh-2", Now.AddDays(100), null, User, Now);
+        connection.Connect(RealmAgain, true, "enc-access-2", Now.AddHours(1), "enc-refresh-2", Now.AddDays(100), null, User, Now);
 
         connection.CompanyCheckJson.Should().Be("{}");
     }

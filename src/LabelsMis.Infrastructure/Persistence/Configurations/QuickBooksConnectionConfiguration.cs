@@ -18,7 +18,7 @@ public class QuickBooksConnectionConfiguration : IEntityTypeConfiguration<QuickB
         // Intuit's access tokens run to 4096 characters, hence no length cap on the token columns.
         builder.Property(c => c.ClientSecretProtected).HasMaxLength(1000).IsRequired();
         builder.Property(c => c.ClientSecretTail).HasMaxLength(8).IsRequired();
-        builder.Property(c => c.RealmId).HasMaxLength(50);
+        builder.Property(c => c.RealmIdProtected).HasMaxLength(200);
         builder.Property(c => c.CompanyName).HasMaxLength(200);
         builder.Property(c => c.AccessTokenProtected);
         builder.Property(c => c.RefreshTokenProtected);

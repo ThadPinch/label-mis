@@ -47,7 +47,10 @@
         case QuickBooksConnectionState.Connected:
             <p class="mb-2" id="qb-connection-summary">
                 Connected to <strong>@company</strong>
-                <span class="text-muted">(company ID @c.RealmId)</span>
+                @if (c.RealmId is not null)
+                {
+                    <span class="text-muted">(company ID @c.RealmId)</span>
+                }
                 since @Model.Local(c.ConnectedAt)@(c.ConnectedBy is null ? "" : $", by {c.ConnectedBy}").
             </p>
             @if (c.ReconnectBy is not null)

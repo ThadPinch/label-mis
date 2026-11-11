@@ -58,6 +58,14 @@ Setup → QuickBooks (Admin and Accounting). The Intuit app keys are Admin only.
 5. **Disconnect** asks Intuit to cancel the tokens and removes them here. If Intuit can't be reached the tokens are
    still removed, and the page says to remove the app from the company's connected apps in QuickBooks.
 
+### What is stored
+
+One row (`QuickBooksConnection`). The client secret, both tokens and the connected company's id (Intuit's realm id)
+are stored encrypted with `Secrets:Key`; Intuit's security rules name the refresh token and the realm id. The client
+ID, the last four characters of the secret, the company's name and the company check are stored as they are. The
+card decrypts the company id to show it; the activity log does not carry it. Because the id is encrypted, the row
+can't tell whether a new connect is for the same company: `QuickBooksConnectionService` compares and tells it.
+
 ### Tokens
 
 - Access tokens last an hour. `QuickBooksTokenService` hands out a live one and refreshes when the saved one has two

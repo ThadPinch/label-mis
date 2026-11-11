@@ -41,7 +41,8 @@ public class QuickBooksConnectionServiceTests : QuickBooksTestHost
         connection!.Should().Satisfy<Domain.Entities.QuickBooksConnection>(c =>
         {
             c.State.Should().Be(QuickBooksConnectionState.Connected);
-            c.RealmId.Should().Be(RealmId);
+            c.RealmIdProtected.Should().StartWith("v1:").And.NotContain(RealmId);
+            Protector.Unprotect(c.RealmIdProtected!).Should().Be(RealmId);
             c.CompanyName.Should().Be("Sandbox Company US ef89");
             c.ConnectedById.Should().Be(TestUserId);
             c.AccessTokenProtected.Should().StartWith("v1:").And.NotContain("access-1");
@@ -85,6 +86,61 @@ public class QuickBooksConnectionServiceTests : QuickBooksTestHost
         result.CompanyName.Should().BeNull();
         result.Warning.Should().Be("QuickBooks answered 503.");
         (await ReadConnectionAsync())!.State.Should().Be(QuickBooksConnectionState.Connected);
+    }
+
+    [Fact]
+    public async Task CompleteConnectAsync_ForTheSameCompanyAgain_KeepsWhatWasKnownAboutIt()
+    {
+        await ConnectAsync();
+        // The reads after the second connect fail, so anything still on the row was kept, not re-read.
+        Api.ReadFailures.Enqueue(QuickBooksApiException.FromResponse(503, "", "tid-503"));
+
+        await WithConnectionServiceAsync(s => s.CompleteConnectAsync("code-2", RealmId, RedirectUri));
+
+        (await ReadConnectionAsync())!.Should().Satisfy<Domain.Entities.QuickBooksConnection>(c =>
+        {
+            c.State.Should().Be(QuickBooksConnectionState.Connected);
+            c.CompanyName.Should().Be("Sandbox Company US ef89");
+            c.CompanyCheckJson.Should().NotBeNull();
+        });
+    }
+
+    [Fact]
+    public async Task CompleteConnectAsync_ForADifferentCompany_ForgetsTheOldOne()
+    {
+        await ConnectAsync();
+        Api.ReadFailures.Enqueue(QuickBooksApiException.FromResponse(503, "", "tid-503"));
+
+        await WithConnectionServiceAsync(s => s.CompleteConnectAsync("code-2", "4620816365000000001", RedirectUri));
+
+        (await ReadConnectionAsync())!.Should().Satisfy<Domain.Entities.QuickBooksConnection>(c =>
+        {
+            c.State.Should().Be(QuickBooksConnectionState.Connected);
+            Protector.Unprotect(c.RealmIdProtected!).Should().Be("4620816365000000001");
+            c.CompanyName.Should().BeNull();
+            c.CompanyCheckJson.Should().BeNull();
+        });
+    }
+
+    [Fact]
+    public async Task CompleteConnectAsync_WithNoCompanyInTheAnswer_SpendsNoCode()
+    {
+        await SaveKeysAsync();
+
+        var act = () => WithConnectionServiceAsync(s => s.CompleteConnectAsync("code-1", "  ", RedirectUri));
+
+        await act.Should().ThrowAsync<ArgumentException>().WithMessage("*which company*");
+        Auth.Exchanges.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetViewAsync_ShowsTheCompanyIdInTheClearToThePage()
+    {
+        await ConnectAsync();
+
+        var view = await WithConnectionServiceAsync(s => s.GetViewAsync());
+
+        view.RealmId.Should().Be(RealmId);
     }
 
     [Fact]
@@ -174,7 +230,7 @@ public class QuickBooksConnectionServiceTests : QuickBooksTestHost
         (await ReadConnectionAsync())!.Should().Satisfy<Domain.Entities.QuickBooksConnection>(c =>
         {
             c.State.Should().Be(QuickBooksConnectionState.NotConnected);
-            c.RealmId.Should().BeNull();
+            c.RealmIdProtected.Should().BeNull();
             c.AccessTokenProtected.Should().BeNull();
             c.RefreshTokenProtected.Should().BeNull();
             c.CompanyCheckJson.Should().BeNull();
@@ -380,7 +436,7 @@ public class QuickBooksTokenServiceTests : QuickBooksTestHost
         {
             c.State.Should().Be(QuickBooksConnectionState.NeedsReconnect);
             c.AccessTokenProtected.Should().BeNull();
-            c.RealmId.Should().Be(RealmId);
+            Protector.Unprotect(c.RealmIdProtected!).Should().Be(RealmId);
         });
 
         await Tokens.Invoking(t => t.GetAccessAsync(TestUserId)).Should().ThrowAsync<QuickBooksNotConnectedException>();

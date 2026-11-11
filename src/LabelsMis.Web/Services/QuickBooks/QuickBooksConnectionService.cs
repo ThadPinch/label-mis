@@ -95,7 +95,7 @@ public class QuickBooksConnectionService(
             connection.ClientId,
             connection.ClientSecretTail,
             connection.CompanyName,
-            connection.RealmId,
+            ReadCompanyId(connection),
             connection.ConnectedAt,
             connectedBy,
             connection.ReconnectBy,
@@ -111,7 +111,7 @@ public class QuickBooksConnectionService(
     /// the one state the invoice pages warn about.</summary>
     public Task<bool> NeedsReconnectAsync(CancellationToken cancellationToken = default) =>
         db.QuickBooksConnections.AsNoTracking()
-            .AnyAsync(c => c.NeedsReconnect && c.RealmId != null, cancellationToken);
+            .AnyAsync(c => c.NeedsReconnect && c.RealmIdProtected != null, cancellationToken);
 
     /// <summary>Saves the Intuit app keys; a blank secret keeps the one on file. Returns true when
     /// the company link was dropped because the app or environment changed.</summary>
@@ -165,6 +165,13 @@ public class QuickBooksConnectionService(
         string code, string realmId, string redirectUri, CancellationToken cancellationToken = default)
     {
         var userId = RequireUser();
+        if (string.IsNullOrWhiteSpace(realmId))
+        {
+            // Checked before the code is traded: a one-time code can't be spent twice.
+            throw new ArgumentException("QuickBooks did not say which company was connected.");
+        }
+
+        var companyId = realmId.Trim();
         await tokens.WithoutRefreshAsync(
             async () =>
             {
@@ -190,7 +197,8 @@ public class QuickBooksConnectionService(
                 // happens to the request from here.
                 var now = time.GetUtcNow().UtcDateTime;
                 connection.Connect(
-                    realmId,
+                    protector.Protect(companyId),
+                    string.Equals(ReadCompanyId(connection), companyId, StringComparison.Ordinal),
                     protector.Protect(issued.AccessToken),
                     now.AddSeconds(issued.ExpiresInSeconds),
                     protector.Protect(issued.RefreshToken),
@@ -201,7 +209,7 @@ public class QuickBooksConnectionService(
                 await db.SaveChangesAsync(CancellationToken.None);
                 await log.WriteAsync(new QuickBooksLogEntry(
                     QuickBooksOperations.Connect, true, userId,
-                    HttpStatus: 200, Message: $"Company {connection.RealmId}", IntuitTid: issued.IntuitTid));
+                    HttpStatus: 200, IntuitTid: issued.IntuitTid));
                 return true;
             },
             cancellationToken);
@@ -235,7 +243,8 @@ public class QuickBooksConnectionService(
         }
 
         var company = await gateway.ReadAsync(
-            $"companyinfo/{saved.RealmId}", QuickBooksOperations.CompanyRead, cancellationToken: cancellationToken);
+            $"companyinfo/{protector.Unprotect(saved.RealmIdProtected!)}", QuickBooksOperations.CompanyRead,
+            cancellationToken: cancellationToken);
         var preferences = await gateway.ReadAsync(
             "preferences", QuickBooksOperations.PreferencesRead, cancellationToken: cancellationToken);
 
@@ -299,6 +308,25 @@ public class QuickBooksConnectionService(
                 return new QuickBooksDisconnectResult(true, company, problem);
             },
             cancellationToken);
+    }
+
+    /// <summary>The connected company's id in the clear, for the card and for comparing companies.
+    /// Null when nothing is connected or the stored value can't be read with the current key.</summary>
+    private string? ReadCompanyId(QuickBooksConnection connection)
+    {
+        if (connection.RealmIdProtected is not { } stored)
+        {
+            return null;
+        }
+
+        try
+        {
+            return protector.Unprotect(stored);
+        }
+        catch (SecretProtectionException)
+        {
+            return null;
+        }
     }
 
     /// <summary>The last four characters, or nothing for a secret too short to show part of.</summary>

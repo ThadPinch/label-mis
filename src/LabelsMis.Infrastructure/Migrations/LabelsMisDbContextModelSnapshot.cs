@@ -2548,9 +2548,9 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
-                    b.Property<string>("RealmId")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                    b.Property<string>("RealmIdProtected")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<DateTime?>("RefreshTokenExpiresAt")
                         .HasColumnType("timestamp with time zone");

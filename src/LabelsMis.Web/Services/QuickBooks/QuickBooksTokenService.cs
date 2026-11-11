@@ -164,8 +164,8 @@ public class QuickBooksTokenService(
         }
     }
 
-    private static QuickBooksCompanyAccess Access(QuickBooksConnection connection, string accessToken) =>
-        new(connection.Environment, connection.RealmId!, accessToken);
+    private QuickBooksCompanyAccess Access(QuickBooksConnection connection, string accessToken) =>
+        new(connection.Environment, protector.Unprotect(connection.RealmIdProtected!), accessToken);
 
     private static bool SameToken(string a, string b) =>
         CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(a), Encoding.UTF8.GetBytes(b));
