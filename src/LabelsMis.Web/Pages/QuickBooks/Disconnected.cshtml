@@ -1,0 +1,33 @@
+@page "/quickbooks/disconnected"
+@model LabelsMis.Web.Pages.QuickBooks.DisconnectedModel
+@{
+    ViewData["Title"] = "QuickBooks disconnected";
+}
+
+<div class="row justify-content-center">
+    <article class="col-lg-7" id="qb-disconnected">
+        <h1 class="h3">LabelShop is disconnected from QuickBooks</h1>
+        <p>
+            QuickBooks sends you here after LabelShop is disconnected from the Apps menu in QuickBooks.
+            LabelShop can no longer read from that QuickBooks company or send anything to it.
+        </p>
+        <ul>
+            <li>Invoices that are already in QuickBooks stay there.</li>
+            <li>LabelShop keeps its own orders and invoices; nothing is deleted.</li>
+            <li>Nothing more goes to QuickBooks until someone connects again.</li>
+        </ul>
+
+        <h2 class="h5 mt-4">To connect again</h2>
+        <ol>
+            <li>Sign in to LabelShop with an Admin or Accounting account and open Setup, QuickBooks.</li>
+            <li>If the Connection card still says Connected, press <strong>Disconnect</strong> to clear the old sign-in.</li>
+            <li>Press <strong>Connect to QuickBooks</strong> and approve the company on Intuit's page.</li>
+        </ol>
+        <p>
+            <a class="btn btn-primary" id="qb-disconnected-setup" asp-page="/Settings/QuickBooks">Open Setup, QuickBooks</a>
+        </p>
+        <p class="small text-muted">
+            <a asp-page="/Legal/Terms">Terms of use</a> · <a asp-page="/Legal/Privacy">Privacy policy</a>
+        </p>
+    </article>
+</div>

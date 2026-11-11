@@ -1,0 +1,104 @@
+@page "/legal/privacy"
+@model LabelsMis.Web.Pages.Legal.PrivacyModel
+@{
+    ViewData["Title"] = "Privacy policy";
+    var op = Model.Operator;
+}
+
+<div class="row justify-content-center">
+    <article class="col-lg-8" id="legal-privacy">
+        <h1 class="h3">LabelShop privacy policy</h1>
+        <p class="text-muted">Last updated November 11, 2026</p>
+
+        <h2 class="h5 mt-4">1. Who runs LabelShop</h2>
+        <p>
+            LabelShop is the order, production and invoicing system that @op.Name runs for its own business. It
+            is used by the people who work there and is not offered to the public. This policy says what
+            information LabelShop holds and what happens to it.
+        </p>
+
+        <h2 class="h5 mt-4">2. What LabelShop holds</h2>
+        <ul>
+            <li><strong>Staff accounts:</strong> name, email address, role, and a password stored in hashed form.</li>
+            <li>
+                <strong>Business records:</strong> customers and their contacts (names, email addresses, phone
+                numbers, billing and shipping addresses), suppliers, estimates, sales orders, jobs, shipments,
+                invoices and payments, and the artwork and documents attached to them.
+            </li>
+            <li><strong>History:</strong> who created or changed a record and when, and a record of the emails LabelShop has sent.</li>
+        </ul>
+
+        <h2 class="h5 mt-4" id="quickbooks">3. Information from QuickBooks Online</h2>
+        <p>When LabelShop is connected to the QuickBooks Online company of @op.Name, it receives from Intuit:</p>
+        <ul>
+            <li>sign-in tokens for that company, which it stores encrypted and uses only for the purposes listed in the <a asp-page="/Legal/Terms" asp-fragment="quickbooks">terms of use</a>;</li>
+            <li>the QuickBooks company's name, its company ID and the settings that affect invoices;</li>
+            <li>the customers, products and services, classes, payment terms and tax codes needed to match LabelShop's records to QuickBooks;</li>
+            <li>for each invoice LabelShop sends: the QuickBooks invoice ID and number, and the tax and total QuickBooks calculated.</li>
+        </ul>
+        <p>
+            LabelShop keeps only what it needs to match its own records to QuickBooks: names, IDs, and the
+            figures on its own invoices. It does not copy the rest of the QuickBooks company's books.
+        </p>
+        <p>
+            LabelShop keeps a log of every call it makes to QuickBooks: what the call was for, when it was made,
+            who started it and whether it worked, with QuickBooks' error message when it did not.
+        </p>
+
+        <h2 class="h5 mt-4">4. How the information is used</h2>
+        <p>
+            Only to run the business of @op.Name: quoting, producing, shipping and invoicing orders, and sending
+            the documents and emails that go with them. LabelShop carries no advertising and no analytics
+            trackers. Information is not sold. Information from QuickBooks is used only for the invoicing work
+            described above.
+        </p>
+
+        <h2 class="h5 mt-4">5. Who it is shared with</h2>
+        <ul>
+            <li>The people who work for @op.Name, each according to their role.</li>
+            <li>Intuit, when LabelShop reads from or sends to the connected QuickBooks company.</li>
+            <li>The services LabelShop runs on, which handle the information only to provide that service: DigitalOcean (hosting, database and file storage) and Mailgun (email delivery).</li>
+            <li>Anyone the law requires it to be given to.</li>
+        </ul>
+
+        <h2 class="h5 mt-4">6. Where it is kept and how it is protected</h2>
+        <p>
+            LabelShop is hosted in the United States. Every connection to it is encrypted (HTTPS). Getting in
+            needs an individual account, and each role opens only its own areas. Passwords are stored hashed.
+            The QuickBooks sign-in tokens and the key of LabelShop's Intuit app are encrypted with a key that is
+            kept apart from the database.
+        </p>
+
+        <h2 class="h5 mt-4">7. How long it is kept</h2>
+        <p>
+            Business records are kept for as long as @op.Name needs them. When the QuickBooks connection is
+            removed in LabelShop, the stored sign-in tokens are deleted at once. QuickBooks IDs and figures
+            already saved against LabelShop's own records, such as the QuickBooks number of an invoice, stay
+            with those records.
+        </p>
+
+        <h2 class="h5 mt-4">8. Cookies and your browser</h2>
+        <p>
+            LabelShop sets a small number of cookies, all needed for it to work: one keeps you signed in, one
+            protects forms from forgery, one remembers your time zone, and one remembers how you like the jobs
+            list shown. A short-lived cookie is set while QuickBooks is being connected. The pages load their
+            typeface from Google Fonts, so your browser contacts Google when a page opens.
+        </p>
+
+        <h2 class="h5 mt-4">9. Your information</h2>
+        <p>To ask what LabelShop holds about you, or to have it corrected or removed:</p>
+        @if (op.Email is not null)
+        {
+            <p>
+                Write to <a href="mailto:@op.Email">@op.Email</a>@(op.PostalAddress is null ? "." : $", or to {op.Name}, {op.PostalAddress}.")
+            </p>
+        }
+        else
+        {
+            <p>Ask a LabelShop administrator@(op.PostalAddress is null ? "." : $", or write to {op.Name}, {op.PostalAddress}.")</p>
+        }
+
+        <h2 class="h5 mt-4">10. Changes</h2>
+        <p>The date at the top shows when this policy last changed.</p>
+    </article>
+</div>

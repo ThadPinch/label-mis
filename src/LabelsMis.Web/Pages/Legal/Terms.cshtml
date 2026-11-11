@@ -1,0 +1,85 @@
+@page "/legal/terms"
+@model LabelsMis.Web.Pages.Legal.TermsModel
+@{
+    ViewData["Title"] = "Terms of use";
+    var op = Model.Operator;
+}
+
+<div class="row justify-content-center">
+    <article class="col-lg-8" id="legal-terms">
+        <h1 class="h3">LabelShop terms of use</h1>
+        <p class="text-muted">Last updated November 11, 2026</p>
+
+        <h2 class="h5 mt-4">1. What LabelShop is</h2>
+        <p>
+            LabelShop is the order, production and invoicing system that @op.Name runs for its own business at
+            this address. It is not offered to the public. These terms apply to everyone who signs in to it.
+        </p>
+
+        <h2 class="h5 mt-4">2. Who may use it</h2>
+        <p>
+            Accounts are created by a LabelShop administrator for people who work for @op.Name. Use only your
+            own account and keep your password to yourself. Tell an administrator straight away if you think
+            someone else has used your account. An administrator can change what your account may do, or close
+            it, at any time.
+        </p>
+
+        <h2 class="h5 mt-4">3. Acceptable use</h2>
+        <p>
+            Use LabelShop only for the business of @op.Name. Do not try to reach information or functions that
+            your role does not include, do not take customer or company information out of LabelShop for any
+            other purpose, and do not interfere with how it runs.
+        </p>
+
+        <h2 class="h5 mt-4" id="quickbooks">4. The QuickBooks Online connection</h2>
+        <p>
+            LabelShop can be connected to the QuickBooks Online company of @op.Name. Only a LabelShop user with
+            the Admin or Accounting role who is also an administrator of that QuickBooks company can connect it.
+            By connecting, that person confirms they are authorised to do so.
+        </p>
+        <p>LabelShop uses the connection only to:</p>
+        <ul>
+            <li>read the QuickBooks company's name and the settings that affect invoices;</li>
+            <li>read the customers, products and services, classes, payment terms and tax codes it needs to prepare invoices;</li>
+            <li>add a customer to QuickBooks when a LabelShop user asks for it;</li>
+            <li>create, update and void the invoices that LabelShop produces, and read those invoices back;</li>
+            <li>ask QuickBooks to email one of those invoices to the customer, when that option is switched on.</li>
+        </ul>
+        <p>
+            Sign-in happens on Intuit's own pages, so LabelShop never sees a QuickBooks password. The connection
+            can be ended at any time, either in LabelShop under Setup, QuickBooks, or from the Apps menu in
+            QuickBooks. Invoices that are already in QuickBooks stay there.
+        </p>
+
+        <h2 class="h5 mt-4">5. QuickBooks and Intuit</h2>
+        <p>
+            QuickBooks is a product and trademark of Intuit Inc. Using QuickBooks itself is covered by Intuit's
+            own terms. LabelShop is not made, sponsored or endorsed by Intuit.
+        </p>
+
+        <h2 class="h5 mt-4">6. Privacy</h2>
+        <p>
+            What LabelShop holds, and what happens to it, is set out in the
+            <a asp-page="/Legal/Privacy">privacy policy</a>.
+        </p>
+
+        <h2 class="h5 mt-4">7. Changes and availability</h2>
+        <p>
+            @op.SentenceStart may change or withdraw LabelShop, or any part of it, and may update these terms.
+            The date at the top shows when they last changed. LabelShop is provided for internal use as it is,
+            without a warranty of any kind to the people who use it.
+        </p>
+
+        <h2 class="h5 mt-4">8. Questions</h2>
+        @if (op.Email is not null)
+        {
+            <p>
+                Write to <a href="mailto:@op.Email">@op.Email</a>@(op.PostalAddress is null ? "." : $", or to {op.Name}, {op.PostalAddress}.")
+            </p>
+        }
+        else
+        {
+            <p>Ask a LabelShop administrator@(op.PostalAddress is null ? "." : $", or write to {op.Name}, {op.PostalAddress}.")</p>
+        }
+    </article>
+</div>

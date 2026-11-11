@@ -4,15 +4,15 @@ Phase 0 (`quickbooks-phase0.md`) built the invoice the way QuickBooks wants it a
 Phase 1 sends that invoice to QuickBooks through Intuit's API. This file describes what is built so far and what
 still has to be checked against a real sandbox company.
 
-**Built: the connection (tasks Q1 to Q7), and the sandbox checks are answered (Q8).** The app itself sends nothing
-to QuickBooks yet. Mapping by QuickBooks id, customer matching and the push come next.
+**Built: the connection (tasks Q1 to Q7), the sandbox checks (Q8) and the public pages Intuit asks for (Q22).**
+The app itself sends nothing to QuickBooks yet. Mapping by QuickBooks id, customer matching and the push come next.
 
 ## Configuration
 
 | Setting | Environment variable | What it is for |
 |---|---|---|
 | `Secrets:Key` | `Secrets__Key` | 32 random bytes, base64 (`openssl rand -base64 32`). Encrypts the Intuit client secret and the OAuth tokens before they are stored (AES-256-GCM; stored values start with `v1:`). Keep it out of the database and out of the repo: an encrypted environment variable in production, `dotnet user-secrets` locally. |
-| `App:PublicBaseUrl` | `App__PublicBaseUrl` | The address people reach the app at, e.g. `https://mis.heyluckylabel.com`. Used to build the OAuth redirect URI. Empty means "use the current request's scheme and host". |
+| `App:PublicBaseUrl` | `App__PublicBaseUrl` | The address people reach the app at, e.g. `https://mis.heyluckylabel.com`. Used to build the OAuth redirect URI. Empty means "use the current request's scheme and host". A misnamed variable is ignored without a word, so the keys form on Setup → QuickBooks says which of the two the redirect URI was built from. |
 | `QuickBooks:*` | `QuickBooks__…` | Intuit's addresses and the API minor version (`QuickBooksOptions`). The defaults are the real ones. Override them only to point the clients at a stub server in a local smoke. |
 
 Without `Secrets:Key` the app boots normally and Setup → QuickBooks says the key is missing; nothing can be saved or
@@ -22,6 +22,23 @@ again and reconnect.
 The app sits behind an edge that ends TLS, so it reads the forwarded protocol header (`Program.cs`). Session cookies
 are `Secure` outside Development. The antiforgery cookie follows the request instead, because the host's health check
 calls `/Account/Login` over plain http.
+
+## Public pages
+
+Intuit issues production keys only to an app that has public addresses for its terms, its privacy policy and a page
+to land on after a disconnect. Three pages open without a sign-in:
+
+| Address | What it is | Field on Intuit's app details |
+|---|---|---|
+| `/legal/terms` | Terms of use, with what the QuickBooks connection is used for | End-user license agreement URL |
+| `/legal/privacy` | Privacy policy, with what comes from QuickBooks and how it is stored | Privacy policy URL |
+| `/quickbooks/disconnected` | Where QuickBooks sends someone who disconnected LabelShop from its Apps menu | Disconnect URL |
+
+The launch and connect/reconnect address is `/settings/quickbooks`. The two legal pages name the company from
+Settings → General (`SiteOperator`), so they carry no company name of their own; with no company name set they say
+"the operator of this site". The disconnected page only explains: anyone can open it, so it changes nothing, and
+LabelShop learns of the disconnection the next time QuickBooks refuses its sign-in. The list of what the connection
+is used for, in the terms, has to stay true as the push is built.
 
 ## The connection
 
@@ -98,6 +115,7 @@ URLs, which carry company ids and query text.
 | Every API call (token, 401 retry, log row) | `Web/Services/QuickBooks/QuickBooksGateway.cs` |
 | Keep-alive | `Web/Background/QuickBooksKeepAliveService.cs` |
 | Pages | `Pages/Settings/QuickBooks`, `Pages/Settings/QuickBooksLog`, `Pages/QuickBooks/Callback` |
+| Public pages | `Pages/Legal/Terms`, `Pages/Legal/Privacy`, `Pages/QuickBooks/Disconnected` |
 | Reconnect banner | `ViewComponents/QuickBooksAlertViewComponent.cs` |
 
 New code calls QuickBooks through `QuickBooksGateway`, not through `IQuickBooksApiClient` directly: the gateway is

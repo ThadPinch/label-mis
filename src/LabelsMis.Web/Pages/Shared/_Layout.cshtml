@@ -191,8 +191,11 @@
     </div>
 
     <footer class="app-footer">
-        <div class="container">
-            &copy; 2026 <span class="footer-accent">LabelShop</span>
+        <div class="container d-flex flex-wrap justify-content-between gap-2">
+            <span>&copy; 2026 <span class="footer-accent">LabelShop</span></span>
+            <span id="footer-legal">
+                <a asp-page="/Legal/Terms">Terms</a> · <a asp-page="/Legal/Privacy">Privacy</a>
+            </span>
         </div>
     </footer>
 
