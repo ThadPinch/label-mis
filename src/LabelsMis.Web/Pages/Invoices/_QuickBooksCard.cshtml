@@ -1,0 +1,214 @@
+@using LabelsMis.Domain.Enums
+@model LabelsMis.Web.Pages.Invoices.QuickBooksCardModel
+@{
+    var state = Model.State;
+    string Money(decimal value) => value.ToString("C2");
+}
+@* The QuickBooks card on the invoice page and (compact) on the preview page. *@
+<div class="card mb-2 @(Model.NeedsAttention ? "border-danger" : "")" id="qb-send-card">
+    <div class="card-header py-1 small fw-semibold d-flex justify-content-between align-items-center">
+        <span>QuickBooks</span>
+        @QuickBooksUi.Badge(Model.InvoiceId, state, "qb-send-status")
+    </div>
+    <div class="card-body py-2 small">
+        @if (Model.Busy)
+        {
+            <div hidden data-qb-status-url="@Url.Page("/Invoices/Index", "QuickBooksStates")"
+                 data-qb-reload-on-settle="true" data-qb-interval="@QuickBooksUi.PollIntervalMs"></div>
+        }
+        <div class="alert alert-info py-1 px-2 mb-2 d-none" data-qb-settled-notice>
+            QuickBooks has answered. <a href="" id="qb-settled-refresh">Refresh</a> to see it.
+        </div>
+        @if (TempData[QuickBooksUi.MessageKey] is string qbMessage)
+        {
+            <div class="alert alert-success py-1 px-2 mb-2" id="qb-card-message">@qbMessage</div>
+        }
+        @if (TempData[QuickBooksUi.ErrorKey] is string qbError)
+        {
+            <div class="alert alert-danger py-1 px-2 mb-2" id="qb-card-error">@qbError</div>
+        }
+
+        @if (!Model.Connected && !Model.InQuickBooks)
+        {
+            <div class="text-muted mb-1" id="qb-card-not-connected">
+                @if (Model.Connection == QuickBooksConnectionState.NeedsReconnect)
+                {
+                    <span>QuickBooks has to be connected again before LabelShop can send this invoice.</span>
+                }
+                else
+                {
+                    <span>QuickBooks is not connected, so LabelShop does not send invoices.</span>
+                }
+                @if (Model.CanEdit)
+                {
+                    <a asp-page="/Settings/QuickBooks">Setup → QuickBooks</a>
+                }
+            </div>
+        }
+
+        @if (state?.QuickBooksInvoiceId is { } qbId)
+        {
+            <div class="d-flex justify-content-between align-items-baseline" id="qb-card-number">
+                <span>
+                    QuickBooks invoice <strong>@Model.InvoiceNumber</strong>
+                    <span class="text-muted">(id @qbId)</span>
+                </span>
+                @if (state.OpenInQuickBooksUrl is { } openUrl)
+                {
+                    <a href="@openUrl" target="_blank" rel="noopener" id="qb-open-link">Open in QuickBooks</a>
+                }
+            </div>
+            @if (Model.VoidedInQuickBooks)
+            {
+                <div class="text-muted">Void in QuickBooks too.</div>
+            }
+            @if (state.QuickBooksTotal is not null || state.QuickBooksTax is not null)
+            {
+                <table class="table table-sm small mb-1 mt-1" id="qb-card-totals">
+                    <thead><tr><th></th><th class="text-end">LabelShop</th><th class="text-end">QuickBooks</th></tr></thead>
+                    <tbody>
+                        <tr class="@(Model.TaxDifference is { } taxDiff && taxDiff != 0 ? "table-warning" : "")">
+                            <td>Tax</td>
+                            <td class="text-end">@Money(Model.LabelShopTax)</td>
+                            <td class="text-end">@(state.QuickBooksTax is { } qbTax ? Money(qbTax) : "—")</td>
+                        </tr>
+                        <tr class="fw-semibold @(Model.TotalDifference is { } totalDiff && totalDiff != 0 ? "table-warning" : "")">
+                            <td>Total</td>
+                            <td class="text-end">@Money(Model.LabelShopTotal)</td>
+                            <td class="text-end">@(state.QuickBooksTotal is { } qbTotal ? Money(qbTotal) : "—")</td>
+                        </tr>
+                    </tbody>
+                </table>
+                @if (Model.TotalDifference is { } difference && difference != 0)
+                {
+                    <div class="text-warning-emphasis mb-1" id="qb-card-difference">
+                        QuickBooks' total is @Money(Math.Abs(difference)) @(difference > 0 ? "more" : "less") than LabelShop's.
+                        QuickBooks works out the tax itself, so check the tax first.
+                    </div>
+                }
+            }
+        }
+        else if (Model.ExportedByHand)
+        {
+            <div class="text-muted mb-1" id="qb-card-by-hand">
+                Marked exported by hand. LabelShop doesn't know the QuickBooks copy yet.
+            </div>
+        }
+
+        @switch (Model.Status)
+        {
+            case QuickBooksExportStatus.Queued:
+                <div id="qb-card-queued">
+                    In line to go to QuickBooks.
+                    @if (state?.NextAttemptAt is { } nextAt)
+                    {
+                        <span>Next try after @Model.Local(nextAt).</span>
+                    }
+                </div>
+                @if (state?.LastError is { } queuedError)
+                {
+                    <div class="text-muted">Last try: @queuedError</div>
+                }
+                break;
+            case QuickBooksExportStatus.Sending:
+                <div id="qb-card-sending">Sending to QuickBooks now…</div>
+                break;
+            case QuickBooksExportStatus.NeedsAttention:
+                <div class="alert alert-danger py-1 px-2 mb-1" id="qb-card-problem">
+                    @(state?.LastError ?? "QuickBooks did not accept this invoice.")
+                    @if (state?.FixUrl is { } fixUrl)
+                    {
+                        <div><a href="@fixUrl" class="alert-link" id="qb-card-fix">Fix it</a></div>
+                    }
+                </div>
+                break;
+        }
+        @if (state is { AttemptCount: > 0, LastAttemptAt: { } lastAt })
+        {
+            <div class="text-muted">
+                @(state.AttemptCount == 1 ? "Tried once" : $"Tried {state.AttemptCount} times"), last @Model.Local(lastAt).
+            </div>
+        }
+
+        @if (Model.CanSend || Model.CanVoidInQuickBooks || Model.CanRetry || Model.CanCancel)
+        {
+            <div class="d-flex flex-wrap gap-2 mt-2">
+                @if (Model.CanSend)
+                {
+                    <form method="post" asp-page-handler="QbSend" asp-route-id="@Model.InvoiceId" class="m-0">
+                        <button type="submit" class="btn btn-sm btn-primary" id="qb-send" disabled="@Model.SendBlocked">Send to QuickBooks</button>
+                    </form>
+                }
+                @if (Model.CanVoidInQuickBooks)
+                {
+                    <form method="post" asp-page-handler="QbSend" asp-route-id="@Model.InvoiceId" class="m-0">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" id="qb-void">Void it in QuickBooks</button>
+                    </form>
+                }
+                @if (Model.CanRetry)
+                {
+                    <form method="post" asp-page-handler="QbRetry" asp-route-id="@Model.InvoiceId" class="m-0">
+                        <button type="submit" class="btn btn-sm btn-primary" id="qb-retry">Retry</button>
+                    </form>
+                }
+                @if (Model.CanCancel)
+                {
+                    <form method="post" asp-page-handler="QbCancel" asp-route-id="@Model.InvoiceId" class="m-0"
+                          onsubmit="@(Model.NeedsAttention ? "return confirm('Take this invoice off Needs attention? Do this once it is right in QuickBooks, or does not need to be there.');" : "return true;")">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" id="qb-cancel">
+                            @(Model.NeedsAttention ? "Settled by hand" : "Take out of line")
+                        </button>
+                    </form>
+                }
+            </div>
+            @if (Model.CanSend && Model.SendBlocked)
+            {
+                <div class="text-muted mt-1" id="qb-send-blocked">Not ready yet: see what it is waiting for.</div>
+            }
+        }
+
+        @if (Model.CanLinkExisting)
+        {
+            <form method="post" asp-page-handler="QbLink" asp-route-id="@Model.InvoiceId" class="border-top mt-2 pt-2" id="qb-link-form">
+                <div class="mb-1">
+                    @(Model.ExportedByHand ? "Keyed in by hand?" : "Already in QuickBooks?")
+                    LabelShop looks for a QuickBooks invoice numbered <strong>@Model.InvoiceNumber</strong> and links to it,
+                    so it is never created twice.
+                </div>
+                <button type="submit" class="btn btn-sm btn-outline-secondary" id="qb-link">Link it</button>
+            </form>
+        }
+
+        @if (Model.CanSetSendOptions)
+        {
+            <form method="post" asp-page-handler="QbSendOptions" asp-route-id="@Model.InvoiceId" class="border-top mt-2 pt-2" id="qb-send-options">
+                <div class="form-check mb-1">
+                    <input class="form-check-input" type="checkbox" name="holdSend" value="true" id="qb-hold-send"
+                           checked="@(state?.HoldSend == true)" />
+                    <label class="form-check-label" for="qb-hold-send">Don't email this one</label>
+                    <div class="form-text mt-0">QuickBooks gets the invoice; nobody is emailed it.</div>
+                </div>
+                <label class="form-label mb-0" for="qb-send-to">Email to instead</label>
+                <div class="input-group input-group-sm">
+                    <input type="email" class="form-control" name="sendToOverride" id="qb-send-to" maxlength="200"
+                           value="@state?.SendToOverride" placeholder="the customer's billing email" />
+                    <button type="submit" class="btn btn-outline-secondary" id="qb-send-options-save">Save</button>
+                </div>
+                <div class="form-text mt-0">For this invoice only. Leave it blank to use the customer's billing email.</div>
+            </form>
+        }
+        else if (state is { HoldSend: true } || !string.IsNullOrWhiteSpace(state?.SendToOverride))
+        {
+            <div class="border-top mt-2 pt-2 text-muted" id="qb-send-options-summary">
+                @if (state!.HoldSend)
+                {
+                    <div>Not emailed from QuickBooks (held).</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(state.SendToOverride))
+                {
+                    <div>Emailed to @state.SendToOverride instead of the billing email.</div>
+                }
+            </div>
+        }
+    </div>
+</div>

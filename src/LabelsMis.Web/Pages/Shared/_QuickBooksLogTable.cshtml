@@ -1,0 +1,77 @@
+@using LabelsMis.Domain.QuickBooks
+@model LabelsMis.Web.Pages.Shared.QuickBooksLogTableModel
+@* One row per attempt LabelShop made against QuickBooks. Used by Setup → QuickBooks → Activity
+   log and by an invoice's QuickBooks history. *@
+<div class="table-responsive">
+    <table class="table table-sm align-middle @(Model.ShowInvoice ? "" : "mb-0")" id="@Model.TableId">
+        <thead>
+            <tr>
+                <th>When</th>
+                <th>What</th>
+                <th>Result</th>
+                <th>Details</th>
+                @if (Model.ShowInvoice)
+                {
+                    <th>Invoice</th>
+                }
+                <th>By</th>
+                <th class="text-end">Took</th>
+                <th>Intuit trace id</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Model.Rows)
+            {
+                <tr class="@(row.Succeeded ? "" : "table-danger")">
+                    <td class="text-nowrap">@Model.Local(row.OccurredAt)</td>
+                    <td>@QuickBooksOperations.Describe(row.Operation)</td>
+                    <td>
+                        @if (row.Succeeded)
+                        {
+                            <span class="badge text-bg-success">OK</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-danger">Failed</span>
+                        }
+                    </td>
+                    <td class="small">
+                        @{
+                            var bits = new List<string>();
+                            if (row.ErrorCode is not null)
+                            {
+                                bits.Add($"code {row.ErrorCode}");
+                            }
+
+                            if (row.HttpStatus is not null && !row.Succeeded)
+                            {
+                                bits.Add($"HTTP {row.HttpStatus}");
+                            }
+                        }
+                        @row.Message
+                        @if (bits.Count > 0)
+                        {
+                            <span class="text-muted">(@string.Join(", ", bits))</span>
+                        }
+                        @if (row.QuickBooksId is not null)
+                        {
+                            <span class="text-muted">QuickBooks id @row.QuickBooksId</span>
+                        }
+                    </td>
+                    @if (Model.ShowInvoice)
+                    {
+                        <td>
+                            @if (row.InvoiceId is not null)
+                            {
+                                <a asp-page="/Invoices/Detail" asp-route-id="@row.InvoiceId">@(row.InvoiceNumber ?? "invoice")</a>
+                            }
+                        </td>
+                    }
+                    <td class="small">@(row.Automatic ? "automatic" : row.Who)</td>
+                    <td class="text-end small text-nowrap">@(row.DurationMs is null ? "" : $"{row.DurationMs} ms")</td>
+                    <td class="small font-monospace">@row.IntuitTid</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

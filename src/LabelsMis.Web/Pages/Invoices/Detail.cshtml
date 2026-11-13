@@ -120,6 +120,22 @@
                 </div>
             }
         </div>
+
+        @if (Model.QuickBooksHistory.Count > 0)
+        {
+            <div class="card mt-2" id="qb-history-card">
+                <div class="card-header py-1 small fw-semibold d-flex justify-content-between">
+                    <span>QuickBooks history</span>
+                    <a asp-page="/Settings/QuickBooksLog" class="fw-normal">Full activity log</a>
+                </div>
+                @await Html.PartialAsync("Shared/_QuickBooksLogTable",
+                    new QuickBooksLogTableModel(Model.QuickBooksHistory, Model.Local, ShowInvoice: false, TableId: "qb-history-table"))
+                @if (Model.QuickBooksHistory.Count >= DetailModel.QuickBooksHistorySize)
+                {
+                    <div class="card-body py-1 small text-muted">The latest @DetailModel.QuickBooksHistorySize entries.</div>
+                }
+            </div>
+        }
     </div>
 
     <div class="col-lg-4">
@@ -177,7 +193,7 @@
         {
             <div class="card mb-2 @(Model.WaitingReasons.Count == 0 ? "border-success" : "border-warning")" id="qb-readiness-card">
                 <div class="card-header py-1 small fw-semibold d-flex justify-content-between">
-                    <span>QuickBooks</span>
+                    <span>Ready for QuickBooks?</span>
                     @if (Model.WaitingReasons.Count == 0)
                     {
                         <span class="badge text-bg-success" id="qb-readiness">Ready</span>
@@ -207,6 +223,11 @@
                     }
                 </div>
             </div>
+        }
+
+        @if (Model.QuickBooksCard is { } qbCard && (!qbCard.NonBillable || qbCard.State?.Label is not null))
+        {
+            <partial name="_QuickBooksCard" model="qbCard" />
         }
 
         <div class="card mb-2">
@@ -296,3 +317,7 @@
         }
     </div>
 </div>
+
+@section Scripts {
+    <script src="~/js/invoice-quickbooks-status.js" asp-append-version="true"></script>
+}
