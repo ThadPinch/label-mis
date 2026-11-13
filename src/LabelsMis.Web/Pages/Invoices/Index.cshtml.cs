@@ -140,6 +140,21 @@ public class IndexModel(
         return new PagedResult<InvoiceListItem>(rows, page, PageSize, total);
     }
 
+    /// <summary>Live statuses for the badges on the invoice pages: the QuickBooks state of each
+    /// invoice asked about (at most <see cref="QuickBooksUi.MaxPollIds"/>). Polled by
+    /// <c>invoice-quickbooks-status.js</c> every few seconds while any badge is busy.</summary>
+    public async Task<IActionResult> OnGetQuickBooksStatesAsync(List<Guid> ids, CancellationToken cancellationToken)
+    {
+        var asked = ids.Distinct().Take(QuickBooksUi.MaxPollIds).ToList();
+        if (asked.Count == 0)
+        {
+            return new JsonResult(Array.Empty<QuickBooksStateJson>());
+        }
+
+        var states = await quickBooksSend.GetStatesAsync(asked, cancellationToken);
+        return new JsonResult(states.Select(QuickBooksUi.ToJson).ToList());
+    }
+
     /// <summary>Puts the ticked Ready invoices in line for QuickBooks; the flash message says
     /// which went and why any didn't.</summary>
     public async Task<IActionResult> OnPostSendSelectedAsync(List<Guid> selectedIds, CancellationToken cancellationToken)

@@ -324,6 +324,18 @@
     Extra = route
 })
 
+@if (Model.ShowQuickBooksColumn)
+{
+    <div id="qb-status-poll" hidden
+         data-qb-status-url="@Url.Page("/Invoices/Index", "QuickBooksStates")"
+         data-qb-tab="@(Model.OnReadyTab ? IndexModel.ReadyTab : Model.Tab)"
+         data-qb-interval="@QuickBooksUi.PollIntervalMs"></div>
+}
+
+@section Scripts {
+    <script src="~/js/invoice-quickbooks-status.js" asp-append-version="true"></script>
+}
+
 @if (showCheckboxes)
 {
     <script>
