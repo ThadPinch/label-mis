@@ -380,6 +380,20 @@ public class QuickBooksCustomerServiceTests : QuickBooksTestHost
     }
 
     [Fact]
+    public async Task CountUnlinkedAsync_CountsActiveCustomersWithNoLinkAndAsksQuickBooksNothing()
+    {
+        var before = await WithServiceAsync(s => s.CountUnlinkedAsync());
+        await SeedCustomerAsync($"Count unlinked {_suffix}");
+        await SeedCustomerAsync($"Count linked {_suffix}", QbId(1));
+        await SeedCustomerAsync($"Count inactive {_suffix}", active: false);
+
+        var after = await WithServiceAsync(s => s.CountUnlinkedAsync());
+
+        after.Should().Be(before + 1);
+        Api.Queries.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task LinkAllAsync_LinksTheConfirmedPairsAndNamesTheOnesItSkipped()
     {
         await ConnectAsync();

@@ -82,6 +82,10 @@ public class QuickBooksCustomerService(
         return new QuickBooksCustomerAvailability(problem is null, connection.Environment, problem);
     }
 
+    /// <summary>Active LabelShop customers with no QuickBooks link. Asks QuickBooks nothing.</summary>
+    public Task<int> CountUnlinkedAsync(CancellationToken cancellationToken = default) =>
+        _db.Customers.AsNoTracking().CountAsync(c => c.IsActive && c.QuickBooksCustomerId == null, cancellationToken);
+
     /// <summary>Active QuickBooks customers whose display name contains <paramref name="text"/>,
     /// at most <see cref="QuickBooksCustomerQueries.SearchLimit"/>, sorted by name.</summary>
     public async Task<IReadOnlyList<QuickBooksCustomerSummary>> SearchAsync(
