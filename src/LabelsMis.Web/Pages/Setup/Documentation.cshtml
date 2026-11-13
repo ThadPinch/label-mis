@@ -47,8 +47,8 @@
             <section class="docs-section" id="whats-new-november">
                 <h2 class="docs-section-title">What's new — November 2026</h2>
                 <p>
-                    Invoices now get ready for QuickBooks on their own as orders ship. LabelShop doesn't send them
-                    to QuickBooks yet: Accounting keys each Ready invoice in from its <strong>QB preview</strong>.
+                    Invoices now get ready for QuickBooks on their own as orders ship, and LabelShop sends them
+                    straight into QuickBooks: tick Ready invoices and press <strong>Send to QuickBooks</strong>.
                     See <a href="#invoicing">Invoicing</a> and <a href="#shipping">Shipping</a>.
                 </p>
 
@@ -63,7 +63,9 @@
                 <ul class="docs-list">
                     <li><strong>Ready to export / Waiting / Exported / closed</strong> tabs. An invoice is Ready once its order has shipped and nothing blocks it; Waiting lists the reasons (not shipped yet, $0 total, carrier cost pending, customer not set up).</li>
                     <li><strong>QB preview</strong> — each invoice laid out like the QuickBooks invoice form (items, classes, bill-to / ship-to, terms) with copy buttons, then <strong>Mark exported to QuickBooks</strong>.</li>
-                    <li><strong>QuickBooks connection (being set up)</strong> — <a asp-page="/Settings/QuickBooks">Setup → QuickBooks</a> has a new <strong>Connection</strong> card that links LabelShop to the QuickBooks company, checks the company's settings and keeps an activity log. Nothing is sent to QuickBooks yet, so keep moving invoices across as before.</li>
+                    <li><strong>Send to QuickBooks</strong> — with QuickBooks connected (<a asp-page="/Settings/QuickBooks">Setup → QuickBooks</a>), Ready invoices go into QuickBooks from the Invoices page or the invoice's own page. The QuickBooks column shows each one's progress; anything QuickBooks turns down lands on a new <strong>Needs attention</strong> tab with the reason and a <em>Fix it</em> link.</li>
+                    <li><strong>QuickBooks lists</strong> — Setup → QuickBooks reads the company's products and services, classes and payment terms, so the mapping is picked from QuickBooks' own names. It also sets the QuickBooks term for each LabelShop term, the PO number field, and what happens to the invoice email.</li>
+                    <li><strong>Customers linked to QuickBooks</strong> — search QuickBooks and link, or create the customer in QuickBooks, from the customer's page; <strong>Customers → Match QuickBooks customers</strong> links many at once.</li>
                     <li><strong>Shipping is billed from the shipments</strong> — no more unlocking the order to type it in: pickup and customer account $0, local delivery a flat fee, carrier shipments the carrier cost × a multiplier (General settings).</li>
                     <li><strong>Bill before shipping</strong> for deposits and prepay, and <strong>Non-billable</strong> for $0 samples.</li>
                     <li><strong>Customer set-up for billing</strong> — <strong>Tax setup complete</strong> (the new-client form is back) and a <strong>Billing</strong> tick on the contact who receives invoices (the primary contact stands in when none is ticked). The Billing tick replaces typing "Billing" into a contact's role.</li>
@@ -194,7 +196,8 @@
                     <li>Assign a <strong>sales rep</strong> and primary <strong>contact</strong> when applicable.</li>
                     <li>Tick <strong>Billing</strong> on the contact who receives invoices (accounts payable). When no contact is ticked, invoices go to the <strong>primary</strong> contact. A contact's <strong>role</strong> is only a label.</li>
                     <li>Tick <strong>Tax setup complete</strong> once the new-client (tax / resale) form is back. Until then the customer's invoices wait on "Waiting on new-client form".</li>
-                    <li>The <strong>QuickBooks customer ID</strong> is shown on each invoice's QB preview to help find the customer in QuickBooks; nothing checks it against QuickBooks.</li>
+                    <li><strong>Link the customer to QuickBooks</strong> before its first invoice is sent: in the customer's <strong>QuickBooks</strong> box, <strong>Search QuickBooks</strong> and <strong>Link</strong> the right one, or <strong>Create in QuickBooks</strong> (it uses the saved name, billing email, phone and addresses; clicking twice does not make two). If QuickBooks already has the name, LabelShop offers to link that customer instead. <strong>Unlink</strong> changes nothing in QuickBooks. Terms and tax status are not sent; set tax up in QuickBooks from the new-client form.</li>
+                    <li><strong>Customers → Match QuickBooks customers</strong> lists active customers not yet linked. A customer whose name matches exactly one QuickBooks customer (ignoring case, spaces and punctuation) is ticked: check the ticks and press <strong>Link all ticked matches</strong>. For the rest, pick a suggestion, type the QuickBooks name, or Create in QuickBooks.</li>
                 </ul>
 
                 <h3 class="docs-subtitle">Usage</h3>
@@ -560,9 +563,8 @@
                 </div>
                 <p>
                     Every sales order gets a <strong>draft invoice</strong> when it is created. The draft follows the
-                    order: price edits rebuild it, and its shipping follows the order's recorded shipments. LabelShop
-                    does not send invoices to QuickBooks yet, even when Setup, QuickBooks says Connected — Accounting keys each
-                    invoice into QuickBooks by hand, then marks it exported.
+                    order: price edits rebuild it, and its shipping follows the order's recorded shipments. Once it is
+                    Ready, Accounting sends it into QuickBooks with <strong>Send to QuickBooks</strong>.
                 </p>
 
                 <h3 class="docs-subtitle">Ready to export vs Waiting</h3>
@@ -575,18 +577,21 @@
                 </ul>
                 <p>Anything else is on <strong>Waiting</strong>, with each reason listed and what to do about it.</p>
 
-                <h3 class="docs-subtitle">Moving an invoice into QuickBooks</h3>
+                <h3 class="docs-subtitle">Sending invoices to QuickBooks</h3>
                 <ol class="docs-list docs-list--ordered">
-                    <li>On <strong>Ready to export</strong>, open an invoice's <strong>QB preview</strong>. It is laid out like the QuickBooks invoice form — customer, billing email, terms, bill-to / ship-to, P.O., each line with its QuickBooks item and class, and the shipping line — with copy buttons. Fix an item or class from its dropdown.</li>
-                    <li>Key the invoice into QuickBooks, then click <strong>Mark exported to QuickBooks</strong>.</li>
-                    <li>Tick several Ready invoices and <strong>Mark selected as exported</strong> to close them in one go (who and when are recorded); <strong>Unmark exported</strong> on the Exported / closed tab reverses a mistake.</li>
-                    <li><strong>Download CSV</strong> gives a list of the ticked invoices for your own records and marks them exported. QuickBooks' importer does not accept the file, so it does not put anything into QuickBooks.</li>
-                    <li>An invoice already keyed into QuickBooks that is still on Waiting can be closed from its QB preview with <strong>Mark exported anyway</strong>.</li>
+                    <li>On <strong>Ready to export</strong>, tick invoices and press <strong>Send to QuickBooks</strong> (or <strong>Send</strong> on an invoice's own page or its QB preview). Each one is created in QuickBooks within a minute or so; the QuickBooks column shows <em>Queued</em>, <em>Sending</em>, then <em>In QuickBooks</em>, and sent invoices move to <strong>Exported / closed</strong>.</li>
+                    <li>Before creating an invoice LabelShop looks for its number in QuickBooks, so an invoice is never created twice. One keyed in by hand earlier is linked instead; <strong>Already in QuickBooks? Link it</strong> on the invoice page does the same on demand.</li>
+                    <li>Anything QuickBooks turns down goes to <strong>Needs attention</strong> with the reason in plain words and a <em>Fix it</em> link. Fix it, then press <strong>Retry</strong> — or <strong>Settled by hand</strong> if you sorted it out in QuickBooks yourself. When QuickBooks is busy or can't be reached, LabelShop tries again by itself after 1, 5, 15 and 60 minutes before asking.</li>
+                    <li>The invoice page's <strong>QuickBooks</strong> card shows the QuickBooks number with <strong>Open in QuickBooks</strong>, QuickBooks' total and tax beside LabelShop's (QuickBooks works out the tax itself, so a difference there is the first thing to check), and the invoice's QuickBooks history.</li>
+                    <li><strong>Email</strong>: Setup → QuickBooks decides what happens to the invoice email — mark it "send later" in QuickBooks (the default), don't send, or email it from QuickBooks straight away. On one invoice, <strong>Don't email this one</strong> or <strong>Email to instead</strong> overrides that.</li>
+                    <li><strong>Changing an invoice already in QuickBooks</strong>: <strong>Unmark exported</strong> on the Exported / closed tab, make the change, then send it again — the same QuickBooks invoice is updated, not a new one made. <strong>Voiding</strong> an invoice in LabelShop voids it in QuickBooks too, unless QuickBooks shows a payment on it (then it lands on Needs attention). Nothing is ever deleted in QuickBooks.</li>
+                    <li><strong>Mark exported to QuickBooks</strong> (and <strong>Mark selected as exported</strong>) are still there for invoices keyed in by hand; <strong>Download CSV</strong> is only a list for your own records — QuickBooks' importer does not accept it.</li>
                 </ol>
 
                 <h3 class="docs-subtitle">Usage</h3>
                 <ul class="docs-list">
-                    <li>QuickBooks item names, class names and the charge keywords are set on <a asp-page="/Settings/QuickBooks">Setup → QuickBooks</a>.</li>
+                    <li>QuickBooks item names, class names and the charge keywords are set on <a asp-page="/Settings/QuickBooks">Setup → QuickBooks</a>. <strong>Refresh the lists from QuickBooks</strong> reads the company's products and services, classes and payment terms; the boxes then pick from those lists. A name QuickBooks doesn't have is flagged <em>Not in QuickBooks</em>, and invoices using it can't be sent until it is fixed. Refresh after adding or renaming anything in QuickBooks.</li>
+                    <li><strong>Sending invoices</strong> on the same page: the QuickBooks term for each LabelShop term (the due date is always sent), and what happens to the invoice email. <strong>Find the PO field</strong> looks at recent QuickBooks invoices for the PO custom field — pick it with <strong>Use this field</strong>. If nothing is found, fill the PO box in by hand on one invoice in QuickBooks, then try again.</li>
                     <li>The <strong>Connection</strong> card at the top of that page links LabelShop to the QuickBooks company (Admin or Accounting; the person connecting must be an admin in QuickBooks too). Connecting sends nothing by itself, and <strong>Activity log</strong> lists every call LabelShop makes to QuickBooks.</li>
                     <li>Due date is calculated from the customer's payment <strong>terms</strong>; tax is applied at the configured rate unless the customer is <strong>tax exempt</strong>.</li>
                     <li>Record <strong>payments</strong> and <strong>void</strong> invoices from the invoice detail page.</li>

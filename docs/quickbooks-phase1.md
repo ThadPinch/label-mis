@@ -125,9 +125,57 @@ URLs, which carry company ids and query text.
 | Pages | `Pages/Settings/QuickBooks`, `Pages/Settings/QuickBooksLog`, `Pages/QuickBooks/Callback` |
 | Public pages | `Pages/Legal/Terms`, `Pages/Legal/Privacy`, `Pages/QuickBooks/Disconnected` |
 | Reconnect banner | `ViewComponents/QuickBooksAlertViewComponent.cs` |
+| Invoice payload, shop-language errors | `Domain/QuickBooks/QuickBooksInvoicePayload*.cs`, `QuickBooksErrorMessages.cs` |
+| Send one invoice (look up, create / update / void, email, record) | `Web/Services/QuickBooks/QuickBooksInvoiceSender.cs` |
+| Queue, retry, cancel, send options, states, link existing | `Web/Services/QuickBooks/QuickBooksSendService.cs` |
+| Background sender | `Web/Background/QuickBooksSendWorker.cs` |
+| Lists cache and refresh, PO field finder | `Web/Services/QuickBooks/QuickBooksCatalogService.cs`; parsers `Domain/QuickBooks/QuickBooksCatalog.cs`, `QuickBooksCustomFields.cs`, `QuickBooksTermsMatcher.cs`, `QuickBooksMappingCheck.cs` |
+| Customers: search, link, create, match | `Web/Services/QuickBooks/QuickBooksCustomerService.cs`, `Domain/QuickBooks/QuickBooksCustomers.cs`, `Pages/Customers/QuickBooks` |
+| Pages | `Pages/Settings/_QuickBooksLists`, `_QuickBooksSending`, `_QuickBooksNamePicker`; `Pages/Invoices/_QuickBooksCard`; `wwwroot/js/invoice-quickbooks-status.js` |
 
 New code calls QuickBooks through `QuickBooksGateway`, not through `IQuickBooksApiClient` directly: the gateway is
 what supplies the token and writes the log row.
+
+## Sending invoices (Q9-Q21, built 2026-11-13)
+
+- **Queue = the invoice rows.** `Invoice.QbExportStatus` None → Queued → Sending → None (in QuickBooks) or
+  NeedsAttention. Only Ready invoices queue (no waiting reasons), plus void invoices that are in QuickBooks and not
+  yet voided there. The worker polls every 5 s, does nothing while QuickBooks isn't connected, claims one row at a
+  time with `FOR UPDATE SKIP LOCKED` (oldest `QbQueuedAt` first, honouring `QbNextAttemptAt`) and acts as the person
+  who queued it. On start it puts any `Sending` row back in line.
+- **One send:** build the payload (names → ids through the cached lists; anything unresolvable stops it with a fix
+  link) → look the number up (`DocNumber`) → link if found for the same customer, create if not, sparse update with
+  the current `SyncToken` when the invoice already has a QuickBooks id, void (`operation=void`) for a void invoice →
+  `invoice/{id}/send` for "email straight away" → record QuickBooks' id, sync token, total and tax.
+- **No duplicates:** the lookup before every create, error 6140 handled as "look up and link", and a `requestid` that
+  is a hash of the invoice id and payload.
+- **Retries:** 429, 5xx, timeouts and network errors wait 1, 5, 15 and 60 minutes, then need attention. 5010 (stale
+  token) re-reads and retries once. Validation faults need attention at once, in shop words (`QuickBooksErrorMessages`).
+- **Void:** voiding in LabelShop queues the QuickBooks void; refused (needs attention) when QuickBooks shows a payment.
+  Nothing is ever deleted.
+- **Change after export:** Unmark exported keeps the QuickBooks id, so the next send updates the same invoice.
+- **Payload rules:** `DocNumber`, `TxnDate`, `DueDate` always; `SalesTermRef` only when the terms map names a term the
+  lists have; lines carry `ItemRef`, `ClassRef`, `TaxCodeRef` TAX/NON from the item's own taxable flag; Qty +
+  UnitPrice only when Qty × UnitPrice rounded half up equals the line amount, else Qty + Amount; shipping as a line
+  with the Shipping item; never a tax amount; `BillEmail` always (the per-invoice address wins); `EmailStatus`
+  NeedToSend for "send later"; the PO number as the chosen custom field.
+- **Shipment-born invoices** send the ordered quantity with LabelShop's billed amount and no rate, so QuickBooks'
+  total matches LabelShop's.
+
+### Checked against Intuit's sandbox (2026-11-13)
+
+Local build, sandbox company "Sandbox Company US ef89". Scripts and output: `smoke/2026-11-13-qbo-push/` (outside the repo).
+
+- Refresh the lists read 18 products and services, 2 classes and 5 terms; Find the PO field found "P.O. Number"
+  (`1000000001`); the seven terms auto-matched four QuickBooks terms.
+- Match customers created five customers in QuickBooks (ids 59-63) and linked them.
+- 25 Ready invoices queued with Send to QuickBooks. The app was killed (`SIGKILL`) with 9 sent and one mid-send;
+  after the restart all 25 were in QuickBooks, 25 numbers, no duplicates, each `EmailStatus` NeedToSend.
+- A customer linked to a hand-typed id QuickBooks rejects (error 2090) went to Needs attention.
+- Voiding a sent invoice voided it in QuickBooks; unmark → change shipping → send updated the same QuickBooks invoice
+  (sync token 0 → 1, total 480.00 → 492.34).
+- Not yet run: "email straight away" (`invoice/{id}/send`), voiding an invoice that has a payment, and the real
+  company (tax on a company with automated sales tax).
 
 ## Checked against Intuit's sandbox (2026-11-11)
 
