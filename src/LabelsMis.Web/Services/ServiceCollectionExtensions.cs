@@ -78,6 +78,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Services.QuickBooks.QuickBooksSyncLogger>();
         services.AddSingleton<Services.QuickBooks.QuickBooksTokenService>();
         services.AddScoped<Services.QuickBooks.QuickBooksGateway>();
+
+        // QuickBooks: sending invoices (queue, worker, payload).
+        services.AddScoped<Services.QuickBooks.QuickBooksSendService>();
+
+        // QuickBooks: lists, mapping and terms.
+        services.AddScoped<Services.QuickBooks.QuickBooksCatalogService>();
+
+        // QuickBooks: customers.
+        services.AddScoped<Services.QuickBooks.QuickBooksCustomerService>();
+
         services.AddScoped<ArtworkService>();
         services.AddScoped<Pdfs.TempPdfStorage>();
         services.AddScoped<Dashboard.DashboardService>();
