@@ -1,0 +1,130 @@
+@model LabelsMis.Web.Pages.Customers.QuickBooksCustomerBox
+@*
+    The box sits inside the customer form, so its buttons and search box belong to the two small
+    forms Edit.cshtml puts after the main one (form="qb-action-form" / form="qb-search-form"):
+    linking never posts, or loses, the rest of the form.
+*@
+<div class="col-12" id="quickbooks">
+    <div class="border rounded p-3 bg-body-tertiary">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <h3 class="h6 mb-0 me-auto">QuickBooks</h3>
+            @if (Model.IsLinked)
+            {
+                <span>
+                    Linked to
+                    @if (Model.LinkedName is not null)
+                    {
+                        <strong>@Model.LinkedName</strong>
+                    }
+                    <span class="text-muted">(QuickBooks id @Model.LinkedId@(Model.LinkedName is null ? ", typed by hand" : ""))</span>
+                </span>
+                @if (Model.OpenUrl is not null)
+                {
+                    <a href="@Model.OpenUrl" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">Open in QuickBooks</a>
+                }
+                @if (Model.CanEdit)
+                {
+                    <button type="submit" form="qb-action-form" asp-page-handler="QbUnlink" asp-route-id="@Model.CustomerId"
+                            class="btn btn-sm btn-outline-danger"
+                            onclick="return confirm('Unlink this customer from QuickBooks? Nothing changes in QuickBooks.');">Unlink</button>
+                }
+            }
+            else
+            {
+                <span class="text-muted">Not linked to a QuickBooks customer.</span>
+            }
+        </div>
+
+        @if (Model.Message is not null)
+        {
+            <div class="alert alert-success py-2 small mb-2">@Model.Message</div>
+        }
+        @if (Model.Error is not null)
+        {
+            <div class="alert alert-danger py-2 small mb-2">@Model.Error</div>
+        }
+
+        @if (!Model.Availability.Connected)
+        {
+            <p class="small text-muted mb-0">
+                @Model.Availability.Problem Searching, linking and creating customers in QuickBooks work while it is connected.
+            </p>
+        }
+        else if (Model.CanEdit)
+        {
+            @if (Model.DuplicateId is not null)
+            {
+                <div class="alert alert-warning py-2 small mb-2 d-flex flex-wrap align-items-center gap-2">
+                    <span class="me-auto">QuickBooks already has a customer named <strong>@Model.DuplicateName</strong>. Is it this customer?</span>
+                    <button type="submit" form="qb-action-form" asp-page-handler="QbLink" asp-route-id="@Model.CustomerId"
+                            asp-route-qbId="@Model.DuplicateId" class="btn btn-sm btn-primary">Link to it</button>
+                </div>
+            }
+
+            <div class="d-flex flex-wrap gap-2">
+                <input type="search" name="qbSearch" form="qb-search-form" value="@Model.SearchText" class="form-control form-control-sm"
+                       style="max-width: 22rem" placeholder="Part of the customer's name in QuickBooks" aria-label="Search QuickBooks customers" />
+                <button type="submit" form="qb-search-form" class="btn btn-sm btn-outline-primary">Search QuickBooks</button>
+                @if (!Model.IsLinked)
+                {
+                    <button type="submit" form="qb-action-form" asp-page-handler="QbCreate" asp-route-id="@Model.CustomerId"
+                            class="btn btn-sm btn-outline-success"
+                            title="Makes the customer in QuickBooks from what is saved here (name, billing email, phone, addresses) and links it">
+                        Create in QuickBooks
+                    </button>
+                }
+            </div>
+            <div class="form-text">
+                Create in QuickBooks uses the customer as saved: save your changes first.
+            </div>
+
+            @if (Model.SearchResults is { } results)
+            {
+                if (results.Count == 0)
+                {
+                    <p class="small text-muted mt-2 mb-0">No active QuickBooks customer has &ldquo;@Model.SearchText&rdquo; in its name.</p>
+                }
+                else
+                {
+                    <table class="table table-sm align-middle mt-2 mb-0 small">
+                        <thead>
+                            <tr><th>QuickBooks customer</th><th>Company</th><th>Email</th><th>Place</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var result in results)
+                        {
+                            <tr>
+                                <td>
+                                    @result.DisplayName
+                                    @if (result.IsSubCustomer && result.FullyQualifiedName is not null)
+                                    {
+                                        <div class="text-muted">Sub-customer: @result.FullyQualifiedName</div>
+                                    }
+                                </td>
+                                <td>@result.CompanyName</td>
+                                <td>@result.Email</td>
+                                <td>@result.Place</td>
+                                <td class="text-end">
+                                    @if (result.Id == Model.LinkedId)
+                                    {
+                                        <span class="badge text-bg-success">Linked</span>
+                                    }
+                                    else
+                                    {
+                                        <button type="submit" form="qb-action-form" asp-page-handler="QbLink" asp-route-id="@Model.CustomerId"
+                                                asp-route-qbId="@result.Id" class="btn btn-sm btn-outline-primary">Link</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                    @if (results.Count >= LabelsMis.Domain.QuickBooks.QuickBooksCustomerQueries.SearchLimit)
+                    {
+                        <p class="small text-muted mt-1 mb-0">Showing the first @results.Count. Type more of the name to narrow it down.</p>
+                    }
+                }
+            }
+        }
+    </div>
+</div>

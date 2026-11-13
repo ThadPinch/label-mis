@@ -20,6 +20,9 @@
         }
     }
 </form>
+@* The QuickBooks box's buttons and search box submit these two, not the customer form above. *@
+<form id="qb-action-form" method="post" class="d-none"></form>
+<form id="qb-search-form" method="get" action="#quickbooks" class="d-none"></form>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
