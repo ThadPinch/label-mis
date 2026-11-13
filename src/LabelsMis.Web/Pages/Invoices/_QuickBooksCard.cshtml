@@ -48,14 +48,14 @@
 
         @if (state?.QuickBooksInvoiceId is { } qbId)
         {
-            <div class="d-flex justify-content-between align-items-baseline" id="qb-card-number">
-                <span>
+            <div id="qb-card-number">
+                <div>
                     QuickBooks invoice <strong>@Model.InvoiceNumber</strong>
-                    <span class="text-muted">(id @qbId)</span>
-                </span>
+                    <span class="text-muted text-nowrap">(id @qbId)</span>
+                </div>
                 @if (state.OpenInQuickBooksUrl is { } openUrl)
                 {
-                    <a href="@openUrl" target="_blank" rel="noopener" id="qb-open-link">Open in QuickBooks</a>
+                    <a href="@openUrl" target="_blank" rel="noopener" id="qb-open-link">Open in QuickBooks ↗</a>
                 }
             </div>
             @if (Model.VoidedInQuickBooks)

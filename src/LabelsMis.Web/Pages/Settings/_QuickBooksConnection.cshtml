@@ -189,13 +189,17 @@
                         </tr>
                         <tr data-check="po-field">
                             <td>
-                                <span class="badge @(check.PoNumberField is not null ? "text-bg-success" : "text-bg-warning")">@(check.PoNumberField is not null ? "Found" : check.CustomFields.Count > 0 ? "Not found" : "Not listed")</span>
+                                <span class="badge @(check.PoNumberField is not null || Model.Push.PoFieldId is not null ? "text-bg-success" : "text-bg-warning")">@(check.PoNumberField is not null ? "Found" : Model.Push.PoFieldId is not null ? "Chosen" : check.CustomFields.Count > 0 ? "Not found" : "Not listed")</span>
                             </td>
                             <td>Custom field for the PO number</td>
                             <td class="small text-muted">
                                 @if (check.PoNumberField is { } po)
                                 {
                                     <text>"@po.Name" (custom field @po.DefinitionId).</text>
+                                }
+                                else if (Model.Push.PoFieldId is { } chosenId)
+                                {
+                                    <text>"@(Model.Push.PoFieldName ?? chosenId)" (custom field @chosenId), chosen under <a href="#qb-po-field">Customer's PO number</a> below.</text>
                                 }
                                 else if (check.CustomFields.Count > 0)
                                 {
