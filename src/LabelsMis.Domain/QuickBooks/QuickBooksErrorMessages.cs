@@ -75,6 +75,10 @@ public static class QuickBooksErrorMessages
             "2020" =>
                 $"QuickBooks says something it needs is missing from this invoice{Quote(detail)}. Check the invoice's "
                 + "QuickBooks preview, then retry.",
+            "2090" =>
+                $"A QuickBooks link on this invoice isn't a QuickBooks id{Quote(detail)}. It is usually the customer's "
+                + "QuickBooks link typed in by hand: open the customer, pick the QuickBooks customer with Search "
+                + "QuickBooks, then retry.",
             "2050" =>
                 $"Some text on this invoice is longer than QuickBooks allows{Quote(detail)}. It is usually the PO "
                 + "number or a line description: shorten it, then retry.",
@@ -127,7 +131,7 @@ public static class QuickBooksErrorMessages
     public static string? FixUrlFor(string? code, Guid invoiceId, Guid customerId) => code switch
     {
         "610" or "2500" or "3200" or "3100" or "401" or "403" or Lists or Item or Class => QuickBooksFixLinks.Settings,
-        "6240" or Customer or Email => QuickBooksFixLinks.Customer(customerId),
+        "6240" or "2090" or Customer or Email => QuickBooksFixLinks.Customer(customerId),
         "2020" or "2050" or "6000" or "6070" or LineItem or LineClass => QuickBooksFixLinks.InvoicePreview(invoiceId),
         "6140" or OtherCustomer or Number or NoLines or Total or NotReady => QuickBooksFixLinks.Invoice(invoiceId),
         _ => null

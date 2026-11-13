@@ -18,6 +18,7 @@ public class QuickBooksErrorMessagesTests
     [InlineData("6070", "/invoices/11111111-2222-3333-4444-555555555555/quickbooks")]
     [InlineData("6140", "/invoices/11111111-2222-3333-4444-555555555555")]
     [InlineData("6240", "/customers/edit/99999999-8888-7777-6666-555555555555")]
+    [InlineData("2090", "/customers/edit/99999999-8888-7777-6666-555555555555")]
     [InlineData("5010", null)]
     [InlineData("6190", null)]
     [InlineData("5000", null)]
