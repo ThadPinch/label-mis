@@ -1,5 +1,6 @@
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Web.Authorization;
+using LabelsMis.Web.Services;
 using LabelsMis.Web.Services.QuickBooks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,9 +9,15 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace LabelsMis.Web.Pages.Invoices;
 
 /// <summary>"Preview for QuickBooks" (E10): the invoice laid out like the QuickBooks invoice
-/// Sabrina keys, blockers in red at the top, per-line item / class dropdowns that save at once.</summary>
+/// Sabrina keys, blockers in red at the top, per-line item / class dropdowns that save at once.
+/// With QuickBooks connected it also sends the invoice (the compact QuickBooks card).</summary>
 [Authorize(Policy = TransactionPolicies.InvoicesRead)]
-public class QuickBooksModel(QuickBooksInvoiceService quickBooksInvoices, Services.Invoices.InvoiceService invoiceService) : PageModel
+public class QuickBooksModel(
+    QuickBooksInvoiceService quickBooksInvoices,
+    Services.Invoices.InvoiceService invoiceService,
+    QuickBooksSendService quickBooksSend,
+    QuickBooksConnectionService quickBooksConnection,
+    ClientClock clock) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
 
@@ -18,10 +25,74 @@ public class QuickBooksModel(QuickBooksInvoiceService quickBooksInvoices, Servic
     public bool CanEdit => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting);
     public bool CanEditOverrides => CanEdit && Preview?.CanEditOverrides == true;
 
+    /// <summary>Status and Send / Retry / Cancel for this invoice (compact: no link or email options).</summary>
+    public QuickBooksCardModel? QuickBooksCard { get; private set; }
+
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         Preview = await quickBooksInvoices.GetPreviewAsync(Id, cancellationToken);
-        return Preview is null ? NotFound() : Page();
+        if (Preview is null) return NotFound();
+        await LoadQuickBooksCardAsync(cancellationToken);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostQbSendAsync(CancellationToken cancellationToken)
+    {
+        if (!CanEdit) return Forbid();
+        await QuickBooksUi.QueueOneAsync(quickBooksSend, TempData, Id, cancellationToken);
+        return BackToQuickBooksCard();
+    }
+
+    public async Task<IActionResult> OnPostQbRetryAsync(CancellationToken cancellationToken)
+    {
+        if (!CanEdit) return Forbid();
+        await QuickBooksUi.RunAsync(TempData, () => quickBooksSend.RetryAsync(Id, cancellationToken),
+            "Back in line for QuickBooks.");
+        return BackToQuickBooksCard();
+    }
+
+    public async Task<IActionResult> OnPostQbCancelAsync(CancellationToken cancellationToken)
+    {
+        if (!CanEdit) return Forbid();
+        await QuickBooksUi.RunAsync(TempData, () => quickBooksSend.CancelAsync(Id, cancellationToken),
+            "Nothing is under way for QuickBooks now.");
+        return BackToQuickBooksCard();
+    }
+
+    private RedirectToPageResult BackToQuickBooksCard() =>
+        RedirectToPage(pageName: null, pageHandler: null, routeValues: new { id = Id }, fragment: "qb-send-card");
+
+    private async Task<IActionResult> ReloadAsync(CancellationToken cancellationToken)
+    {
+        Preview = await quickBooksInvoices.GetPreviewAsync(Id, cancellationToken);
+        if (Preview is null) return NotFound();
+        await LoadQuickBooksCardAsync(cancellationToken);
+        return Page();
+    }
+
+    private async Task LoadQuickBooksCardAsync(CancellationToken cancellationToken)
+    {
+        if (Preview is not { } p)
+        {
+            return;
+        }
+
+        var state = (await quickBooksSend.GetStatesAsync([Id], cancellationToken)).FirstOrDefault();
+        var connection = await QuickBooksUi.ReadConnectionAsync(quickBooksConnection, cancellationToken);
+        QuickBooksCard = new QuickBooksCardModel(
+            Id,
+            p.DocNumber,
+            state,
+            connection,
+            CanEdit,
+            IsVoid: p.Status == QbInvoiceStatus.Void,
+            NonBillable: p.Status == QbInvoiceStatus.NonBillable,
+            ExportedByHand: p.ExportedAt is not null && state?.QuickBooksInvoiceId is null,
+            WaitingReasons: p.Blockers,
+            LabelShopTotal: p.LabelShopTotal,
+            LabelShopTax: p.LabelShopTax,
+            Local: utc => clock.ToLocal(utc).ToString("MMM d, yyyy h:mm tt"),
+            Compact: true);
     }
 
     /// <summary>E11: the invoice is in QuickBooks — mark it exported (who and when are recorded)
@@ -38,8 +109,7 @@ public class QuickBooksModel(QuickBooksInvoiceService quickBooksInvoices, Servic
         catch (InvalidOperationException ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            Preview = await quickBooksInvoices.GetPreviewAsync(Id, cancellationToken);
-            return Preview is null ? NotFound() : Page();
+            return await ReloadAsync(cancellationToken);
         }
     }
 
@@ -79,8 +149,7 @@ public class QuickBooksModel(QuickBooksInvoiceService quickBooksInvoices, Servic
             }
 
             ModelState.AddModelError(string.Empty, ex.Message);
-            Preview = await quickBooksInvoices.GetPreviewAsync(Id, cancellationToken);
-            return Preview is null ? NotFound() : Page();
+            return await ReloadAsync(cancellationToken);
         }
     }
 }

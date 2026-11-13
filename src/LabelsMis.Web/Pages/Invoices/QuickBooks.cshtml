@@ -44,7 +44,10 @@
             <span class="badge @statusBadge align-middle" id="qb-status">@p.Status</span>
         </h1>
         <div class="text-muted small">
-            Key this into QuickBooks as shown. Invoice <a asp-page="Detail" asp-route-id="@p.InvoiceId">@p.DocNumber</a>
+            @(Model.QuickBooksCard?.Connected == true
+                ? "This is the invoice LabelShop sends to QuickBooks."
+                : "Key this into QuickBooks as shown.")
+            Invoice <a asp-page="Detail" asp-route-id="@p.InvoiceId">@p.DocNumber</a>
             &middot; Sales order <a asp-page="/SalesOrders/Edit" asp-route-id="@p.SalesOrderId">@p.OrderNumber</a>
         </div>
     </div>
@@ -89,6 +92,15 @@
                 <li>@warning</li>
             }
         </ul>
+    </div>
+}
+
+@if (Model.QuickBooksCard is { } qbCard && (qbCard.Connected || qbCard.State?.Label is not null))
+{
+    <div class="row g-2">
+        <div class="col-lg-5 col-xl-4">
+            <partial name="_QuickBooksCard" model="qbCard" />
+        </div>
     </div>
 }
 
@@ -262,7 +274,7 @@
     <div class="card mb-2 @(p.IsReady ? "border-success" : "border-danger")" id="qb-mark-exported-card">
         <div class="card-body py-2 small d-flex flex-wrap align-items-center gap-3">
             <div class="flex-grow-1">
-                Keyed it into QuickBooks? Mark it exported — LabelShop records who and when, and it moves to
+                Keyed it into QuickBooks yourself? Mark it exported — LabelShop records who and when, and it moves to
                 <strong>Exported / closed</strong>.
             </div>
             <form method="post" asp-page-handler="MarkExported" class="d-flex align-items-center gap-2 m-0" id="qb-mark-exported-form">
@@ -368,3 +380,7 @@
         });
     })();
 </script>
+
+@section Scripts {
+    <script src="~/js/invoice-quickbooks-status.js" asp-append-version="true"></script>
+}
