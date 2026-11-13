@@ -22,5 +22,9 @@ public class QuickBooksSettingsConfiguration : IEntityTypeConfiguration<QuickBoo
         builder.Property(s => s.RushKeywords).HasMaxLength(500).IsRequired();
         builder.Property(s => s.DieCreationKeywords).HasMaxLength(500).IsRequired();
         builder.Property(s => s.OutsourcedSubstrateCode).HasMaxLength(50).IsRequired();
+        builder.Property(s => s.TermsMapJson).HasMaxLength(2000);
+        builder.Property(s => s.PoCustomFieldId).HasMaxLength(50);
+        builder.Property(s => s.PoCustomFieldName).HasMaxLength(100);
+        builder.Property(s => s.SendMode).IsRequired().HasDefaultValue(Domain.Enums.QuickBooksSendMode.SendLater);
     }
 }

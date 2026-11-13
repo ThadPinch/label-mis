@@ -1,4 +1,5 @@
 using LabelsMis.Domain.Common;
+using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Invoicing;
 
 namespace LabelsMis.Domain.Entities;
@@ -25,6 +26,14 @@ public class QuickBooksSettings : EntityBase
     public string RushKeywords { get; private set; } = string.Empty;
     public string DieCreationKeywords { get; private set; } = string.Empty;
     public string OutsourcedSubstrateCode { get; private set; } = string.Empty;
+
+    /// <summary>LabelShop term → QuickBooks term name, as JSON (<c>{"Net30":"Net 30"}</c>).</summary>
+    public string? TermsMapJson { get; private set; }
+
+    /// <summary>The QuickBooks custom field that carries the customer's PO number, and its label.</summary>
+    public string? PoCustomFieldId { get; private set; }
+    public string? PoCustomFieldName { get; private set; }
+    public QuickBooksSendMode SendMode { get; private set; }
 
     public static QuickBooksSettings CreateDefault(Guid createdById, DateTime createdAt)
     {
@@ -71,6 +80,37 @@ public class QuickBooksSettings : EntityBase
         }
 
         Apply(mapping);
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    public QuickBooksPushSettings ToPushSettings() =>
+        new(QuickBooksPushSettings.ParseTerms(TermsMapJson), PoCustomFieldId, PoCustomFieldName, SendMode);
+
+    /// <summary>Saves the terms map, the PO field and the send setting.</summary>
+    public void UpdatePush(QuickBooksPushSettings push, Guid modifiedById, DateTime modifiedAt)
+    {
+        var fieldId = string.IsNullOrWhiteSpace(push.PoFieldId) ? null : push.PoFieldId.Trim();
+        if (fieldId is { Length: > 50 })
+        {
+            throw new ArgumentException("The PO field id is at most 50 characters.");
+        }
+
+        if (!Enum.IsDefined(push.SendMode))
+        {
+            throw new ArgumentException("Choose how invoices are sent.");
+        }
+
+        var json = QuickBooksPushSettings.SerializeTerms(push.Terms);
+        if (json.Length > 2000)
+        {
+            throw new ArgumentException("The payment terms map is too long.");
+        }
+
+        TermsMapJson = json;
+        PoCustomFieldId = fieldId;
+        var fieldName = fieldId is null || string.IsNullOrWhiteSpace(push.PoFieldName) ? null : push.PoFieldName.Trim();
+        PoCustomFieldName = fieldName is { Length: > 100 } ? fieldName[..100] : fieldName;
+        SendMode = push.SendMode;
         SetModified(modifiedById, modifiedAt);
     }
 

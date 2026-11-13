@@ -260,7 +260,10 @@ public abstract class QuickBooksTestHost : IAsyncLifetime
         public string Preferences { get; set; } = PreferencesAllOn;
 
         public Task<QuickBooksApiResponse> ReadAsync(
-            QuickBooksCompanyAccess access, string resource, CancellationToken cancellationToken = default)
+            QuickBooksCompanyAccess access,
+            string resource,
+            IReadOnlyDictionary<string, string>? parameters = null,
+            CancellationToken cancellationToken = default)
         {
             Exception? failure;
             lock (_lock)
@@ -281,7 +284,10 @@ public abstract class QuickBooksTestHost : IAsyncLifetime
         }
 
         public Task<QuickBooksApiResponse> QueryAsync(
-            QuickBooksCompanyAccess access, string query, CancellationToken cancellationToken = default) =>
+            QuickBooksCompanyAccess access,
+            string query,
+            IReadOnlyDictionary<string, string>? parameters = null,
+            CancellationToken cancellationToken = default) =>
             Task.FromResult(new QuickBooksApiResponse(200, """{"QueryResponse":{}}""", "tid-api", 12));
 
         public Task<QuickBooksApiResponse> WriteAsync(

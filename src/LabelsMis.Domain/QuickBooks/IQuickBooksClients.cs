@@ -31,13 +31,20 @@ public interface IQuickBooksAuthClient
 /// <see cref="QuickBooksApiException"/>.</summary>
 public interface IQuickBooksApiClient
 {
-    /// <summary>GET a resource, e.g. <c>preferences</c> or <c>companyinfo/123</c>. Metered by Intuit.</summary>
+    /// <summary>GET a resource, e.g. <c>preferences</c> or <c>companyinfo/123</c>. Metered by Intuit.
+    /// <paramref name="parameters"/> go on the URL (<c>include=enhancedAllCustomFields</c>).</summary>
     Task<QuickBooksApiResponse> ReadAsync(
-        QuickBooksCompanyAccess access, string resource, CancellationToken cancellationToken = default);
+        QuickBooksCompanyAccess access,
+        string resource,
+        IReadOnlyDictionary<string, string>? parameters = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Run a query, e.g. <c>select Id from Invoice where DocNumber = 'INV-1'</c>. Metered.</summary>
     Task<QuickBooksApiResponse> QueryAsync(
-        QuickBooksCompanyAccess access, string query, CancellationToken cancellationToken = default);
+        QuickBooksCompanyAccess access,
+        string query,
+        IReadOnlyDictionary<string, string>? parameters = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>POST a create, update, void or send. <paramref name="requestId"/> makes a repeat of
     /// the same call return the first answer instead of acting twice.</summary>

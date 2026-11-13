@@ -207,6 +207,31 @@ public class QuickBooksApiClientTests
     }
 
     [Fact]
+    public async Task ReadAsync_WithParameters_PutsThemOnTheUrl()
+    {
+        var (client, handler) = Create();
+        handler.Answer(HttpStatusCode.OK, "{}");
+
+        await client.ReadAsync(Sandbox, "invoice/156", new Dictionary<string, string> { ["include"] = "enhancedAllCustomFields" });
+
+        handler.Sent.Single().Url.Should().Be(
+            "https://sandbox-quickbooks.api.intuit.com/v3/company/9341/invoice/156?minorversion=75&include=enhancedAllCustomFields");
+    }
+
+    [Fact]
+    public async Task QueryAsync_WithParameters_KeepsTheQueryAndAddsThem()
+    {
+        var (client, handler) = Create();
+        handler.Answer(HttpStatusCode.OK, """{"QueryResponse":{}}""");
+
+        await client.QueryAsync(Sandbox, "select * from Class", new Dictionary<string, string> { ["include"] = "enhancedAllCustomFields" });
+
+        handler.Sent.Single().Url.Should().Be(
+            "https://sandbox-quickbooks.api.intuit.com/v3/company/9341/query?minorversion=75"
+            + "&include=enhancedAllCustomFields&query=select%20%2A%20from%20Class");
+    }
+
+    [Fact]
     public async Task ReadAsync_On401_ThrowsUnauthorizedWithoutRetrying()
     {
         var (client, handler) = Create();

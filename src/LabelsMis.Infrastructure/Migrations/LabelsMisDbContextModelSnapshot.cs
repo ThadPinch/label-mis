@@ -207,6 +207,10 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("QuickBooksCustomerName")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<Guid?>("SalesRepId")
                         .HasColumnType("uuid");
 
@@ -1386,15 +1390,73 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<int>("QbAttemptCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("QbExportStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTime?>("QbExportedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("QbExportedById")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("QbHoldSend")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("QbInvoiceId")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("QbLastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("QbLastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("QbLastErrorCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("QbNextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("QbPayloadHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("QbQueuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("QbQueuedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("QbSendToOverride")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("QbSyncToken")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal?>("QbTax")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<decimal?>("QbTotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<DateTime?>("QbVoidedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("SalesOrderId")
                         .HasColumnType("uuid");
@@ -1444,6 +1506,8 @@ namespace LabelsMis.Infrastructure.Migrations
                         .IsUnique();
 
                     b.HasIndex("ModifiedById");
+
+                    b.HasIndex("QbExportStatus");
 
                     b.HasIndex("SalesOrderId");
 
@@ -2474,6 +2538,65 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.ToTable("PurchaseOrderLine", "public");
                 });
 
+            modelBuilder.Entity("LabelsMis.Domain.Entities.QuickBooksCatalogEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ModifiedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("QuickBooksId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("RefreshedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool?>("Taxable")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("TenantId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000001"));
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("ModifiedById");
+
+                    b.HasIndex("Kind", "QuickBooksId")
+                        .IsUnique();
+
+                    b.ToTable("QuickBooksCatalogEntry", "public");
+                });
+
             modelBuilder.Entity("LabelsMis.Domain.Entities.QuickBooksConnection", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2628,6 +2751,14 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("PoCustomFieldId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("PoCustomFieldName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("RollLabelClass")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -2648,6 +2779,11 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int>("SendMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<string>("ShippingItem")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -2662,6 +2798,10 @@ namespace LabelsMis.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000001"));
+
+                    b.Property<string>("TermsMapJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.HasKey("Id");
 
@@ -5201,6 +5341,20 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Navigation("PurchaseOrder");
 
                     b.Navigation("Stock");
+                });
+
+            modelBuilder.Entity("LabelsMis.Domain.Entities.QuickBooksCatalogEntry", b =>
+                {
+                    b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LabelsMis.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ModifiedById")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("LabelsMis.Domain.Entities.QuickBooksConnection", b =>

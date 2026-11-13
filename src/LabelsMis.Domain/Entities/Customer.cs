@@ -28,6 +28,10 @@ public class Customer : MasterDataEntity
     /// <summary>The customer's id in QuickBooks Online (Phase 1 sends it as <c>CustomerRef</c>).</summary>
     public string? QuickBooksCustomerId { get; private set; }
 
+    /// <summary>The linked QuickBooks customer's display name, kept so the link can be read without
+    /// asking QuickBooks. Null for an id that was typed in by hand.</summary>
+    public string? QuickBooksCustomerName { get; private set; }
+
     /// <summary>The new-client form (tax / resale set-up in QuickBooks) is back. Until then the
     /// customer's invoices wait. A human gate: QuickBooks applies the tax, LabelShop doesn't.</summary>
     public bool TaxSetupComplete { get; private set; }
@@ -117,6 +121,34 @@ public class Customer : MasterDataEntity
         SetModified(modifiedById, modifiedAt);
     }
 
+    /// <summary>Links the customer to a QuickBooks customer picked from QuickBooks' own list (or
+    /// just created there), keeping its name beside the id.</summary>
+    public void LinkQuickBooksCustomer(string quickBooksCustomerId, string? displayName, Guid modifiedById, DateTime modifiedAt)
+    {
+        if (string.IsNullOrWhiteSpace(quickBooksCustomerId))
+        {
+            throw new ArgumentException("Pick the QuickBooks customer to link.", nameof(quickBooksCustomerId));
+        }
+
+        var id = quickBooksCustomerId.Trim();
+        if (id.Length > 100)
+        {
+            throw new ArgumentException("The QuickBooks customer id is at most 100 characters.", nameof(quickBooksCustomerId));
+        }
+
+        var name = string.IsNullOrWhiteSpace(displayName) ? null : displayName.Trim();
+        QuickBooksCustomerId = id;
+        QuickBooksCustomerName = name is { Length: > 500 } ? name[..500] : name;
+        SetModified(modifiedById, modifiedAt);
+    }
+
+    public void UnlinkQuickBooksCustomer(Guid modifiedById, DateTime modifiedAt)
+    {
+        QuickBooksCustomerId = null;
+        QuickBooksCustomerName = null;
+        SetModified(modifiedById, modifiedAt);
+    }
+
     public void AddAddress(Address address) => _addresses.Add(address);
     public void AddContact(Contact contact) => _contacts.Add(contact);
 
@@ -133,6 +165,12 @@ public class Customer : MasterDataEntity
         if (id is { Length: > 100 })
         {
             throw new ArgumentException("The QuickBooks customer id is at most 100 characters.", nameof(quickBooksCustomerId));
+        }
+
+        if (!string.Equals(QuickBooksCustomerId, id, StringComparison.Ordinal))
+        {
+            // A different id typed by hand: the name on file belongs to the old one.
+            QuickBooksCustomerName = null;
         }
 
         QuickBooksCustomerId = id;

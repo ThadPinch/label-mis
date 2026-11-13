@@ -22,6 +22,20 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(i => i.Total).HasMoneyPrecision();
         builder.Property(i => i.BalanceDue).HasMoneyPrecision();
         builder.Property(i => i.QbInvoiceId).HasMaxLength(100);
+        builder.Property(i => i.QbExportStatus).IsRequired().HasDefaultValue(Domain.Enums.QuickBooksExportStatus.None);
+        builder.Property(i => i.QbSyncToken).HasMaxLength(20);
+        builder.Property(i => i.QbAttemptCount).IsRequired().HasDefaultValue(0);
+        builder.Property(i => i.QbLastError).HasMaxLength(1000);
+        builder.Property(i => i.QbLastErrorCode).HasMaxLength(50);
+        builder.Property(i => i.QbTotal).HasPrecision(18, 4);
+        builder.Property(i => i.QbTax).HasPrecision(18, 4);
+        builder.Property(i => i.QbPayloadHash).HasMaxLength(64);
+        builder.Property(i => i.QbHoldSend).IsRequired().HasDefaultValue(false);
+        builder.Property(i => i.QbSendToOverride).HasMaxLength(320);
+        builder.Ignore(i => i.IsLinkedToQuickBooks);
+
+        // The background worker asks for the queued rows every few seconds.
+        builder.HasIndex(i => i.QbExportStatus);
         builder.Property(i => i.Notes).HasMaxLength(4000);
         builder.Property(i => i.PdfFilePath).HasMaxLength(500);
         builder.Property(i => i.VoidReason).HasMaxLength(500);

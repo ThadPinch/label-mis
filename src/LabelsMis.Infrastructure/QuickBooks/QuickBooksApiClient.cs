@@ -19,18 +19,23 @@ public class QuickBooksApiClient(
     private readonly QuickBooksOptions _options = options.Value;
 
     public Task<QuickBooksApiResponse> ReadAsync(
-        QuickBooksCompanyAccess access, string resource, CancellationToken cancellationToken = default) =>
+        QuickBooksCompanyAccess access,
+        string resource,
+        IReadOnlyDictionary<string, string>? parameters = null,
+        CancellationToken cancellationToken = default) =>
         SendWithReadRetriesAsync(
-            access, () => new HttpRequestMessage(HttpMethod.Get, Url(access, resource, null)), resource, cancellationToken);
+            access, () => new HttpRequestMessage(HttpMethod.Get, Url(access, resource, parameters)), resource, cancellationToken);
 
     public Task<QuickBooksApiResponse> QueryAsync(
-        QuickBooksCompanyAccess access, string query, CancellationToken cancellationToken = default) =>
-        SendWithReadRetriesAsync(
-            access,
-            () => new HttpRequestMessage(
-                HttpMethod.Get, Url(access, "query", new Dictionary<string, string> { ["query"] = query })),
-            "query",
-            cancellationToken);
+        QuickBooksCompanyAccess access,
+        string query,
+        IReadOnlyDictionary<string, string>? parameters = null,
+        CancellationToken cancellationToken = default)
+    {
+        var all = new Dictionary<string, string>(parameters ?? new Dictionary<string, string>()) { ["query"] = query };
+        return SendWithReadRetriesAsync(
+            access, () => new HttpRequestMessage(HttpMethod.Get, Url(access, "query", all)), "query", cancellationToken);
+    }
 
     public Task<QuickBooksApiResponse> WriteAsync(
         QuickBooksCompanyAccess access,
