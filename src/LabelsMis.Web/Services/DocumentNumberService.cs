@@ -4,7 +4,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LabelsMis.Web.Services;
 
-public class DocumentNumberService(LabelsMisDbContext db)
+/// <summary>
+/// Hands out document numbers (<c>INV-2026-00549</c>). The year in the middle is the year the
+/// document is made; the number at the end keeps counting from year to year and never starts
+/// again, so it identifies the document by itself (QuickBooks can be sent it without the rest).
+/// </summary>
+public class DocumentNumberService(LabelsMisDbContext db, TimeProvider? time = null)
 {
     public const string EstimateType = "EST";
     public const string SalesOrderType = "SO";
@@ -40,13 +45,17 @@ public class DocumentNumberService(LabelsMisDbContext db)
         string prefix,
         CancellationToken cancellationToken)
     {
-        var year = DateTime.UtcNow.Year;
+        var year = (time ?? TimeProvider.System).GetUtcNow().Year;
         var sequence = await db.DocumentSequences
             .FirstOrDefaultAsync(s => s.DocumentType == documentType && s.Year == year, cancellationToken);
 
         if (sequence is null)
         {
-            sequence = DocumentSequence.Create(Guid.NewGuid(), documentType, year);
+            // The first document of a year: carry on from the highest number this type has reached.
+            var reached = await db.DocumentSequences
+                .Where(s => s.DocumentType == documentType)
+                .MaxAsync(s => (int?)s.LastNumber, cancellationToken) ?? 0;
+            sequence = DocumentSequence.Create(Guid.NewGuid(), documentType, year, reached);
             db.DocumentSequences.Add(sequence);
         }
 

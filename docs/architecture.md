@@ -56,7 +56,10 @@ flowchart TB
 
 ## Document numbering
 
-Year-sequenced via `DocumentSequence` table: EST, SO, JOB, PO, SHP, INV, ROLL barcodes.
+`PREFIX-YEAR-NUMBER` via the `DocumentSequence` table (one row per type and year): EST, SO, JOB, PO, SHP, INV, ROLL
+barcodes. The year is the year the document was made. The number does **not** start again each year: a new year's row
+begins at the highest number the type has reached (`DocumentNumberService`), so `INV-2026-00549` is followed by
+`INV-2027-00550` and the number alone identifies the document.
 
 ## Equipment polymorphism (JobOperation)
 
