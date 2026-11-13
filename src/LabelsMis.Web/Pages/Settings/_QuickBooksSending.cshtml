@@ -1,0 +1,143 @@
+@using LabelsMis.Domain.Enums
+@model LabelsMis.Web.Pages.Settings.QuickBooksModel
+@{
+    var push = Model.Push;
+    var search = Model.PoSearch;
+    var canAsk = Model.Connection.IsLinked;
+}
+<h2 class="h5 mb-1 mt-4" id="qb-sending">Sending invoices</h2>
+<p class="text-muted">How an invoice is filled in when LabelShop sends it to QuickBooks.</p>
+
+@if (TempData["QuickBooksSendingStatus"] is string sendingStatus)
+{
+    <div class="alert alert-success py-2" id="qb-sending-saved">@sendingStatus</div>
+}
+@if (TempData["QuickBooksSendingError"] is string sendingError)
+{
+    <div class="alert alert-danger py-2" id="qb-sending-error">@sendingError</div>
+}
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <form method="post" asp-page-handler="SaveSending" id="qb-sending-form">
+            <fieldset class="border rounded p-3 mb-3" id="qb-terms">
+                <legend class="float-none w-auto px-2 h6 mb-0">Payment terms</legend>
+                <p class="small text-muted mb-2">
+                    The QuickBooks term each customer's LabelShop terms become. The invoice's due date is always sent,
+                    so it matches either way; with no term chosen, the terms box on the QuickBooks invoice stays empty.
+                </p>
+                <div class="row g-2">
+                    @foreach (var row in Model.TermRows)
+                    {
+                        <div class="col-md-6" data-qb-term="@row.Terms">
+                            <partial name="_QuickBooksNamePicker" model="row.Picker" />
+                        </div>
+                    }
+                </div>
+            </fieldset>
+            <fieldset class="border rounded p-3 mb-3" id="qb-send-mode">
+                <legend class="float-none w-auto px-2 h6 mb-0">The invoice email</legend>
+                @foreach (var option in Html.GetEnumSelectList<QuickBooksSendMode>())
+                {
+                    var id = $"Sending_SendMode_{option.Value}";
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="Sending.SendMode" id="@id" value="@option.Value"
+                               checked="@(option.Value == ((int)push.SendMode).ToString())" />
+                        <label class="form-check-label" for="@id">@option.Text</label>
+                    </div>
+                }
+                <p class="small text-muted mt-2 mb-0">
+                    The billing email always goes on the invoice. "Send later" puts it on QuickBooks' own list of invoices
+                    to send, for someone to send from there.
+                </p>
+            </fieldset>
+            <button type="submit" class="btn btn-primary" id="qb-sending-save">Save terms and sending</button>
+        </form>
+    </div>
+    <div class="col-lg-6">
+        <section class="border rounded p-3" id="qb-po-field">
+            <h3 class="h6 mb-2">Customer's PO number</h3>
+            @if (push.PoFieldId is not null)
+            {
+                <p class="mb-2" id="qb-po-current">
+                    Goes into QuickBooks' <strong>@(push.PoFieldName ?? "custom field")</strong> field
+                    <span class="small text-muted">(field id @push.PoFieldId)</span>.
+                </p>
+            }
+            else
+            {
+                <p class="mb-2" id="qb-po-current">Not sent yet: QuickBooks' field for it hasn't been chosen.</p>
+            }
+
+            <div class="d-flex flex-wrap gap-2">
+                <form method="post" asp-page-handler="FindPoField">
+                    <button type="submit" class="btn btn-outline-primary btn-sm" id="qb-po-find" disabled="@(!canAsk)">Find the PO field</button>
+                </form>
+                @if (push.PoFieldId is not null)
+                {
+                    <form method="post" asp-page-handler="UsePoField">
+                        <input type="hidden" name="fieldId" value="" />
+                        <button type="submit" class="btn btn-outline-secondary btn-sm" id="qb-po-clear">Stop sending the PO number</button>
+                    </form>
+                }
+            </div>
+            <p class="small text-muted mt-2 mb-0">
+                Looks at the most recent invoices in QuickBooks for a custom field with something in it.
+                @if (!canAsk)
+                {
+                    <span>Connect QuickBooks above first.</span>
+                }
+            </p>
+
+            @if (search is not null)
+            {
+                <div class="mt-3" id="qb-po-results">
+                    @if (search.Fields.Count == 0)
+                    {
+                        <div class="alert alert-warning py-2 mb-0" id="qb-po-none">
+                            No custom field found on the last @search.InvoicesRead.ToString("N0") invoices.
+                            Fill the PO box in by hand on one invoice in QuickBooks, then try again.
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="small mb-1">
+                            @(search.FromPreferences
+                                ? "No recent invoice has a custom field filled in; these are the company's older custom fields:"
+                                : $"Found on the last {search.InvoicesRead:N0} invoices:")
+                        </p>
+                        <table class="table table-sm align-middle mb-0">
+                            <tbody>
+                            @foreach (var field in search.Fields)
+                            {
+                                <tr data-qb-field="@field.DefinitionId">
+                                    <td>
+                                        <strong>@field.Name</strong>
+                                        @if (field.DefinitionId == search.Suggested?.DefinitionId)
+                                        {
+                                            <span class="badge text-bg-success ms-1">Looks like the PO number</span>
+                                        }
+                                        <div class="small text-muted">
+                                            @(field.Legacy ? "Older custom field" : $"On {field.InvoiceCount:N0} of them") · field id @field.DefinitionId
+                                        </div>
+                                    </td>
+                                    <td class="text-end">
+                                        <form method="post" asp-page-handler="UsePoField">
+                                            <input type="hidden" name="fieldId" value="@field.DefinitionId" />
+                                            <input type="hidden" name="fieldName" value="@field.Name" />
+                                            <button type="submit" class="btn btn-sm btn-outline-success"
+                                                    disabled="@(field.DefinitionId == push.PoFieldId)">
+                                                @(field.DefinitionId == push.PoFieldId ? "In use" : "Use this field")
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+</div>

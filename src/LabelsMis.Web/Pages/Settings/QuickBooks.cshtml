@@ -8,15 +8,27 @@
 
 <partial name="_QuickBooksConnection" model="Model" />
 
+<partial name="_QuickBooksLists" model="Model" />
+
 <h2 class="h5 mb-1" id="qb-mapping">Mapping</h2>
 <p class="text-muted">
-    How an invoice line becomes a QuickBooks line on <em>Preview for QuickBooks</em>. Use the names exactly as they
-    appear in QuickBooks. Any line's item or class can still be changed on the preview.
+    How an invoice line becomes a QuickBooks line on <em>Preview for QuickBooks</em>. Pick the names from the company's
+    lists (refresh them above); before the lists are read, type the names exactly as they appear in QuickBooks. Any
+    line's item or class can still be changed on the preview.
 </p>
 
 @if (TempData["QuickBooksStatus"] is string statusMessage)
 {
     <div class="alert alert-success py-2" id="qb-mapping-saved">@statusMessage</div>
+}
+
+@if (Model.MissingMappingNames > 0)
+{
+    <div class="alert alert-warning py-2" id="qb-mapping-missing">
+        @(Model.MissingMappingNames == 1 ? "One name below is" : $"{Model.MissingMappingNames} names below are") not in
+        QuickBooks. Invoices that use @(Model.MissingMappingNames == 1 ? "it" : "them") can't be sent until it's picked
+        from the list or added in QuickBooks.
+    </div>
 }
 
 <form method="post" id="qb-mapping-form">
@@ -27,24 +39,19 @@
                 <legend class="float-none w-auto px-2 h6 mb-0">QuickBooks item per line type</legend>
                 <div class="row g-2">
                     <div class="col-md-6">
-                        <label asp-for="Input.SalesItem" class="form-label small mb-0"></label>
-                        <input asp-for="Input.SalesItem" class="form-control form-control-sm" />
+                        <partial name="_QuickBooksNamePicker" model='Model.MappingPicker("SalesItem", "Sales (product lines)")' />
                     </div>
                     <div class="col-md-6">
-                        <label asp-for="Input.ShippingItem" class="form-label small mb-0"></label>
-                        <input asp-for="Input.ShippingItem" class="form-control form-control-sm" />
+                        <partial name="_QuickBooksNamePicker" model='Model.MappingPicker("ShippingItem", "Shipping")' />
                     </div>
                     <div class="col-md-4">
-                        <label asp-for="Input.DesignItem" class="form-label small mb-0"></label>
-                        <input asp-for="Input.DesignItem" class="form-control form-control-sm" />
+                        <partial name="_QuickBooksNamePicker" model='Model.MappingPicker("DesignItem", "Design")' />
                     </div>
                     <div class="col-md-4">
-                        <label asp-for="Input.RushItem" class="form-label small mb-0"></label>
-                        <input asp-for="Input.RushItem" class="form-control form-control-sm" />
+                        <partial name="_QuickBooksNamePicker" model='Model.MappingPicker("RushItem", "Rush")' />
                     </div>
                     <div class="col-md-4">
-                        <label asp-for="Input.DieCreationItem" class="form-label small mb-0"></label>
-                        <input asp-for="Input.DieCreationItem" class="form-control form-control-sm" />
+                        <partial name="_QuickBooksNamePicker" model='Model.MappingPicker("DieCreationItem", "Die creation")' />
                     </div>
                 </div>
                 <h2 class="h6 mt-3 mb-1">Charge lines</h2>
@@ -74,16 +81,13 @@
                 <legend class="float-none w-auto px-2 h6 mb-0">Classes</legend>
                 <div class="row g-2">
                     <div class="col-md-4">
-                        <label asp-for="Input.RollLabelClass" class="form-label small mb-0"></label>
-                        <input asp-for="Input.RollLabelClass" class="form-control form-control-sm" />
+                        <partial name="_QuickBooksNamePicker" model='Model.MappingPicker("RollLabelClass", "Roll label")' />
                     </div>
                     <div class="col-md-4">
-                        <label asp-for="Input.ShrinkSleevesClass" class="form-label small mb-0"></label>
-                        <input asp-for="Input.ShrinkSleevesClass" class="form-control form-control-sm" />
+                        <partial name="_QuickBooksNamePicker" model='Model.MappingPicker("ShrinkSleevesClass", "Shrink sleeves")' />
                     </div>
                     <div class="col-md-4">
-                        <label asp-for="Input.BuyoutClass" class="form-label small mb-0"></label>
-                        <input asp-for="Input.BuyoutClass" class="form-control form-control-sm" />
+                        <partial name="_QuickBooksNamePicker" model='Model.MappingPicker("BuyoutClass", "Buyout")' />
                     </div>
                     <div class="col-md-6">
                         <label asp-for="Input.OutsourcedSubstrateCode" class="form-label small mb-0"></label>
@@ -121,3 +125,5 @@
         <button type="submit" class="btn btn-primary">Save mapping</button>
     </div>
 </form>
+
+<partial name="_QuickBooksSending" model="Model" />

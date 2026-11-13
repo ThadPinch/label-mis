@@ -1,0 +1,251 @@
+{
+  "Preferences": {
+    "AccountingInfoPrefs": {
+      "UseAccountNumbers": false,
+      "TrackDepartments": false,
+      "ClassTrackingPerTxn": false,
+      "ClassTrackingPerTxnLine": true,
+      "FirstMonthOfFiscalYear": "January",
+      "TaxYearMonth": "January",
+      "TaxForm": "6",
+      "CustomerTerminology": "Customers"
+    },
+    "ProductAndServicesPrefs": {
+      "ForSales": true,
+      "ForPurchase": true,
+      "QuantityWithPriceAndRate": true,
+      "QuantityOnHand": true,
+      "RevenueRecognition": false,
+      "RevenueRecognitionFrequency": "MONTHLY"
+    },
+    "SalesFormsPrefs": {
+      "UsingProgressInvoicing": false,
+      "CustomField": [
+        {
+          "CustomField": [
+            {
+              "Name": "SalesFormsPrefs.UseSalesCustom3",
+              "Type": "BooleanType",
+              "BooleanValue": false
+            },
+            {
+              "Name": "SalesFormsPrefs.UseSalesCustom1",
+              "Type": "BooleanType",
+              "BooleanValue": false
+            },
+            {
+              "Name": "SalesFormsPrefs.UseSalesCustom2",
+              "Type": "BooleanType",
+              "BooleanValue": false
+            }
+          ]
+        }
+      ],
+      "CustomTxnNumbers": true,
+      "EmailCopyToCompany": false,
+      "AllowDeposit": false,
+      "AllowDiscount": true,
+      "DefaultDiscountAccount": "86",
+      "AllowEstimates": true,
+      "ETransactionEnabledStatus": "NotApplicable",
+      "ETransactionAttachPDF": false,
+      "ETransactionPaymentEnabled": false,
+      "IPNSupportEnabled": false,
+      "AllowServiceDate": false,
+      "AllowShipping": false,
+      "DefaultTerms": {
+        "value": "3"
+      },
+      "AutoApplyCredit": true,
+      "AutoApplyPayments": true,
+      "UsingPriceLevels": false,
+      "DefaultCustomerMessage": "Thank you for your business and have a great day!"
+    },
+    "EmailMessagesPrefs": {
+      "InvoiceMessage": {
+        "Subject": "Invoice from Craig's Design and Landscaping Services",
+        "Message": "Your invoice is attached.  Please remit payment at your earliest convenience.\nThank you for your business - we appreciate it very much.\n\nSincerely,\nCraig's Design and Landscaping Services"
+      },
+      "EstimateMessage": {
+        "Subject": "Estimate from Craig's Design and Landscaping Services",
+        "Message": "Please review the estimate below.  Feel free to contact us if you have any questions.\nWe look forward to working with you.\n\nSincerely,\nCraig's Design and Landscaping Services"
+      },
+      "SalesReceiptMessage": {
+        "Subject": "Sales Receipt from Craig's Design and Landscaping Services",
+        "Message": "Your sales receipt is attached.\nThank you for your business - we appreciate it very much.\n\nSincerely,\nCraig's Design and Landscaping Services"
+      },
+      "StatementMessage": {
+        "Subject": "Statement from Craig's Design and Landscaping Services",
+        "Message": "Your statement is attached.  Please remit payment at your earliest convenience.\nThank you for your business - we appreciate it very much.\n\nSincerely,\nCraig's Design and Landscaping Services"
+      }
+    },
+    "VendorAndPurchasesPrefs": {
+      "TrackingByCustomer": true,
+      "BillableExpenseTracking": true,
+      "POCustomField": [
+        {
+          "CustomField": [
+            {
+              "Name": "PurchasePrefs.UsePurchaseCustom1",
+              "Type": "BooleanType",
+              "BooleanValue": false
+            },
+            {
+              "Name": "PurchasePrefs.UsePurchaseCustom2",
+              "Type": "BooleanType",
+              "BooleanValue": false
+            },
+            {
+              "Name": "PurchasePrefs.UsePurchaseCustom3",
+              "Type": "BooleanType",
+              "BooleanValue": false
+            }
+          ]
+        }
+      ]
+    },
+    "TimeTrackingPrefs": {
+      "UseServices": true,
+      "DefaultTimeItem": {
+        "value": "2"
+      },
+      "BillCustomers": true,
+      "ShowBillRateToAll": false,
+      "WorkWeekStartDate": "Monday",
+      "MarkTimeEntriesBillable": true
+    },
+    "TaxPrefs": {
+      "UsingSalesTax": true,
+      "TaxGroupCodeRef": {
+        "value": "2"
+      }
+    },
+    "CurrencyPrefs": {
+      "MultiCurrencyEnabled": false,
+      "HomeCurrency": {
+        "value": "USD"
+      }
+    },
+    "ReportPrefs": {
+      "ReportBasis": "Accrual",
+      "CalcAgingReportFromTxnDate": false
+    },
+    "OtherPrefs": {
+      "NameValue": [
+        {
+          "Name": "SalesFormsPrefs.DefaultCustomerMessage",
+          "Value": "Thank you for your business and have a great day!"
+        },
+        {
+          "Name": "SalesFormsPrefs.DefaultItem",
+          "Value": "1"
+        },
+        {
+          "Name": "DTXCopyMemo",
+          "Value": "false"
+        },
+        {
+          "Name": "UncategorizedAssetAccountId",
+          "Value": "32"
+        },
+        {
+          "Name": "UncategorizedIncomeAccountId",
+          "Value": "30"
+        },
+        {
+          "Name": "UncategorizedExpenseAccountId",
+          "Value": "31"
+        },
+        {
+          "Name": "SFCEnabled",
+          "Value": "true"
+        },
+        {
+          "Name": "DataPartner",
+          "Value": "false"
+        },
+        {
+          "Name": "Vendor1099Enabled",
+          "Value": "true"
+        },
+        {
+          "Name": "TimeTrackingFeatureEnabled",
+          "Value": "true"
+        },
+        {
+          "Name": "FDPEnabled",
+          "Value": "false"
+        },
+        {
+          "Name": "isDTXOnStage",
+          "Value": "false"
+        },
+        {
+          "Name": "ProjectsEnabled",
+          "Value": "false"
+        },
+        {
+          "Name": "VendorAndPurchasesPrefs.UseCustomTxnNumbers",
+          "Value": "false"
+        },
+        {
+          "Name": "DateFormat",
+          "Value": "Month Date Year separated by a slash"
+        },
+        {
+          "Name": "DateFormatMnemonic",
+          "Value": "MMDDYYYY_SEP_SLASH"
+        },
+        {
+          "Name": "NumberFormat",
+          "Value": "US Number Format"
+        },
+        {
+          "Name": "NumberFormatMnemonic",
+          "Value": "US_NB"
+        },
+        {
+          "Name": "WarnDuplicateCheckNumber",
+          "Value": "true"
+        },
+        {
+          "Name": "WarnDuplicateBillNumber",
+          "Value": "false"
+        },
+        {
+          "Name": "WarnDuplicateJournalNumber",
+          "Value": "false"
+        },
+        {
+          "Name": "SignoutInactiveMinutes",
+          "Value": "60"
+        },
+        {
+          "Name": "AccountingInfoPrefs.ShowAccountNumbers",
+          "Value": "false"
+        },
+        {
+          "Name": "VendorAndPurchasesPrefs.PurchaseOrderEnabled",
+          "Value": "true"
+        },
+        {
+          "Name": "VendorAndPurchasesPrefs.MarkupOnBillableExpenseEnabled",
+          "Value": "false"
+        },
+        {
+          "Name": "SalesFormsPrefs.AllowGratuity",
+          "Value": "false"
+        }
+      ]
+    },
+    "domain": "QBO",
+    "sparse": false,
+    "Id": "1",
+    "SyncToken": "5",
+    "MetaData": {
+      "CreateTime": "2026-11-10T13:00:31-08:00",
+      "LastUpdatedTime": "2026-11-10T20:32:51-08:00"
+    }
+  },
+  "time": "2026-11-10T22:05:20.418-08:00"
+}

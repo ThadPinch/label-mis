@@ -6,6 +6,8 @@ public static class QuickBooksOperations
 {
     public const string Connect = "connect";
     public const string Disconnect = "disconnect";
+    public const string ListsRefresh = "lists.refresh";
+    public const string PoFieldFind = "pofield.find";
     public const string TokenRefresh = "token.refresh";
     public const string CompanyRead = "company.read";
     public const string PreferencesRead = "preferences.read";
@@ -15,6 +17,8 @@ public static class QuickBooksOperations
     {
         Connect => "Connect to QuickBooks",
         Disconnect => "Disconnect",
+        ListsRefresh => "Refresh the lists",
+        PoFieldFind => "Find the PO field",
         TokenRefresh => "Refresh the sign-in",
         CompanyRead => "Read the company name",
         PreferencesRead => "Read the company settings",
