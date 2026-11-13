@@ -1,0 +1,98 @@
+{
+  "QueryResponse": {
+    "Term": [
+      {
+        "Name": "Due on receipt",
+        "Active": true,
+        "Type": "STANDARD",
+        "DueDays": 0,
+        "DiscountDays": 0,
+        "domain": "QBO",
+        "sparse": false,
+        "Id": "1",
+        "SyncToken": "0",
+        "MetaData": {
+          "CreateTime": "2026-10-07T14:41:49-07:00",
+          "LastModifiedByRef": {
+            "value": "0"
+          },
+          "LastUpdatedTime": "2026-10-07T14:41:49-07:00"
+        }
+      },
+      {
+        "Name": "Net 10",
+        "Active": true,
+        "Type": "STANDARD",
+        "DueDays": 10,
+        "domain": "QBO",
+        "sparse": false,
+        "Id": "5",
+        "SyncToken": "0",
+        "MetaData": {
+          "CreateTime": "2026-10-12T15:24:26-07:00",
+          "LastModifiedByRef": {
+            "value": "9341458679203214"
+          },
+          "LastUpdatedTime": "2026-10-12T15:24:26-07:00"
+        }
+      },
+      {
+        "Name": "Net 15",
+        "Active": true,
+        "Type": "STANDARD",
+        "DueDays": 15,
+        "DiscountDays": 0,
+        "domain": "QBO",
+        "sparse": false,
+        "Id": "2",
+        "SyncToken": "0",
+        "MetaData": {
+          "CreateTime": "2026-10-07T14:41:49-07:00",
+          "LastModifiedByRef": {
+            "value": "0"
+          },
+          "LastUpdatedTime": "2026-10-07T14:41:49-07:00"
+        }
+      },
+      {
+        "Name": "Net 30",
+        "Active": true,
+        "Type": "STANDARD",
+        "DueDays": 30,
+        "DiscountDays": 0,
+        "domain": "QBO",
+        "sparse": false,
+        "Id": "3",
+        "SyncToken": "0",
+        "MetaData": {
+          "CreateTime": "2026-10-07T14:41:49-07:00",
+          "LastModifiedByRef": {
+            "value": "0"
+          },
+          "LastUpdatedTime": "2026-10-07T14:41:49-07:00"
+        }
+      },
+      {
+        "Name": "Net 60",
+        "Active": true,
+        "Type": "STANDARD",
+        "DueDays": 60,
+        "DiscountDays": 0,
+        "domain": "QBO",
+        "sparse": false,
+        "Id": "4",
+        "SyncToken": "0",
+        "MetaData": {
+          "CreateTime": "2026-10-07T14:41:49-07:00",
+          "LastModifiedByRef": {
+            "value": "0"
+          },
+          "LastUpdatedTime": "2026-10-07T14:41:49-07:00"
+        }
+      }
+    ],
+    "startPosition": 1,
+    "maxResults": 5
+  },
+  "time": "2026-11-10T22:05:27.991-08:00"
+}
