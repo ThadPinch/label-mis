@@ -72,15 +72,21 @@
 
 @if (showCheckboxes)
 {
+    <div class="alert alert-info py-2 small mb-2" id="qb-not-sending-note">
+        <strong>LabelShop does not send invoices to QuickBooks yet.</strong>
+        Key each invoice into QuickBooks from its <strong>QB preview</strong>, then mark it exported.
+        The CSV is a list for your own records: QuickBooks' importer does not accept it, and downloading it
+        moves the ticked invoices to Exported / closed.
+    </div>
     @* Row checkboxes live outside this form in the table below and join it via form="bulk-export-form". *@
     <form method="post" id="bulk-export-form" asp-page-handler="MarkSelectedExported"
           asp-all-route-data="@Model.FilterRouteValues()" class="mb-2 d-flex gap-2">
-        <button type="submit" id="bulk-qb-button" class="btn btn-sm btn-primary" disabled
-                asp-page-handler="ExportSelected" asp-all-route-data="@Model.FilterRouteValues()">
-            Export to QuickBooks
-        </button>
         <button type="submit" id="bulk-mark-button" class="btn btn-sm btn-outline-success" disabled>
             Mark selected as exported
+        </button>
+        <button type="submit" id="bulk-qb-button" class="btn btn-sm btn-outline-secondary" disabled
+                asp-page-handler="ExportSelected" asp-all-route-data="@Model.FilterRouteValues()">
+            Download CSV
         </button>
     </form>
 }
@@ -215,8 +221,8 @@
                 qbButton.disabled = checked === 0;
                 markButton.disabled = checked === 0;
                 qbButton.textContent = checked === 0
-                    ? 'Export to QuickBooks'
-                    : `Export ${checked} to QuickBooks`;
+                    ? 'Download CSV'
+                    : `Download CSV of ${checked}`;
                 markButton.textContent = checked === 0
                     ? 'Mark selected as exported'
                     : `Mark ${checked} selected as exported`;

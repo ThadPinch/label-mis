@@ -48,8 +48,8 @@
                 <h2 class="docs-section-title">What's new — November 2026</h2>
                 <p>
                     Invoices now get ready for QuickBooks on their own as orders ship. LabelShop doesn't send them
-                    to QuickBooks yet: Accounting keys each Ready invoice in from its <strong>QB preview</strong>,
-                    or exports a CSV. See <a href="#invoicing">Invoicing</a> and <a href="#shipping">Shipping</a>.
+                    to QuickBooks yet: Accounting keys each Ready invoice in from its <strong>QB preview</strong>.
+                    See <a href="#invoicing">Invoicing</a> and <a href="#shipping">Shipping</a>.
                 </p>
 
                 <h3 class="docs-subtitle">Search everything &amp; the jobs floor board</h3>
@@ -137,7 +137,7 @@
 
                 <h3 class="docs-subtitle">Invoices &amp; QuickBooks</h3>
                 <ul class="docs-list">
-                    <li><strong>Ready to export / Exported tabs</strong> — invoices track who exported them and when; per-row and checkbox bulk actions to mark exported, export selected to a QuickBooks CSV, or unmark.</li>
+                    <li><strong>Ready to export / Exported tabs</strong> — invoices track who exported them and when; per-row and checkbox bulk actions to mark exported, download a CSV list, or unmark.</li>
                     <li><strong>Sales tax rate</strong> moved from configuration into <a asp-page="/Settings/General">General settings</a>.</li>
                 </ul>
 
@@ -561,8 +561,8 @@
                 <p>
                     Every sales order gets a <strong>draft invoice</strong> when it is created. The draft follows the
                     order: price edits rebuild it, and its shipping follows the order's recorded shipments. LabelShop
-                    does not send invoices to QuickBooks yet — Accounting moves each invoice into QuickBooks by hand or by CSV,
-                    then marks it exported.
+                    does not send invoices to QuickBooks yet, even when Setup, QuickBooks says Connected — Accounting keys each
+                    invoice into QuickBooks by hand, then marks it exported.
                 </p>
 
                 <h3 class="docs-subtitle">Ready to export vs Waiting</h3>
@@ -579,7 +579,8 @@
                 <ol class="docs-list docs-list--ordered">
                     <li>On <strong>Ready to export</strong>, open an invoice's <strong>QB preview</strong>. It is laid out like the QuickBooks invoice form — customer, billing email, terms, bill-to / ship-to, P.O., each line with its QuickBooks item and class, and the shipping line — with copy buttons. Fix an item or class from its dropdown.</li>
                     <li>Key the invoice into QuickBooks, then click <strong>Mark exported to QuickBooks</strong>.</li>
-                    <li>Or tick several Ready invoices and <strong>Export to QuickBooks</strong> to download a CSV (they are marked exported, with who/when recorded); <strong>Mark selected as exported</strong> does the same without a download, and <strong>Unmark exported</strong> reverses a mistake.</li>
+                    <li>Tick several Ready invoices and <strong>Mark selected as exported</strong> to close them in one go (who and when are recorded); <strong>Unmark exported</strong> on the Exported / closed tab reverses a mistake.</li>
+                    <li><strong>Download CSV</strong> gives a list of the ticked invoices for your own records and marks them exported. QuickBooks' importer does not accept the file, so it does not put anything into QuickBooks.</li>
                     <li>An invoice already keyed into QuickBooks that is still on Waiting can be closed from its QB preview with <strong>Mark exported anyway</strong>.</li>
                 </ol>
 

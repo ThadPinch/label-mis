@@ -4,7 +4,11 @@
     ViewData["BackNav"] = new BackNavModel();
 }
 
-<h1 class="h3 mb-3">QuickBooks CSV export</h1>
+<h1 class="h3 mb-3">Invoice CSV download</h1>
+<div class="alert alert-info py-2 small" id="qb-not-sending-note">
+    A list for your own records. QuickBooks' importer does not accept this file, and downloading it marks the
+    invoices in it as exported.
+</div>
 <form method="post">
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
     <div class="row g-3 mb-3">
