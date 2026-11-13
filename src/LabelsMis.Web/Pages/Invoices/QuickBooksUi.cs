@@ -116,6 +116,29 @@ public static class QuickBooksUi
         }
     }
 
+    /// <summary>"Send to QuickBooks" for one invoice (the invoice and preview pages): queued, or
+    /// the reason it wasn't.</summary>
+    public static async Task QueueOneAsync(
+        QuickBooksSendService sendService, ITempDataDictionary tempData, Guid invoiceId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var outcome = (await sendService.QueueAsync([invoiceId], cancellationToken)).FirstOrDefault();
+            if (outcome is { Queued: true })
+            {
+                tempData[MessageKey] = "On its way to QuickBooks.";
+            }
+            else
+            {
+                tempData[ErrorKey] = outcome?.Reason ?? "This invoice was not sent to QuickBooks.";
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            tempData[ErrorKey] = ex.Message;
+        }
+    }
+
     /// <summary>Runs one QuickBooks action from a page and leaves its result for the redirect:
     /// <paramref name="done"/> when it worked, the service's own words when it was refused.</summary>
     public static async Task RunAsync(ITempDataDictionary tempData, Func<Task> action, string done)
