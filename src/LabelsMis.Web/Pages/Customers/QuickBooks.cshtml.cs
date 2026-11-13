@@ -9,7 +9,7 @@ namespace LabelsMis.Web.Pages.Customers;
 
 /// <summary>Match customers: every active LabelShop customer with no QuickBooks link, the QuickBooks
 /// customer with the same name where there is exactly one, and one click to link it.</summary>
-[Authorize(Policy = MasterDataPolicies.Edit)]
+[Authorize(Policy = MasterDataPolicies.QuickBooksLink)]
 public class QuickBooksModel(QuickBooksCustomerService quickBooksCustomers) : PageModel
 {
     private const string MessageKey = "QbMatchMessage";

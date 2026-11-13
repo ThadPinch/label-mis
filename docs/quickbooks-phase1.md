@@ -160,7 +160,10 @@ what supplies the token and writes the log row.
   with the Shipping item; never a tax amount; `BillEmail` always (the per-invoice address wins); `EmailStatus`
   NeedToSend for "send later"; the PO number as the chosen custom field.
 - **Shipment-born invoices** send the ordered quantity with LabelShop's billed amount and no rate, so QuickBooks'
-  total matches LabelShop's.
+  total matches LabelShop's. The QB preview shows the lines exactly as sent: the billed amount, and a dash for a
+  rate that isn't sent (`QuickBooksInvoicePayloadBuilder.SendsRate` is the one rule both use).
+- **Who links customers:** Admin, Estimator and Accounting (`MasterDataPolicies.QuickBooksLink`). Accounting can
+  open a customer's page (`CustomerView`) for its QuickBooks box; the rest of the form is read-only for them.
 
 ### Checked against Intuit's sandbox (2026-11-13)
 

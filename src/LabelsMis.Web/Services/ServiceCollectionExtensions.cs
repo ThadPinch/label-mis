@@ -108,6 +108,10 @@ public static class ServiceCollectionExtensions
                 policy.RequireRole(MasterDataPolicies.ReadRoles))
             .AddPolicy(MasterDataPolicies.Edit, policy =>
                 policy.RequireRole(MasterDataPolicies.EditRoles))
+            .AddPolicy(MasterDataPolicies.CustomerView, policy =>
+                policy.RequireRole(MasterDataPolicies.CustomerViewRoles))
+            .AddPolicy(MasterDataPolicies.QuickBooksLink, policy =>
+                policy.RequireRole(MasterDataPolicies.QuickBooksLinkRoles))
             .AddPolicy(TransactionPolicies.EstimatesRead, policy =>
                 policy.RequireRole(TransactionPolicies.EstimatesReadRoles))
             .AddPolicy(TransactionPolicies.EstimatesEdit, policy =>

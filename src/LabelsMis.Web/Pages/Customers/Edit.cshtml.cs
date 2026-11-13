@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LabelsMis.Web.Pages.Customers;
 
-[Authorize(Policy = MasterDataPolicies.Read)]
+[Authorize(Policy = MasterDataPolicies.CustomerView)]
 public class EditModel(
     CustomerService customerService,
     ICurrentUserService currentUser,
@@ -29,6 +29,9 @@ public class EditModel(
     public CustomerFormInput Input { get; set; } = new();
 
     public bool CanEdit => currentUser.CanEditMasterData;
+
+    /// <summary>The QuickBooks box: master-data editors, and Accounting (who can't edit the rest).</summary>
+    public bool CanLinkQuickBooks => CanEdit || User.IsInRole(LabelsMis.Infrastructure.Identity.AppRoles.Accounting);
     public bool IsActive { get; private set; } = true;
 
     public async Task<IActionResult> OnGetAsync(Guid id, string? qbSearch, CancellationToken cancellationToken)
@@ -122,7 +125,7 @@ public class EditModel(
 
     private async Task<IActionResult> QuickBooksActionAsync(Guid id, Func<Task> action)
     {
-        if (!CanEdit)
+        if (!CanLinkQuickBooks)
         {
             return Forbid();
         }
@@ -149,7 +152,7 @@ public class EditModel(
         var error = TempData[QbErrorKey] as string;
         IReadOnlyList<Domain.QuickBooks.QuickBooksCustomerSummary>? results = null;
         var searchText = string.IsNullOrWhiteSpace(qbSearch) ? null : qbSearch.Trim();
-        if (searchText is not null && availability.Connected && CanEdit)
+        if (searchText is not null && availability.Connected && CanLinkQuickBooks)
         {
             try
             {
@@ -166,7 +169,7 @@ public class EditModel(
             customer.QuickBooksCustomerId,
             customer.QuickBooksCustomerName,
             availability,
-            CanEdit,
+            CanLinkQuickBooks,
             searchText,
             results,
             TempData[QbMessageKey] as string,
