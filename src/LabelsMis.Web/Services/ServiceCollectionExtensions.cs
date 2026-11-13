@@ -81,6 +81,7 @@ public static class ServiceCollectionExtensions
 
         // QuickBooks: sending invoices (queue, worker, payload).
         services.AddScoped<Services.QuickBooks.QuickBooksSendService>();
+        services.AddScoped<Services.QuickBooks.QuickBooksInvoiceSender>();
 
         // QuickBooks: lists, mapping and terms.
         services.AddScoped<Services.QuickBooks.QuickBooksCatalogService>();
