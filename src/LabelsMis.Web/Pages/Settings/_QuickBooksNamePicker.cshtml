@@ -1,0 +1,46 @@
+@using LabelsMis.Domain.QuickBooks
+@model LabelsMis.Web.Pages.Settings.QuickBooksNamePicker
+@{
+    var check = Model.Check;
+    var hasList = Model.Options.Count > 0;
+    var selected = check.Selected;
+    var listed = Model.Options.Contains(selected, StringComparer.Ordinal);
+}
+<label for="@Model.Id" class="form-label small mb-0">@Model.Label</label>
+@if (!hasList)
+{
+    <input id="@Model.Id" name="@Model.Name" value="@selected" class="form-control form-control-sm" maxlength="100" />
+}
+else
+{
+    <select id="@Model.Id" name="@Model.Name" class="form-select form-select-sm @(check.IsMissing ? "is-invalid" : null)"
+            data-qb-status="@check.Status">
+        @if (Model.NoneText is not null)
+        {
+            <option value="" selected="@(selected.Length == 0)">@Model.NoneText</option>
+        }
+        @if (selected.Length > 0 && !listed)
+        {
+            <option value="@selected" selected="selected">@selected (not in QuickBooks)</option>
+        }
+        @foreach (var name in Model.Options)
+        {
+            <option value="@name" selected="@(name == selected)">@name</option>
+        }
+    </select>
+    @if (check.IsMissing)
+    {
+        <div class="small text-danger mt-1">
+            <span class="badge text-bg-danger">Not in QuickBooks</span>
+            Pick the QuickBooks name, or add "@check.Saved" in QuickBooks and refresh the lists.
+        </div>
+    }
+    else if (check.Status == QuickBooksNameStatus.Matched && check.Saved.Length > 0 && Model.Note is null)
+    {
+        <div class="small text-muted mt-1">"@check.Saved" matched QuickBooks' "@check.Selected"; saved that way when you save.</div>
+    }
+}
+@if (Model.Note is not null)
+{
+    <div class="small text-muted mt-1">@Model.Note</div>
+}

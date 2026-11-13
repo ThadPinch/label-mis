@@ -1,0 +1,48 @@
+@model LabelsMis.Web.Pages.Settings.QuickBooksModel
+@{
+    var counts = Model.ListCounts;
+    var canAsk = Model.Connection.IsLinked;
+}
+<section class="border rounded p-3 mb-4" id="qb-lists">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h2 class="h5 mb-0">Lists from QuickBooks</h2>
+        <form method="post" asp-page-handler="RefreshLists" class="ms-auto" id="qb-lists-refresh-form">
+            <button type="submit" class="btn btn-outline-primary btn-sm" id="qb-lists-refresh" disabled="@(!canAsk)">
+                Refresh the lists from QuickBooks
+            </button>
+        </form>
+    </div>
+
+    @if (TempData["QuickBooksListsStatus"] is string listsStatus)
+    {
+        <div class="alert alert-success py-2" id="qb-lists-saved">@listsStatus</div>
+    }
+    @if (TempData["QuickBooksListsError"] is string listsError)
+    {
+        <div class="alert alert-danger py-2" id="qb-lists-error">@listsError</div>
+    }
+
+    @if (Model.ListsRefreshedAt is { } refreshedAt)
+    {
+        <p class="small mb-1" id="qb-lists-summary">
+            Last read <strong>@Model.Local(refreshedAt)</strong>:
+            @counts.Items.ToString("N0") products and services, @counts.Classes.ToString("N0") classes,
+            @counts.Terms.ToString("N0") payment terms.
+        </p>
+        <p class="small text-muted mb-0">
+            The item, class and payment-term boxes below pick from these. Refresh after adding or renaming one in QuickBooks.
+            Inactive entries are left out.
+        </p>
+    }
+    else
+    {
+        <p class="small mb-0" id="qb-lists-summary">
+            Not read yet. Refresh once QuickBooks is connected, and the boxes below become lists of the company's own
+            products and services, classes and payment terms.
+        </p>
+    }
+    @if (!canAsk)
+    {
+        <p class="small text-muted mb-0 mt-1">Connect QuickBooks above to read the lists.</p>
+    }
+</section>

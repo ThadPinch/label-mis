@@ -269,6 +269,17 @@ public class QuickBooksMappingServiceTests : QuickBooksListsTestHost
         push.SendMode.Should().Be(QuickBooksSendMode.SendNow);
         (push.PoFieldId, push.PoFieldName).Should().Be(("1000000001", "P.O. Number"));
         (await WithMappingAsync(s => s.GetMappingAsync())).Should().Be(QuickBooksMapping.Default, "the push settings leave the mapping alone");
+
+        await WithMappingAsync(async s =>
+        {
+            await s.SaveSendingAsync(new Dictionary<PaymentTerms, string> { [PaymentTerms.Net15] = "Net 15" }, QuickBooksSendMode.Leave);
+            return true;
+        });
+
+        var saved = await WithMappingAsync(s => s.GetPushSettingsAsync());
+        saved.Terms.Should().BeEquivalentTo(new Dictionary<PaymentTerms, string> { [PaymentTerms.Net15] = "Net 15" });
+        saved.SendMode.Should().Be(QuickBooksSendMode.Leave);
+        saved.PoFieldId.Should().Be("1000000001", "saving terms and sending keeps the PO field");
     }
 
     [Fact]

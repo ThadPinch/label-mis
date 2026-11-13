@@ -52,6 +52,15 @@ public class QuickBooksMappingService(LabelsMisDbContext db, ICurrentUserService
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>Saves the terms map and the send setting; the PO field stays as it is.</summary>
+    public async Task SaveSendingAsync(
+        IReadOnlyDictionary<PaymentTerms, string> terms, QuickBooksSendMode sendMode, CancellationToken cancellationToken = default)
+    {
+        var settings = await GetOrCreateSettingsAsync(cancellationToken);
+        settings.UpdatePush(settings.ToPushSettings() with { Terms = terms, SendMode = sendMode }, UserId, DateTime.UtcNow);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     /// <summary>Saves the PO field only (from "Find the PO field"); the terms map and the send
     /// setting stay as they are. A blank id clears it.</summary>
     public async Task SetPoFieldAsync(string? fieldId, string? fieldName, CancellationToken cancellationToken = default)
