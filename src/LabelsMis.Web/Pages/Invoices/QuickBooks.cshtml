@@ -213,7 +213,16 @@
                     <button type="button" class="btn btn-link btn-sm p-0 align-baseline qb-copy" data-copy="@line.Description" title="Copy">copy</button>
                 </td>
                 <td class="text-end">@line.Quantity.ToString("N0")</td>
-                <td class="text-end">@line.Rate.ToString("0.00####")</td>
+                <td class="text-end">
+                    @if (line.SendsRate)
+                    {
+                        @line.Rate.ToString("0.00####")
+                    }
+                    else
+                    {
+                        <span class="text-muted qb-rate-not-sent" title="Not sent: @line.Quantity.ToString("N0") × @line.Rate.ToString("0.00####") isn't the amount billed, so QuickBooks gets the amount without a rate">—</span>
+                    }
+                </td>
                 <td class="text-end">
                     <span class="qb-amount">@line.Amount.ToString("N2")</span>
                     <button type="button" class="btn btn-link btn-sm p-0 align-baseline qb-copy" data-copy="@line.Amount.ToString("0.00")" title="Copy">copy</button>

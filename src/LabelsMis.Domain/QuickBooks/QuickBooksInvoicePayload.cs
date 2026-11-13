@@ -222,7 +222,7 @@ public static class QuickBooksInvoicePayloadBuilder
             }
 
             detail["Qty"] = Number(line.Quantity);
-            if (line.Quantity != 0m && Cents(line.Quantity * line.Rate) == amount)
+            if (SendsRate(line.Quantity, line.Rate, amount))
             {
                 detail["UnitPrice"] = Number(line.Rate);
             }
@@ -317,6 +317,12 @@ public static class QuickBooksInvoicePayloadBuilder
 
     /// <summary>Rounded half up to the cent, the way QuickBooks compares amounts.</summary>
     public static decimal Cents(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>A line carries its rate only when quantity × rate, rounded half up to the cent, is
+    /// the amount billed; otherwise QuickBooks gets the quantity and the amount with no rate (it
+    /// refuses a line whose rate doesn't multiply out, error 6070).</summary>
+    public static bool SendsRate(decimal quantity, decimal rate, decimal amount) =>
+        quantity != 0m && Cents(quantity * rate) == Cents(amount);
 
     private static QuickBooksListEntry? ResolveItem(
         QuickBooksCatalogLookup catalog, string name, string where, bool overridden, string previewUrl, List<QuickBooksPayloadProblem> problems)

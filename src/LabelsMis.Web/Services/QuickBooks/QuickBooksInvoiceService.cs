@@ -15,8 +15,9 @@ public record QbAddress(string? Name, string? Line1, string? Line2, string? City
             : null;
 }
 
-/// <summary>One QuickBooks line: quantity is the quantity <em>ordered</em> (what Sabrina keys);
-/// Amount = quantity × rate in cents; <see cref="LabelShopAmount"/> is the invoice line's own total.</summary>
+/// <summary>One QuickBooks line exactly as it is sent: quantity is the quantity <em>ordered</em>;
+/// <see cref="Amount"/> is what LabelShop bills for the line (its total in cents, the same as
+/// <see cref="LabelShopAmount"/>); the rate goes with it only when <see cref="SendsRate"/>.</summary>
 public record QbPreviewLine(
     Guid InvoiceLineId,
     int LineNumber,
@@ -32,7 +33,12 @@ public record QbPreviewLine(
     int Quantity,
     decimal Rate,
     decimal Amount,
-    decimal LabelShopAmount);
+    decimal LabelShopAmount)
+{
+    /// <summary>Quantity × rate is the amount, so QuickBooks gets the rate too; otherwise it gets the
+    /// quantity and the amount with no rate (same rule as the payload).</summary>
+    public bool SendsRate => LabelsMis.Domain.QuickBooks.QuickBooksInvoicePayloadBuilder.SendsRate(Quantity, Rate, Amount);
+}
 
 public record QbPreviewShipping(string Item, string Class, decimal Amount);
 
@@ -151,17 +157,18 @@ public class QuickBooksInvoiceService(
             var quantity = line.SalesOrderLineId is Guid orderLineId && orderedQty.TryGetValue(orderLineId, out var ordered)
                 ? ordered
                 : line.Quantity;
-            // The amount is what LabelShop bills (the line total in cents), so the QuickBooks invoice
-            // matches LabelShop's subtotal. Only an invoice that bills a different quantity than was
-            // ordered (one generated from a shipment) is re-priced at the ordered quantity.
-            var amount = Math.Round(quantity == line.Quantity ? line.LineTotal : quantity * line.UnitPrice, 2, MidpointRounding.AwayFromZero);
+            // The amount is always what LabelShop bills (the line total in cents), so the QuickBooks
+            // invoice matches LabelShop's subtotal; this is what Send to QuickBooks sends. An invoice
+            // that bills a different quantity than was ordered (one generated from a shipment) keeps
+            // the ordered quantity beside the billed amount and goes without a rate.
+            var amount = Math.Round(line.LineTotal, 2, MidpointRounding.AwayFromZero);
             if (quantity != line.Quantity)
             {
-                warnings.Add($"Line {line.LineNumber}: QuickBooks gets the ordered quantity ({quantity:N0}); this invoice bills {line.Quantity:N0}.");
+                warnings.Add($"Line {line.LineNumber}: QuickBooks gets the ordered quantity ({quantity:N0}) with the amount this invoice bills for {line.Quantity:N0} ({amount:C2}), and no rate.");
             }
-            else if (Math.Round(quantity * line.UnitPrice, 2, MidpointRounding.AwayFromZero) != amount)
+            else if (!LabelsMis.Domain.QuickBooks.QuickBooksInvoicePayloadBuilder.SendsRate(quantity, line.UnitPrice, amount))
             {
-                warnings.Add($"Line {line.LineNumber}: {quantity:N0} × {line.UnitPrice:0.00####} = {quantity * line.UnitPrice:C2}, but LabelShop bills {amount:C2} — key the amount, not the rate.");
+                warnings.Add($"Line {line.LineNumber}: {quantity:N0} × {line.UnitPrice:0.00####} = {quantity * line.UnitPrice:C2}, but LabelShop bills {amount:C2} — QuickBooks gets the amount, not the rate (key the amount, not the rate, if keying by hand).");
             }
 
             if (!mapping.IsProductLine && mapping.Mapping.ItemSource.Contains("no keyword", StringComparison.Ordinal))

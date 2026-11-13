@@ -618,6 +618,35 @@ public class QuickBooksSendIntegrationTests : QuickBooksTestHost, IAsyncLifetime
             await db.SaveChangesAsync();
         });
 
+    [Fact]
+    public async Task Preview_OfAShipmentBornInvoice_ShowsTheLinesExactlyAsSent()
+    {
+        await ConnectAsync();
+        var invoice = await SeedReadyInvoiceAsync();
+
+        // An invoice generated from a shipment bills 600 of the 1,000 ordered.
+        await InDbAsync(db => db.InvoiceLines
+            .Where(l => l.InvoiceId == invoice.Id && l.SalesOrderLineId != null)
+            .ExecuteUpdateAsync(s => s.SetProperty(l => l.Quantity, 600).SetProperty(l => l.LineTotal, 300m)));
+
+        var preview = (await InSendAppAsync(sp => sp.GetRequiredService<QuickBooksInvoiceService>().GetPreviewAsync(invoice.Id)))!;
+        var shown = preview.Lines.Single(l => l.IsProductLine);
+        shown.Quantity.Should().Be(1000, "QuickBooks gets the ordered quantity");
+        shown.Amount.Should().Be(300m, "the preview shows the billed amount, not 1,000 x 0.50");
+        shown.SendsRate.Should().BeFalse();
+        preview.Warnings.Should().Contain(w => w.Contains("ordered quantity (1,000)") && w.Contains("no rate"));
+
+        (await QueueAsync(invoice.Id)).Queued.Should().BeTrue();
+        (await Worker.RunOnceAsync(default)).Should().BeTrue();
+
+        var sent = JsonNode.Parse(Api.Writes.Single(w => w.Resource == "invoice").Body!)!["Line"]!.AsArray();
+        var sentProduct = sent.Single(l => l!["Description"]!.GetValue<string>() == shown.Description)!;
+        sentProduct["Amount"]!.GetValue<decimal>().Should().Be(shown.Amount);
+        sentProduct["SalesItemLineDetail"]!["Qty"]!.GetValue<decimal>().Should().Be(shown.Quantity);
+        sentProduct["SalesItemLineDetail"]!.AsObject().ContainsKey("UnitPrice").Should().BeFalse();
+        sent.Sum(l => l!["Amount"]!.GetValue<decimal>()).Should().Be(preview.Total, "the preview's total is what QuickBooks receives");
+    }
+
     /// <summary>A customer linked to QuickBooks with a Billing contact, an order of 1,000 labels at
     /// 0.50 with $35 shipping quoted, and its invoice flagged bill-before-ship so it is Ready.</summary>
     private async Task<SeededInvoice> SeedReadyInvoiceAsync(bool billBeforeShip = true)
