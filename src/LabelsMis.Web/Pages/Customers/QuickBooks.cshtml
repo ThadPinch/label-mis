@@ -1,0 +1,164 @@
+@page "/customers/quickbooks"
+@model LabelsMis.Web.Pages.Customers.QuickBooksModel
+@using LabelsMis.Domain.QuickBooks
+@{
+    ViewData["Title"] = "Match customers with QuickBooks";
+    ViewData["BackNav"] = new BackNavModel();
+    var rows = Model.Rows;
+    var view = Model.View;
+
+    void Summary(QuickBooksCustomerSummary customer)
+    {
+        <span>@customer.DisplayName</span>
+        @if (customer.IsSubCustomer && customer.FullyQualifiedName is not null)
+        {
+            <span class="text-muted small">(sub-customer: @customer.FullyQualifiedName)</span>
+        }
+        var details = new[] { customer.CompanyName == customer.DisplayName ? null : customer.CompanyName, customer.Email, customer.Place }
+            .Where(d => !string.IsNullOrWhiteSpace(d))
+            .ToList();
+        @if (details.Count > 0)
+        {
+            <span class="text-muted small">&middot; @string.Join(" \u00b7 ", details)</span>
+        }
+    }
+}
+
+<div class="d-flex justify-content-between align-items-center mb-1">
+    <h1 class="h3 mb-0">Match customers with QuickBooks</h1>
+    <a class="btn btn-outline-secondary" asp-page="Index">Customers</a>
+</div>
+<p class="text-muted">
+    An invoice goes to QuickBooks under the customer's linked QuickBooks customer. Names are compared without
+    case, spaces or punctuation, and a QuickBooks customer already linked to someone is never offered again.
+</p>
+
+@if (Model.Message is not null)
+{
+    <div class="alert alert-success">@Model.Message</div>
+}
+@if (Model.Error is not null)
+{
+    <div class="alert alert-warning">@Model.Error</div>
+}
+
+@if (!Model.Availability.Connected)
+{
+    <div class="alert alert-info">
+        @Model.Availability.Problem Matching reads the customer list from QuickBooks, so it works while QuickBooks is connected.
+    </div>
+}
+else if (view is not null)
+{
+    <p>
+        <strong>@view.UnlinkedCount</strong> active @(view.UnlinkedCount == 1 ? "customer isn't" : "customers aren't") linked
+        to QuickBooks; @view.LinkedCount @(view.LinkedCount == 1 ? "is" : "are").
+        QuickBooks has @view.QuickBooksCount active customers, @view.Unclaimed.Count of them not linked to any LabelShop customer.
+    </p>
+
+    @if (view.UnlinkedCount == 0)
+    {
+        <div class="alert alert-success">Every active customer is linked to QuickBooks.</div>
+    }
+    else
+    {
+        @if (view.ExactCount > 0)
+        {
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <button type="submit" form="link-all-form" class="btn btn-primary">Link all ticked matches</button>
+                <span class="small text-muted">@view.ExactCount exact @(view.ExactCount == 1 ? "match" : "matches") below, all ticked. Untick any that are wrong first.</span>
+            </div>
+        }
+
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th>LabelShop customer</th>
+                    <th>QuickBooks customer</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var match in rows)
+            {
+                var duplicate = Model.Duplicate is { } d && d.CustomerId == match.CustomerId ? Model.Duplicate : null;
+                <tr>
+                    <td><a asp-page="Edit" asp-route-id="@match.CustomerId" asp-fragment="quickbooks">@match.Name</a></td>
+                    <td>
+                        @if (match.Kind == QuickBooksMatchKind.Exact && match.Proposed is { } proposed)
+                        {
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="checkbox" form="link-all-form" name="selected"
+                                       value="@($"{match.CustomerId}|{proposed.Id}")" id="pick-@match.CustomerId" checked />
+                                <label class="form-check-label" for="pick-@match.CustomerId">
+                                    @{ Summary(proposed); }
+                                    @if (match.MatchedOn == QuickBooksMatchField.CompanyName)
+                                    {
+                                        <span class="badge text-bg-light border">same company name</span>
+                                    }
+                                </label>
+                            </div>
+                        }
+                        else
+                        {
+                            @if (match.Kind == QuickBooksMatchKind.Ambiguous)
+                            {
+                                <div class="small text-muted">
+                                    @(match.Candidates.Count == 1
+                                        ? "Another LabelShop customer has the same name. Is it this one?"
+                                        : "More than one QuickBooks customer has this name. Pick one:")
+                                </div>
+                                @foreach (var candidate in match.Candidates)
+                                {
+                                    <div>
+                                        @{ Summary(candidate); }
+                                        <button type="submit" form="row-form" asp-page-handler="Link" asp-route-customerId="@match.CustomerId"
+                                                asp-route-qbId="@candidate.Id" class="btn btn-sm btn-link py-0">Link</button>
+                                    </div>
+                                }
+                            }
+                            @if (duplicate is { } taken)
+                            {
+                                <div class="small">
+                                    QuickBooks already has <strong>@taken.Name</strong>.
+                                    <button type="submit" form="row-form" asp-page-handler="Link" asp-route-customerId="@match.CustomerId"
+                                            asp-route-qbId="@taken.QuickBooksId" class="btn btn-sm btn-link py-0">Link to it</button>
+                                </div>
+                            }
+                            <form method="post" asp-page-handler="LinkByName" asp-route-customerId="@match.CustomerId" class="d-flex gap-1 mt-1">
+                                <input name="qbName" list="qb-unclaimed" class="form-control form-control-sm" style="max-width: 22rem"
+                                       placeholder="Find it in QuickBooks by name" aria-label="QuickBooks customer for @match.Name" />
+                                <button type="submit" class="btn btn-sm btn-outline-primary">Link</button>
+                            </form>
+                        }
+                    </td>
+                    <td class="text-end text-nowrap">
+                        @if (match.Kind == QuickBooksMatchKind.Exact && match.Proposed is { } exact)
+                        {
+                            <button type="submit" form="row-form" asp-page-handler="Link" asp-route-customerId="@match.CustomerId"
+                                    asp-route-qbId="@exact.Id" class="btn btn-sm btn-primary">Link</button>
+                        }
+                        else
+                        {
+                            <button type="submit" form="row-form" asp-page-handler="Create" asp-route-customerId="@match.CustomerId"
+                                    class="btn btn-sm btn-outline-success"
+                                    title="Makes the customer in QuickBooks from LabelShop's record (name, billing email, phone, addresses) and links it">
+                                Create in QuickBooks
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+
+        <datalist id="qb-unclaimed">
+            @foreach (var customer in view.Unclaimed)
+            {
+                <option value="@customer.DisplayName">@(customer.CompanyName ?? customer.Place)</option>
+            }
+        </datalist>
+        <form id="link-all-form" method="post" asp-page-handler="LinkAll" class="d-none"></form>
+        <form id="row-form" method="post" class="d-none"></form>
+    }
+}

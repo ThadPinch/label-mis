@@ -14,7 +14,16 @@
     <h1 class="h3 mb-0">Customers</h1>
     @if (Model.CanEdit)
     {
-        <a class="btn btn-primary" asp-page="Create">New customer</a>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary" asp-page="QuickBooks">
+                Match QuickBooks customers
+                @if (Model.UnlinkedCount > 0)
+                {
+                    <span class="badge text-bg-secondary ms-1" title="Active customers not linked to QuickBooks">@Model.UnlinkedCount unlinked</span>
+                }
+            </a>
+            <a class="btn btn-primary" asp-page="Create">New customer</a>
+        </div>
     }
 </div>
 

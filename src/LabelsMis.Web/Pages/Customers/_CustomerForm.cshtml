@@ -78,6 +78,16 @@
             "Waiting on new-client form". Invoices go to the contact ticked <strong>Billing</strong> — or the
             primary contact when none is — and wait until one of them has an email.
         </div>
+        @if (ViewData["QuickBooksBox"] is QuickBooksCustomerBox quickBooksBox)
+        {
+            <partial name="_QuickBooksCustomerBox" model="quickBooksBox" />
+        }
+        else
+        {
+            <div class="col-12 form-text mt-0">
+                Once the customer is saved, its page can search QuickBooks for it, link it, or create it in QuickBooks.
+            </div>
+        }
     </div>
 </fieldset>
 

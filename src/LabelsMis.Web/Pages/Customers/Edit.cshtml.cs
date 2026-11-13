@@ -3,6 +3,7 @@ using LabelsMis.Web.Authorization;
 using LabelsMis.Web.Pages.Shared;
 using LabelsMis.Web.Services;
 using LabelsMis.Web.Services.Customers;
+using LabelsMis.Web.Services.QuickBooks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -13,15 +14,24 @@ using Microsoft.EntityFrameworkCore;
 namespace LabelsMis.Web.Pages.Customers;
 
 [Authorize(Policy = MasterDataPolicies.Read)]
-public class EditModel(CustomerService customerService, ICurrentUserService currentUser, UserManager<ApplicationUser> userManager) : PageModel
+public class EditModel(
+    CustomerService customerService,
+    ICurrentUserService currentUser,
+    UserManager<ApplicationUser> userManager,
+    QuickBooksCustomerService quickBooksCustomers) : PageModel
 {
+    private const string QbMessageKey = "QbCustomerMessage";
+    private const string QbErrorKey = "QbCustomerError";
+    private const string QbDuplicateIdKey = "QbCustomerDuplicateId";
+    private const string QbDuplicateNameKey = "QbCustomerDuplicateName";
+
     [BindProperty]
     public CustomerFormInput Input { get; set; } = new();
 
     public bool CanEdit => currentUser.CanEditMasterData;
     public bool IsActive { get; private set; } = true;
 
-    public async Task<IActionResult> OnGetAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(Guid id, string? qbSearch, CancellationToken cancellationToken)
     {
         var customer = await customerService.GetByIdAsync(id, cancellationToken);
         if (customer is null)
@@ -33,6 +43,7 @@ public class EditModel(CustomerService customerService, ICurrentUserService curr
         IsActive = customer.IsActive;
         ViewData["CanEditForm"] = CanEdit;
         await LoadSalesRepOptionsAsync(cancellationToken);
+        await LoadQuickBooksBoxAsync(customer, qbSearch, cancellationToken);
         return Page();
     }
 
@@ -76,12 +87,104 @@ public class EditModel(CustomerService customerService, ICurrentUserService curr
         return this.RedirectToListPage();
     }
 
+    public Task<IActionResult> OnPostQbLinkAsync(Guid id, string? qbId, CancellationToken cancellationToken) =>
+        QuickBooksActionAsync(id, async () =>
+            TempData[QbMessageKey] = QuickBooksCustomerPageErrors.Linked(
+                await quickBooksCustomers.LinkAsync(id, qbId ?? string.Empty, cancellationToken)));
+
+    public Task<IActionResult> OnPostQbUnlinkAsync(Guid id, CancellationToken cancellationToken) =>
+        QuickBooksActionAsync(id, async () =>
+        {
+            await quickBooksCustomers.UnlinkAsync(id, cancellationToken);
+            TempData[QbMessageKey] = "Unlinked from QuickBooks. Nothing was changed in QuickBooks.";
+        });
+
+    public Task<IActionResult> OnPostQbCreateAsync(Guid id, CancellationToken cancellationToken) =>
+        QuickBooksActionAsync(id, async () =>
+        {
+            var result = await quickBooksCustomers.CreateAsync(id, cancellationToken);
+            if (result.Outcome == QuickBooksCustomerCreateOutcome.Created)
+            {
+                TempData[QbMessageKey] = $"Created \u201c{result.Customer!.DisplayName}\u201d in QuickBooks and linked it.";
+                return;
+            }
+
+            if (result.Customer is { } existing)
+            {
+                TempData[QbDuplicateIdKey] = existing.Id;
+                TempData[QbDuplicateNameKey] = existing.DisplayName;
+            }
+            else
+            {
+                TempData[QbErrorKey] = result.Message;
+            }
+        });
+
+    private async Task<IActionResult> QuickBooksActionAsync(Guid id, Func<Task> action)
+    {
+        if (!CanEdit)
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            await action();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (Exception ex) when (QuickBooksCustomerPageErrors.Describe(ex) is { } message)
+        {
+            TempData[QbErrorKey] = message;
+        }
+
+        return RedirectToPage(null, null, new { id }, "quickbooks");
+    }
+
+    private async Task LoadQuickBooksBoxAsync(Domain.Entities.Customer customer, string? qbSearch, CancellationToken cancellationToken)
+    {
+        var availability = await quickBooksCustomers.GetAvailabilityAsync(cancellationToken);
+        var error = TempData[QbErrorKey] as string;
+        IReadOnlyList<Domain.QuickBooks.QuickBooksCustomerSummary>? results = null;
+        var searchText = string.IsNullOrWhiteSpace(qbSearch) ? null : qbSearch.Trim();
+        if (searchText is not null && availability.Connected && CanEdit)
+        {
+            try
+            {
+                results = await quickBooksCustomers.SearchAsync(searchText, customer.Id, cancellationToken);
+            }
+            catch (Exception ex) when (QuickBooksCustomerPageErrors.Describe(ex) is { } message)
+            {
+                error = message;
+            }
+        }
+
+        ViewData["QuickBooksBox"] = new QuickBooksCustomerBox(
+            customer.Id,
+            customer.QuickBooksCustomerId,
+            customer.QuickBooksCustomerName,
+            availability,
+            CanEdit,
+            searchText,
+            results,
+            TempData[QbMessageKey] as string,
+            error,
+            TempData[QbDuplicateIdKey] as string,
+            TempData[QbDuplicateNameKey] as string);
+    }
+
     private async Task ReloadAsync(Guid id, CancellationToken cancellationToken)
     {
         var customer = await customerService.GetByIdAsync(id, cancellationToken);
         IsActive = customer?.IsActive ?? false;
         ViewData["CanEditForm"] = CanEdit;
         await LoadSalesRepOptionsAsync(cancellationToken);
+        if (customer is not null)
+        {
+            await LoadQuickBooksBoxAsync(customer, null, cancellationToken);
+        }
     }
 
     private async Task LoadSalesRepOptionsAsync(CancellationToken cancellationToken)
