@@ -255,9 +255,24 @@ public abstract class QuickBooksTestHost : IAsyncLifetime
 
         public List<(string Resource, string AccessToken)> Reads { get; } = [];
 
+        /// <summary>Every query and write made, in order, for assertions.</summary>
+        public List<(string Query, IReadOnlyDictionary<string, string>? Parameters)> Queries { get; } = [];
+        public List<(string Resource, string? Body, string? RequestId, IReadOnlyDictionary<string, string>? Parameters)> Writes { get; } = [];
+        public List<IReadOnlyDictionary<string, string>?> ReadParameters { get; } = [];
+
         /// <summary>Failures handed out, in order, before reads start working again.</summary>
         public Queue<Exception> ReadFailures { get; } = new();
         public string Preferences { get; set; } = PreferencesAllOn;
+
+        /// <summary>Scripted answers. Return a response (or throw a <see cref="QuickBooksApiException"/>)
+        /// to answer the call; return null to fall through to the defaults (company/preferences for
+        /// reads, an empty <c>QueryResponse</c> for queries, <c>{}</c> for writes). Tests in every lane
+        /// script through these instead of editing this class.</summary>
+        public Func<string, IReadOnlyDictionary<string, string>?, QuickBooksApiResponse?>? OnRead { get; set; }
+        public Func<string, IReadOnlyDictionary<string, string>?, QuickBooksApiResponse?>? OnQuery { get; set; }
+        public Func<string, string?, string?, IReadOnlyDictionary<string, string>?, QuickBooksApiResponse?>? OnWrite { get; set; }
+
+        public static QuickBooksApiResponse Ok(string body) => new(200, body, "tid-api", 12);
 
         public Task<QuickBooksApiResponse> ReadAsync(
             QuickBooksCompanyAccess access,
@@ -269,12 +284,25 @@ public abstract class QuickBooksTestHost : IAsyncLifetime
             lock (_lock)
             {
                 Reads.Add((resource, access.AccessToken));
+                ReadParameters.Add(parameters);
                 ReadFailures.TryDequeue(out failure);
             }
 
             if (failure is not null)
             {
                 return Task.FromException<QuickBooksApiResponse>(failure);
+            }
+
+            try
+            {
+                if (OnRead?.Invoke(resource, parameters) is { } scripted)
+                {
+                    return Task.FromResult(scripted);
+                }
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException<QuickBooksApiResponse>(ex);
             }
 
             var body = resource.StartsWith("companyinfo/", StringComparison.Ordinal)
@@ -287,8 +315,22 @@ public abstract class QuickBooksTestHost : IAsyncLifetime
             QuickBooksCompanyAccess access,
             string query,
             IReadOnlyDictionary<string, string>? parameters = null,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new QuickBooksApiResponse(200, """{"QueryResponse":{}}""", "tid-api", 12));
+            CancellationToken cancellationToken = default)
+        {
+            lock (_lock)
+            {
+                Queries.Add((query, parameters));
+            }
+
+            try
+            {
+                return Task.FromResult(OnQuery?.Invoke(query, parameters) ?? Ok("""{"QueryResponse":{}}"""));
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException<QuickBooksApiResponse>(ex);
+            }
+        }
 
         public Task<QuickBooksApiResponse> WriteAsync(
             QuickBooksCompanyAccess access,
@@ -296,8 +338,22 @@ public abstract class QuickBooksTestHost : IAsyncLifetime
             string? jsonBody,
             string? requestId = null,
             IReadOnlyDictionary<string, string>? parameters = null,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new QuickBooksApiResponse(200, "{}", "tid-api", 12));
+            CancellationToken cancellationToken = default)
+        {
+            lock (_lock)
+            {
+                Writes.Add((resource, jsonBody, requestId, parameters));
+            }
+
+            try
+            {
+                return Task.FromResult(OnWrite?.Invoke(resource, jsonBody, requestId, parameters) ?? Ok("{}"));
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException<QuickBooksApiResponse>(ex);
+            }
+        }
     }
 
     protected static QuickBooksAuthException InvalidGrant() =>
