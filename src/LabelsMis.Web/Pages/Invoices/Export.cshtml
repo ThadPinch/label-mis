@@ -1,13 +1,21 @@
 @page "/invoices/export"
+@using LabelsMis.Domain.Enums
+@inject LabelsMis.Web.Services.QuickBooks.QuickBooksConnectionService QuickBooksConnections
 @model LabelsMis.Web.Pages.Invoices.ExportModel
 @{ ViewData["Title"] = "Export invoices"; 
     ViewData["BackNav"] = new BackNavModel();
+    var qbConnection = await QuickBooksUi.ReadConnectionAsync(QuickBooksConnections, HttpContext.RequestAborted);
 }
 
 <h1 class="h3 mb-3">Invoice CSV download</h1>
-<div class="alert alert-info py-2 small" id="qb-not-sending-note">
-    A list for your own records. QuickBooks' importer does not accept this file, and downloading it marks the
-    invoices in it as exported.
+<div class="alert alert-info py-2 small" id="qb-csv-note">
+    A list for your own records. It puts nothing into QuickBooks: QuickBooks' importer does not accept this file,
+    and downloading it marks the invoices in it as exported.
+    @if (qbConnection == QuickBooksConnectionState.Connected)
+    {
+        <span>To send invoices to QuickBooks, tick them on the <a asp-page="Index">Invoices</a> Ready tab and press
+        <strong>Send to QuickBooks</strong>.</span>
+    }
 </div>
 <form method="post">
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>

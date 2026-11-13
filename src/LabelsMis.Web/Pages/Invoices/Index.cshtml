@@ -1,4 +1,5 @@
 @page "/invoices"
+@using LabelsMis.Domain.Enums
 @model LabelsMis.Web.Pages.Invoices.IndexModel
 @{
     ViewData["Title"] = "Invoices";
@@ -22,19 +23,29 @@
     <li class="nav-item">
         <a class="nav-link @(Model.OnReadyTab ? "active" : "")" id="tab-ready"
            asp-page="Index" asp-all-route-data="@Model.FilterRouteValues(IndexModel.ReadyTab)">
-            Ready to export <span class="badge rounded-pill text-bg-secondary">@Model.ReadyCount</span>
+            Ready to export <span class="badge rounded-pill text-bg-secondary" id="tab-ready-count">@Model.ReadyCount</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link @(Model.OnWaitingTab ? "active" : "")" id="tab-waiting"
            asp-page="Index" asp-all-route-data="@Model.FilterRouteValues(IndexModel.WaitingTab)">
-            Waiting <span class="badge rounded-pill text-bg-warning">@Model.WaitingCount</span>
+            Waiting <span class="badge rounded-pill text-bg-warning" id="tab-waiting-count">@Model.WaitingCount</span>
         </a>
     </li>
+    @if (Model.AttentionCount > 0 || Model.OnAttentionTab || Model.QuickBooksConnected)
+    {
+        <li class="nav-item">
+            <a class="nav-link @(Model.OnAttentionTab ? "active" : "")" id="tab-attention"
+               asp-page="Index" asp-all-route-data="@Model.FilterRouteValues(IndexModel.AttentionTab)">
+                Needs attention
+                <span class="badge rounded-pill @(Model.AttentionCount > 0 ? "text-bg-danger" : "text-bg-secondary")" id="tab-attention-count">@Model.AttentionCount</span>
+            </a>
+        </li>
+    }
     <li class="nav-item">
         <a class="nav-link @(Model.OnExportedTab ? "active" : "")" id="tab-exported"
            asp-page="Index" asp-all-route-data="@Model.FilterRouteValues(IndexModel.ExportedTab)">
-            Exported / closed <span class="badge rounded-pill text-bg-secondary">@Model.ExportedCount</span>
+            Exported / closed <span class="badge rounded-pill text-bg-secondary" id="tab-exported-count">@Model.ExportedCount</span>
         </a>
     </li>
 </ul>
@@ -43,6 +54,33 @@
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         @exportMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData[QuickBooksUi.MessageKey] is string qbMessage)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert" id="qb-message">
+        @qbMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData[QuickBooksUi.ProblemsKey] is string qbProblems)
+{
+    <div class="alert alert-warning alert-dismissible fade show" role="alert" id="qb-problems">
+        <div class="fw-semibold">Not sent to QuickBooks:</div>
+        <ul class="mb-0 small">
+            @foreach (var problem in qbProblems.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                <li>@problem</li>
+            }
+        </ul>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData[QuickBooksUi.ErrorKey] is string qbError)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert" id="qb-error">
+        @qbError
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 }
@@ -72,15 +110,39 @@
 
 @if (showCheckboxes)
 {
-    <div class="alert alert-info py-2 small mb-2" id="qb-not-sending-note">
-        <strong>LabelShop does not send invoices to QuickBooks yet.</strong>
-        Key each invoice into QuickBooks from its <strong>QB preview</strong>, then mark it exported.
-        The CSV is a list for your own records: QuickBooks' importer does not accept it, and downloading it
-        moves the ticked invoices to Exported / closed.
+    <div class="alert alert-info py-2 small mb-2" id="qb-send-note">
+        @switch (Model.QuickBooksConnection)
+        {
+            case QuickBooksConnectionState.Connected:
+                <span><strong>Send to QuickBooks</strong> puts the ticked invoices in line, and LabelShop creates each one in
+                QuickBooks within a minute or so. The QuickBooks column shows how far each one got: sent invoices move to
+                <strong>Exported / closed</strong>, and any QuickBooks turns down go to <strong>Needs attention</strong>.
+                <strong>Mark selected as exported</strong> is for invoices already keyed into QuickBooks by hand.</span>
+                break;
+            case QuickBooksConnectionState.NeedsReconnect:
+                <span><strong>QuickBooks has to be connected again before LabelShop can send invoices</strong>
+                (<a asp-page="/Settings/QuickBooks">Setup → QuickBooks</a>). Until then, key each invoice into QuickBooks from
+                its <strong>QB preview</strong>, then mark it exported.</span>
+                break;
+            default:
+                <span><strong>QuickBooks is not connected, so LabelShop does not send invoices.</strong>
+                Key each invoice into QuickBooks from its <strong>QB preview</strong>, then mark it exported, or connect
+                QuickBooks on <a asp-page="/Settings/QuickBooks">Setup → QuickBooks</a>.</span>
+                break;
+        }
+        The CSV is a list for your own records: QuickBooks' importer does not accept it, and downloading it moves the
+        ticked invoices to Exported / closed.
     </div>
     @* Row checkboxes live outside this form in the table below and join it via form="bulk-export-form". *@
     <form method="post" id="bulk-export-form" asp-page-handler="MarkSelectedExported"
           asp-all-route-data="@Model.FilterRouteValues()" class="mb-2 d-flex gap-2">
+        @if (Model.QuickBooksConnected)
+        {
+            <button type="submit" id="bulk-send-button" class="btn btn-sm btn-primary" disabled
+                    asp-page-handler="SendSelected" asp-all-route-data="@Model.FilterRouteValues()">
+                Send to QuickBooks
+            </button>
+        }
         <button type="submit" id="bulk-mark-button" class="btn btn-sm btn-outline-success" disabled>
             Mark selected as exported
         </button>
@@ -89,6 +151,14 @@
             Download CSV
         </button>
     </form>
+}
+
+@if (Model.OnAttentionTab)
+{
+    <p class="small text-muted mb-2" id="qb-attention-note">
+        QuickBooks turned these down. Fix what the message says, then <strong>Retry</strong>. If you sorted it out in
+        QuickBooks yourself, <strong>Settled by hand</strong> takes it off this list.
+    </p>
 }
 
 <table class="table table-striped">
@@ -104,9 +174,16 @@
         <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Date", "date", Model.Sort, route))</th>
         <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Due", "due", Model.Sort, route))</th>
         <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Status", "status", Model.Sort, route))</th>
-        <th>Order status</th>
+        @if (!Model.OnAttentionTab)
+        {
+            <th>Order status</th>
+        }
         <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Total", "total", Model.Sort, route))</th>
         <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Balance", "balance", Model.Sort, route))</th>
+        @if (Model.ShowQuickBooksColumn)
+        {
+            <th>QuickBooks</th>
+        }
         @if (Model.OnExportedTab)
         {
             <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Exported", "exported", Model.Sort, route))</th>
@@ -115,12 +192,17 @@
         {
             <th>Waiting for</th>
         }
+        @if (Model.OnAttentionTab)
+        {
+            <th>Problem</th>
+        }
         <th></th>
     </tr>
     </thead>
     <tbody>
     @foreach (var item in Model.Result.Items)
     {
+        var qbState = Model.QuickBooksStates.GetValueOrDefault(item.Id);
         <tr data-invoice-id="@item.Id">
             @if (showCheckboxes)
             {
@@ -133,17 +215,24 @@
             <td><a asp-page="/SalesOrders/Edit" asp-route-id="@item.SalesOrderId">@item.OrderNumber</a></td>
             <td>@item.InvoiceDate.ToString("yyyy-MM-dd")</td><td>@item.DueDate.ToString("yyyy-MM-dd")</td>
             <td>@item.Status</td>
-            <td>
-                @if (item.IsFullyShipped)
-                {
-                    <span class="badge bg-success">Shipped @item.ShippedLines/@item.TotalLines</span>
-                }
-                else
-                {
-                    <span class="badge bg-secondary">Shipped @item.ShippedLines/@item.TotalLines</span>
-                }
-            </td>
+            @if (!Model.OnAttentionTab)
+            {
+                <td>
+                    @if (item.IsFullyShipped)
+                    {
+                        <span class="badge bg-success">Shipped @item.ShippedLines/@item.TotalLines</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">Shipped @item.ShippedLines/@item.TotalLines</span>
+                    }
+                </td>
+            }
             <td>@item.Total.ToString("C2")</td><td>@item.BalanceDue.ToString("C2")</td>
+            @if (Model.ShowQuickBooksColumn)
+            {
+                <td class="qb-status-cell">@QuickBooksUi.Badge(item.Id, qbState)</td>
+            }
             @if (Model.OnExportedTab)
             {
                 <td>
@@ -168,7 +257,33 @@
                     }
                 </td>
             }
+            @if (Model.OnAttentionTab)
+            {
+                <td class="small qb-problem" style="max-width: 28rem">
+                    <div class="text-danger-emphasis">@(qbState?.LastError ?? "QuickBooks did not accept this invoice.")</div>
+                    @if (qbState?.FixUrl is { } fixUrl)
+                    {
+                        <a href="@fixUrl" class="qb-fix-link">Fix it</a>
+                    }
+                </td>
+            }
             <td class="text-end text-nowrap">
+                @if (Model.OnAttentionTab && Model.CanEdit)
+                {
+                    <form method="post" asp-page-handler="QuickBooksRetry"
+                          asp-all-route-data="@Model.FilterRouteValues()" class="d-inline">
+                        <input type="hidden" name="id" value="@item.Id" />
+                        <input type="hidden" name="invoiceNumber" value="@item.InvoiceNumber" />
+                        <button type="submit" class="btn btn-sm btn-primary qb-retry">Retry</button>
+                    </form>
+                    <form method="post" asp-page-handler="QuickBooksCancel"
+                          asp-all-route-data="@Model.FilterRouteValues()" class="d-inline"
+                          onsubmit="return confirm('Take @item.InvoiceNumber off Needs attention? Do this once it is right in QuickBooks, or does not need to be there.');">
+                        <input type="hidden" name="id" value="@item.Id" />
+                        <input type="hidden" name="invoiceNumber" value="@item.InvoiceNumber" />
+                        <button type="submit" class="btn btn-sm btn-outline-secondary qb-settled">Settled by hand</button>
+                    </form>
+                }
                 @if (Model.OnExportedTab && Model.CanEdit && !item.NonBillable)
                 {
                     <form method="post" asp-page-handler="UnmarkExported"
@@ -195,7 +310,9 @@
             ? "No exported invoices match the current filters."
             : Model.OnWaitingTab
                 ? "Nothing is waiting."
-                : "No invoices are ready to export.")
+                : Model.OnAttentionTab
+                    ? "Nothing needs attention."
+                    : "No invoices are ready to export.")
     </p>
 }
 
@@ -213,6 +330,7 @@
         (function () {
             const selectAll = document.getElementById('select-all-invoices');
             const boxes = Array.from(document.querySelectorAll('.invoice-select'));
+            const sendButton = document.getElementById('bulk-send-button');
             const qbButton = document.getElementById('bulk-qb-button');
             const markButton = document.getElementById('bulk-mark-button');
 
@@ -220,6 +338,12 @@
                 const checked = boxes.filter(b => b.checked).length;
                 qbButton.disabled = checked === 0;
                 markButton.disabled = checked === 0;
+                if (sendButton) {
+                    sendButton.disabled = checked === 0;
+                    sendButton.textContent = checked === 0
+                        ? 'Send to QuickBooks'
+                        : `Send ${checked} to QuickBooks`;
+                }
                 qbButton.textContent = checked === 0
                     ? 'Download CSV'
                     : `Download CSV of ${checked}`;
@@ -237,8 +361,8 @@
             boxes.forEach(b => b.addEventListener('change', refresh));
             refresh();
 
-            // The QuickBooks export responds with a file download, which doesn't reload the
-            // page, so refresh shortly after to move the exported rows off the Ready tab.
+            // The CSV download responds with a file, which doesn't reload the page, so refresh
+            // shortly after to move the exported rows off the Ready tab.
             qbButton.addEventListener('click', () => {
                 setTimeout(() => window.location.reload(), 1500);
             });
