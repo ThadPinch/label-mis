@@ -50,7 +50,7 @@
         {
             <div id="qb-card-number">
                 <div>
-                    QuickBooks invoice <strong>@Model.InvoiceNumber</strong>
+                    QuickBooks invoice <strong id="qb-card-doc-number">@Model.QuickBooksNumber</strong>
                     <span class="text-muted text-nowrap">(id @qbId)</span>
                 </div>
                 @if (state.OpenInQuickBooksUrl is { } openUrl)
@@ -172,7 +172,7 @@
             <form method="post" asp-page-handler="QbLink" asp-route-id="@Model.InvoiceId" class="border-top mt-2 pt-2" id="qb-link-form">
                 <div class="mb-1">
                     @(Model.ExportedByHand ? "Keyed in by hand?" : "Already in QuickBooks?")
-                    LabelShop looks for a QuickBooks invoice numbered <strong>@Model.InvoiceNumber</strong> and links to it,
+                    LabelShop looks for a QuickBooks invoice numbered <strong id="qb-link-doc-number">@Model.QuickBooksNumber</strong> and links to it,
                     so it is never created twice.
                 </div>
                 <button type="submit" class="btn btn-sm btn-outline-secondary" id="qb-link">Link it</button>

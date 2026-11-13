@@ -76,6 +76,9 @@ public class QuickBooksSendIntegrationTests : QuickBooksTestHost, IAsyncLifetime
 
     async Task IAsyncLifetime.DisposeAsync()
     {
+        // The settings row is one row for the whole database: a send mode or a number format left
+        // behind here would show up in other classes' invoice previews.
+        await InDbAsync(db => db.QuickBooksSettings.ExecuteDeleteAsync());
         await _app.DisposeAsync();
         await DisposeAsync();
     }
@@ -522,7 +525,170 @@ public class QuickBooksSendIntegrationTests : QuickBooksTestHost, IAsyncLifetime
         (await Worker.RunOnceAsync(default)).Should().BeFalse();
     }
 
+    // ---- the invoice number QuickBooks gets ---------------------------------------------------
+
+    [Fact]
+    public async Task Send_NumberOnly_LooksUpAndCreatesUnderTheNumberAtTheEnd()
+    {
+        await ConnectAsync();
+        await SaveNumberFormatAsync(QuickBooksInvoiceNumberFormat.NumberOnly);
+        var invoice = await SeedReadyInvoiceAsync();
+        var shortNumber = ShortNumber(invoice);
+
+        (await QueueAsync(invoice.Id)).Queued.Should().BeTrue();
+        (await Worker.RunOnceAsync(default)).Should().BeTrue();
+
+        Api.Queries.Should().ContainSingle().Which.Query.Should().EndWith($"DocNumber = '{shortNumber}'");
+        var body = JsonNode.Parse(Api.Writes.Should().ContainSingle().Subject.Body!)!;
+        body["DocNumber"]!.GetValue<string>().Should().Be(shortNumber);
+        var saved = await ReadInvoiceAsync(invoice.Id);
+        saved.QbInvoiceId.Should().Be("200");
+        saved.InvoiceNumber.Should().Be(invoice.Number, "LabelShop keeps its own number");
+    }
+
+    [Fact]
+    public async Task Send_NumberOnly_KeyedInByHandUnderTheShortNumber_LinksInsteadOfCreating()
+    {
+        await ConnectAsync();
+        await SaveNumberFormatAsync(QuickBooksInvoiceNumberFormat.NumberOnly);
+        var invoice = await SeedReadyInvoiceAsync();
+        _qb.Add("77", ShortNumber(invoice), invoice.QbCustomerId, 535m);
+
+        await QueueAsync(invoice.Id);
+        await Worker.RunOnceAsync(default);
+
+        (await ReadInvoiceAsync(invoice.Id)).QbInvoiceId.Should().Be("77");
+        Api.Writes.Should().BeEmpty("a second copy is never made");
+    }
+
+    [Fact]
+    public async Task Send_NumberOnly_ShortNumberTakenByAnotherCustomer_StopsAndNamesTheShortNumber()
+    {
+        await ConnectAsync();
+        await SaveNumberFormatAsync(QuickBooksInvoiceNumberFormat.NumberOnly);
+        var invoice = await SeedReadyInvoiceAsync();
+        _qb.Add("78", ShortNumber(invoice), "someone-else", 99m);
+
+        await QueueAsync(invoice.Id);
+        await Worker.RunOnceAsync(default);
+
+        var saved = await ReadInvoiceAsync(invoice.Id);
+        saved.QbExportStatus.Should().Be(QuickBooksExportStatus.NeedsAttention);
+        saved.QbLastErrorCode.Should().Be(QuickBooksErrorMessages.OtherCustomer);
+        saved.QbLastError.Should().Contain($"numbered {ShortNumber(invoice)},");
+        Api.Writes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Send_NumberOnly_AfterUnmark_RenamesTheInvoiceSentUnderTheFullNumber()
+    {
+        await ConnectAsync();
+        var invoice = await SeedReadyInvoiceAsync();
+        await SendAsync(invoice.Id);
+        _qb.Get("200")!["DocNumber"]!.GetValue<string>().Should().Be(invoice.Number);
+
+        await SaveNumberFormatAsync(QuickBooksInvoiceNumberFormat.NumberOnly);
+        _qb.Get("200")!["DocNumber"]!.GetValue<string>().Should().Be(invoice.Number, "the setting renames nothing by itself");
+        await WithInvoiceServiceAsync(s => s.UnmarkExportedAsync(invoice.Id));
+        await QueueAsync(invoice.Id);
+        await Worker.RunOnceAsync(default);
+
+        Api.Queries.Should().BeEmpty("it is found by its QuickBooks id, not by number");
+        var update = JsonNode.Parse(Api.Writes.Should().ContainSingle().Subject.Body!)!;
+        update["Id"]!.GetValue<string>().Should().Be("200");
+        update["DocNumber"]!.GetValue<string>().Should().Be(ShortNumber(invoice));
+        _qb.Count.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Worker_NumberOnly_AppStoppedBetweenCreateAndRecord_FindsItUnderTheShortNumber()
+    {
+        await ConnectAsync();
+        await SaveNumberFormatAsync(QuickBooksInvoiceNumberFormat.NumberOnly);
+        var invoice = await SeedReadyInvoiceAsync();
+        await QueueAsync(invoice.Id);
+        using var stop = new CancellationTokenSource();
+        _qb.AfterCreate = () =>
+        {
+            stop.Cancel();
+            throw new OperationCanceledException(stop.Token);
+        };
+
+        var run = () => Worker.RunOnceAsync(stop.Token);
+        await run.Should().ThrowAsync<OperationCanceledException>();
+        _qb.AfterCreate = null;
+
+        await using var restarted = BuildSendApp();
+        var worker = restarted.GetRequiredService<QuickBooksSendWorker>();
+        (await worker.ReleaseStuckAsync(default)).Should().Be(1);
+        (await worker.RunOnceAsync(default)).Should().BeTrue();
+
+        (await ReadInvoiceAsync(invoice.Id)).QbInvoiceId.Should().Be("200");
+        _qb.Count.Should().Be(1);
+        _qb.Get("200")!["DocNumber"]!.GetValue<string>().Should().Be(ShortNumber(invoice));
+    }
+
+    [Fact]
+    public async Task LinkExisting_NumberOnly_LooksForTheShortNumber_AndSaysSo()
+    {
+        await ConnectAsync();
+        await SaveNumberFormatAsync(QuickBooksInvoiceNumberFormat.NumberOnly);
+        var invoice = await SeedReadyInvoiceAsync();
+        var shortNumber = ShortNumber(invoice);
+        _qb.Add("91", invoice.Number, invoice.QbCustomerId, 575m);
+
+        var missing = await WithSendServiceAsync(s => s.LinkExistingAsync(invoice.Id));
+        missing.Linked.Should().BeFalse("only the short number is looked for");
+        missing.Message.Should().Contain($"numbered {shortNumber}.");
+
+        _qb.Add("92", shortNumber, invoice.QbCustomerId, 575m);
+        var linked = await WithSendServiceAsync(s => s.LinkExistingAsync(invoice.Id));
+
+        linked.Linked.Should().BeTrue();
+        linked.Message.Should().Be($"Linked {invoice.Number} to QuickBooks invoice {shortNumber}.");
+        (await ReadInvoiceAsync(invoice.Id)).QbInvoiceId.Should().Be("92");
+    }
+
+    [Fact]
+    public async Task Preview_ShowsTheNumberQuickBooksGets_BesideLabelShopsOwn()
+    {
+        await ConnectAsync();
+        var invoice = await SeedReadyInvoiceAsync();
+        Task<QbInvoicePreview?> PreviewAsync() =>
+            InSendAppAsync(sp => sp.GetRequiredService<QuickBooksInvoiceService>().GetPreviewAsync(invoice.Id));
+
+        var full = (await PreviewAsync())!;
+        (full.InvoiceNumber, full.DocNumber).Should().Be((invoice.Number, invoice.Number));
+
+        await SaveNumberFormatAsync(QuickBooksInvoiceNumberFormat.NumberOnly);
+        var cut = (await PreviewAsync())!;
+        (cut.InvoiceNumber, cut.DocNumber).Should().Be((invoice.Number, ShortNumber(invoice)));
+        (await WithSendServiceAsync(s => s.QuickBooksNumberAsync(invoice.Number))).Should().Be(ShortNumber(invoice));
+    }
+
     // ---- helpers ------------------------------------------------------------------------------
+
+    /// <summary>The number at the end of the seeded invoice's number, zeros kept.</summary>
+    private static string ShortNumber(SeededInvoice invoice)
+    {
+        var number = invoice.Number.Split('-')[^1];
+        number.Should().MatchRegex("^[0-9]{5,}$");
+        return number;
+    }
+
+    private Task SaveNumberFormatAsync(QuickBooksInvoiceNumberFormat format) =>
+        InDbAsync(async db =>
+        {
+            var settings = await db.QuickBooksSettings.SingleOrDefaultAsync();
+            if (settings is null)
+            {
+                settings = QuickBooksSettings.CreateDefault(TestUserId, DateTime.UtcNow);
+                db.QuickBooksSettings.Add(settings);
+            }
+
+            settings.UpdatePush(settings.ToPushSettings() with { NumberFormat = format }, TestUserId, DateTime.UtcNow);
+            await db.SaveChangesAsync();
+        });
 
     private sealed record SeededInvoice(Guid Id, string Number, string QbCustomerId);
 

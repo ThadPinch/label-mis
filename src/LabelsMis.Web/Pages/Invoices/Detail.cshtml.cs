@@ -142,7 +142,7 @@ public class DetailModel(
         var connection = await QuickBooksUi.ReadConnectionAsync(quickBooksConnection, cancellationToken);
         QuickBooksCard = new QuickBooksCardModel(
             Id,
-            invoice.InvoiceNumber,
+            await quickBooksSend.QuickBooksNumberAsync(invoice.InvoiceNumber, cancellationToken),
             state,
             connection,
             CanEdit,

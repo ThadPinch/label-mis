@@ -52,12 +52,17 @@ public class QuickBooksMappingService(LabelsMisDbContext db, ICurrentUserService
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>Saves the terms map and the send setting; the PO field stays as it is.</summary>
+    /// <summary>Saves the terms map, the send setting and the invoice number format; the PO field
+    /// stays as it is.</summary>
     public async Task SaveSendingAsync(
-        IReadOnlyDictionary<PaymentTerms, string> terms, QuickBooksSendMode sendMode, CancellationToken cancellationToken = default)
+        IReadOnlyDictionary<PaymentTerms, string> terms,
+        QuickBooksSendMode sendMode,
+        QuickBooksInvoiceNumberFormat numberFormat,
+        CancellationToken cancellationToken = default)
     {
         var settings = await GetOrCreateSettingsAsync(cancellationToken);
-        settings.UpdatePush(settings.ToPushSettings() with { Terms = terms, SendMode = sendMode }, UserId, DateTime.UtcNow);
+        settings.UpdatePush(
+            settings.ToPushSettings() with { Terms = terms, SendMode = sendMode, NumberFormat = numberFormat }, UserId, DateTime.UtcNow);
         await db.SaveChangesAsync(cancellationToken);
     }
 

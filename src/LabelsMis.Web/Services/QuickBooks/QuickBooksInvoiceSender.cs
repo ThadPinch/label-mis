@@ -110,7 +110,8 @@ public class QuickBooksInvoiceSender(
         }
     }
 
-    /// <summary>Looks QuickBooks up for an invoice with this number.</summary>
+    /// <summary>Looks QuickBooks up for an invoice with this number: the number QuickBooks knows the
+    /// invoice by (<see cref="QuickBooksPushSettings.DocNumberFor"/>), not always LabelShop's own.</summary>
     public static async Task<QuickBooksInvoiceAnswer?> FindByNumberAsync(
         QuickBooksGateway gateway, string docNumber, QuickBooksCaller caller, CancellationToken cancellationToken)
     {
@@ -197,10 +198,10 @@ public class QuickBooksInvoiceSender(
         {
             // Look before creating: an earlier attempt may have created it and been cut off before
             // recording it, or someone keyed it by hand. Either way it is linked, never made twice.
-            var found = await FindByNumberAsync(gateway, invoice.InvoiceNumber, caller, cancellationToken);
+            var found = await FindByNumberAsync(gateway, source.DocNumber, caller, cancellationToken);
             if (found is not null)
             {
-                return await LinkFoundAsync(invoice, found, source.QuickBooksCustomerId, caller.ActorId);
+                return await LinkFoundAsync(invoice, found, source.DocNumber, source.QuickBooksCustomerId, caller.ActorId);
             }
 
             try
@@ -219,13 +220,13 @@ public class QuickBooksInvoiceSender(
             catch (QuickBooksApiException ex) when (ex.Code == "6140")
             {
                 // The number is taken: whatever has it was not found a moment ago, so look again.
-                var duplicate = await FindByNumberAsync(gateway, invoice.InvoiceNumber, caller, cancellationToken);
+                var duplicate = await FindByNumberAsync(gateway, source.DocNumber, caller, cancellationToken);
                 if (duplicate is null)
                 {
                     throw;
                 }
 
-                return await LinkFoundAsync(invoice, duplicate, source.QuickBooksCustomerId, caller.ActorId);
+                return await LinkFoundAsync(invoice, duplicate, source.DocNumber, source.QuickBooksCustomerId, caller.ActorId);
             }
         }
         else
@@ -282,8 +283,10 @@ public class QuickBooksInvoiceSender(
         if (quickBooksId is null)
         {
             // Voided while its create was still in line: if an attempt got it into QuickBooks
-            // without recording it, it is under this number.
-            var found = await FindByNumberAsync(gateway, invoice.InvoiceNumber, caller, cancellationToken);
+            // without recording it, it is under the number it was sent with.
+            var settings = (await db.QuickBooksSettings.AsNoTracking().SingleOrDefaultAsync(cancellationToken))?.ToPushSettings()
+                ?? QuickBooksPushSettings.Default;
+            var found = await FindByNumberAsync(gateway, settings.DocNumberFor(invoice.InvoiceNumber), caller, cancellationToken);
             if (found is null || !IsSameCustomer(found, invoice.Customer.QuickBooksCustomerId))
             {
                 invoice.ReleaseStuckQuickBooksAttempt();
@@ -372,12 +375,12 @@ public class QuickBooksInvoiceSender(
     }
 
     private async Task<QuickBooksSendResult> LinkFoundAsync(
-        Invoice invoice, QuickBooksInvoiceAnswer found, string? quickBooksCustomerId, Guid actorId)
+        Invoice invoice, QuickBooksInvoiceAnswer found, string docNumber, string? quickBooksCustomerId, Guid actorId)
     {
         if (!IsSameCustomer(found, quickBooksCustomerId))
         {
             return await StopAsync(
-                invoice, OtherCustomerMessage(invoice.InvoiceNumber, found, invoice.Customer.Name), QuickBooksErrorMessages.OtherCustomer);
+                invoice, OtherCustomerMessage(docNumber, found, invoice.Customer.Name), QuickBooksErrorMessages.OtherCustomer);
         }
 
         invoice.RecordInQuickBooks(found.Id, found.SyncToken, found.TotalAmt, found.TotalTax, null, actorId, Now);

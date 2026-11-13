@@ -154,6 +154,16 @@ what supplies the token and writes the log row.
 - **Void:** voiding in LabelShop queues the QuickBooks void; refused (needs attention) when QuickBooks shows a payment.
   Nothing is ever deleted.
 - **Change after export:** Unmark exported keeps the QuickBooks id, so the next send updates the same invoice.
+- **The invoice number QuickBooks gets** (`QuickBooksSettings.InvoiceNumberFormat`, Setup → QuickBooks → Sending
+  invoices → The invoice number): the full LabelShop number (default) or only the number at the end, so
+  `INV-2026-00549` goes as `00549` (leading zeros kept; `QuickBooksDocNumber`). The same number is used for the
+  payload's `DocNumber`, the lookup before a create, the 6140 fallback, the void of an invoice that was never
+  recorded, and "Already in QuickBooks? Link it", so an invoice keyed in by hand as `00549` is found and linked.
+  A number that isn't prefix-year-number (imported with its old number) goes as it is. The short number is safe
+  because the number at the end no longer starts again each year (`DocumentNumberService`; see
+  `docs/architecture.md`). Changing the setting renames nothing by itself: an invoice already in QuickBooks keeps its
+  number until it is sent again (Unmark exported → Send updates the same QuickBooks invoice, `DocNumber` included).
+  LabelShop's own screens, PDFs, emails and the CSV download keep the full number.
 - **Payload rules:** `DocNumber`, `TxnDate`, `DueDate` always; `SalesTermRef` only when the terms map names a term the
   lists have; lines carry `ItemRef`, `ClassRef`, `TaxCodeRef` TAX/NON from the item's own taxable flag; Qty +
   UnitPrice only when Qty × UnitPrice rounded half up equals the line amount, else Qty + Amount; shipping as a line

@@ -248,11 +248,13 @@ public class QuickBooksModel(
         return RedirectToPage(pageName: null, pageHandler: null, routeValues: null, fragment: "qb-po-field");
     }
 
-    /// <summary>Saves the payment terms map and the send setting. Binds its fields by name and
-    /// ignores ModelState, which also holds the mapping form's (unposted) required fields.</summary>
+    /// <summary>Saves the payment terms map, the send setting and the invoice number format. Binds
+    /// its fields by name and ignores ModelState, which also holds the mapping form's (unposted)
+    /// required fields.</summary>
     public async Task<IActionResult> OnPostSaveSendingAsync(
         [FromForm(Name = "Sending.Terms")] Dictionary<string, string?>? terms,
         [FromForm(Name = "Sending.SendMode")] QuickBooksSendMode sendMode,
+        [FromForm(Name = "Sending.NumberFormat")] QuickBooksInvoiceNumberFormat numberFormat,
         CancellationToken cancellationToken)
     {
         var map = new Dictionary<PaymentTerms, string>();
@@ -266,8 +268,8 @@ public class QuickBooksModel(
 
         try
         {
-            await mappingService.SaveSendingAsync(map, sendMode, cancellationToken);
-            TempData[SendingStatusKey] = "Payment terms and sending saved.";
+            await mappingService.SaveSendingAsync(map, sendMode, numberFormat, cancellationToken);
+            TempData[SendingStatusKey] = "Payment terms, invoice number and sending saved.";
         }
         catch (ArgumentException ex)
         {

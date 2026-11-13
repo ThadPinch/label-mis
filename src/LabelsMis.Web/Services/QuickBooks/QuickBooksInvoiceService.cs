@@ -43,12 +43,14 @@ public record QbPreviewLine(
 public record QbPreviewShipping(string Item, string Class, decimal Amount);
 
 /// <summary>
-/// One invoice as QuickBooks Online will receive it (E9). DocNumber = the LabelShop invoice
-/// number. Tax is not part of it: QuickBooks applies the customer's tax set-up to the ship-to, so
+/// One invoice as QuickBooks Online will receive it (E9). <see cref="InvoiceNumber"/> is the
+/// LabelShop number; <see cref="DocNumber"/> is the number QuickBooks gets, which Setup →
+/// QuickBooks can cut down to the number at the end. Tax is not part of it: QuickBooks applies the customer's tax set-up to the ship-to, so
 /// <see cref="Total"/> is lines + shipping and LabelShop's own tax is shown for reference only.
 /// </summary>
 public record QbInvoicePreview(
     Guid InvoiceId,
+    string InvoiceNumber,
     string DocNumber,
     string Status,
     DateOnly TxnDate,
@@ -257,9 +259,11 @@ public class QuickBooksInvoiceService(
             ?? billingAddress;
 
         var options = await mappingService.GetLineOptionsAsync(mapped.Mapping, cancellationToken);
+        var push = await mappingService.GetPushSettingsAsync(cancellationToken);
         return new QbInvoicePreview(
             invoice.Id,
             invoice.InvoiceNumber,
+            push.DocNumberFor(invoice.InvoiceNumber),
             status,
             invoice.InvoiceDate,
             invoice.DueDate,

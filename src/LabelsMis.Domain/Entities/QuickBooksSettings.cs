@@ -35,6 +35,9 @@ public class QuickBooksSettings : EntityBase
     public string? PoCustomFieldName { get; private set; }
     public QuickBooksSendMode SendMode { get; private set; }
 
+    /// <summary>The invoice number QuickBooks gets: the full LabelShop number, or only the number at its end.</summary>
+    public QuickBooksInvoiceNumberFormat InvoiceNumberFormat { get; private set; }
+
     public static QuickBooksSettings CreateDefault(Guid createdById, DateTime createdAt)
     {
         var settings = new QuickBooksSettings();
@@ -84,9 +87,9 @@ public class QuickBooksSettings : EntityBase
     }
 
     public QuickBooksPushSettings ToPushSettings() =>
-        new(QuickBooksPushSettings.ParseTerms(TermsMapJson), PoCustomFieldId, PoCustomFieldName, SendMode);
+        new(QuickBooksPushSettings.ParseTerms(TermsMapJson), PoCustomFieldId, PoCustomFieldName, SendMode, InvoiceNumberFormat);
 
-    /// <summary>Saves the terms map, the PO field and the send setting.</summary>
+    /// <summary>Saves the terms map, the PO field, the send setting and the invoice number format.</summary>
     public void UpdatePush(QuickBooksPushSettings push, Guid modifiedById, DateTime modifiedAt)
     {
         var fieldId = string.IsNullOrWhiteSpace(push.PoFieldId) ? null : push.PoFieldId.Trim();
@@ -100,6 +103,11 @@ public class QuickBooksSettings : EntityBase
             throw new ArgumentException("Choose how invoices are sent.");
         }
 
+        if (!Enum.IsDefined(push.NumberFormat))
+        {
+            throw new ArgumentException("Choose which invoice number QuickBooks gets.");
+        }
+
         var json = QuickBooksPushSettings.SerializeTerms(push.Terms);
         if (json.Length > 2000)
         {
@@ -111,6 +119,7 @@ public class QuickBooksSettings : EntityBase
         var fieldName = fieldId is null || string.IsNullOrWhiteSpace(push.PoFieldName) ? null : push.PoFieldName.Trim();
         PoCustomFieldName = fieldName is { Length: > 100 } ? fieldName[..100] : fieldName;
         SendMode = push.SendMode;
+        InvoiceNumberFormat = push.NumberFormat;
         SetModified(modifiedById, modifiedAt);
     }
 

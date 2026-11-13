@@ -244,6 +244,7 @@ public class QuickBooksMappingServiceTests : QuickBooksListsTestHost
         var push = await WithMappingAsync(s => s.GetPushSettingsAsync());
 
         push.SendMode.Should().Be(QuickBooksSendMode.SendLater);
+        push.NumberFormat.Should().Be(QuickBooksInvoiceNumberFormat.Full);
         push.Terms.Should().BeEmpty();
         push.PoFieldId.Should().BeNull();
     }
@@ -272,14 +273,27 @@ public class QuickBooksMappingServiceTests : QuickBooksListsTestHost
 
         await WithMappingAsync(async s =>
         {
-            await s.SaveSendingAsync(new Dictionary<PaymentTerms, string> { [PaymentTerms.Net15] = "Net 15" }, QuickBooksSendMode.Leave);
+            await s.SaveSendingAsync(
+                new Dictionary<PaymentTerms, string> { [PaymentTerms.Net15] = "Net 15" },
+                QuickBooksSendMode.Leave,
+                QuickBooksInvoiceNumberFormat.NumberOnly);
             return true;
         });
 
         var saved = await WithMappingAsync(s => s.GetPushSettingsAsync());
         saved.Terms.Should().BeEquivalentTo(new Dictionary<PaymentTerms, string> { [PaymentTerms.Net15] = "Net 15" });
         saved.SendMode.Should().Be(QuickBooksSendMode.Leave);
+        saved.NumberFormat.Should().Be(QuickBooksInvoiceNumberFormat.NumberOnly);
         saved.PoFieldId.Should().Be("1000000001", "saving terms and sending keeps the PO field");
+
+        await WithMappingAsync(async s =>
+        {
+            await s.SetPoFieldAsync(null, null);
+            return true;
+        });
+
+        (await WithMappingAsync(s => s.GetPushSettingsAsync())).NumberFormat
+            .Should().Be(QuickBooksInvoiceNumberFormat.NumberOnly, "changing the PO field keeps the invoice number format");
     }
 
     [Fact]

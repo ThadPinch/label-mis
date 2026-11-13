@@ -1,4 +1,5 @@
 @using LabelsMis.Domain.Enums
+@using LabelsMis.Domain.QuickBooks
 @model LabelsMis.Web.Pages.Settings.QuickBooksModel
 @{
     var push = Model.Push;
@@ -35,6 +36,27 @@
                     }
                 </div>
             </fieldset>
+            <fieldset class="border rounded p-3 mb-3" id="qb-number-format">
+                <legend class="float-none w-auto px-2 h6 mb-0">The invoice number</legend>
+                @foreach (var option in Html.GetEnumSelectList<QuickBooksInvoiceNumberFormat>())
+                {
+                    var id = $"Sending_NumberFormat_{option.Value}";
+                    var format = (QuickBooksInvoiceNumberFormat)int.Parse(option.Value);
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="Sending.NumberFormat" id="@id" value="@option.Value"
+                               checked="@(format == push.NumberFormat)" />
+                        <label class="form-check-label" for="@id">
+                            @option.Text <span class="text-muted">(@QuickBooksDocNumber.For("INV-2026-00549", format))</span>
+                        </label>
+                    </div>
+                }
+                <p class="small text-muted mt-2 mb-0">
+                    The number QuickBooks shows for an invoice LabelShop sends, and the number LabelShop looks for when it
+                    checks whether an invoice is already in QuickBooks. LabelShop's own screens, PDFs and emails keep the
+                    full number. The number at the end keeps counting from year to year, so it never repeats. Invoices
+                    already in QuickBooks keep the number they were sent with unless they are sent again.
+                </p>
+            </fieldset>
             <fieldset class="border rounded p-3 mb-3" id="qb-send-mode">
                 <legend class="float-none w-auto px-2 h6 mb-0">The invoice email</legend>
                 @foreach (var option in Html.GetEnumSelectList<QuickBooksSendMode>())
@@ -51,7 +73,7 @@
                     to send, for someone to send from there.
                 </p>
             </fieldset>
-            <button type="submit" class="btn btn-primary" id="qb-sending-save">Save terms and sending</button>
+            <button type="submit" class="btn btn-primary" id="qb-sending-save">Save terms, number and sending</button>
         </form>
     </div>
     <div class="col-lg-6">

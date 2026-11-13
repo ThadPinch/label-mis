@@ -1,5 +1,6 @@
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
+using LabelsMis.Domain.Invoicing;
 using LabelsMis.Domain.QuickBooks;
 using LabelsMis.Infrastructure.Persistence;
 using LabelsMis.Web.Services.Invoices;
@@ -266,11 +267,12 @@ public class QuickBooksSendService(
             throw new InvalidOperationException(notConnected);
         }
 
+        var docNumber = await QuickBooksNumberAsync(invoice.InvoiceNumber, cancellationToken);
         QuickBooksInvoiceAnswer? found;
         try
         {
             found = await QuickBooksInvoiceSender.FindByNumberAsync(
-                _gateway, invoice.InvoiceNumber, _gateway.CallerFor(invoiceId: invoice.Id), cancellationToken);
+                _gateway, docNumber, _gateway.CallerFor(invoiceId: invoice.Id), cancellationToken);
         }
         catch (QuickBooksApiException ex)
         {
@@ -287,18 +289,31 @@ public class QuickBooksSendService(
 
         if (found is null)
         {
-            return new QuickBooksLinkResult(false, $"QuickBooks has no invoice numbered {invoice.InvoiceNumber}. Nothing was changed.");
+            return new QuickBooksLinkResult(false, $"QuickBooks has no invoice numbered {docNumber}. Nothing was changed.");
         }
 
         if (!QuickBooksInvoiceSender.IsSameCustomer(found, invoice.Customer.QuickBooksCustomerId))
         {
             return new QuickBooksLinkResult(
-                false, QuickBooksInvoiceSender.OtherCustomerMessage(invoice.InvoiceNumber, found, invoice.Customer.Name));
+                false, QuickBooksInvoiceSender.OtherCustomerMessage(docNumber, found, invoice.Customer.Name));
         }
 
         invoice.RecordInQuickBooks(found.Id, found.SyncToken, found.TotalAmt, found.TotalTax, null, userId, DateTime.UtcNow);
         await _db.SaveChangesAsync(cancellationToken);
-        return new QuickBooksLinkResult(true, $"Linked {invoice.InvoiceNumber} to the QuickBooks invoice with the same number.");
+        return new QuickBooksLinkResult(
+            true,
+            docNumber == invoice.InvoiceNumber
+                ? $"Linked {invoice.InvoiceNumber} to the QuickBooks invoice with the same number."
+                : $"Linked {invoice.InvoiceNumber} to QuickBooks invoice {docNumber}.");
+    }
+
+    /// <summary>The number QuickBooks knows a LabelShop invoice by: the LabelShop number, or only the
+    /// number at its end when Setup → QuickBooks says so.</summary>
+    public async Task<string> QuickBooksNumberAsync(string invoiceNumber, CancellationToken cancellationToken = default)
+    {
+        var settings = (await _db.QuickBooksSettings.AsNoTracking().SingleOrDefaultAsync(cancellationToken))?.ToPushSettings()
+            ?? QuickBooksPushSettings.Default;
+        return settings.DocNumberFor(invoiceNumber);
     }
 
     /// <summary>Why the invoice can't be put in line, or null when it can.</summary>

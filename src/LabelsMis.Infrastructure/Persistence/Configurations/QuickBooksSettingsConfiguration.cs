@@ -26,5 +26,6 @@ public class QuickBooksSettingsConfiguration : IEntityTypeConfiguration<QuickBoo
         builder.Property(s => s.PoCustomFieldId).HasMaxLength(50);
         builder.Property(s => s.PoCustomFieldName).HasMaxLength(100);
         builder.Property(s => s.SendMode).IsRequired().HasDefaultValue(Domain.Enums.QuickBooksSendMode.SendLater);
+        builder.Property(s => s.InvoiceNumberFormat).IsRequired().HasDefaultValue(Domain.Enums.QuickBooksInvoiceNumberFormat.Full);
     }
 }

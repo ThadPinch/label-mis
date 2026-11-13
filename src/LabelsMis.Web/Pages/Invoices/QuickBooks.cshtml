@@ -2,7 +2,7 @@
 @model LabelsMis.Web.Pages.Invoices.QuickBooksModel
 @using LabelsMis.Web.Services.QuickBooks
 @{
-    ViewData["Title"] = $"QuickBooks preview · {Model.Preview?.DocNumber}";
+    ViewData["Title"] = $"QuickBooks preview · {Model.Preview?.InvoiceNumber}";
     ViewData["BackNav"] = new BackNavModel();
 }
 
@@ -47,7 +47,7 @@
             @(Model.QuickBooksCard?.Connected == true
                 ? "This is the invoice LabelShop sends to QuickBooks."
                 : "Key this into QuickBooks as shown.")
-            Invoice <a asp-page="Detail" asp-route-id="@p.InvoiceId">@p.DocNumber</a>
+            Invoice <a asp-page="Detail" asp-route-id="@p.InvoiceId">@p.InvoiceNumber</a>
             &middot; Sales order <a asp-page="/SalesOrders/Edit" asp-route-id="@p.SalesOrderId">@p.OrderNumber</a>
         </div>
     </div>

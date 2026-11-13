@@ -5,10 +5,12 @@ namespace LabelsMis.Web.Pages.Invoices;
 
 /// <summary>What the QuickBooks card (<c>_QuickBooksCard</c>) on the invoice and preview pages
 /// needs. The page that hosts the card implements its handlers: <c>QbSend</c>, <c>QbRetry</c>,
-/// <c>QbCancel</c>, and on the invoice page also <c>QbLink</c> and <c>QbSendOptions</c>.</summary>
+/// <c>QbCancel</c>, and on the invoice page also <c>QbLink</c> and <c>QbSendOptions</c>.
+/// <paramref name="QuickBooksNumber"/> is the number QuickBooks knows the invoice by, which Setup →
+/// QuickBooks can cut down to the number at the end of LabelShop's.</summary>
 public sealed record QuickBooksCardModel(
     Guid InvoiceId,
-    string InvoiceNumber,
+    string QuickBooksNumber,
     QuickBooksSendState? State,
     QuickBooksConnectionState Connection,
     bool CanEdit,
