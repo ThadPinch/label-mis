@@ -249,6 +249,7 @@ public class QuickBooksInvoiceService(
                 .FirstOrDefault()
             ?? billingAddress;
 
+        var options = await mappingService.GetLineOptionsAsync(mapped.Mapping, cancellationToken);
         return new QbInvoicePreview(
             invoice.Id,
             invoice.InvoiceNumber,
@@ -276,8 +277,8 @@ public class QuickBooksInvoiceService(
             warnings,
             invoice.QbExportedAt,
             exportedBy,
-            mapped.Mapping.Items,
-            mapped.Mapping.Classes,
+            options.Items,
+            options.Classes,
             billingEmail?.IsPrimaryFallback ?? false);
     }
 }
