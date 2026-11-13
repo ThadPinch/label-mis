@@ -1091,7 +1091,27 @@ public class InvoiceService(
         var userId = RequireUserId();
         var now = DateTime.UtcNow;
         var invoice = await db.Invoices.SingleAsync(i => i.Id == invoiceId, cancellationToken);
+        if (invoice.QbExportStatus is QuickBooksExportStatus.Sending)
+        {
+            throw new InvalidOperationException("This invoice is being sent to QuickBooks right now; try again in a moment.");
+        }
+
         invoice.Void(reason, userId, now);
+
+        // Q20: the QuickBooks copy is voided too (never deleted). One that is already in line
+        // stays there: the worker voids a void invoice instead of sending it. One that never
+        // reached QuickBooks has nothing to void.
+        if (invoice.QbInvoiceId is not null
+            && invoice.QbVoidedAt is null
+            && invoice.QbExportStatus is QuickBooksExportStatus.None or QuickBooksExportStatus.NeedsAttention)
+        {
+            invoice.QueueForQuickBooks(userId, now);
+        }
+        else if (invoice.QbInvoiceId is null && invoice.QbExportStatus is QuickBooksExportStatus.NeedsAttention)
+        {
+            invoice.CancelQuickBooksSend(userId, now);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
     }
 
