@@ -12,6 +12,14 @@ public static class QuickBooksOperations
     public const string CompanyRead = "company.read";
     public const string PreferencesRead = "preferences.read";
 
+    // Invoice sends (the sender's own constants carry the same text).
+    public const string InvoiceLookup = "invoice.lookup";
+    public const string InvoiceRead = "invoice.read";
+    public const string InvoiceCreate = "invoice.create";
+    public const string InvoiceUpdate = "invoice.update";
+    public const string InvoiceVoid = "invoice.void";
+    public const string InvoiceEmail = "invoice.email";
+
     /// <summary>What the log page calls an operation.</summary>
     public static string Describe(string operation) => operation switch
     {
@@ -22,6 +30,12 @@ public static class QuickBooksOperations
         TokenRefresh => "Refresh the sign-in",
         CompanyRead => "Read the company name",
         PreferencesRead => "Read the company settings",
-        _ => operation
+        InvoiceLookup => "Look for the invoice number",
+        InvoiceRead => "Read the invoice",
+        InvoiceCreate => "Create the invoice",
+        InvoiceUpdate => "Update the invoice",
+        InvoiceVoid => "Void the invoice",
+        InvoiceEmail => "Email the invoice from QuickBooks",
+        _ => QuickBooksCustomerOperations.Describe(operation) ?? operation
     };
 }
