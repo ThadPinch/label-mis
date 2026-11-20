@@ -64,7 +64,19 @@ public sealed class FlowDocument
         _cursorY -= table.MarginTop;
         var widths = table.ResolveColumnWidths(ContentWidth);
 
-        void DrawRows(IEnumerable<FlowTable.Row> rows)
+        // Keep-together: a table that fits on a fresh page but not in the space left starts a new
+        // page instead of splitting. One taller than a page still paginates row by row.
+        if (table.KeepTogether)
+        {
+            var pageTop = _pageSize.Height - _marginTop;
+            var tableHeight = table.HeaderRows.Concat(table.BodyRows).Sum(row => table.MeasureRow(row, widths));
+            if (_cursorY - tableHeight < BottomLimit && tableHeight <= pageTop - BottomLimit && _cursorY < pageTop - table.MarginTop - 0.5f)
+            {
+                NewPage();
+            }
+        }
+
+        void DrawRows(IEnumerable<FlowTable.Row> rows, bool repeatHeaders)
         {
             foreach (var row in rows)
             {
@@ -72,7 +84,10 @@ public sealed class FlowDocument
                 if (_cursorY - rowHeight < BottomLimit)
                 {
                     NewPage();
-                    foreach (var headerRow in table.HeaderRows)
+
+                    // Headers repeat above body rows only: a header row that itself starts the new
+                    // page is about to be drawn, and repeating it here printed it twice.
+                    foreach (var headerRow in repeatHeaders ? table.HeaderRows : [])
                     {
                         var headerHeight = table.MeasureRow(headerRow, widths);
                         table.DrawRow(Context(), headerRow, widths, _marginLeft, _cursorY);
@@ -85,8 +100,8 @@ public sealed class FlowDocument
             }
         }
 
-        DrawRows(table.HeaderRows);
-        DrawRows(table.BodyRows);
+        DrawRows(table.HeaderRows, repeatHeaders: false);
+        DrawRows(table.BodyRows, repeatHeaders: true);
         _cursorY -= table.MarginBottom;
     }
 
@@ -415,6 +430,10 @@ public sealed class FlowTable : FlowElement
     {
         _percentColumns = percentColumns;
     }
+
+    /// <summary>When set, FlowDocument moves the whole table to a new page rather than splitting it,
+    /// as long as it fits on one page.</summary>
+    public bool KeepTogether { get; set; }
 
     internal IReadOnlyList<Row> HeaderRows => _headerRows;
 
