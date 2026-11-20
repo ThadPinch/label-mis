@@ -675,6 +675,45 @@
   display: none;
 }
 
+/* The trial-layout button (v2) sits against the ticket button as one narrow pair, so a board card's
+   buttons stay on the row they were on and a list row grows as little as possible. */
+.floor-card .floor-card-actions {
+  gap: 0.15rem;
+}
+
+.floor-card .floor-ticket:not(.floor-ticket-alt),
+.floor-row-actions .floor-ticket:not(.floor-ticket-alt) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.floor-card .floor-ticket:not(.floor-ticket-alt) {
+  padding-left: 0.22rem;
+  padding-right: 0.22rem;
+}
+
+.floor-row-actions .floor-ticket:not(.floor-ticket-alt) {
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
+.floor-card .floor-ticket-alt,
+.floor-row-actions .btn + .floor-ticket-alt {
+  margin-left: -1px;
+  padding-left: 0.18rem;
+  padding-right: 0.18rem;
+  font-size: 0.62rem;
+  letter-spacing: -0.02em;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.floor-row-actions .btn + .floor-ticket-alt {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+  font-size: 0.68rem;
+}
+
 .floor-refresh-icon {
   width: 0.9rem;
   height: 0.9rem;

@@ -86,7 +86,7 @@ else
                     <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap">Set status</button>
                 </form>
             }
-            <a asp-page="Ticket" asp-route-id="@Model.Detail.Job.Id" class="btn btn-sm btn-outline-secondary text-nowrap">Print ticket</a>
+            <partial name="_TicketButtons" model="new TicketButtonsModel(Model.Detail.Job.Id, Floor: false)" />
         </div>
     </div>
 

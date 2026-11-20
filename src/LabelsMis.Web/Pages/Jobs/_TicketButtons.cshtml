@@ -1,0 +1,24 @@
+@* The ticket buttons for one job. The main button prints the default layout; the small one beside
+   it prints the other layout (v2 while the job-first ticket is on trial, v1 once v2 is the default).
+   When the trial ends, remove the second link in each branch. *@
+@using LabelsMis.Web.Pdf
+@using Microsoft.Extensions.Options
+@model LabelsMis.Web.Pages.Jobs.TicketButtonsModel
+@inject IOptions<JobOptions> TicketOptions
+@{
+    var current = TicketOptions.Value.ResolveTicketVersion(null);
+    var other = current == JobOptions.TrialTicketVersion ? JobOptions.OriginalTicketVersion : JobOptions.TrialTicketVersion;
+    var otherTitle = other == JobOptions.TrialTicketVersion
+        ? "Print the new ticket layout (trial)"
+        : "Print the previous ticket layout";
+}
+@if (Model.Floor)
+{
+    <a asp-page="/Jobs/Ticket" asp-route-id="@Model.JobId" class="btn btn-sm btn-outline-secondary floor-ticket" title="Print the job ticket" aria-label="Job ticket"><svg aria-hidden="true"><use href="#si-job" /></svg><span class="floor-ticket-text">Ticket</span></a>
+    <a asp-page="/Jobs/Ticket" asp-route-id="@Model.JobId" asp-route-v="@other" class="btn btn-sm btn-outline-secondary floor-ticket floor-ticket-alt" title="@otherTitle" aria-label="Job ticket, layout v@(other)">v@(other)</a>
+}
+else
+{
+    <a asp-page="/Jobs/Ticket" asp-route-id="@Model.JobId" class="btn btn-sm btn-outline-secondary text-nowrap">Print ticket</a>
+    <a asp-page="/Jobs/Ticket" asp-route-id="@Model.JobId" asp-route-v="@other" class="btn btn-sm btn-outline-secondary text-nowrap" title="@otherTitle">Ticket v@(other)</a>
+}

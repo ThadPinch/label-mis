@@ -16,6 +16,22 @@ public class JobOptions
     public const string SectionName = "Jobs";
     public string PdfStoragePath { get; set; } = "./data/pdfs/jobs";
     public string ShopName { get; set; } = "Labels MIS Print Shop";
+
+    /// <summary>
+    /// Which ticket layout the plain Ticket buttons print: 1 = the original, 2 = the job-first trial
+    /// (<see cref="JobTicketV2PdfGenerator"/>). The other one stays reachable from the small button
+    /// beside each Ticket button. Set <c>Jobs__DefaultTicketVersion</c> to switch without a code change.
+    /// </summary>
+    public int DefaultTicketVersion { get; set; } = 1;
+
+    public const int OriginalTicketVersion = 1;
+    public const int TrialTicketVersion = 2;
+
+    /// <summary>The layout to print for a requested version; anything unknown gets the default.</summary>
+    public int ResolveTicketVersion(int? requested) =>
+        requested is OriginalTicketVersion or TrialTicketVersion
+            ? requested.Value
+            : DefaultTicketVersion == TrialTicketVersion ? TrialTicketVersion : OriginalTicketVersion;
 }
 
 public class JobTicketPdfGenerator(IOptions<JobOptions> options, GeneralSettingsService generalSettings)

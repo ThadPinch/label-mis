@@ -180,6 +180,19 @@ public class PdfGeneratorSmokeTests
         var bytes = await generator.GenerateAsync(detail, new[] { detail, sibling, outsourced });
 
         AssertLoadablePdf(bytes, minPages: 1, "job-ticket.pdf");
+
+        // The trial layout renders the same order from the same data.
+        var generatorV2 = new JobTicketV2PdfGenerator(
+            Options.Create(new JobOptions()),
+            new StubGeneralSettingsService(BrandedSettings()));
+        var versioned = detail with
+        {
+            LineNotes = "VERSIONS: Mild 3,000 | Hot 2,000\nFINISH: matte, not gloss",
+            OrderNotes = string.Join("\n", Enumerable.Range(1, 14).Select(i => $"Order note line {i} of 14."))
+        };
+        var bytesV2 = await generatorV2.GenerateAsync(versioned, new[] { versioned, sibling, outsourced });
+
+        AssertLoadablePdf(bytesV2, minPages: 1, "job-ticket-v2.pdf");
     }
 
     [Fact]

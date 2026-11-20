@@ -22,6 +22,9 @@ public record FloorColumn(JobStatus Status, string Label, string StagePage, IRea
 /// <summary>What a job card / list row needs besides the job.</summary>
 public record FloorCardModel(FloorJob Job, bool CanAdvance, bool CanShip, DateOnly Today);
 
+/// <summary>The ticket buttons for one job: compact on the floor board and list, labelled on the job page.</summary>
+public record TicketButtonsModel(Guid JobId, bool Floor);
+
 public record FloorDueModel(DateOnly? DueDate, DateOnly Today, DateOnly? ScheduledForDate = null);
 
 /// <summary>
