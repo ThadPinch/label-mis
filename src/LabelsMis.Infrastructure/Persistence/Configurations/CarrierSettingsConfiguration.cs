@@ -19,6 +19,7 @@ public class CarrierSettingsConfiguration : IEntityTypeConfiguration<CarrierSett
         builder.Property(s => s.ShipFromContact).HasMaxLength(60);
         builder.Property(s => s.ShipFromPhone).HasMaxLength(30);
         builder.Property(s => s.DefaultServiceCode).HasMaxLength(10).IsRequired();
+        builder.Property(s => s.DefaultLabelFormat).HasConversion<int>().IsRequired();
         builder.Property(s => s.TrackingEnabled).IsRequired().HasDefaultValue(true);
         builder.Property(s => s.BoxPresetsJson).HasMaxLength(CarrierSettings.MaxBoxPresetsLength);
         builder.Property(s => s.LastTestMessage).HasMaxLength(CarrierSettings.MaxMessageLength);

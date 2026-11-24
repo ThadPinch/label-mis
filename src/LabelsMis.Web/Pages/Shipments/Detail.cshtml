@@ -1,4 +1,6 @@
 @page "/shipments/{id:guid}"
+@using LabelsMis.Domain.Carriers
+@using LabelsMis.Domain.Enums
 @model LabelsMis.Web.Pages.Shipments.DetailModel
 @{ ViewData["Title"] = Model.Detail?.Shipment.ShipmentNumber ?? "Shipment"; 
     ViewData["BackNav"] = new BackNavModel();
@@ -6,10 +8,26 @@
 
 @if (Model.Detail is null) { <p>Not found.</p>; return; }
 
+@{
+    var s = Model.Detail.Shipment;
+    var canPrint = s.LabelState == ShipmentLabelState.Purchased && Model.CanShip;
+    string PrintClass(CarrierLabelFormat format) => format == Model.DefaultLabelFormat ? "btn-primary" : "btn-outline-secondary";
+}
+
 <div class="d-flex justify-content-between mb-3">
     <div>
-        <h1 class="h3 mb-1">@Model.Detail.Shipment.ShipmentNumber</h1>
-        <p class="text-muted mb-0">@Model.Detail.CustomerName — @Model.Detail.Shipment.Status</p>
+        <h1 class="h3 mb-1">@s.ShipmentNumber</h1>
+        <p class="text-muted mb-0">
+            @Model.Detail.CustomerName — <span id="shipment-status">@Model.StatusText</span>
+            @if (s.LabelState == ShipmentLabelState.Unconfirmed)
+            {
+                <span class="badge text-bg-warning" id="label-unconfirmed-badge">Label not confirmed</span>
+            }
+            @if (s.IsSampleLabel)
+            {
+                <span class="badge text-bg-warning" id="label-sample-badge">Staging sample label</span>
+            }
+        </p>
         @if (!string.IsNullOrWhiteSpace(Model.Detail.LatestTrackingStatus))
         {
             <p class="text-muted">Latest: @Model.Detail.LatestTrackingStatus</p>
@@ -24,7 +42,7 @@
 </div>
 
 @{
-    var shipFrom = Model.Detail.Shipment.ShipFromSnapshot;
+    var shipFrom = s.ShipFromSnapshot;
 }
 <div class="row">
     <div class="col-md-6">
@@ -37,7 +55,7 @@
                 @shipFrom.City, @shipFrom.State @shipFrom.Zip
             </p>
         }
-        else if (Model.Detail.Shipment.ShipFromAddress is { } from)
+        else if (s.ShipFromAddress is { } from)
         {
             <p>@from.Street1<br />@from.City, @from.State @from.Zip</p>
         }
@@ -48,13 +66,18 @@
     </div>
     <div class="col-md-6">
         <h2 class="h6">Ship to</h2>
-        @{ var shipTo = Model.Detail.Shipment.ShipToSnapshot; }
+        @{ var shipTo = s.ShipToSnapshot; }
         @if (shipTo.HasAddress)
         {
             <p>
                 @if (!string.IsNullOrWhiteSpace(shipTo.RecipientName)) { <text>@shipTo.RecipientName<br /></text> }
                 @shipTo.Street1<br />
+                @if (!string.IsNullOrWhiteSpace(shipTo.Street2)) { <text>@shipTo.Street2<br /></text> }
                 @shipTo.City, @shipTo.State @shipTo.Zip
+                @if (!string.IsNullOrWhiteSpace(s.ShipToContact) || !string.IsNullOrWhiteSpace(s.ShipToPhone))
+                {
+                    <br /><span class="text-muted" id="ship-to-contact">@s.ShipToContact @s.ShipToPhone@(s.ShipToResidential ? " · residential" : "")</span>
+                }
             </p>
         }
         else
@@ -65,15 +88,81 @@
 </div>
 
 <p class="text-muted">
-    Carrier: @LabelsMis.Domain.Carriers.CarrierNames.For(Model.Detail.Shipment.Carrier)@(Model.Detail.Shipment.ServiceLevel is { } svc ? $" · {svc}" : "")
-    · Ship date: @Model.Detail.Shipment.ShipDate.ToString("yyyy-MM-dd")
+    Carrier: @CarrierNames.For(s.Carrier)@(s.CarrierServiceName is { } service ? $" · {service}" : s.ServiceLevel is { } svc ? $" · {svc}" : "")
+    · Ship date: @s.ShipDate.ToString("yyyy-MM-dd")
 </p>
 
 @if (TempData["ShipmentStatus"] is string shipmentStatus)
 {
-    <div class="alert alert-success py-2 small">@shipmentStatus</div>
+    <div class="alert alert-success py-2 small" id="shipment-message">@shipmentStatus</div>
+}
+@if (TempData["ShipmentWarning"] is string shipmentWarning)
+{
+    <div class="alert alert-warning py-2 small" id="shipment-warning">@shipmentWarning</div>
 }
 <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
+
+@if (s.LabelState == ShipmentLabelState.Unconfirmed)
+{
+    <div class="card border-warning mb-3" id="label-unconfirmed">
+        <div class="card-header py-1 small fw-semibold">Worldwide Express never answered</div>
+        <div class="card-body py-2 small">
+            <p class="mb-2">
+                LabelShop asked for <strong>@s.CarrierServiceName</strong> at @((s.CarrierCost ?? 0m).ToString("C2")) on
+                @Model.Local(s.CreatedAt) and no usable answer came back, so it doesn't know whether the label was bought.
+                Nothing is recorded as shipped, and the order's jobs and invoice are untouched.
+            </p>
+            <p class="mb-2">
+                <strong>Check with carrier</strong> asks again. If the label was not bought, it is bought now. If it was,
+                its tracking numbers were lost with the answer: LabelShop voids that order with Worldwide Express (a void
+                costs nothing), removes this shipment, and the shipment is recorded again.
+            </p>
+            @if (Model.CanShip)
+            {
+                <form method="post" asp-page-handler="CheckCarrier">
+                    <button type="submit" class="btn btn-sm btn-warning" id="check-carrier">Check with carrier</button>
+                </form>
+            }
+        </div>
+    </div>
+}
+
+@if (s.LabelState is ShipmentLabelState.Purchased or ShipmentLabelState.Voided)
+{
+    <div class="card mb-3" id="shipment-label">
+        <div class="card-header py-1 small fw-semibold">UPS label</div>
+        <div class="card-body py-2 small">
+            <div>
+                <span class="fw-semibold" id="label-service">@s.CarrierServiceName</span>
+                · bought @Model.Local(s.LabelPurchasedAt)
+                @if (!string.IsNullOrEmpty(s.CarrierOrderNumber))
+                {
+                    <text>· Worldwide Express order <span id="label-order-number">@s.CarrierOrderNumber</span></text>
+                }
+                @if (!string.IsNullOrEmpty(s.CarrierBillToAccount))
+                {
+                    <text>· billed to UPS account @s.CarrierBillToAccount</text>
+                }
+            </div>
+            @if (s.IsSampleLabel)
+            {
+                <div class="text-warning-emphasis" id="label-sample-note">
+                    Bought with staging keys: a sample label. It can't ship and nothing is billed.
+                </div>
+            }
+            @if (canPrint)
+            {
+                <div class="d-flex flex-wrap align-items-center gap-2 mt-2" id="label-print">
+                    <a asp-page="Detail" asp-page-handler="Label" asp-route-id="@s.Id" asp-route-format="PdfLetter"
+                       target="_blank" rel="noopener" class="btn btn-sm @PrintClass(CarrierLabelFormat.PdfLetter)" id="print-letter">
+                        Print on Letter paper (@(s.Packages.Count == 1 ? "1 label" : $"{s.Packages.Count} labels"))
+                    </a>
+                    <span class="text-muted">4 × 6 labels and ZPL files are per package, below. Printing again never buys again.</span>
+                </div>
+            }
+        </div>
+    </div>
+}
 
 @if (Model.OrderProgress is { CanMarkShipped: true } progress)
 {
@@ -113,15 +202,21 @@
                 <div class="col-md-2">
                     <button type="submit" class="btn btn-sm btn-primary w-100">Save</button>
                 </div>
+                @if (s.LabelState == ShipmentLabelState.Purchased)
+                {
+                    <div class="col-md-6 text-muted" id="carrier-cost-source">
+                        Filled in from the rate the label was bought at. Change it if the Worldwide Express bill differs.
+                    </div>
+                }
             </form>
         }
         else
         {
-            <div>Carrier cost: <span id="carrier-cost-value">@(Model.Detail.Shipment.CarrierCost?.ToString("C2") ?? "not entered")</span></div>
+            <div>Carrier cost: <span id="carrier-cost-value">@(s.CarrierCost?.ToString("C2") ?? "not entered")</span></div>
         }
         <div class="mt-1">
             Billed shipping:
-            @if (Model.Detail.Shipment.BilledShipping is { } billed)
+            @if (s.BilledShipping is { } billed)
             {
                 <span class="fw-semibold" id="billed-shipping-value">@billed.ToString("C2")</span>
             }
@@ -140,7 +235,7 @@
 <table class="table table-sm table-striped mb-3">
     <thead><tr><th>Product</th><th>Qty shipped</th></tr></thead>
     <tbody>
-    @foreach (var line in Model.Detail.Shipment.Lines)
+    @foreach (var line in s.Lines)
     {
         <tr><td>@line.SalesOrderLine.Product.Description</td><td>@line.QuantityShipped.ToString("N0")</td></tr>
     }
@@ -148,14 +243,47 @@
 </table>
 
 <h2 class="h6">Packages</h2>
-<table class="table table-sm table-striped">
-    <thead><tr><th>#</th><th>Weight</th><th>Tracking</th><th>Cost</th></tr></thead>
+<table class="table table-sm table-striped align-middle" id="shipment-packages">
+    <thead>
+        <tr>
+            <th>#</th><th>Weight</th><th>Size</th><th>Tracking</th><th>Cost</th>
+            @if (canPrint)
+            {
+                <th>Label</th>
+            }
+        </tr>
+    </thead>
     <tbody>
-    @foreach (var pkg in Model.Detail.Shipment.Packages.OrderBy(p => p.PackageNumber))
+    @foreach (var pkg in s.Packages.OrderBy(p => p.PackageNumber))
     {
         <tr>
-            <td>@pkg.PackageNumber</td><td>@pkg.WeightLb.ToString("N1") lb</td>
-            <td>@(pkg.TrackingNumber ?? "—")</td><td>@pkg.ShippingCost.ToString("C2")</td>
+            <td>@pkg.PackageNumber</td>
+            <td>@pkg.WeightLb.ToString("N1") lb</td>
+            <td>@(pkg.LengthIn > 0 && pkg.WidthIn > 0 && pkg.HeightIn > 0 ? $"{pkg.LengthIn:0.##} × {pkg.WidthIn:0.##} × {pkg.HeightIn:0.##} in" : "—")</td>
+            <td>
+                @if (pkg.TrackingNumber is null)
+                {
+                    <text>—</text>
+                }
+                else if (!s.IsSampleLabel && s.Carrier == Carrier.Ups && UpsServices.LooksLikeTrackingNumber(pkg.TrackingNumber))
+                {
+                    <a href="@UpsServices.TrackingUrl(pkg.TrackingNumber)" target="_blank" rel="noopener">@pkg.TrackingNumber</a>
+                }
+                else
+                {
+                    <text>@pkg.TrackingNumber</text>
+                }
+            </td>
+            <td>@pkg.ShippingCost.ToString("C2")</td>
+            @if (canPrint)
+            {
+                <td class="text-nowrap">
+                    <a asp-page="Detail" asp-page-handler="Label" asp-route-id="@s.Id" asp-route-packageId="@pkg.Id" asp-route-format="Pdf4x6"
+                       target="_blank" rel="noopener" class="btn btn-sm @PrintClass(CarrierLabelFormat.Pdf4x6)" data-print="4x6">Print 4 × 6</a>
+                    <a asp-page="Detail" asp-page-handler="Label" asp-route-id="@s.Id" asp-route-packageId="@pkg.Id" asp-route-format="Zpl"
+                       class="btn btn-sm @PrintClass(CarrierLabelFormat.Zpl)" data-print="zpl">ZPL</a>
+                </td>
+            }
         </tr>
     }
     </tbody>

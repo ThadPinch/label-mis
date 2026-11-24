@@ -182,7 +182,16 @@
                             }
                         </select>
                     </div>
-                    <div class="col-sm-6 d-flex align-items-end">
+                    <div class="col-sm-6">
+                        <label for="Defaults_LabelFormat" class="form-label small mb-0">Label file to print from</label>
+                        <select id="Defaults_LabelFormat" name="Defaults.LabelFormat" class="form-select form-select-sm">
+                            @foreach (var format in CarrierLabelFormats.InPickOrder)
+                            {
+                                <option value="@format" selected="@(format == c.DefaultLabelFormat)">@CarrierLabelFormats.Describe(format)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-12">
                         <div class="form-check">
                             <input type="checkbox" class="form-check-input" id="Defaults_TrackingEnabled" name="Defaults.TrackingEnabled" value="true" checked="@c.TrackingEnabled" />
                             <label class="form-check-label small" for="Defaults_TrackingEnabled">Check tracking in the background for labels bought here</label>

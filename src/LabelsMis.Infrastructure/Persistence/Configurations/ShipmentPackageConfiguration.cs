@@ -20,6 +20,8 @@ public class ShipmentPackageConfiguration : IEntityTypeConfiguration<ShipmentPac
         builder.Property(p => p.LabelUrl).HasMaxLength(500);
         builder.Property(p => p.DeclaredValue).HasMoneyPrecision();
         builder.Property(p => p.ShippingCost).HasMoneyPrecision();
+        builder.Property(p => p.CarrierBoxKey).HasMaxLength(100);
+        builder.Property(p => p.CarrierPackageId).HasMaxLength(100);
 
         builder.HasIndex(p => new { p.ShipmentId, p.PackageNumber }).IsUnique();
         builder.HasIndex(p => p.TrackingNumber)

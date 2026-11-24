@@ -1,3 +1,4 @@
+using LabelsMis.Domain.Carriers;
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Shipping;
@@ -130,6 +131,41 @@ public record ManualShipmentInput(
     IReadOnlyList<ManualShipmentLineInput> Lines,
     IReadOnlyList<ManualPackageInput> Packages,
     decimal? CarrierCost = null);
+
+/// <summary>A shipment whose label purchase the carrier never answered.</summary>
+public record UnconfirmedShipmentRef(Guid Id, string ShipmentNumber);
+
+/// <summary>Who to name on a label at the customer's end, from their contacts.</summary>
+public record ShipToContactDefault(string? Name, string? Phone);
+
+/// <summary>One box of a label purchase: its size, the carrier's key for it in the quote, and what
+/// the quote priced it at.</summary>
+public record LabelPackageInput(
+    decimal WeightLb,
+    decimal LengthIn,
+    decimal WidthIn,
+    decimal HeightIn,
+    decimal DeclaredValue,
+    string BoxKey,
+    decimal QuotedCost);
+
+/// <summary>A shipment about to get a carrier label: what ships, in which boxes, and the rate of
+/// the carrier's quote it is bought at.</summary>
+public record LabelShipmentInput(
+    DateOnly ShipDate,
+    ShippingAddress ShipTo,
+    string? ShipToContact,
+    string? ShipToPhone,
+    bool ShipToResidential,
+    IReadOnlyList<ManualShipmentLineInput> Lines,
+    IReadOnlyList<LabelPackageInput> Packages,
+    CarrierEnvironment Environment,
+    string QuoteId,
+    string OfferId,
+    string ServiceCode,
+    string ServiceName,
+    CarrierBillTo BillTo,
+    decimal QuotedCost);
 
 public class ShipmentService(
     LabelsMisDbContext db,
@@ -482,6 +518,218 @@ public class ShipmentService(
         // The draft invoice's shipping follows the shipments' billed shipping (no SO unlock).
         await invoiceService.SyncDraftShippingAsync(salesOrderId, cancellationToken);
         return shipment;
+    }
+
+    /// <summary>The order's shipment whose label purchase the carrier never answered, if there is one.</summary>
+    public async Task<UnconfirmedShipmentRef?> GetUnconfirmedShipmentAsync(
+        Guid salesOrderId,
+        CancellationToken cancellationToken = default) =>
+        await db.Shipments.AsNoTracking()
+            .Where(s => s.SalesOrderId == salesOrderId
+                && s.Status == ShipmentStatus.Pending
+                && s.LabelState == ShipmentLabelState.Unconfirmed)
+            .OrderBy(s => s.CreatedAt)
+            .Select(s => new UnconfirmedShipmentRef(s.Id, s.ShipmentNumber))
+            .FirstOrDefaultAsync(cancellationToken);
+
+    /// <summary>Who the carrier should ask for at the customer's: the order's customer's primary
+    /// contact, preferring one with a phone number on file.</summary>
+    public async Task<ShipToContactDefault> GetShipToContactAsync(
+        Guid salesOrderId,
+        CancellationToken cancellationToken = default)
+    {
+        var contacts = await db.Contacts.AsNoTracking()
+            .Where(c => db.SalesOrders.Any(o => o.Id == salesOrderId && o.CustomerId == c.CustomerId))
+            .OrderByDescending(c => c.IsPrimary)
+            .ThenBy(c => c.LastName)
+            .Select(c => new { c.FirstName, c.LastName, c.Phone })
+            .ToListAsync(cancellationToken);
+        var pick = contacts.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c.Phone)) ?? contacts.FirstOrDefault();
+        return pick is null
+            ? new ShipToContactDefault(null, null)
+            : new ShipToContactDefault(
+                $"{pick.FirstName} {pick.LastName}".Trim(),
+                string.IsNullOrWhiteSpace(pick.Phone) ? null : pick.Phone.Trim());
+    }
+
+    /// <summary>
+    /// First half of buying a carrier label: saves the shipment as pending, with its lines, its
+    /// boxes and the rate it is being bought at, before the carrier is asked. Nothing counts as
+    /// shipped yet. If the carrier's answer never arrives, this row is what lets the purchase be
+    /// settled later (<see cref="ShipmentLabelState.Unconfirmed"/>).
+    /// </summary>
+    public async Task<Shipment> StartLabelShipmentAsync(
+        Guid salesOrderId,
+        LabelShipmentInput input,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+
+        var shipLines = input.Lines.Where(l => l.QuantityShipped > 0).ToList();
+        if (shipLines.Count == 0)
+        {
+            throw new InvalidOperationException("Select at least one item to ship.");
+        }
+
+        if (input.Packages.Count == 0)
+        {
+            throw new InvalidOperationException("At least one package is required.");
+        }
+
+        var shipment = Shipment.CreatePending(
+            Guid.NewGuid(),
+            await documentNumbers.NextShipmentNumberAsync(cancellationToken),
+            salesOrderId,
+            input.ShipDate,
+            Carrier.Ups,
+            null,
+            null,
+            await GetCompanyShipFromAsync(cancellationToken),
+            input.ShipTo,
+            shipToAddressId: null,
+            input.Packages.Sum(p => p.DeclaredValue),
+            BillingType.Sender,
+            null,
+            userId,
+            now);
+
+        var packages = input.Packages.Select((pkg, index) =>
+        {
+            var package = ShipmentPackage.Create(
+                Guid.NewGuid(), shipment.Id, index + 1,
+                pkg.WeightLb, pkg.LengthIn, pkg.WidthIn, pkg.HeightIn, pkg.DeclaredValue,
+                userId, now);
+            package.SetCarrierQuote(pkg.BoxKey, pkg.QuotedCost, userId, now);
+            return package;
+        }).ToList();
+        shipment.ReplacePackages(packages);
+        foreach (var package in packages)
+        {
+            db.ShipmentPackages.Add(package);
+        }
+
+        foreach (var line in shipLines)
+        {
+            var shipmentLine = ShipmentLine.Create(
+                Guid.NewGuid(), shipment.Id, line.SalesOrderLineId, line.JobId, line.QuantityShipped, userId, now);
+            shipment.AddLine(shipmentLine);
+            db.ShipmentLines.Add(shipmentLine);
+        }
+
+        shipment.StartLabelPurchase(
+            input.Environment, input.QuoteId, input.OfferId, input.ServiceCode, input.ServiceName, input.BillTo,
+            input.QuotedCost, input.ShipToContact, input.ShipToPhone, input.ShipToResidential, userId, now);
+        db.Shipments.Add(shipment);
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException?.Message.Contains("IX_Shipment_CarrierQuoteId", StringComparison.Ordinal) == true)
+        {
+            // A carrier quote is bought once (unique index): this is a second click, or a second tab.
+            db.ChangeTracker.Clear();
+            throw new InvalidOperationException(
+                "A label has already been bought from these rates, or is being bought right now. Look for it under Shipments, or get rates again to buy another.");
+        }
+
+        return shipment;
+    }
+
+    /// <summary>
+    /// Second half of buying a carrier label, once the carrier has booked it: puts each tracking
+    /// number on its box, then records the shipment exactly as a hand-entered one is recorded:
+    /// in transit, billed shipping derived from the carrier's price, jobs to Shipped, the order
+    /// rolled up and the draft invoice's shipping brought up to date.
+    /// </summary>
+    public async Task<Shipment> CompleteLabelShipmentAsync(
+        Guid shipmentId,
+        CarrierBooking booking,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        var shipment = await db.Shipments
+            .Include(s => s.Packages)
+            .Include(s => s.Lines)
+            .SingleOrDefaultAsync(s => s.Id == shipmentId, cancellationToken)
+            ?? throw new InvalidOperationException("Shipment not found.");
+        if (shipment.Status is not ShipmentStatus.Pending || shipment.LabelState is not ShipmentLabelState.Unconfirmed)
+        {
+            throw new InvalidOperationException("This shipment has no label purchase waiting to be confirmed.");
+        }
+
+        // Each tracking number goes on the box the carrier booked it for; the box key is the
+        // carrier's own id for the box and is the same in the quote and in the booking.
+        var packages = shipment.Packages.OrderBy(p => p.PackageNumber).ToList();
+        var booked = booking.Boxes.ToDictionary(b => b.BoxKey, StringComparer.OrdinalIgnoreCase);
+        foreach (var package in packages)
+        {
+            CarrierBookedBox? box = null;
+            if (package.CarrierBoxKey is not null && booked.TryGetValue(package.CarrierBoxKey, out var match))
+            {
+                box = match;
+            }
+            else if (packages.Count == 1 && booking.Boxes.Count == 1)
+            {
+                box = booking.Boxes[0];
+            }
+
+            if (box is null)
+            {
+                throw new InvalidOperationException(
+                    $"The carrier's answer has no tracking number for package {package.PackageNumber}.");
+            }
+
+            package.SetCarrierLabel(box.TrackingNumber, box.CarrierPackageId, userId, now);
+        }
+
+        shipment.ConfirmLabelPurchase(booking.OrderNumber, userId, now);
+        var billing = await GetBillingContextAsync(shipment.SalesOrderId, cancellationToken);
+        shipment.ComputeBilledShipping(billing.ShippingMethodType, billing.Settings);
+        shipment.MarkInTransit(packages.Sum(p => p.ShippingCost), userId, now);
+
+        var jobIds = shipment.Lines.Where(l => l.JobId.HasValue).Select(l => l.JobId!.Value).Distinct().ToList();
+        if (jobIds.Count > 0)
+        {
+            var jobs = await db.Jobs.Where(j => jobIds.Contains(j.Id)).ToListAsync(cancellationToken);
+            foreach (var job in jobs.Where(j => j.Status < JobStatus.Shipped))
+            {
+                job.AdvanceStatus(JobStatus.Shipped, userId, now);
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        // Roll up the order status after the shipment is persisted, so the query sees it.
+        await UpdateSalesOrderStatusAsync(shipment.SalesOrderId, userId, now, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        await invoiceService.SyncDraftShippingAsync(shipment.SalesOrderId, cancellationToken);
+        return shipment;
+    }
+
+    /// <summary>Removes a pending shipment whose label purchase turned out never to have happened,
+    /// or was voided with the carrier unseen. Nothing else can be removed this way.</summary>
+    public async Task DiscardUnconfirmedShipmentAsync(Guid shipmentId, CancellationToken cancellationToken = default)
+    {
+        var shipment = await db.Shipments
+            .Include(s => s.Packages)
+            .Include(s => s.Lines)
+            .SingleOrDefaultAsync(s => s.Id == shipmentId, cancellationToken);
+        if (shipment is null)
+        {
+            return;
+        }
+
+        if (shipment.Status is not ShipmentStatus.Pending || shipment.LabelState is not ShipmentLabelState.Unconfirmed)
+        {
+            throw new InvalidOperationException("Only a shipment whose label purchase was never confirmed can be removed.");
+        }
+
+        db.Shipments.Remove(shipment);
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>A package-less shipment of the order this recent is added to rather than starting a

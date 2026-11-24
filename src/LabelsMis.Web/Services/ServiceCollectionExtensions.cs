@@ -95,6 +95,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Services.Carriers.CarrierLogger>();
         services.AddScoped<Services.Carriers.CarrierGateway>();
         services.AddScoped<Services.Carriers.CarrierConnectionTest>();
+        services.AddScoped<Services.Carriers.CarrierShipmentService>();
 
         services.AddScoped<ArtworkService>();
         services.AddScoped<Pdfs.TempPdfStorage>();

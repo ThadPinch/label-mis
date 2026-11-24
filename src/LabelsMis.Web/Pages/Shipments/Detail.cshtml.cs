@@ -1,6 +1,9 @@
+using LabelsMis.Domain.Carriers;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Web.Authorization;
+using LabelsMis.Web.Services;
+using LabelsMis.Web.Services.Carriers;
 using LabelsMis.Web.Services.Invoices;
 using LabelsMis.Web.Services.Shipments;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +13,12 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace LabelsMis.Web.Pages.Shipments;
 
 [Authorize(Policy = TransactionPolicies.ShippingRead)]
-public class DetailModel(ShipmentService shipmentService, InvoiceService invoiceService) : PageModel
+public class DetailModel(
+    ShipmentService shipmentService,
+    InvoiceService invoiceService,
+    CarrierShipmentService carrierShipments,
+    CarrierSettingsService carrierSettings,
+    ClientClock clock) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
 
@@ -27,9 +35,26 @@ public class DetailModel(ShipmentService shipmentService, InvoiceService invoice
     /// <summary>The order's per-line shipped quantities (for Mark order shipped after an under-run).</summary>
     public OrderShipProgress? OrderProgress { get; private set; }
 
+    /// <summary>The label file the shop prints from (Setup → Shipping carrier); its button comes first.</summary>
+    public CarrierLabelFormat DefaultLabelFormat { get; private set; } = CarrierLabelFormat.Pdf4x6;
+
     /// <summary>Shipping staff record the carrier cost; accounting enters it from the WWEX bill.</summary>
     public bool CanEditCarrierCost =>
         User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Shipping) || User.IsInRole(AppRoles.Accounting);
+
+    /// <summary>Who buys, prints and voids labels: the people who record shipments.</summary>
+    public bool CanShip => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Shipping);
+
+    public string StatusText => Detail?.Shipment switch
+    {
+        null => string.Empty,
+        { Status: ShipmentStatus.Pending, LabelState: ShipmentLabelState.Unconfirmed } => "Not shipped: waiting on the carrier",
+        { Status: ShipmentStatus.InTransit } => "In transit",
+        var shipment => shipment.Status.ToString()
+    };
+
+    public string Local(DateTime? utc) =>
+        utc is { } value ? clock.ToLocal(value).ToString("MMM d, yyyy h:mm tt") : string.Empty;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -78,6 +103,52 @@ public class DetailModel(ShipmentService shipmentService, InvoiceService invoice
         }
     }
 
+    /// <summary>Settles a label purchase the carrier never answered.</summary>
+    public async Task<IActionResult> OnPostCheckCarrierAsync(CancellationToken cancellationToken)
+    {
+        if (!CanShip) return Forbid();
+        try
+        {
+            var result = await carrierShipments.CheckUnconfirmedAsync(Id, cancellationToken);
+            if (result.Outcome is LabelCheckOutcome.Discarded)
+            {
+                // The shipment is gone; the order is back where it can be shipped.
+                TempData["RecordNotice"] = result.Message;
+                return RedirectToPage("Record", new { salesOrderId = result.SalesOrderId });
+            }
+
+            TempData[result.Outcome is LabelCheckOutcome.Bought ? "ShipmentStatus" : "ShipmentWarning"] = result.Message;
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["ShipmentWarning"] = ex.Message;
+        }
+
+        return RedirectToPage(new { id = Id });
+    }
+
+    /// <summary>A bought label's file: PDFs open in the browser to print, ZPL downloads.</summary>
+    public async Task<IActionResult> OnGetLabelAsync(Guid? packageId, CarrierLabelFormat format, CancellationToken cancellationToken)
+    {
+        if (!CanShip) return Forbid();
+        try
+        {
+            var file = await carrierShipments.GetLabelAsync(Id, packageId, format, cancellationToken);
+            if (format is CarrierLabelFormat.Zpl)
+            {
+                return File(file.Content, file.ContentType, file.FileName);
+            }
+
+            Response.Headers.ContentDisposition = $"inline; filename=\"{file.FileName}\"";
+            return File(file.Content, file.ContentType);
+        }
+        catch (Exception ex) when (ex is CarrierException or CarrierNotConfiguredException or InvalidOperationException)
+        {
+            TempData["ShipmentWarning"] = ex.Message;
+            return RedirectToPage(new { id = Id });
+        }
+    }
+
     private async Task<bool> LoadAsync(CancellationToken cancellationToken)
     {
         Detail = await shipmentService.GetDetailAsync(Id, cancellationToken);
@@ -89,6 +160,11 @@ public class DetailModel(ShipmentService shipmentService, InvoiceService invoice
 
         CanInvoice = (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting))
             && Detail.Shipment.Status is ShipmentStatus.InTransit or ShipmentStatus.Delivered;
+        if (Detail.Shipment.LabelState is ShipmentLabelState.Purchased)
+        {
+            DefaultLabelFormat = (await carrierSettings.GetViewAsync(cancellationToken)).DefaultLabelFormat;
+        }
+
         return true;
     }
 

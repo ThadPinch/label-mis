@@ -163,6 +163,21 @@ public class SalesOrder : EntityBase
         SetModified(modifiedById, modifiedAt);
     }
 
+    /// <summary>A shipment of this order was voided and the order is no longer fully shipped:
+    /// Shipped goes back to In production. Invoiced, closed and cancelled orders are left as they
+    /// are. Returns true when the status moved.</summary>
+    public bool ReopenAfterShipmentVoid(Guid modifiedById, DateTime modifiedAt)
+    {
+        if (Status is not SalesOrderStatus.Shipped)
+        {
+            return false;
+        }
+
+        Status = SalesOrderStatus.InProduction;
+        SetModified(modifiedById, modifiedAt);
+        return true;
+    }
+
     public void EnsureOpen()
     {
         if (Status is not SalesOrderStatus.Open)

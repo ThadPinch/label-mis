@@ -37,6 +37,10 @@ public class CarrierSettings : EntityBase
     /// <summary>The UPS service Record shipment selects when the rates come back.</summary>
     public string DefaultServiceCode { get; private set; } = UpsServices.Ground;
 
+    /// <summary>The label file kept when a label is bought, and the one the shipment page offers
+    /// first: it depends on what the shop prints labels on.</summary>
+    public CarrierLabelFormat DefaultLabelFormat { get; private set; } = CarrierLabelFormat.Pdf4x6;
+
     /// <summary>Check tracking in the background for labels bought here.</summary>
     public bool TrackingEnabled { get; private set; } = true;
 
@@ -148,8 +152,14 @@ public class CarrierSettings : EntityBase
         bool trackingEnabled,
         IReadOnlyList<CarrierBoxPreset> boxPresets,
         Guid modifiedById,
-        DateTime modifiedAt)
+        DateTime modifiedAt,
+        CarrierLabelFormat? labelFormat = null)
     {
+        if (labelFormat is { } format && !Enum.IsDefined(format))
+        {
+            throw new ArgumentException("Pick one of the label files for the default.");
+        }
+
         var code = (defaultServiceCode ?? string.Empty).Trim().ToUpperInvariant();
         if (!UpsServices.IsKnown(code))
         {
@@ -163,6 +173,7 @@ public class CarrierSettings : EntityBase
         }
 
         DefaultServiceCode = code;
+        DefaultLabelFormat = labelFormat ?? DefaultLabelFormat;
         TrackingEnabled = trackingEnabled;
         BoxPresetsJson = json;
         SetModified(modifiedById, modifiedAt);

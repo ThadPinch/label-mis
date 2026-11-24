@@ -6,5 +6,9 @@ public enum ShipmentStatus
     InTransit = 1,
     Delivered = 2,
     Exception = 3,
-    Returned = 4
+    Returned = 4,
+
+    /// <summary>Taken back after it was recorded (a label bought by mistake, a shipment recorded
+    /// on the wrong order). It no longer counts toward what the order has shipped.</summary>
+    Voided = 5
 }

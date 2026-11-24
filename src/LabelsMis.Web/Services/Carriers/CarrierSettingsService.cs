@@ -37,6 +37,9 @@ public sealed record CarrierSettingsView(
     /// <summary>Labels bought now are samples: they can't ship and nothing is billed.</summary>
     public bool IsStaging => IsReady && Environment == CarrierEnvironment.Staging;
 
+    /// <summary>The label file kept at purchase and offered first on the shipment page.</summary>
+    public CarrierLabelFormat DefaultLabelFormat { get; init; } = CarrierLabelFormat.Pdf4x6;
+
     public static CarrierSettingsView Empty(string? keyProblem, CarrierParty shipFrom) => new(
         false, keyProblem, CarrierEnvironment.Staging, string.Empty, string.Empty, null, null,
         UpsServices.Ground, true, [], null, null, null, null, null, shipFrom);
@@ -80,7 +83,10 @@ public class CarrierSettingsService(
             settings.LastTestMessage,
             settings.BillToAccountNumber,
             settings.BillToPostalCode,
-            shipFrom);
+            shipFrom)
+        {
+            DefaultLabelFormat = settings.DefaultLabelFormat
+        };
     }
 
     /// <summary>The keys in the clear, for one call. Throws <see cref="CarrierNotConfiguredException"/>
@@ -154,12 +160,13 @@ public class CarrierSettingsService(
         string defaultServiceCode,
         bool trackingEnabled,
         IReadOnlyList<CarrierBoxPreset> boxPresets,
+        CarrierLabelFormat? labelFormat = null,
         CancellationToken cancellationToken = default)
     {
         var userId = RequireUser();
         var now = Now();
         var settings = await GetOrCreateAsync(userId, now, cancellationToken);
-        settings.SetDefaults(defaultServiceCode, trackingEnabled, boxPresets, userId, now);
+        settings.SetDefaults(defaultServiceCode, trackingEnabled, boxPresets, userId, now, labelFormat);
         await db.SaveChangesAsync(cancellationToken);
     }
 

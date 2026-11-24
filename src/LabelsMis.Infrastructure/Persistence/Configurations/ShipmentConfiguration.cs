@@ -40,6 +40,27 @@ public class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
         builder.Property(s => s.ShipToCountry).HasMaxLength(2);
         builder.Ignore(s => s.ShipToSnapshot);
 
+        // A label bought through LabelShop: what the carrier was asked and what it answered.
+        builder.Property(s => s.ShipToContact).HasMaxLength(100);
+        builder.Property(s => s.ShipToPhone).HasMaxLength(30);
+        builder.Property(s => s.LabelState).IsRequired();
+        builder.Property(s => s.CarrierQuoteId).HasMaxLength(100);
+        builder.Property(s => s.CarrierOfferId).HasMaxLength(100);
+        builder.Property(s => s.CarrierOrderNumber).HasMaxLength(50);
+        builder.Property(s => s.CarrierServiceCode).HasMaxLength(10);
+        builder.Property(s => s.CarrierServiceName).HasMaxLength(100);
+        builder.Property(s => s.CarrierBillToAccount).HasMaxLength(20);
+        builder.Property(s => s.CarrierBillToPostalCode).HasMaxLength(12);
+        builder.Property(s => s.VoidReason).HasMaxLength(Shipment.MaxVoidReasonLength);
+        builder.Ignore(s => s.IsSampleLabel);
+        builder.Ignore(s => s.CarrierBillTo);
+        builder.Ignore(s => s.CountsAsShipped);
+
+        // A carrier quote is booked once: two shipments can never hold the same one.
+        builder.HasIndex(s => s.CarrierQuoteId)
+            .IsUnique()
+            .HasFilter("\"CarrierQuoteId\" IS NOT NULL");
+
         builder.HasIndex(s => s.ShipmentNumber).IsUnique();
         builder.HasIndex(s => s.Status);
         builder.HasIndex(s => s.SalesOrderId);

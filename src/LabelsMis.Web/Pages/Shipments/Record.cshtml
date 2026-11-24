@@ -1,30 +1,75 @@
 @page "/shipments/record"
+@using LabelsMis.Domain.Carriers
 @model LabelsMis.Web.Pages.Shipments.RecordModel
 @{
     ViewData["Title"] = "Record shipment";
     ViewData["BackNav"] = new BackNavModel();
     var order = Model.Order!;
     var lineLookup = order.Lines.ToDictionary(l => l.SalesOrderLineId);
+    var account = Model.CarrierAccount;
+    var canBuy = Model.CanBuyLabel;
+    var labelMode = Model.LabelMode;
+    var presets = account?.BoxPresets ?? [];
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    string Num(decimal? value) => value?.ToString("0.####", inv) ?? string.Empty;
 }
+
+<style>
+    .ship-mode-label [data-ship-mode="manual"],
+    .ship-mode-manual [data-ship-mode="label"] { display: none !important; }
+</style>
 
 <h1 class="h3 mb-1">Record shipment</h1>
 <p class="text-muted">@order.OrderNumber — @order.CustomerName</p>
 
-<form method="post">
+@if (TempData["RecordNotice"] is string notice)
+{
+    <div class="alert alert-info py-2" id="record-notice">@notice</div>
+}
+@if (Model.Unconfirmed is { } open)
+{
+    <div class="alert alert-warning py-2" id="record-unconfirmed">
+        A label was being bought for this order and Worldwide Express never answered
+        (<a asp-page="Detail" asp-route-id="@open.Id">@open.ShipmentNumber</a>). Open it and use
+        <strong>Check with carrier</strong> before buying another label.
+    </div>
+}
+
+<form method="post" asp-page="Record" id="record-form" class="@(labelMode ? "ship-mode-label" : "ship-mode-manual")">
     <input type="hidden" asp-for="SalesOrderId" />
-    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div asp-validation-summary="ModelOnly" class="text-danger" id="record-errors"></div>
+
+    @if (canBuy)
+    {
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <div class="btn-group" role="group" aria-label="How this shipment is recorded" id="ship-mode">
+                <input type="radio" class="btn-check" name="Input.Mode" id="ship-mode-label" value="label" autocomplete="off" checked="@labelMode" />
+                <label class="btn btn-outline-primary" for="ship-mode-label">Buy a UPS label</label>
+                <input type="radio" class="btn-check" name="Input.Mode" id="ship-mode-manual" value="manual" autocomplete="off" checked="@(!labelMode)" />
+                <label class="btn btn-outline-primary" for="ship-mode-manual">I have the tracking numbers</label>
+            </div>
+            @if (account!.IsStaging)
+            {
+                <span class="badge text-bg-warning" id="record-staging" data-ship-mode="label">Staging keys: labels bought here are samples</span>
+            }
+        </div>
+    }
+    else
+    {
+        <input type="hidden" name="Input.Mode" value="manual" />
+    }
 
     <div class="row g-3 mb-3">
-        <div class="col-md-3">
+        <div class="col-md-3" data-quote-field>
             <label asp-for="Input.ShipDate" class="form-label">Ship date</label>
             <input asp-for="Input.ShipDate" type="date" class="form-control" />
         </div>
-        <div class="col-md-3">
+        <div class="col-md-3" data-ship-mode="manual">
             <label asp-for="Input.Carrier" class="form-label">Carrier</label>
             <select asp-for="Input.Carrier" class="form-select"
-                    asp-items="@(LabelsMis.Domain.Carriers.CarrierNames.InPickOrder.Select(c => new SelectListItem(LabelsMis.Domain.Carriers.CarrierNames.For(c), ((int)c).ToString())))"></select>
+                    asp-items="@(CarrierNames.InPickOrder.Select(c => new SelectListItem(CarrierNames.For(c), ((int)c).ToString())))"></select>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-3" data-ship-mode="manual">
             <label asp-for="Input.CarrierCost" class="form-label">Carrier cost</label>
             <div class="input-group">
                 <span class="input-group-text">$</span>
@@ -37,13 +82,13 @@
             <label class="form-label" for="billed-shipping-preview">Billed shipping</label>
             <input id="billed-shipping-preview" class="form-control-plaintext fw-semibold" readonly tabindex="-1"
                    data-method-type="@(Model.Billing?.ShippingMethodType?.ToString() ?? "")"
-                   data-delivery-fee="@((Model.Billing?.Settings.LocalDeliveryFee ?? 25m).ToString(System.Globalization.CultureInfo.InvariantCulture))"
-                   data-multiplier="@((Model.Billing?.Settings.CarrierCostMultiplier ?? 1.5m).ToString(System.Globalization.CultureInfo.InvariantCulture))" />
+                   data-delivery-fee="@((Model.Billing?.Settings.LocalDeliveryFee ?? 25m).ToString(inv))"
+                   data-multiplier="@((Model.Billing?.Settings.CarrierCostMultiplier ?? 1.5m).ToString(inv))" />
             <div class="form-text">@(Model.Billing?.ShippingMethodName ?? "No method on the order") · @Model.Billing?.Rule</div>
         </div>
     </div>
 
-    <fieldset class="border rounded p-3 mb-3">
+    <fieldset class="border rounded p-3 mb-3" data-quote-field>
         <legend class="float-none w-auto px-2 h6 mb-0">Ship to</legend>
         <div class="row g-2">
             <div class="col-md-6"><label asp-for="Input.ShipToName" class="form-label">Recipient / company</label><input asp-for="Input.ShipToName" class="form-control" /></div>
@@ -52,7 +97,22 @@
             <div class="col-md-3"><label asp-for="Input.ShipToCity" class="form-label">City</label><input asp-for="Input.ShipToCity" class="form-control" /></div>
             <div class="col-md-1"><label asp-for="Input.ShipToState" class="form-label">State</label><input asp-for="Input.ShipToState" class="form-control" /></div>
             <div class="col-md-2"><label asp-for="Input.ShipToZip" class="form-label">Zip</label><input asp-for="Input.ShipToZip" class="form-control" /></div>
+            <div class="col-md-4" data-ship-mode="label">
+                <label asp-for="Input.ShipToContact" class="form-label">Contact</label>
+                <input asp-for="Input.ShipToContact" class="form-control" maxlength="100" />
+            </div>
+            <div class="col-md-3" data-ship-mode="label">
+                <label asp-for="Input.ShipToPhone" class="form-label">Phone</label>
+                <input asp-for="Input.ShipToPhone" class="form-control" maxlength="30" inputmode="tel" />
+            </div>
+            <div class="col-md-5 d-flex align-items-end" data-ship-mode="label">
+                <div class="form-check mb-2">
+                    <input asp-for="Input.ShipToResidential" class="form-check-input" />
+                    <label asp-for="Input.ShipToResidential" class="form-check-label">A home, not a business (UPS adds a residential charge)</label>
+                </div>
+            </div>
         </div>
+        <input type="hidden" asp-for="Input.ShipToCountry" />
     </fieldset>
 
     <h2 class="h6">Items ready to ship</h2>
@@ -95,150 +155,282 @@
         </div>
     }
 
-    <h2 class="h6">Packages &amp; tracking</h2>
-    <div id="package-rows">
+    <h2 class="h6">Packages<span data-ship-mode="manual"> &amp; tracking</span></h2>
+    <p class="form-text mt-0" data-ship-mode="label">
+        Weigh each box. UPS bills by size as well as weight, so leave the size blank only when a box wasn't measured.
+        A declared value over $100 adds UPS's declared-value charge.
+    </p>
+    <div id="package-rows" data-quote-field>
         @for (var i = 0; i < Model.Input.Packages.Count; i++)
         {
+            var p = Model.Input.Packages[i];
             <div class="row g-2 mb-2 align-items-end package-row">
-                <div class="col-md-3">
-                    <label asp-for="Input.Packages[i].TrackingNumber" class="form-label">Tracking #</label>
-                    <input asp-for="Input.Packages[i].TrackingNumber" class="form-control" />
+                @if (presets.Count > 0)
+                {
+                    <div class="col-md-3" data-ship-mode="label">
+                        <label class="form-label">Box</label>
+                        <select class="form-select box-preset" aria-label="Box">
+                            <option value="">Other size</option>
+                            @foreach (var preset in presets)
+                            {
+                                <option value="@preset.Name" data-l="@Num(preset.LengthIn)" data-w="@Num(preset.WidthIn)" data-h="@Num(preset.HeightIn)"
+                                        selected="@(p.LengthIn == preset.LengthIn && p.WidthIn == preset.WidthIn && p.HeightIn == preset.HeightIn)">@preset.Label</option>
+                            }
+                        </select>
+                    </div>
+                }
+                <div class="col-md-3" data-ship-mode="manual">
+                    <label class="form-label">Tracking #</label>
+                    <input name="Input.Packages[@i].TrackingNumber" value="@p.TrackingNumber" class="form-control" />
                 </div>
                 <div class="col-md-1">
-                    <label asp-for="Input.Packages[i].WeightLb" class="form-label">Wt (lb)</label>
-                    <input asp-for="Input.Packages[i].WeightLb" class="form-control" />
+                    <label class="form-label">Wt (lb)</label>
+                    <input name="Input.Packages[@i].WeightLb" value="@Num(p.WeightLb)" class="form-control" inputmode="decimal" />
                 </div>
                 <div class="col-md-1">
-                    <label asp-for="Input.Packages[i].LengthIn" class="form-label">L</label>
-                    <input asp-for="Input.Packages[i].LengthIn" class="form-control" />
+                    <label class="form-label">L</label>
+                    <input name="Input.Packages[@i].LengthIn" value="@Num(p.LengthIn)" class="form-control" inputmode="decimal" />
                 </div>
                 <div class="col-md-1">
-                    <label asp-for="Input.Packages[i].WidthIn" class="form-label">W</label>
-                    <input asp-for="Input.Packages[i].WidthIn" class="form-control" />
+                    <label class="form-label">W</label>
+                    <input name="Input.Packages[@i].WidthIn" value="@Num(p.WidthIn)" class="form-control" inputmode="decimal" />
                 </div>
                 <div class="col-md-1">
-                    <label asp-for="Input.Packages[i].HeightIn" class="form-label">H</label>
-                    <input asp-for="Input.Packages[i].HeightIn" class="form-control" />
+                    <label class="form-label">H</label>
+                    <input name="Input.Packages[@i].HeightIn" value="@Num(p.HeightIn)" class="form-control" inputmode="decimal" />
                 </div>
                 <div class="col-md-2">
-                    <label asp-for="Input.Packages[i].DeclaredValue" class="form-label">Declared $</label>
-                    <input asp-for="Input.Packages[i].DeclaredValue" class="form-control" />
+                    <label class="form-label">Declared $</label>
+                    <input name="Input.Packages[@i].DeclaredValue" value="@Num(p.DeclaredValue)" class="form-control" inputmode="decimal" />
                 </div>
-                <div class="col-md-2">
-                    <label asp-for="Input.Packages[i].ShippingCost" class="form-label">Cost $</label>
-                    <input asp-for="Input.Packages[i].ShippingCost" class="form-control" />
+                <div class="col-md-2" data-ship-mode="manual">
+                    <label class="form-label">Cost $</label>
+                    <input name="Input.Packages[@i].ShippingCost" value="@Num(p.ShippingCost)" class="form-control" inputmode="decimal" />
                 </div>
                 <div class="col-md-1">
-                    <button type="button" class="btn btn-outline-danger remove-package w-100">×</button>
+                    <button type="button" class="btn btn-outline-danger remove-package w-100" aria-label="Remove this package">×</button>
                 </div>
             </div>
         }
     </div>
     <button type="button" id="add-package" class="btn btn-outline-secondary btn-sm mb-3">+ Add package</button>
 
-    <template id="package-template">
-        <div class="row g-2 mb-2 align-items-end package-row">
-            <div class="col-md-3">
-                <label class="form-label">Tracking #</label>
-                <input name="Input.Packages[__INDEX__].TrackingNumber" class="form-control" />
-            </div>
-            <div class="col-md-1">
-                <label class="form-label">Wt (lb)</label>
-                <input name="Input.Packages[__INDEX__].WeightLb" value="1" class="form-control" />
-            </div>
-            <div class="col-md-1">
-                <label class="form-label">L</label>
-                <input name="Input.Packages[__INDEX__].LengthIn" value="12" class="form-control" />
-            </div>
-            <div class="col-md-1">
-                <label class="form-label">W</label>
-                <input name="Input.Packages[__INDEX__].WidthIn" value="12" class="form-control" />
-            </div>
-            <div class="col-md-1">
-                <label class="form-label">H</label>
-                <input name="Input.Packages[__INDEX__].HeightIn" value="6" class="form-control" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Declared $</label>
-                <input name="Input.Packages[__INDEX__].DeclaredValue" value="0" class="form-control" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Cost $</label>
-                <input name="Input.Packages[__INDEX__].ShippingCost" value="0" class="form-control" />
-            </div>
-            <div class="col-md-1">
-                <button type="button" class="btn btn-outline-danger remove-package w-100">×</button>
+    @if (canBuy)
+    {
+        <div class="card mb-3" data-ship-mode="label" id="label-card">
+            <div class="card-header py-2 fw-semibold">UPS label through Worldwide Express</div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <button type="submit" class="btn btn-primary" id="get-rates" asp-page="Record" asp-page-handler="Rates"
+                            disabled="@(Model.Unconfirmed is not null)">@(Model.Quote is null ? "Get rates" : "Get rates again")</button>
+                    <span class="text-muted small">Prices the packages above on every UPS service. Nothing is bought.</span>
+                </div>
+                @if (Model.Quote is { } quote)
+                {
+                    <input type="hidden" name="Input.QuoteToken" value="@quote.Token" />
+                    <div class="alert alert-warning py-2 small d-none" id="rates-stale">
+                        The address, the ship date or a package changed after these rates were fetched. Get rates again before buying.
+                    </div>
+                    <table class="table table-sm align-middle mb-2" id="rates-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 2rem"></th>
+                                <th>Service</th>
+                                <th>Arrives</th>
+                                <th class="text-end">Carrier cost</th>
+                                <th class="text-end">Billed shipping</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var rate in quote.Rates)
+                            {
+                                var billed = Model.BilledFor(rate.Cost);
+                                var rateId = $"rate-{rate.ServiceCode}";
+                                <tr data-service="@rate.ServiceCode">
+                                    <td>
+                                        <input type="radio" class="form-check-input" name="Input.OfferId" id="@rateId" value="@rate.OfferId"
+                                               checked="@(rate.OfferId == Model.Input.OfferId)"
+                                               data-cost="@rate.Cost.ToString(inv)" data-service="@rate.ServiceName" />
+                                    </td>
+                                    <td>
+                                        <label for="@rateId" class="fw-semibold mb-0">@rate.ServiceName</label>
+                                        <div class="small text-muted">@RecordModel.Details(rate)</div>
+                                    </td>
+                                    <td>@RecordModel.Arrives(rate)</td>
+                                    <td class="text-end">@rate.Cost.ToString("C2")</td>
+                                    <td class="text-end">@(billed is { } amount ? amount.ToString("C2") : "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <button type="submit" class="btn btn-success" id="buy-label" asp-page="Record" asp-page-handler="Buy"
+                                data-sample="@(account!.IsStaging ? "1" : null)"
+                                disabled="@(Model.Unconfirmed is not null)">Buy label</button>
+                        <span class="small text-muted" id="rates-bill-to">
+                            Billed to UPS account @quote.BillTo.AccountNumber by Worldwide Express. The tracking numbers and the
+                            carrier cost are filled in for you.
+                        </span>
+                    </div>
+                }
             </div>
         </div>
-    </template>
+    }
 
-    <div class="mt-2">
-        <button type="submit" class="btn btn-success">Record shipment</button>
+    <div class="mt-2" data-ship-mode="manual">
+        <button type="submit" class="btn btn-success" id="record-shipment">Record shipment</button>
     </div>
 </form>
 
 @section Scripts {
     <script>
-        // Read-only preview of what this shipment will bill (the server computes the stored value
-        // with the same rule): pickup / customer account $0, local delivery the flat fee, carrier
-        // shipments carrier cost × multiplier (blank cost falls back to the package costs).
         (() => {
+            const form = document.getElementById('record-form');
+            const container = document.getElementById('package-rows');
+            if (!form || !container) return;
             const out = document.getElementById('billed-shipping-preview');
             const costInput = document.getElementById('Input_CarrierCost');
-            if (!out || !costInput) return;
-            const type = out.dataset.methodType;
-            const fee = Number(out.dataset.deliveryFee);
-            const mult = Number(out.dataset.multiplier);
+            const addBtn = document.getElementById('add-package');
+            const ratesBtn = document.getElementById('get-rates');
+            const buyBtn = document.getElementById('buy-label');
+            const recordBtn = document.getElementById('record-shipment');
+            const staleNote = document.getElementById('rates-stale');
+
+            const isLabel = () => form.classList.contains('ship-mode-label');
+            const isStale = () => !!staleNote && !staleNote.classList.contains('d-none');
             const money = v => v.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-            const packageTotal = () => [...document.querySelectorAll('[name^="Input.Packages["][name$=".ShippingCost"]')]
-                .reduce((sum, el) => sum + (Number(el.value) || 0), 0);
-            const update = () => {
+            const cents = v => Math.round((v + Number.EPSILON) * 100) / 100;
+
+            // Read-only preview of what this shipment will bill (the server computes the stored value
+            // with the same rule): pickup / customer account $0, local delivery the flat fee, carrier
+            // shipments carrier cost × multiplier. A bought label takes its cost from the picked rate;
+            // a hand-recorded one from the typed cost, else the package costs.
+            const updateBilled = () => {
+                if (!out) return;
+                const type = out.dataset.methodType;
+                const fee = Number(out.dataset.deliveryFee);
+                const mult = Number(out.dataset.multiplier);
                 if (type === 'Pickup' || type === 'CustomerAccount') { out.value = money(0); return; }
                 if (type === 'Delivery') { out.value = money(fee); return; }
-                const typed = costInput.value.trim();
-                const cost = typed !== '' ? Number(typed) : (packageTotal() > 0 ? packageTotal() : NaN);
-                out.value = Number.isFinite(cost) ? money(Math.round((cost * mult + Number.EPSILON) * 100) / 100) : 'pending — enter the carrier cost';
+                if (isLabel()) {
+                    const picked = document.querySelector('input[name="Input.OfferId"]:checked');
+                    out.value = picked && !isStale() ? money(cents(Number(picked.dataset.cost) * mult)) : 'get rates and pick a service';
+                    return;
+                }
+                const packageTotal = [...container.querySelectorAll('[name$=".ShippingCost"]')]
+                    .reduce((sum, el) => sum + (Number(el.value) || 0), 0);
+                const typed = costInput ? costInput.value.trim() : '';
+                const cost = typed !== '' ? Number(typed) : (packageTotal > 0 ? packageTotal : NaN);
+                out.value = Number.isFinite(cost) ? money(cents(cost * mult)) : 'pending — enter the carrier cost';
             };
-            document.addEventListener('input', e => {
-                if (e.target === costInput || e.target.name?.endsWith('.ShippingCost')) update();
+
+            // Rates belong to the shipment as it was when they were fetched: once the address, the
+            // date or a box changes they can't be bought from (the server refuses too).
+            const markStale = () => {
+                if (!staleNote || isStale()) return;
+                staleNote.classList.remove('d-none');
+                if (buyBtn) buyBtn.disabled = true;
+                updateBilled();
+            };
+
+            document.querySelectorAll('input[name="Input.Mode"]').forEach(radio => radio.addEventListener('change', () => {
+                const label = !!document.getElementById('ship-mode-label')?.checked;
+                form.classList.toggle('ship-mode-label', label);
+                form.classList.toggle('ship-mode-manual', !label);
+                updateBilled();
+            }));
+
+            // A size typed by hand shows the matching box in the list, or "Other size".
+            const syncPreset = row => {
+                const select = row.querySelector('.box-preset');
+                if (!select) return;
+                const value = suffix => (row.querySelector(`[name$="${suffix}"]`)?.value ?? '').trim();
+                const match = [...select.options].find(o => o.value !== ''
+                    && Number(o.dataset.l) === Number(value('.LengthIn'))
+                    && Number(o.dataset.w) === Number(value('.WidthIn'))
+                    && Number(o.dataset.h) === Number(value('.HeightIn')));
+                select.value = match ? match.value : '';
+            };
+
+            form.addEventListener('input', e => {
+                const name = e.target.name ?? '';
+                if (/\.(LengthIn|WidthIn|HeightIn)$/.test(name)) syncPreset(e.target.closest('.package-row'));
+                if (e.target.closest('[data-quote-field]')) markStale();
+                if (e.target === costInput || name.endsWith('.ShippingCost') || name === 'Input.OfferId') updateBilled();
             });
-            update();
-        })();
 
-        (() => {
-            const container = document.getElementById('package-rows');
-            const template = document.getElementById('package-template');
-            const addBtn = document.getElementById('add-package');
-            if (!container || !template) return;
+            form.addEventListener('change', e => {
+                if (e.target.classList.contains('box-preset')) {
+                    const option = e.target.selectedOptions[0];
+                    const row = e.target.closest('.package-row');
+                    if (option && option.value !== '') {
+                        row.querySelector('[name$=".LengthIn"]').value = option.dataset.l;
+                        row.querySelector('[name$=".WidthIn"]').value = option.dataset.w;
+                        row.querySelector('[name$=".HeightIn"]').value = option.dataset.h;
+                    }
+                }
+                if (e.target.closest('[data-quote-field]')) markStale();
+                if (e.target.name === 'Input.OfferId') updateBilled();
+            });
 
-            const reindex = () => {
-                container.querySelectorAll('.package-row').forEach((row, idx) => {
-                    row.querySelectorAll('[name^="Input.Packages["]').forEach(el => {
-                        el.name = el.name.replace(/Input\.Packages\[\d+\]/, `Input.Packages[${idx}]`);
-                    });
+            const reindex = () => container.querySelectorAll('.package-row').forEach((row, index) => {
+                row.querySelectorAll('[name^="Input.Packages["]').forEach(el => {
+                    el.name = el.name.replace(/Input\.Packages\[\d+\]/, `Input.Packages[${index}]`);
                 });
-            };
+            });
 
-            const wireRemove = (row) => {
-                row.querySelector('.remove-package')?.addEventListener('click', () => {
-                    if (container.querySelectorAll('.package-row').length <= 1) return;
-                    row.remove();
-                    reindex();
-                });
-            };
-
-            container.querySelectorAll('.package-row').forEach(wireRemove);
-
-            addBtn?.addEventListener('click', () => {
-                const idx = container.querySelectorAll('.package-row').length;
-                const html = template.innerHTML.replace(/__INDEX__/g, String(idx));
-                const wrapper = document.createElement('div');
-                wrapper.innerHTML = html.trim();
-                const row = wrapper.firstElementChild;
-                container.appendChild(row);
-                wireRemove(row);
+            container.addEventListener('click', e => {
+                if (!e.target.closest('.remove-package')) return;
+                if (container.querySelectorAll('.package-row').length <= 1) return;
+                e.target.closest('.package-row').remove();
                 reindex();
+                markStale();
+                updateBilled();
             });
+
+            // A new package starts as a copy of the last one (same box), with its own weight to enter.
+            addBtn?.addEventListener('click', () => {
+                const rows = container.querySelectorAll('.package-row');
+                const last = rows[rows.length - 1];
+                const row = last.cloneNode(true);
+                const set = (suffix, value) => { const el = row.querySelector(`[name$="${suffix}"]`); if (el) el.value = value; };
+                set('.TrackingNumber', '');
+                set('.WeightLb', isLabel() ? '' : '1');
+                set('.DeclaredValue', '0');
+                set('.ShippingCost', '0');
+                const preset = row.querySelector('.box-preset');
+                if (preset) preset.value = last.querySelector('.box-preset').value;
+                container.appendChild(row);
+                reindex();
+                markStale();
+                row.querySelector(isLabel() ? '[name$=".WeightLb"]' : '[name$=".TrackingNumber"]')?.focus();
+            });
+
+            // Enter in a field does what the visible button does; it never buys.
+            form.addEventListener('keydown', e => {
+                if (e.key !== 'Enter' || e.target.tagName !== 'INPUT' || ['checkbox', 'radio'].includes(e.target.type)) return;
+                e.preventDefault();
+                (isLabel() ? ratesBtn : recordBtn)?.click();
+            });
+
+            buyBtn?.addEventListener('click', e => {
+                const picked = document.querySelector('input[name="Input.OfferId"]:checked');
+                if (!picked) { e.preventDefault(); alert('Pick a service first.'); return; }
+                const sample = buyBtn.dataset.sample ? '\n\nStaging keys: this makes a sample label.' : '';
+                if (!confirm(`Buy ${picked.dataset.service} for ${money(Number(picked.dataset.cost))}?${sample}`)) e.preventDefault();
+            });
+
+            // One click, one purchase.
+            form.addEventListener('submit', () => setTimeout(() => {
+                [ratesBtn, buyBtn, recordBtn].forEach(button => { if (button) button.disabled = true; });
+            }, 0));
+            window.addEventListener('pageshow', e => {
+                if (!e.persisted) return;
+                [ratesBtn, recordBtn].forEach(button => { if (button) button.disabled = false; });
+                if (buyBtn) buyBtn.disabled = isStale();
+            });
+
+            updateBilled();
         })();
     </script>
 }

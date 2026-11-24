@@ -10,6 +10,10 @@ namespace LabelsMis.Web.Tests.Carriers;
 public sealed class FakeCarrierClient : ICarrierClient
 {
     private readonly Dictionary<string, FakeShipment> _shipments = [];
+
+    // Quote ids and tracking numbers are unique in the database (as they are at the real carrier),
+    // and the test database outlives one test: every fake hands out its own.
+    private readonly string _run = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
     private int _quotes;
     private int _tracking;
 
@@ -56,7 +60,7 @@ public sealed class FakeCarrierClient : ICarrierClient
             return Task.FromResult(Remember(scripted(request)));
         }
 
-        var quoteId = $"quote-{++_quotes}";
+        var quoteId = $"quote-{_run}-{++_quotes}";
         var keys = request.Boxes.Select((_, i) => $"{quoteId}-box-{i + 1}").ToList();
         CarrierRate Rate(string code, decimal factor, int days) => new(
             $"{quoteId}-{code}",
@@ -114,7 +118,7 @@ public sealed class FakeCarrierClient : ICarrierClient
 
         shipment.Booking = new CarrierBooking(
             $"NUD{90000000 + _shipments.Values.Count(s => s.Booking is not null) + 1}",
-            rate.Boxes.Select(b => new CarrierBookedBox(b.BoxKey, $"1ZTEST{++_tracking:D12}", $"item-{_tracking}")).ToList(),
+            rate.Boxes.Select(b => new CarrierBookedBox(b.BoxKey, $"1ZT{_run[..5]}{++_tracking:D10}", $"item-{_run}-{_tracking}")).ToList(),
             $"NG-book-{request.QuoteId}");
         return shipment.Booking;
     }

@@ -15,6 +15,13 @@ public class TrackingEvent : EntityBase
     public string? Location { get; private set; }
     public string? RawPayload { get; private set; }
 
+    /// <summary>The carrier's own status word for the event (CREATED, IN_TRANSIT, DELIVERED …).
+    /// Set on events read from the carrier: with the box and the time it identifies the event,
+    /// so the same one is never stored twice.</summary>
+    public string? CarrierCode { get; private set; }
+
+    public const int MaxCarrierCodeLength = 40;
+
     public static TrackingEvent Create(
         Guid id,
         Guid shipmentPackageId,
@@ -23,15 +30,18 @@ public class TrackingEvent : EntityBase
         string? location,
         string? rawPayload,
         Guid createdById,
-        DateTime createdAt)
+        DateTime createdAt,
+        string? carrierCode = null)
     {
+        carrierCode = string.IsNullOrWhiteSpace(carrierCode) ? null : carrierCode.Trim().ToUpperInvariant();
         var trackingEvent = new TrackingEvent
         {
             ShipmentPackageId = shipmentPackageId,
             EventAt = eventAt,
             StatusDescription = statusDescription.Trim(),
             Location = string.IsNullOrWhiteSpace(location) ? null : location.Trim(),
-            RawPayload = rawPayload
+            RawPayload = rawPayload,
+            CarrierCode = carrierCode is { Length: > MaxCarrierCodeLength } ? carrierCode[..MaxCarrierCodeLength] : carrierCode
         };
         trackingEvent.SetCreated(id, createdById, createdAt);
         return trackingEvent;

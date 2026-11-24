@@ -214,6 +214,9 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<Guid>("CreatedById")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("DefaultLabelFormat")
+                        .HasColumnType("integer");
+
                     b.Property<string>("DefaultServiceCode")
                         .IsRequired()
                         .HasMaxLength(10)
@@ -3630,15 +3633,52 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<int>("Carrier")
                         .HasColumnType("integer");
 
+                    b.Property<string>("CarrierBillToAccount")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("CarrierBillToPostalCode")
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
                     b.Property<decimal?>("CarrierCost")
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
+
+                    b.Property<int?>("CarrierEnvironment")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CarrierOfferId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("CarrierOrderNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("CarrierQuoteId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("CarrierServiceCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("CarrierServiceName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("CreatedById")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("LabelPurchasedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("LabelState")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime?>("ModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -3693,6 +3733,10 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("ShipToContact")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("ShipToCountry")
                         .HasMaxLength(2)
                         .HasColumnType("character varying(2)");
@@ -3700,6 +3744,13 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<string>("ShipToName")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ShipToPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<bool>("ShipToResidential")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("ShipToState")
                         .HasMaxLength(50)
@@ -3738,7 +3789,24 @@ namespace LabelsMis.Infrastructure.Migrations
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
 
+                    b.Property<DateTime?>("TrackingCheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime?>("VoidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("VoidedById")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("CarrierQuoteId")
+                        .IsUnique()
+                        .HasFilter("\"CarrierQuoteId\" IS NOT NULL");
 
                     b.HasIndex("CreatedById");
 
@@ -3814,6 +3882,14 @@ namespace LabelsMis.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CarrierBoxKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("CarrierPackageId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -3860,6 +3936,9 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.Property<string>("TrackingNumber")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<int?>("TrackingStatus")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("WeightLb")
                         .HasPrecision(14, 4)
@@ -4300,6 +4379,10 @@ namespace LabelsMis.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CarrierCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -4344,6 +4427,10 @@ namespace LabelsMis.Infrastructure.Migrations
                     b.HasIndex("ModifiedById");
 
                     b.HasIndex("ShipmentPackageId");
+
+                    b.HasIndex("ShipmentPackageId", "CarrierCode", "EventAt")
+                        .IsUnique()
+                        .HasFilter("\"CarrierCode\" IS NOT NULL");
 
                     b.ToTable("TrackingEvent", "public");
                 });

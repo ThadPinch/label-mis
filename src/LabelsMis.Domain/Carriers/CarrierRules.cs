@@ -194,3 +194,49 @@ public static class CarrierNames
         _ => "Other"
     };
 }
+
+/// <summary>The files a bought label can be printed from, as the screens name them.</summary>
+public static class CarrierLabelFormats
+{
+    public static readonly IReadOnlyList<CarrierLabelFormat> InPickOrder =
+        [CarrierLabelFormat.Pdf4x6, CarrierLabelFormat.PdfLetter, CarrierLabelFormat.Zpl];
+
+    public static string Describe(CarrierLabelFormat format) => format switch
+    {
+        CarrierLabelFormat.Pdf4x6 => "4 × 6 in PDF (thermal label printer)",
+        CarrierLabelFormat.PdfLetter => "Letter page PDF (plain paper)",
+        CarrierLabelFormat.Zpl => "ZPL file (raw, for a thermal printer)",
+        _ => format.ToString()
+    };
+
+    /// <summary>A short name, for a button.</summary>
+    public static string Short(CarrierLabelFormat format) => format switch
+    {
+        CarrierLabelFormat.Pdf4x6 => "4 × 6 PDF",
+        CarrierLabelFormat.PdfLetter => "Letter PDF",
+        CarrierLabelFormat.Zpl => "ZPL",
+        _ => format.ToString()
+    };
+}
+
+/// <summary>The lines of a UPS price as Worldwide Express codes them, in shop words.</summary>
+public static class UpsCharges
+{
+    public static string Name(string? code, string? description = null) =>
+        (code ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            "FRT" => "Freight",
+            "FSC" => "Fuel",
+            "RDC" => "Delivery area",
+            "HRS" => "Residential",
+            "DVS" => "Declared value",
+            "SUR" => "Surcharge",
+            _ => string.IsNullOrWhiteSpace(description) ? (code ?? string.Empty).Trim() : Sentence(description)
+        };
+
+    private static string Sentence(string text)
+    {
+        var lower = text.Trim().ToLowerInvariant();
+        return char.ToUpperInvariant(lower[0]) + lower[1..];
+    }
+}

@@ -122,6 +122,7 @@ public class CarrierModel(
         [FromForm(Name = "Defaults.ServiceCode")] string? serviceCode,
         [FromForm(Name = "Defaults.TrackingEnabled")] bool trackingEnabled,
         [FromForm(Name = "Boxes")] List<BoxPresetInput>? boxes,
+        [FromForm(Name = "Defaults.LabelFormat")] CarrierLabelFormat? labelFormat,
         CancellationToken cancellationToken)
     {
         try
@@ -129,7 +130,7 @@ public class CarrierModel(
             var presets = (boxes ?? [])
                 .Select(b => new CarrierBoxPreset(b.Name ?? string.Empty, b.LengthIn ?? 0m, b.WidthIn ?? 0m, b.HeightIn ?? 0m))
                 .ToList();
-            await settings.SaveDefaultsAsync(serviceCode ?? string.Empty, trackingEnabled, presets, cancellationToken);
+            await settings.SaveDefaultsAsync(serviceCode ?? string.Empty, trackingEnabled, presets, labelFormat, cancellationToken);
             TempData[StatusKey] = "Defaults saved.";
         }
         catch (ArgumentException ex)

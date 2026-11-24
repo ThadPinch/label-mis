@@ -18,5 +18,12 @@ public class TrackingEventConfiguration : IEntityTypeConfiguration<TrackingEvent
 
         builder.HasIndex(e => e.ShipmentPackageId);
         builder.HasIndex(e => e.EventAt);
+
+        // An event read from the carrier is stored once however often tracking is asked for.
+        // Events without a carrier code (none are written any more) are not covered.
+        builder.Property(e => e.CarrierCode).HasMaxLength(TrackingEvent.MaxCarrierCodeLength);
+        builder.HasIndex(e => new { e.ShipmentPackageId, e.CarrierCode, e.EventAt })
+            .IsUnique()
+            .HasFilter("\"CarrierCode\" IS NOT NULL");
     }
 }
