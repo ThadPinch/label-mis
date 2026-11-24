@@ -66,7 +66,7 @@ public class JobShippingIntegrationTests : IAsyncLifetime
             Options.Create(new InvoiceOptions()),
             new LabelsMis.Web.Services.Email.DocumentEmailService(_db, user, new NoopEmailSender()),
             new LabelsMis.Web.Pdf.InvoicePdfGenerator(settings, new TempPdfStorage(null!)));
-        _shipments = new ShipmentService(_db, user, numbers, null!, _invoices);
+        _shipments = new ShipmentService(_db, user, numbers, _invoices);
         _jobs = new JobService(_db, user, numbers, new EstimateCalculationMapper(_db), new EstimatingService(),
             new RollService(_db, user, numbers), _shipments);
     }
@@ -120,7 +120,7 @@ public class JobShippingIntegrationTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData(ShippingMethodType.Fedex)]
+    [InlineData(ShippingMethodType.Carrier)]
     [InlineData(null)]
     public async Task MarkShipped_MethodNeedingTheShipmentRecord_IsRefusedAndNothingMoves(ShippingMethodType? type)
     {
@@ -211,7 +211,7 @@ public class JobShippingIntegrationTests : IAsyncLifetime
         {
             methodId = Guid.NewGuid();
             _db.ShippingMethods.Add(ShippingMethod.Create(methodId.Value, $"Ship {type} {suffix}", type,
-                type == ShippingMethodType.Fedex ? 35m : 0m, type != ShippingMethodType.Pickup, TestUserId, now));
+                type == ShippingMethodType.Carrier ? 35m : 0m, type != ShippingMethodType.Pickup, TestUserId, now));
         }
 
         _db.Suppliers.Add(Supplier.Create(supplierId, $"Ship Sup {suffix}", $"SS{suffix}"[..10], "Net 30", 7, null, TestUserId, now));

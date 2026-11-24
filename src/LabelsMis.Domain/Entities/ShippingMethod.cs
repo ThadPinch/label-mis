@@ -36,7 +36,7 @@ public class ShippingMethod : MasterDataEntity
     /// <summary>The flag a method gets when none is chosen: carrier methods need the shipment record
     /// (their billed shipping comes from its carrier cost); hand-offs don't.</summary>
     public static bool DefaultRequiresShipmentRecord(ShippingMethodType methodType) =>
-        methodType == ShippingMethodType.Fedex;
+        methodType == ShippingMethodType.Carrier;
 
     public static ShippingMethod Create(
         Guid id,
@@ -92,7 +92,7 @@ public class ShippingMethod : MasterDataEntity
     [
         Create(PickupId, "Pickup", ShippingMethodType.Pickup, 0m, requiresAddress: false, createdById, createdAt),
         Create(DeliveryId, "Delivery", ShippingMethodType.Delivery, 25m, requiresAddress: true, createdById, createdAt),
-        Create(FedexId, "FedEx", ShippingMethodType.Fedex, 35m, requiresAddress: true, createdById, createdAt, FedexNotes),
+        Create(FedexId, "FedEx", ShippingMethodType.Carrier, 35m, requiresAddress: true, createdById, createdAt, FedexNotes),
         Create(CustomerAccountId, "Customer account", ShippingMethodType.CustomerAccount, 0m, requiresAddress: true,
             createdById, createdAt, CustomerAccountNotes)
     ];

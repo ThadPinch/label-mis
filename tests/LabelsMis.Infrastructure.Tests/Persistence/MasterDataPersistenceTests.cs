@@ -162,7 +162,7 @@ public class MasterDataPersistenceTests : IAsyncLifetime
         var method = ShippingMethod.Create(
             id,
             "FedEx Ground",
-            ShippingMethodType.Fedex,
+            ShippingMethodType.Carrier,
             35m,
             requiresAddress: true,
             TestUserId,
@@ -171,7 +171,7 @@ public class MasterDataPersistenceTests : IAsyncLifetime
         await _db.SaveChangesAsync();
 
         var loaded = await _db.ShippingMethods.SingleAsync(m => m.Id == id);
-        loaded.MethodType.Should().Be(ShippingMethodType.Fedex);
+        loaded.MethodType.Should().Be(ShippingMethodType.Carrier);
         loaded.Price.Should().Be(35m);
         loaded.RequiresAddress.Should().BeTrue();
         loaded.IsActive.Should().BeTrue();

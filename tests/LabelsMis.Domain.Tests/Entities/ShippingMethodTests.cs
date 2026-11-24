@@ -46,7 +46,7 @@ public class ShippingMethodTests
     [Theory]
     [InlineData(ShippingMethodType.Pickup, false)]
     [InlineData(ShippingMethodType.Delivery, false)]
-    [InlineData(ShippingMethodType.Fedex, true)]
+    [InlineData(ShippingMethodType.Carrier, true)]
     [InlineData(ShippingMethodType.CustomerAccount, false)]
     public void Create_WithoutAFlag_DefaultsTheShipmentRecordFromTheType(ShippingMethodType type, bool expected)
     {
@@ -58,11 +58,11 @@ public class ShippingMethodTests
     [Fact]
     public void CreateAndUpdate_AnExplicitShipmentRecordFlag_Wins()
     {
-        var method = ShippingMethod.Create(Guid.NewGuid(), "UPS", ShippingMethodType.Fedex, 0m, true, UserId,
+        var method = ShippingMethod.Create(Guid.NewGuid(), "UPS", ShippingMethodType.Carrier, 0m, true, UserId,
             DateTime.UtcNow, requiresShipmentRecord: false);
         method.RequiresShipmentRecord.Should().BeFalse();
 
-        method.Update("UPS", ShippingMethodType.Fedex, 0m, true, true, null, UserId, DateTime.UtcNow);
+        method.Update("UPS", ShippingMethodType.Carrier, 0m, true, true, null, UserId, DateTime.UtcNow);
 
         method.RequiresShipmentRecord.Should().BeTrue();
     }

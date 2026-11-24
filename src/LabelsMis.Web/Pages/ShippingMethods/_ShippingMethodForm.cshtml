@@ -10,7 +10,7 @@
     <div class="col-md-4">
         <label asp-for="MethodType" class="form-label"></label>
         <select asp-for="MethodType" asp-items="Html.GetEnumSelectList<ShippingMethodType>()" class="form-select"></select>
-        <span class="form-text">FedEx is a label only — no live rates are pulled. Customer account = shipped on the customer's own carrier account, billed $0.</span>
+        <span class="form-text">Carrier = shipped by a parcel carrier on our own account (UPS), billed at the carrier's cost × the multiplier. Customer account = shipped on the customer's own carrier account, billed $0.</span>
     </div>
     <div class="col-md-3">
         <label asp-for="Price" class="form-label"></label>
@@ -35,7 +35,7 @@
         <input asp-for="RequiresShipmentRecord" class="form-check-input" />
         <label asp-for="RequiresShipmentRecord" class="form-check-label"></label>
         <div class="form-text">
-            Checked (carriers like FedEx): production can't mark these jobs shipped — they wait on
+            Checked (carrier methods): production can't mark these jobs shipped — they wait on
             Shipping → Ready to ship until the shipment is recorded with its packages, tracking and carrier
             cost, which is what the shipping charge is billed from. Unchecked (pickup, local delivery,
             customer account): <strong>Mark shipped</strong> records a shipment by itself.

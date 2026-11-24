@@ -19,7 +19,7 @@ flowchart TB
 
     subgraph infra [LabelsMis.Infrastructure]
         EF[EF Core + Npgsql]
-        Fedex[SandboxFedexClient]
+        Carrier[WwexCarrierClient]
         Email[LoggingEmailSender]
         Identity[ASP.NET Identity]
     end
@@ -32,7 +32,7 @@ flowchart TB
 
     subgraph external [External]
         PG[(PostgreSQL 16)]
-        FedexAPI[FedEx API - sandbox/prod]
+        CarrierAPI[Worldwide Express SpeedShip API - UPS labels]
     end
 
     Browser --> Pages
@@ -41,15 +41,16 @@ flowchart TB
     Pages --> Services
     Services --> domain
     Services --> EF
-    Poller --> Fedex
-    Fedex --> FedexAPI
+    Services --> Carrier
+    Poller --> Carrier
+    Carrier --> CarrierAPI
     EF --> PG
     PDF --> Services
 ```
 
 ## Layer rules
 
-- **Domain** — business entities, estimating engine, FedEx/Email interfaces. No EF, no HTTP.
+- **Domain** — business entities, estimating engine, carrier/Email interfaces. No EF, no HTTP.
 - **Infrastructure** — EF DbContext, migrations, external clients.
 - **Web** — Razor Pages, services, PDF, background workers.
 - **Tools** — CSV importers for cutover (no UI).

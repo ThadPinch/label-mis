@@ -24,7 +24,7 @@ public class ShipmentBillingTests
     {
         var shipment = Pending();
 
-        shipment.SetCarrierCost(20m, ShippingMethodType.Fedex, Settings, UserId, Now);
+        shipment.SetCarrierCost(20m, ShippingMethodType.Carrier, Settings, UserId, Now);
 
         shipment.CarrierCost.Should().Be(20m);
         shipment.BilledShipping.Should().Be(30m);
@@ -34,9 +34,9 @@ public class ShipmentBillingTests
     public void SetCarrierCost_Cleared_BilledShippingBackToPending()
     {
         var shipment = Pending();
-        shipment.SetCarrierCost(20m, ShippingMethodType.Fedex, Settings, UserId, Now);
+        shipment.SetCarrierCost(20m, ShippingMethodType.Carrier, Settings, UserId, Now);
 
-        shipment.SetCarrierCost(null, ShippingMethodType.Fedex, Settings, UserId, Now);
+        shipment.SetCarrierCost(null, ShippingMethodType.Carrier, Settings, UserId, Now);
 
         shipment.CarrierCost.Should().BeNull();
         shipment.BilledShipping.Should().BeNull();
@@ -55,7 +55,7 @@ public class ShipmentBillingTests
     [Fact]
     public void SetCarrierCost_Negative_Throws()
     {
-        var act = () => Pending().SetCarrierCost(-1m, ShippingMethodType.Fedex, Settings, UserId, Now);
+        var act = () => Pending().SetCarrierCost(-1m, ShippingMethodType.Carrier, Settings, UserId, Now);
 
         act.Should().Throw<ArgumentOutOfRangeException>();
     }

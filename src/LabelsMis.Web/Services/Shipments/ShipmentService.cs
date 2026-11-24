@@ -1,6 +1,5 @@
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
-using LabelsMis.Domain.Fedex;
 using LabelsMis.Domain.Shipping;
 using LabelsMis.Domain.ValueObjects;
 using LabelsMis.Infrastructure.Persistence;
@@ -18,27 +17,6 @@ public record ShipmentListItem(
     DateOnly ShipDate,
     Carrier Carrier,
     string? PrimaryTrackingNumber);
-
-public record ShipmentLineInput(
-    Guid SalesOrderLineId,
-    Guid? JobId,
-    int QuantityShipped);
-
-public record ShipmentPackageInput(
-    decimal WeightLb,
-    decimal LengthIn,
-    decimal WidthIn,
-    decimal HeightIn,
-    decimal DeclaredValue);
-
-public record CreateShipmentInput(
-    DateOnly ShipDate,
-    FedexServiceLevel ServiceLevel,
-    Guid ShipToAddressId,
-    BillingType BillingType,
-    string? BillingAccountNumber,
-    IReadOnlyList<ShipmentLineInput> Lines,
-    IReadOnlyList<ShipmentPackageInput> Packages);
 
 public record ShipmentDetail(
     Shipment Shipment,
@@ -157,7 +135,6 @@ public class ShipmentService(
     LabelsMisDbContext db,
     ICurrentUserService currentUser,
     DocumentNumberService documentNumbers,
-    IFedexClient fedexClient,
     Invoices.InvoiceService invoiceService)
 {
     public async Task<PagedResult<ShipmentListItem>> ListAsync(
@@ -259,15 +236,6 @@ public class ShipmentService(
             shipment.SalesOrder.Customer.Name,
             latestEvent?.StatusDescription);
     }
-
-    public async Task<SalesOrder?> GetSalesOrderForCreateAsync(
-        Guid salesOrderId,
-        CancellationToken cancellationToken = default) =>
-        await db.SalesOrders.AsNoTracking()
-            .Include(o => o.Customer).ThenInclude(c => c.Addresses)
-            .Include(o => o.Lines).ThenInclude(l => l.Product)
-            .AsSplitQuery()
-            .SingleOrDefaultAsync(o => o.Id == salesOrderId, cancellationToken);
 
     /// <summary>Sales orders that have at least one job sitting at the Rewound (ready-to-ship) stage.</summary>
     public async Task<PagedResult<ReadyToShipOrder>> GetReadyToShipAsync(
@@ -837,163 +805,6 @@ public class ShipmentService(
         return new ShipmentBillingContext(method?.Name, method?.MethodType, settings);
     }
 
-    public async Task<Shipment> CreateAsync(
-        Guid salesOrderId,
-        CreateShipmentInput input,
-        CancellationToken cancellationToken = default)
-    {
-        var userId = RequireUserId();
-        var now = DateTime.UtcNow;
-
-        if (input.Packages.Count == 0)
-        {
-            throw new InvalidOperationException("At least one package is required.");
-        }
-
-        var order = await db.SalesOrders
-            .Include(o => o.Lines)
-            .SingleAsync(o => o.Id == salesOrderId, cancellationToken);
-
-        var shipFrom = await db.Addresses.AsNoTracking()
-            .Where(a => a.CustomerId == order.CustomerId && a.AddressType == AddressType.Shipping)
-            .OrderByDescending(a => a.IsDefault)
-            .FirstOrDefaultAsync(cancellationToken)
-            ?? throw new InvalidOperationException("No ship-from address configured.");
-
-        var shipToAddress = await db.Addresses.AsNoTracking()
-            .SingleOrDefaultAsync(a => a.Id == input.ShipToAddressId, cancellationToken)
-            ?? throw new InvalidOperationException("Ship-to address not found.");
-
-        var shipmentNumber = await documentNumbers.NextShipmentNumberAsync(cancellationToken);
-        var declaredValue = input.Packages.Sum(p => p.DeclaredValue);
-
-        var shipment = Shipment.CreatePending(
-            Guid.NewGuid(),
-            shipmentNumber,
-            salesOrderId,
-            input.ShipDate,
-            Carrier.Fedex,
-            input.ServiceLevel,
-            shipFrom.Id,
-            new ShippingAddress(null, shipFrom.Street1, shipFrom.Street2, shipFrom.City, shipFrom.State, shipFrom.Zip, shipFrom.Country),
-            new ShippingAddress(null, shipToAddress.Street1, shipToAddress.Street2, shipToAddress.City, shipToAddress.State, shipToAddress.Zip, shipToAddress.Country),
-            input.ShipToAddressId,
-            declaredValue,
-            input.BillingType,
-            input.BillingAccountNumber,
-            userId,
-            now);
-
-        var packages = input.Packages.Select((pkg, index) =>
-            ShipmentPackage.Create(
-                Guid.NewGuid(),
-                shipment.Id,
-                index + 1,
-                pkg.WeightLb,
-                pkg.LengthIn,
-                pkg.WidthIn,
-                pkg.HeightIn,
-                pkg.DeclaredValue,
-                userId,
-                now)).ToList();
-
-        shipment.ReplacePackages(packages);
-        foreach (var package in packages)
-        {
-            db.ShipmentPackages.Add(package);
-        }
-
-        foreach (var line in input.Lines)
-        {
-            var shipmentLine = ShipmentLine.Create(
-                Guid.NewGuid(),
-                shipment.Id,
-                line.SalesOrderLineId,
-                line.JobId,
-                line.QuantityShipped,
-                userId,
-                now);
-            shipment.AddLine(shipmentLine);
-            db.ShipmentLines.Add(shipmentLine);
-        }
-
-        db.Shipments.Add(shipment);
-        await db.SaveChangesAsync(cancellationToken);
-        return shipment;
-    }
-
-    public async Task<IReadOnlyList<FedexRateOption>> GetRatesAsync(
-        Guid shipmentId,
-        CancellationToken cancellationToken = default)
-    {
-        var shipment = await db.Shipments
-            .Include(s => s.ShipFromAddress)
-            .Include(s => s.ShipToAddress)
-            .Include(s => s.Packages)
-            .SingleAsync(s => s.Id == shipmentId, cancellationToken);
-
-        if (shipment.Packages.Count == 0)
-        {
-            throw new InvalidOperationException("Shipment has no packages.");
-        }
-
-        var request = BuildRateRequest(shipment);
-        return await fedexClient.GetRateAsync(request, cancellationToken);
-    }
-
-    public async Task<Shipment> GenerateLabelsAsync(
-        Guid shipmentId,
-        FedexServiceLevel serviceLevel,
-        CancellationToken cancellationToken = default)
-    {
-        var userId = RequireUserId();
-        var now = DateTime.UtcNow;
-
-        var shipment = await db.Shipments
-            .Include(s => s.SalesOrder).ThenInclude(o => o.Lines)
-            .Include(s => s.ShipFromAddress)
-            .Include(s => s.ShipToAddress)
-            .Include(s => s.Packages)
-            .AsSplitQuery()
-            .SingleAsync(s => s.Id == shipmentId, cancellationToken);
-
-        if (shipment.Status is not ShipmentStatus.Pending)
-        {
-            throw new InvalidOperationException("Labels can only be generated for pending shipments.");
-        }
-
-        var serviceCode = ToFedexServiceCode(serviceLevel);
-        var totalCost = 0m;
-
-        foreach (var package in shipment.Packages.OrderBy(p => p.PackageNumber))
-        {
-            var rateRequest = BuildRateRequest(shipment, package);
-            var shipmentRequest = new FedexShipmentRequest(
-                rateRequest,
-                serviceCode,
-                shipment.ShipmentNumber);
-
-            var result = await fedexClient.CreateShipmentAsync(shipmentRequest, cancellationToken);
-            package.SetLabel(result.TrackingNumber, result.LabelPath, result.ShippingCost, userId, now);
-            totalCost += result.ShippingCost;
-        }
-
-        shipment.MarkInTransit(totalCost, userId, now);
-        var billing = await GetBillingContextAsync(shipment.SalesOrderId, cancellationToken);
-        // The labels' rated cost is the best carrier cost known so far; it stays editable on the
-        // shipment page for when the carrier's bill differs.
-        shipment.SetCarrierCost(
-            shipment.CarrierCost ?? (totalCost > 0 ? totalCost : null),
-            billing.ShippingMethodType,
-            billing.Settings,
-            userId,
-            now);
-        await UpdateSalesOrderStatusAsync(shipment.SalesOrderId, userId, now, cancellationToken);
-        await db.SaveChangesAsync(cancellationToken);
-        await invoiceService.SyncDraftShippingAsync(shipment.SalesOrderId, cancellationToken);
-        return shipment;
-    }
-
     private async Task UpdateSalesOrderStatusAsync(
         Guid salesOrderId,
         Guid userId,
@@ -1023,42 +834,6 @@ public class ShipmentService(
             order.AdvanceStatus(SalesOrderStatus.InProduction, userId, now);
         }
     }
-
-    private static FedexRateRequest BuildRateRequest(Shipment shipment, ShipmentPackage? package = null)
-    {
-        package ??= shipment.Packages.OrderBy(p => p.PackageNumber).First();
-        var shipFrom = shipment.ShipFromSnapshot;
-        if (!shipFrom.HasAddress)
-        {
-            throw new InvalidOperationException("Carrier rating requires a ship-from address on file.");
-        }
-        return new FedexRateRequest(
-            ToFedexAddress(shipFrom),
-            ToFedexAddress(shipment.ShipToSnapshot),
-            package.WeightLb,
-            package.LengthIn,
-            package.WidthIn,
-            package.HeightIn,
-            package.DeclaredValue);
-    }
-
-    private static FedexAddress ToFedexAddress(ShippingAddress address) =>
-        new(
-            address.Street1 ?? string.Empty,
-            address.Street2,
-            address.City ?? string.Empty,
-            address.State ?? string.Empty,
-            address.Zip ?? string.Empty,
-            address.Country ?? "US");
-
-    private static string ToFedexServiceCode(FedexServiceLevel level) => level switch
-    {
-        FedexServiceLevel.FedexGround => "FEDEX_GROUND",
-        FedexServiceLevel.FedexExpressSaver => "FEDEX_EXPRESS_SAVER",
-        FedexServiceLevel.Fedex2Day => "FEDEX_2_DAY",
-        FedexServiceLevel.FedexOvernight => "FEDEX_OVERNIGHT",
-        _ => "FEDEX_GROUND"
-    };
 
     /// <summary>Builds the ship-from snapshot from the company address in General Settings.</summary>
     private async Task<ShippingAddress> GetCompanyShipFromAsync(CancellationToken cancellationToken)

@@ -21,9 +21,9 @@ public class Shipment : EntityBase
     public Carrier Carrier { get; private set; }
     public FedexServiceLevel? ServiceLevel { get; private set; }
 
-    // Ship-from may be a customer Address (FedEx flow) or a point-in-time snapshot of the
-    // company address from General Settings (manual flow). The snapshot columns are always
-    // populated; the FK is optional.
+    // Ship-from is a point-in-time snapshot of the company address from General Settings. The
+    // snapshot columns are always populated; the address FK is left from the first label design
+    // and is never set.
     public Guid? ShipFromAddressId { get; private set; }
     public Address? ShipFromAddress { get; private set; }
     public string? ShipFromName { get; private set; }

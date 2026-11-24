@@ -1,9 +1,9 @@
+using LabelsMis.Domain.Carriers;
 using LabelsMis.Domain.Email;
-using LabelsMis.Domain.Fedex;
 using LabelsMis.Domain.QuickBooks;
 using LabelsMis.Domain.Security;
+using LabelsMis.Infrastructure.Carriers;
 using LabelsMis.Infrastructure.Email;
-using LabelsMis.Infrastructure.Fedex;
 using LabelsMis.Domain.Storage;
 using LabelsMis.Infrastructure.Storage;
 using LabelsMis.Infrastructure.Identity;
@@ -51,17 +51,11 @@ public static class DependencyInjection
 
         services.AddHttpClient<IEmailSender, MailgunEmailSender>();
 
-        services.Configure<FedexOptions>(configuration.GetSection(FedexOptions.SectionName));
-        var fedexOptions = configuration.GetSection(FedexOptions.SectionName).Get<FedexOptions>() ?? new FedexOptions();
-        if (fedexOptions.UseSandbox)
-        {
-            services.AddSingleton<IFedexClient, SandboxFedexClient>();
-        }
-        else
-        {
-            throw new InvalidOperationException(
-                "Production FedEx client is not configured. Set Fedex:UseSandbox to true for local development.");
-        }
+        // The carrier (UPS through Worldwide Express). The keys are saved on Setup → Shipping
+        // carrier; with none saved the client is simply never called.
+        services.Configure<WwexOptions>(configuration.GetSection(WwexOptions.SectionName));
+        services.AddSingleton<WwexTokenCache>();
+        services.AddHttpClient<ICarrierClient, WwexCarrierClient>().RemoveAllLoggers();
 
         services.Configure<SecretOptions>(configuration.GetSection(SecretOptions.SectionName));
         services.AddSingleton<ISecretProtector, AesGcmSecretProtector>();

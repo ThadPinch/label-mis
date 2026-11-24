@@ -1,0 +1,1 @@
+{"apiVersion":"1","clientStatus":{"fieldMap":{"Measure.weight":["ERR_INVALID_NUMBER"]},"apiVersion":"1","message":"Weight of the package is more than 150; exception: AppException","fieldList":["Measure.weight"]},"correlationId":"NG-d47fd8a5-d31b-468e-97c2-1b9c71cafb6d","executionId":"NG-d47fd8a5-d31b-468e-97c2-1b9c71cafb6d"}

@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using LabelsMis.Domain.Carriers;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Jobs;
 using LabelsMis.Domain.Search;
@@ -797,14 +798,8 @@ public class GlobalSearchService(LabelsMisDbContext db, JobFloorService floor, L
 
     private static string SizeLabel(decimal acrossIn, decimal aroundIn) => $"{acrossIn:0.###}\" × {aroundIn:0.###}\"";
 
-    private static string CarrierLabel(Carrier carrier) => carrier switch
-    {
-        Carrier.Fedex => "FedEx",
-        Carrier.Ups => "UPS",
-        Carrier.Usps => "USPS",
-        Carrier.Dhl => "DHL",
-        _ => "Other carrier"
-    };
+    private static string CarrierLabel(Carrier carrier) =>
+        carrier == Carrier.Other ? "Other carrier" : CarrierNames.For(carrier);
 
     private static string SalesOrderStatusLabel(SalesOrderStatus status) => status switch
     {

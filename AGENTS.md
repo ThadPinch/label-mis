@@ -109,8 +109,8 @@ Foreign keys always end in `Id`. Navigation properties never end in `Id`. Exampl
 ### Infrastructure layer
 - One `IEntityTypeConfiguration<T>` per entity, in `Persistence/Configurations/`
 - DbContext is `LabelsMisDbContext`, registered as scoped
-- External service clients live in subfolders: `Fedex/`, `QuickBooks/`, `Email/`, `Storage/`
-- Each external client has an interface in Domain (`IFedexClient`, `IFileStorageClient`) and implementation in Infrastructure
+- External service clients live in subfolders: `Carriers/`, `QuickBooks/`, `Email/`, `Storage/`
+- Each external client has an interface in Domain (`ICarrierClient`, `IFileStorageClient`) and implementation in Infrastructure
 
 ### Web layer
 - Razor Pages, not MVC controllers, unless there's a specific reason

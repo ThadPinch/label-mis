@@ -27,7 +27,7 @@ public class RecordModel(ShipmentService shipmentService) : PageModel
         Input = new RecordShipmentInput
         {
             ShipDate = DateOnly.FromDateTime(DateTime.UtcNow),
-            Carrier = Carrier.Fedex,
+            Carrier = Carrier.Ups,
             ShipToName = shipTo.RecipientName,
             ShipToStreet1 = shipTo.Street1,
             ShipToStreet2 = shipTo.Street2,
@@ -86,7 +86,7 @@ public class RecordModel(ShipmentService shipmentService) : PageModel
 public class RecordShipmentInput
 {
     public DateOnly ShipDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
-    public Carrier Carrier { get; set; } = Carrier.Fedex;
+    public Carrier Carrier { get; set; } = Carrier.Ups;
 
     /// <summary>The carrier's charge for the whole shipment (WWEX); blank = not known yet.</summary>
     [System.ComponentModel.DataAnnotations.Range(0, 999999)]

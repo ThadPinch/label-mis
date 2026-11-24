@@ -65,7 +65,7 @@
 </div>
 
 <p class="text-muted">
-    Carrier: @Model.Detail.Shipment.Carrier@(Model.Detail.Shipment.ServiceLevel is { } svc ? $" · {svc}" : "")
+    Carrier: @LabelsMis.Domain.Carriers.CarrierNames.For(Model.Detail.Shipment.Carrier)@(Model.Detail.Shipment.ServiceLevel is { } svc ? $" · {svc}" : "")
     · Ship date: @Model.Detail.Shipment.ShipDate.ToString("yyyy-MM-dd")
 </p>
 

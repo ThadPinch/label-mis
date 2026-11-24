@@ -15,7 +15,7 @@ public class ShippingBillingRulesTests
     [InlineData(ShippingMethodType.CustomerAccount, 40d, 0d)]
     [InlineData(ShippingMethodType.Delivery, null, 25d)]
     [InlineData(ShippingMethodType.Delivery, 12d, 25d)]
-    [InlineData(ShippingMethodType.Fedex, 20d, 30d)]
+    [InlineData(ShippingMethodType.Carrier, 20d, 30d)]
     public void BilledShipping_FollowsSabrinasRules(ShippingMethodType type, double? carrierCost, double expected)
     {
         ShippingBillingRules.BilledShipping(type, (decimal?)carrierCost, Settings).Should().Be((decimal)expected);
@@ -24,7 +24,7 @@ public class ShippingBillingRulesTests
     [Fact]
     public void BilledShipping_CarrierWithoutCost_IsPending()
     {
-        ShippingBillingRules.BilledShipping(ShippingMethodType.Fedex, null, Settings).Should().BeNull();
+        ShippingBillingRules.BilledShipping(ShippingMethodType.Carrier, null, Settings).Should().BeNull();
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class ShippingBillingRulesTests
     public void BilledShipping_RoundsToCents()
     {
         // 13.37 × 1.5 = 20.055 → 20.06 (half away from zero)
-        ShippingBillingRules.BilledShipping(ShippingMethodType.Fedex, 13.37m, Settings).Should().Be(20.06m);
+        ShippingBillingRules.BilledShipping(ShippingMethodType.Carrier, 13.37m, Settings).Should().Be(20.06m);
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class ShippingBillingRulesTests
         var custom = new ShippingBillingSettings(LocalDeliveryFee: 30m, CarrierCostMultiplier: 1.25m);
 
         ShippingBillingRules.BilledShipping(ShippingMethodType.Delivery, null, custom).Should().Be(30m);
-        ShippingBillingRules.BilledShipping(ShippingMethodType.Fedex, 20m, custom).Should().Be(25m);
+        ShippingBillingRules.BilledShipping(ShippingMethodType.Carrier, 20m, custom).Should().Be(25m);
     }
 
     [Fact]

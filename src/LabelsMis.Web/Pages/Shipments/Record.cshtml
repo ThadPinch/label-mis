@@ -21,7 +21,8 @@
         </div>
         <div class="col-md-3">
             <label asp-for="Input.Carrier" class="form-label">Carrier</label>
-            <select asp-for="Input.Carrier" class="form-select" asp-items="Html.GetEnumSelectList<LabelsMis.Domain.Enums.Carrier>()"></select>
+            <select asp-for="Input.Carrier" class="form-select"
+                    asp-items="@(LabelsMis.Domain.Carriers.CarrierNames.InPickOrder.Select(c => new SelectListItem(LabelsMis.Domain.Carriers.CarrierNames.For(c), ((int)c).ToString())))"></select>
         </div>
         <div class="col-md-3">
             <label asp-for="Input.CarrierCost" class="form-label">Carrier cost</label>

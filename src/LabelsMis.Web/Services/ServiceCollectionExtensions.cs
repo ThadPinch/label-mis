@@ -95,7 +95,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<Dashboard.DashboardService>();
         services.AddScoped<Reports.ReportService>();
         services.AddScoped<Reports.EvaService>();
-        services.AddHostedService<ShipmentTrackingPoller>();
         services.AddHostedService<TempPdfPurgeService>();
         services.AddHostedService<QuickBooksKeepAliveService>();
         services.AddHostedService<QuickBooksSendWorker>();

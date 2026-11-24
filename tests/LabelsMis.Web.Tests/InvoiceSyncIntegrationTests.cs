@@ -193,14 +193,14 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task DraftInvoiceShipping_FollowsBilledShipping_OverrideWins_AndNeverRewritesSent()
     {
-        var fedex = await SeedMethodAsync(ShippingMethodType.Fedex);
+        var fedex = await SeedMethodAsync(ShippingMethodType.Carrier);
         var order = await SeedOrderAsync(quantity: 1000, unitPrice: 0.50m, chargeAmount: null,
             shippingMethodId: fedex, shippingCost: 35m);
         var invoice = await _invoiceService.CreateFromSalesOrderAsync(order.Id);
         invoice.ShippingAmount.Should().Be(35m, "before anything ships the invoice carries the quote");
 
         // Shipped without a carrier cost: pending, the quote stays.
-        var shipment = await SeedShippedShipmentAsync(order.Id, ShippingMethodType.Fedex, carrierCost: null);
+        var shipment = await SeedShippedShipmentAsync(order.Id, ShippingMethodType.Carrier, carrierCost: null);
         (await _invoiceService.SyncDraftShippingAsync(order.Id)).Outcome.Should().Be(InvoiceSyncOutcome.Updated);
         var detail = await _invoiceService.GetDetailAsync(invoice.Id);
         detail!.Invoice.ShippingAmount.Should().Be(35m);
@@ -209,7 +209,7 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
 
         // Carrier cost $20 -> billed $30 replaces the quote; total and balance move with it.
         var tracked = await _db.Shipments.SingleAsync(s => s.Id == shipment.Id);
-        tracked.SetCarrierCost(20m, ShippingMethodType.Fedex, LabelsMis.Domain.Shipping.ShippingBillingSettings.Default,
+        tracked.SetCarrierCost(20m, ShippingMethodType.Carrier, LabelsMis.Domain.Shipping.ShippingBillingSettings.Default,
             TestUserId, DateTime.UtcNow);
         await _db.SaveChangesAsync();
         await _invoiceService.SyncDraftShippingAsync(order.Id);
@@ -235,7 +235,7 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
         // Once sent, a later carrier-cost correction never rewrites it.
         var sent = await _db.Invoices.SingleAsync(i => i.Id == invoice.Id);
         sent.MarkSent(null, TestUserId, DateTime.UtcNow);
-        tracked.SetCarrierCost(40m, ShippingMethodType.Fedex, LabelsMis.Domain.Shipping.ShippingBillingSettings.Default,
+        tracked.SetCarrierCost(40m, ShippingMethodType.Carrier, LabelsMis.Domain.Shipping.ShippingBillingSettings.Default,
             TestUserId, DateTime.UtcNow);
         await _db.SaveChangesAsync();
         (await _invoiceService.SyncDraftShippingAsync(order.Id)).Outcome.Should().Be(InvoiceSyncOutcome.SkippedSent);
@@ -268,13 +268,13 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task DraftInvoiceShipping_TwoShipments_AreSummed()
     {
-        var fedex = await SeedMethodAsync(ShippingMethodType.Fedex);
+        var fedex = await SeedMethodAsync(ShippingMethodType.Carrier);
         var order = await SeedOrderAsync(quantity: 800, unitPrice: 0.30m, chargeAmount: null,
             shippingMethodId: fedex, shippingCost: 35m);
         var invoice = await _invoiceService.CreateFromSalesOrderAsync(order.Id);
 
-        await SeedShippedShipmentAsync(order.Id, ShippingMethodType.Fedex, carrierCost: 20m);
-        await SeedShippedShipmentAsync(order.Id, ShippingMethodType.Fedex, carrierCost: 10m);
+        await SeedShippedShipmentAsync(order.Id, ShippingMethodType.Carrier, carrierCost: 20m);
+        await SeedShippedShipmentAsync(order.Id, ShippingMethodType.Carrier, carrierCost: 10m);
         await _invoiceService.SyncDraftShippingAsync(order.Id);
 
         (await _db.Invoices.AsNoTracking().SingleAsync(i => i.Id == invoice.Id)).ShippingAmount.Should().Be(45m);
@@ -288,7 +288,7 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
             shippingMethodId: pickup, shippingCost: 0m);
         var invoice = await _invoiceService.CreateFromSalesOrderAsync(order.Id);
         var shipments = new LabelsMis.Web.Services.Shipments.ShipmentService(
-            _db, new StubCurrentUserService(TestUserId), new DocumentNumberService(_db), null!, _invoiceService);
+            _db, new StubCurrentUserService(TestUserId), new DocumentNumberService(_db), _invoiceService);
 
         (await _invoiceService.GetWaitingReasonsAsync(invoice.Id)).Should().Equal("Not shipped yet (0 of 1 lines)");
         (await _invoiceService.MarkExportedAsync([invoice.Id])).Should().Be(0, "bulk export acts only on Ready");
@@ -449,7 +449,7 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
     {
         var order = await SeedOrderAsync(quantity: 500, unitPrice: 0.40m, chargeAmount: null);
         var shipments = new LabelsMis.Web.Services.Shipments.ShipmentService(
-            _db, new StubCurrentUserService(TestUserId), new DocumentNumberService(_db), null!, _invoiceService);
+            _db, new StubCurrentUserService(TestUserId), new DocumentNumberService(_db), _invoiceService);
 
         var act = () => shipments.MarkOrderShippedAsync(order.Id);
 
@@ -460,7 +460,7 @@ public class InvoiceSyncIntegrationTests : IAsyncLifetime
     {
         var id = Guid.NewGuid();
         _db.ShippingMethods.Add(ShippingMethod.Create(
-            id, $"Test {type} {id.ToString("N")[..8]}", type, type == ShippingMethodType.Fedex ? 35m : 0m,
+            id, $"Test {type} {id.ToString("N")[..8]}", type, type == ShippingMethodType.Carrier ? 35m : 0m,
             type != ShippingMethodType.Pickup, TestUserId, DateTime.UtcNow));
         await _db.SaveChangesAsync();
         return id;

@@ -84,7 +84,7 @@
                                 {
                                     <a asp-page="/Shipments/Record" asp-route-salesOrderId="@order.SalesOrderId" class="btn btn-sm btn-success text-nowrap">Record shipment</a>
                                 }
-                                @* Methods that need the shipment record (FedEx, or no method) have no
+                                @* Methods that need the shipment record (carrier methods, or no method) have no
                                    package-less one-click: their shipping charge comes from the carrier cost. *@
                                 @if (Model.CanShip && !order.RequiresShipmentRecord)
                                 {
@@ -147,7 +147,7 @@
                 <tr>
                     <td class="text-nowrap"><a asp-page="Detail" asp-route-id="@item.Id">@item.ShipmentNumber</a></td>
                     <td>@item.CustomerName</td><td>@item.ShipDate.ToString("yyyy-MM-dd")</td>
-                    <td>@item.Status</td><td>@item.Carrier</td><td>@(item.PrimaryTrackingNumber ?? "—")</td>
+                    <td>@item.Status</td><td>@LabelsMis.Domain.Carriers.CarrierNames.For(item.Carrier)</td><td>@(item.PrimaryTrackingNumber ?? "—")</td>
                     <td class="text-end">
                         <div class="d-flex justify-content-end align-items-center gap-2 flex-nowrap">
                             <a asp-page="PackingList" asp-route-salesOrderId="@item.SalesOrderId" class="btn btn-sm btn-outline-secondary text-nowrap">Packing list</a>

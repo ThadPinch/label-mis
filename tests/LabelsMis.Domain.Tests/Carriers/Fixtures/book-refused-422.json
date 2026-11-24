@@ -1,0 +1,1 @@
+{"apiVersion":"1","clientStatus":{"fieldMap":{"ProductTransactionRecord":["ERR_EMPTY"]},"apiVersion":"1","message":"no product transaction records found; exception: AppException","fieldList":["ProductTransactionRecord"]},"correlationId":"NG-972c1aa2-cb76-4c3d-ac43-9fb2262ff912","executionId":"NG-972c1aa2-cb76-4c3d-ac43-9fb2262ff912"}
