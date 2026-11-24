@@ -90,6 +90,12 @@ public static class ServiceCollectionExtensions
         // QuickBooks: customers.
         services.AddScoped<Services.QuickBooks.QuickBooksCustomerService>();
 
+        // Carrier labels (UPS through Worldwide Express).
+        services.AddScoped<Services.Carriers.CarrierSettingsService>();
+        services.AddSingleton<Services.Carriers.CarrierLogger>();
+        services.AddScoped<Services.Carriers.CarrierGateway>();
+        services.AddScoped<Services.Carriers.CarrierConnectionTest>();
+
         services.AddScoped<ArtworkService>();
         services.AddScoped<Pdfs.TempPdfStorage>();
         services.AddScoped<Dashboard.DashboardService>();

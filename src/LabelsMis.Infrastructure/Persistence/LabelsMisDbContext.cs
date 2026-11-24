@@ -66,6 +66,8 @@ public class LabelsMisDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<QuickBooksSyncLog> QuickBooksSyncLogs => Set<QuickBooksSyncLog>();
     public DbSet<QuickBooksCatalogEntry> QuickBooksCatalogEntries => Set<QuickBooksCatalogEntry>();
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
+    public DbSet<CarrierSettings> CarrierSettings => Set<CarrierSettings>();
+    public DbSet<CarrierLog> CarrierLogs => Set<CarrierLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

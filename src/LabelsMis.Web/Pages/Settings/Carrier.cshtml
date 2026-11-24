@@ -1,0 +1,249 @@
+@page "/settings/carrier"
+@using LabelsMis.Domain.Carriers
+@using LabelsMis.Domain.Enums
+@model LabelsMis.Web.Pages.Settings.CarrierModel
+@{
+    ViewData["Title"] = "Shipping carrier";
+    ViewData["BackNav"] = new BackNavModel();
+    var c = Model.Carrier;
+    var (stateText, stateClass) = c switch
+    {
+        { HasCredentials: false } => ("Not set up", "text-bg-secondary"),
+        { IsReady: false } => ("Keys can't be read", "text-bg-danger"),
+        { LastTestSucceeded: true } => ("Connected", "text-bg-success"),
+        { LastTestSucceeded: false } => ("Last test failed", "text-bg-danger"),
+        _ => ("Keys saved, not tested", "text-bg-secondary")
+    };
+    var from = c.ShipFrom;
+    var presetRows = Model.PresetRows;
+}
+<h1 class="h3 mb-1">Shipping carrier</h1>
+<p class="text-muted">
+    UPS labels are bought through the shop's Worldwide Express account. With keys saved here, <em>Record shipment</em>
+    gets live UPS rates, buys the label and fills in the tracking number and the carrier cost by itself. Without keys,
+    shipments are recorded by hand as before.
+</p>
+
+@if (TempData["CarrierStatus"] is string statusMessage)
+{
+    <div class="alert alert-success py-2" id="carrier-status">@statusMessage</div>
+}
+@if (TempData["CarrierError"] is string errorMessage)
+{
+    <div class="alert alert-danger py-2" id="carrier-error">@errorMessage</div>
+}
+
+<section class="border rounded p-3 mb-4" id="carrier-connection">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h2 class="h5 mb-0">Worldwide Express connection</h2>
+        <span class="badge @stateClass" id="carrier-state">@stateText</span>
+        @if (c.IsStaging)
+        {
+            <span class="badge text-bg-warning" id="carrier-staging">Staging: sample labels, nothing ships and nothing is billed</span>
+        }
+        else if (c.IsReady)
+        {
+            <span class="badge text-bg-primary" id="carrier-production">Production: labels are real and are billed</span>
+        }
+    </div>
+
+    @if (!c.CanStoreSecrets)
+    {
+        <div class="alert alert-warning py-2" id="carrier-key-missing">
+            The carrier keys can't be saved on this server yet: @c.KeyProblem
+            LabelShop stores the client secret encrypted, and the encryption key is the
+            <code>Secrets__Key</code> setting on the server (32 random bytes, base64).
+        </div>
+    }
+
+    @if (c.HasCredentials)
+    {
+        <p class="mb-2" id="carrier-summary">
+            @if (c.LastTestedAt is null)
+            {
+                <text>The keys have not been tested since they were saved.</text>
+            }
+            else
+            {
+                <text>Last tested @Model.Local(c.LastTestedAt): </text>
+                <span class="@(c.LastTestSucceeded == true ? "" : "text-danger")" id="carrier-last-test">@c.LastTestMessage</span>
+            }
+        </p>
+        @if (c.BillToAccountNumber is not null)
+        {
+            <p class="small text-muted mb-2" id="carrier-bill-to">
+                Labels are billed to UPS account <strong>@c.BillToAccountNumber</strong> (ZIP @c.BillToPostalCode), as
+                Worldwide Express named it in the last rate.
+            </p>
+        }
+        <div class="d-flex flex-wrap gap-2 mb-3" id="carrier-actions">
+            <form method="post" asp-page-handler="Test">
+                <button type="submit" class="btn btn-sm btn-primary" id="carrier-test" disabled="@(!c.IsReady)">Test connection</button>
+            </form>
+            <form method="post" asp-page-handler="RemoveKeys"
+                  onsubmit="return confirm('Remove the carrier keys? Shipments already bought keep their tracking numbers and labels. New shipments are recorded by hand until keys are saved again.');">
+                <button type="submit" class="btn btn-sm btn-outline-danger" id="carrier-remove-keys">Remove keys</button>
+            </form>
+        </div>
+    }
+    else
+    {
+        <p class="mb-2" id="carrier-summary">
+            No keys are saved. Worldwide Express Integration Support issues a client ID and a client secret: a staging
+            pair for testing first, and a production pair once they are told testing is complete.
+        </p>
+    }
+
+    <details open="@(!c.HasCredentials)" id="carrier-keys">
+        <summary class="small">API keys</summary>
+        <form method="post" asp-page-handler="SaveKeys" id="carrier-keys-form" class="mt-2" autocomplete="off">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label for="Keys_Environment" class="form-label small mb-0">Keys are for</label>
+                    <select id="Keys_Environment" name="Keys.Environment" class="form-select form-select-sm">
+                        <option value="Staging" selected="@(c.Environment == CarrierEnvironment.Staging)">Staging (sample labels)</option>
+                        <option value="Production" selected="@(c.Environment == CarrierEnvironment.Production)">Production (real labels)</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="Keys_ClientId" class="form-label small mb-0">Client ID</label>
+                    <input id="Keys_ClientId" name="Keys.ClientId" class="form-control form-control-sm" maxlength="200" value="@c.ClientId" />
+                </div>
+                <div class="col-md-4">
+                    <label for="Keys_ClientSecret" class="form-label small mb-0">Client secret</label>
+                    <input id="Keys_ClientSecret" name="Keys.ClientSecret" type="password" class="form-control form-control-sm" maxlength="400"
+                           autocomplete="new-password"
+                           placeholder="@(c.HasCredentials ? $"(unchanged{(c.ClientSecretTail.Length > 0 ? ", ends " + c.ClientSecretTail : "")})" : "")" />
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-sm btn-outline-primary w-100" id="carrier-save-keys" disabled="@(!c.CanStoreSecrets)">Save</button>
+                </div>
+            </div>
+            <div class="form-text">
+                Staging keys only ever make sample labels. Production keys buy real ones on the shop's UPS account. Leave
+                the secret blank to keep the saved one. A label can only be reprinted, voided or tracked with the kind of
+                keys it was bought with.
+            </div>
+        </form>
+    </details>
+</section>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-5">
+        <section class="border rounded p-3 h-100" id="carrier-ship-from">
+            <h2 class="h5 mb-2">Ship-from</h2>
+            <address class="mb-2" id="carrier-ship-from-address">
+                <strong>@(string.IsNullOrWhiteSpace(from.Company) ? "(no company name)" : from.Company)</strong><br />
+                @from.Street1@(string.IsNullOrWhiteSpace(from.Street2) ? "" : ", " + from.Street2)<br />
+                @from.City@(string.IsNullOrWhiteSpace(from.State) ? "" : ", " + from.State) @from.PostalCode
+            </address>
+            <p class="small text-muted mb-2">
+                The address is the company address in <a asp-page="/Settings/General">Settings → General</a>. It prints on
+                every label as the return address.
+            </p>
+            @if (Model.ShipFromProblems.Count > 0)
+            {
+                <div class="alert alert-warning py-2 small" id="carrier-ship-from-problems">
+                    @foreach (var problem in Model.ShipFromProblems)
+                    {
+                        <div>@problem</div>
+                    }
+                </div>
+            }
+            <form method="post" asp-page-handler="SaveShipFrom" id="carrier-ship-from-form">
+                <div class="row g-2 align-items-end">
+                    <div class="col-sm-6">
+                        <label for="ShipFrom_Contact" class="form-label small mb-0">Contact at the shop</label>
+                        <input id="ShipFrom_Contact" name="ShipFrom.Contact" class="form-control form-control-sm" maxlength="60" value="@c.ShipFromContact" placeholder="Shipping desk" />
+                    </div>
+                    <div class="col-sm-4">
+                        <label for="ShipFrom_Phone" class="form-label small mb-0">Phone</label>
+                        <input id="ShipFrom_Phone" name="ShipFrom.Phone" class="form-control form-control-sm" maxlength="30" value="@c.ShipFromPhone" placeholder="@from.Phone" />
+                    </div>
+                    <div class="col-sm-2">
+                        <button type="submit" class="btn btn-sm btn-outline-primary w-100" id="carrier-save-ship-from">Save</button>
+                    </div>
+                </div>
+                <div class="form-text">UPS asks for a 10-digit phone on a label. Blank uses the company phone.</div>
+            </form>
+        </section>
+    </div>
+    <div class="col-lg-7">
+        <section class="border rounded p-3 h-100" id="carrier-defaults">
+            <h2 class="h5 mb-2">Defaults for Record shipment</h2>
+            <form method="post" asp-page-handler="SaveDefaults" id="carrier-defaults-form">
+                <div class="row g-2 mb-3">
+                    <div class="col-sm-6">
+                        <label for="Defaults_ServiceCode" class="form-label small mb-0">Service selected first</label>
+                        <select id="Defaults_ServiceCode" name="Defaults.ServiceCode" class="form-select form-select-sm">
+                            @foreach (var (code, name) in UpsServices.Domestic)
+                            {
+                                <option value="@code" selected="@(code == c.DefaultServiceCode)">@name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-6 d-flex align-items-end">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="Defaults_TrackingEnabled" name="Defaults.TrackingEnabled" value="true" checked="@c.TrackingEnabled" />
+                            <label class="form-check-label small" for="Defaults_TrackingEnabled">Check tracking in the background for labels bought here</label>
+                        </div>
+                    </div>
+                </div>
+                <h3 class="h6 mb-1">Usual boxes</h3>
+                <p class="small text-muted mb-2">
+                    Picking one on Record shipment fills in the size. UPS bills by size as well as weight, so a rate
+                    without the box size can come in under what is charged. Clear a name to remove the box.
+                </p>
+                <table class="table table-sm align-middle mb-2" id="carrier-box-presets">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th style="width: 6.5rem">Length (in)</th>
+                            <th style="width: 6.5rem">Width (in)</th>
+                            <th style="width: 6.5rem">Height (in)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < presetRows.Count; i++)
+                        {
+                            var row = presetRows[i];
+                            <tr>
+                                <td><input name="Boxes[@i].Name" class="form-control form-control-sm" maxlength="@CarrierBoxPresets.MaxNameLength" value="@row.Name" aria-label="Box name" /></td>
+                                <td><input name="Boxes[@i].LengthIn" type="number" min="0" step="0.01" class="form-control form-control-sm" value="@(row.LengthIn?.ToString("0.##"))" aria-label="Length" /></td>
+                                <td><input name="Boxes[@i].WidthIn" type="number" min="0" step="0.01" class="form-control form-control-sm" value="@(row.WidthIn?.ToString("0.##"))" aria-label="Width" /></td>
+                                <td><input name="Boxes[@i].HeightIn" type="number" min="0" step="0.01" class="form-control form-control-sm" value="@(row.HeightIn?.ToString("0.##"))" aria-label="Height" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <button type="submit" class="btn btn-sm btn-outline-primary" id="carrier-save-defaults">Save defaults</button>
+            </form>
+        </section>
+    </div>
+</div>
+
+<section id="carrier-log">
+    <div class="d-flex flex-wrap align-items-baseline gap-2 mb-1">
+        <h2 class="h5 mb-0">Carrier activity</h2>
+        <span class="small text-muted">
+            Every call LabelShop made to Worldwide Express, newest first. If their support asks for a call id, it is the
+            last column.
+        </span>
+        @if (Model.ShowAllLog)
+        {
+            <a asp-page="/Settings/Carrier" asp-fragment="carrier-log" class="small ms-auto">Newest @CarrierModel.RecentLogRows only</a>
+        }
+        else if (Model.Log.Count >= CarrierModel.RecentLogRows)
+        {
+            <a asp-page="/Settings/Carrier" asp-route-log="all" asp-fragment="carrier-log" class="small ms-auto" id="carrier-log-all">Show more</a>
+        }
+    </div>
+    @if (Model.Log.Count == 0)
+    {
+        <p class="text-muted" id="carrier-log-empty">Nothing yet. Entries appear with the first test of the connection.</p>
+    }
+    else
+    {
+        @await Html.PartialAsync("Shared/_CarrierLogTable", new CarrierLogTableModel(Model.Log, Model.LocalWithSeconds, ShowShipment: true, TableId: "carrier-log-table"))
+    }
+</section>

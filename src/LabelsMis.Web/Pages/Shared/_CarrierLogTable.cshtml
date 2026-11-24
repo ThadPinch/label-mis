@@ -1,0 +1,74 @@
+@using LabelsMis.Domain.Carriers
+@using LabelsMis.Domain.Enums
+@model LabelsMis.Web.Pages.Shared.CarrierLogTableModel
+@* One row per call LabelShop made to the carrier. Used by Setup → Shipping carrier and by a
+   shipment's own carrier history. *@
+<div class="table-responsive">
+    <table class="table table-sm align-middle mb-0" id="@Model.TableId">
+        <thead>
+            <tr>
+                <th>When</th>
+                <th>What</th>
+                <th>Result</th>
+                <th>Details</th>
+                @if (Model.ShowShipment)
+                {
+                    <th>Shipment</th>
+                }
+                <th>By</th>
+                <th class="text-end">Took</th>
+                <th>Carrier call id</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Model.Rows)
+            {
+                <tr class="@(row.Succeeded ? "" : "table-danger")" data-operation="@row.Operation">
+                    <td class="text-nowrap">@Model.Local(row.OccurredAt)</td>
+                    <td>
+                        @CarrierOperations.Describe(row.Operation)
+                        @if (row.Environment == CarrierEnvironment.Staging)
+                        {
+                            <span class="badge text-bg-warning">staging</span>
+                        }
+                    </td>
+                    <td>
+                        @if (row.Succeeded)
+                        {
+                            <span class="badge text-bg-success">OK</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-danger">Failed</span>
+                        }
+                    </td>
+                    <td class="small">
+                        @row.Detail
+                        @if (!row.Succeeded)
+                        {
+                            <div>
+                                @row.Message
+                                @if (row.HttpStatus is not null)
+                                {
+                                    <span class="text-muted">(answer @row.HttpStatus)</span>
+                                }
+                            </div>
+                        }
+                    </td>
+                    @if (Model.ShowShipment)
+                    {
+                        <td>
+                            @if (row.ShipmentId is not null && row.ShipmentNumber is not null)
+                            {
+                                <a asp-page="/Shipments/Detail" asp-route-id="@row.ShipmentId">@row.ShipmentNumber</a>
+                            }
+                        </td>
+                    }
+                    <td class="small">@(row.Automatic ? "automatic" : row.Who)</td>
+                    <td class="text-end small text-nowrap">@(row.DurationMs is null ? "" : $"{row.DurationMs} ms")</td>
+                    <td class="small font-monospace">@row.CorrelationId</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
