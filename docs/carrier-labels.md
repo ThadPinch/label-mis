@@ -161,6 +161,26 @@ asks WWEX to buy anything.
   answer with nothing new writes no log row. Staging samples never move, so they are never polled. The switch is
   in Setup → Shipping carrier.
 
+### The guide and its walkthroughs
+
+Setup → Documentation has a **UPS labels** section (`#carrier-labels`): how it works, and two walkthroughs that
+run on the real pages.
+
+- `wwwroot/js/walkthrough.js` is the engine: a card that points at one element at a time, follows the person from
+  page to page (its place is kept in `sessionStorage`, so one browser tab), and leaves the page usable. It is
+  loaded on every page; it does nothing until a walkthrough is started. The header comment lists the step fields.
+- `wwwroot/js/walkthroughs.js` holds the two walkthroughs, `carrier-setup` (administrators, Setup → Shipping
+  carrier) and `carrier-usage` (Production → Shipping → Record shipment → the shipment page). Steps point at
+  element ids on those pages: **renaming an id there means changing it here**. A step whose element is missing
+  shows its fallback text, so a rename degrades the walkthrough without breaking the page.
+- Neither walkthrough presses anything for the person. The shipping one never buys a label: Next on the Buy step
+  opens the newest shipment that already has one (`CarrierShipmentService.GetNewestLabelShipmentIdAsync`, asked
+  through `/setup/documentation?handler=WalkthroughTargets`), and says so when there is none.
+- Who is offered which: the setup walkthrough to administrators; the shipping one to Shipping and administrators
+  once keys are saved. Everyone else sees the buttons greyed out with the reason.
+- A walkthrough for another feature is one more `register(...)` call and a button with
+  `data-walkthrough-start="<id>"`.
+
 ### How it was checked
 
 - Unit and integration tests: Domain (parsers against the saved staging answers, shipment rules), Web
@@ -169,6 +189,8 @@ asks WWEX to buy anything.
 - Through the real pages against WWEX staging, with scripts kept outside the repo in
   `~/Documents/LabelShop/smoke/2026-11-24-carrier-labels/`: `s3_setup.py`, `s4_buy.py`, `s6_void.py`,
   `s7_track.py`. Every sample label they bought is voided, except the one two-box sample kept for printing checks.
+- The walkthroughs, in a real browser: `~/Documents/LabelShop/smoke/2026-11-25-walkthroughs/` (`w1_tours.py`,
+  `w2_no_keys.py`).
 
 ## Not proven
 

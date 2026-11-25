@@ -23,11 +23,11 @@
 
 @if (Model.Result.Items.Count == 0)
 {
-    <div class="alert alert-light border">Nothing is ready to ship right now.</div>
+    <div class="alert alert-light border" id="shipping-empty">Nothing is ready to ship right now.</div>
 }
 else
 {
-    <table class="table table-striped align-middle">
+    <table class="table table-striped align-middle" id="shipping-ready">
         <thead>
             <tr>
                 <th>@await Html.PartialAsync("Shared/_SortHeader", new SortHeaderModel("Order #", "order", Model.Sort, sortRoute))</th>

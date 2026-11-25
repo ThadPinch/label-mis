@@ -337,4 +337,26 @@ public class CarrierVoidTests : CarrierShipmentTestHost
         (await markShipped.Should().ThrowAsync<InvalidOperationException>())
             .WithMessage("Line 1 hasn't shipped anything yet*");
     }
+
+    [Fact]
+    public async Task NewestLabelShipment_ForTheGuidesWalkthrough_PrefersALiveLabelOverANewerVoidedOne()
+    {
+        await SaveKeysAsync();
+        var first = await BuyAsync(await SeedOrderAsync(ShippingMethodType.Carrier, 500), "GND", Box(5m));
+        var second = await BuyAsync(await SeedOrderAsync(ShippingMethodType.Carrier, 500), "GND", Box(5m));
+
+        // The test database outlives one test: every label older than these two is out of the way.
+        await InDbAsync(db => db.Shipments
+            .Where(s => s.Id != first.ShipmentId && s.Id != second.ShipmentId && s.LabelState != ShipmentLabelState.None)
+            .ExecuteUpdateAsync(set => set.SetProperty(s => s.LabelPurchasedAt, new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc))));
+        await InDbAsync(db => db.Shipments.Where(s => s.Id == second.ShipmentId)
+            .ExecuteUpdateAsync(set => set.SetProperty(s => s.LabelPurchasedAt, DateTime.UtcNow.AddMinutes(5))));
+
+        (await WithLabelsAsync(labels => labels.GetNewestLabelShipmentIdAsync())).Should().Be(second.ShipmentId);
+
+        await VoidAsync(second.ShipmentId);
+
+        (await WithLabelsAsync(labels => labels.GetNewestLabelShipmentIdAsync()))
+            .Should().Be(first.ShipmentId, "a label that is still live shows printing, tracking and voiding");
+    }
 }

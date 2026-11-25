@@ -88,7 +88,7 @@
         </div>
     </div>
 
-    <fieldset class="border rounded p-3 mb-3" data-quote-field>
+    <fieldset class="border rounded p-3 mb-3" data-quote-field id="record-ship-to">
         <legend class="float-none w-auto px-2 h6 mb-0">Ship to</legend>
         <div class="row g-2">
             <div class="col-md-6"><label asp-for="Input.ShipToName" class="form-label">Recipient / company</label><input asp-for="Input.ShipToName" class="form-control" /></div>
@@ -115,14 +115,14 @@
         <input type="hidden" asp-for="Input.ShipToCountry" />
     </fieldset>
 
-    <h2 class="h6">Items ready to ship</h2>
+    <h2 class="h6" id="record-items-title">Items ready to ship</h2>
     @if (Model.Input.Lines.Count == 0)
     {
         <div class="alert alert-warning">No items on this order are at the ready-to-ship stage.</div>
     }
     else
     {
-        <table class="table table-sm align-middle">
+        <table class="table table-sm align-middle" id="record-items">
             <thead><tr><th style="width:3rem;">Ship</th><th>Item</th><th>Ordered</th><th>Already shipped</th><th>Quantity to ship</th></tr></thead>
             <tbody>
             @for (var i = 0; i < Model.Input.Lines.Count; i++)

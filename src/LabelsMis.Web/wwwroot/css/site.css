@@ -2029,3 +2029,199 @@ body {
   font-size: 0.85rem;
   color: var(--lm-text-muted);
 }
+
+/* Guided walkthroughs (js/walkthrough.js): a card that points at one part of the page at a time.
+   The dimming is the spot's own shadow and takes no clicks, so the page stays usable. */
+.walkthrough-spot {
+  position: fixed;
+  z-index: 1040;
+  pointer-events: none;
+  border-radius: 8px;
+  box-shadow: 0 0 0 3px var(--lm-orange), 0 0 0 9999px rgba(23, 23, 23, 0.32);
+  transition: top 0.18s ease, left 0.18s ease, width 0.18s ease, height 0.18s ease;
+}
+
+.walkthrough-target {
+  scroll-margin-top: 5.5rem;
+  scroll-margin-bottom: 14rem;
+}
+
+.walkthrough-card {
+  position: fixed;
+  z-index: 1045;
+  width: min(24rem, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  background: var(--lm-white);
+  color: var(--lm-text);
+  border: 1px solid var(--lm-gray-200);
+  border-top: 4px solid var(--lm-orange);
+  border-radius: var(--lm-radius);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+  padding: 0.75rem 0.9rem 0.8rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.walkthrough-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--lm-orange-dark);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.walkthrough-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.walkthrough-count {
+  color: var(--lm-text-muted);
+  white-space: nowrap;
+}
+
+.walkthrough-end {
+  border: 0;
+  background: none;
+  color: var(--lm-gray-600);
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+  cursor: pointer;
+}
+
+.walkthrough-end:hover,
+.walkthrough-end:focus {
+  color: var(--lm-text);
+}
+
+.walkthrough-progress {
+  height: 3px;
+  margin: 0.4rem 0 0.6rem;
+  background: var(--lm-gray-200);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.walkthrough-progress span {
+  display: block;
+  height: 100%;
+  background: var(--lm-orange);
+  transition: width 0.2s ease;
+}
+
+.walkthrough-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+  color: var(--lm-text);
+}
+
+.walkthrough-body p,
+.walkthrough-body ul {
+  margin: 0 0 0.5rem;
+}
+
+.walkthrough-body ul {
+  padding-left: 1.1rem;
+}
+
+.walkthrough-body li + li {
+  margin-top: 0.25rem;
+}
+
+.walkthrough-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.walkthrough-extra {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.walkthrough-card--paused {
+  width: min(19rem, calc(100vw - 24px));
+}
+
+.walkthrough-card--paused .walkthrough-progress {
+  display: none;
+}
+
+@media (max-width: 575.98px) {
+  .walkthrough-card {
+    width: calc(100vw - 24px);
+    max-height: 46vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .walkthrough-spot,
+  .walkthrough-progress span {
+    transition: none;
+  }
+}
+
+/* The two walkthrough cards in the guide. */
+.docs-walkthroughs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 0.5rem;
+}
+
+.docs-walkthrough {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: var(--lm-white);
+  border: 1px solid var(--lm-gray-200);
+  border-top: 4px solid var(--lm-orange);
+  border-radius: var(--lm-radius);
+  padding: 0.9rem 1rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.docs-walkthrough-for {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lm-orange-dark);
+}
+
+.docs-walkthrough h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--lm-text);
+}
+
+.docs-walkthrough p {
+  margin: 0;
+  color: var(--lm-text-muted);
+}
+
+.docs-walkthrough .btn {
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+.docs-walkthrough-note {
+  font-size: 0.8rem;
+}

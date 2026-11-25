@@ -619,6 +619,21 @@ public class CarrierShipmentService(
             .ToListAsync(cancellationToken);
     }
 
+    /// <summary>The shipment the guide's walkthrough shows as "a shipment with a label": the newest one
+    /// whose label is live and in transit, else the newest one a label was ever bought for (a
+    /// delivered or voided one still shows the page). Null when no label has been bought.</summary>
+    public async Task<Guid?> GetNewestLabelShipmentIdAsync(CancellationToken cancellationToken = default)
+    {
+        var found = await db.Shipments.AsNoTracking()
+            .Where(s => s.LabelState == ShipmentLabelState.Purchased || s.LabelState == ShipmentLabelState.Voided)
+            .OrderByDescending(s => s.LabelState == ShipmentLabelState.Purchased && s.Status == ShipmentStatus.InTransit)
+            .ThenByDescending(s => s.LabelState == ShipmentLabelState.Purchased)
+            .ThenByDescending(s => s.LabelPurchasedAt)
+            .Select(s => (Guid?)s.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        return found;
+    }
+
     /// <summary>Notes that a shipment was asked about although the carrier refused the question,
     /// so the background check moves on to the others instead of asking about it every time.</summary>
     public async Task NoteTrackingAskedAsync(Guid shipmentId, CancellationToken cancellationToken = default)

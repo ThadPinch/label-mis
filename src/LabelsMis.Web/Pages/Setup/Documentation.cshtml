@@ -37,6 +37,7 @@
                     <li><a class="docs-nav-link" href="#estimating">Estimating</a></li>
                     <li><a class="docs-nav-link" href="#purchase-orders">Purchase orders</a></li>
                     <li><a class="docs-nav-link" href="#shipping">Shipping &amp; fulfillment</a></li>
+                    <li><a class="docs-nav-link" href="#carrier-labels">UPS labels</a></li>
                     <li><a class="docs-nav-link" href="#invoicing">Invoicing</a></li>
                     <li><a class="docs-nav-link" href="#finance-reports">Finance &amp; reports</a></li>
                 </ul>
@@ -77,7 +78,7 @@
                     <li><strong>Mark shipped always leaves a shipment behind</strong>, so the order and its invoice see it shipped. On pickup, delivery and customer-account orders it records the shipment by itself; carrier orders (UPS, FedEx) are shipped with <strong>Record shipment</strong> (packages, tracking, carrier cost). Each shipping method has a <strong>Needs a shipment record</strong> setting.</li>
                     <li><strong>Jobs marked shipped earlier without a shipment</strong> show a warning on the job page with the fix, and the invoice's Waiting reason names the job.</li>
                     <li><strong>Mark order shipped</strong> on a shipment finishes an order that under-ran (shipped short).</li>
-                    <li><strong>UPS labels from Record shipment</strong> — with the shop's Worldwide Express keys saved (<a asp-page="/Settings/Carrier">Setup → Shipping carrier</a>), Record shipment gets rates for the boxes, buys the label, and fills in the tracking numbers and the carrier cost by itself. Labels print as 4 × 6, ZPL or on Letter paper, and can be reprinted from the shipment.</li>
+                    <li><strong>UPS labels from Record shipment</strong> — with the shop's Worldwide Express keys saved (<a asp-page="/Settings/Carrier">Setup → Shipping carrier</a>), Record shipment gets rates for the boxes, buys the label, and fills in the tracking numbers and the carrier cost by itself. Labels print as 4 × 6, ZPL or on Letter paper, and can be reprinted from the shipment. <a href="#carrier-labels">UPS labels</a> explains how it works and has a walkthrough for setting it up and one for shipping an order.</li>
                     <li><strong>Void label / Void shipment</strong> on a shipment takes it back: the items are ready to ship again and the shipping comes off the draft invoice. A label bought in LabelShop is voided with Worldwide Express first.</li>
                     <li><strong>Tracking</strong> — shipments with a label bought in LabelShop show where each box is, and turn <strong>Delivered</strong> by themselves.</li>
                 </ul>
@@ -521,28 +522,9 @@
                 <p>
                     With carrier keys saved, Record shipment has two ways to work, picked at the top of the page:
                     <strong>Buy a UPS label</strong> and <strong>I have the tracking numbers</strong>. Without keys
-                    only the second one is shown.
+                    only the second one is shown. Buying, printing and tracking labels have their own section,
+                    with a walkthrough: <a href="#carrier-labels">UPS labels</a>.
                 </p>
-
-                <h3 class="docs-subtitle">Buying a UPS label</h3>
-                <ol class="docs-list docs-list--ordered">
-                    <li>On the Shipping workspace, click <strong>Record shipment</strong> for an order and leave <strong>Buy a UPS label</strong> selected.</li>
-                    <li>Check the <strong>ship-to</strong> address, contact and phone, and tick <strong>A home, not a business</strong> when it is one (UPS adds a residential charge).</li>
-                    <li>Check the <strong>items</strong> to ship and the quantity for each. Partial shipments are allowed.</li>
-                    <li>Add a <strong>package</strong> per box: weight, and the size or one of the shop's usual boxes. A box without a size is rated on its weight alone, and UPS may bill more later.</li>
-                    <li>Click <strong>Get rates</strong>. Each UPS service is listed with the carrier cost, the arrival date and what the customer will be billed (carrier cost × the multiplier in General settings). Nothing is bought yet.</li>
-                    <li>Pick a service and click <strong>Buy label</strong>. The shipment is recorded with its tracking numbers and carrier cost, the jobs advance to <strong>Shipped</strong>, and the draft invoice takes the billed shipping. Nothing is typed.</li>
-                </ol>
-                <ul class="docs-list">
-                    <li>If the address, the ship date or a box is changed after the rates came back, or the rates are more than 30 minutes old, <strong>Buy label</strong> asks for <strong>Get rates again</strong> first. The price bought is always a price that was on screen.</li>
-                    <li><strong>Label not confirmed</strong> — if Worldwide Express doesn't answer the purchase, the shipment is kept with that badge and nothing counts as shipped. Open it and press <strong>Check with carrier</strong>: it either completes the purchase or clears it, and it never leaves a label that is paid for and not recorded. No other label can be bought for the order until it is settled.</li>
-                </ul>
-
-                <h3 class="docs-subtitle">Printing labels</h3>
-                <ul class="docs-list">
-                    <li>On the shipment page: <strong>Print 4 × 6</strong> and <strong>ZPL</strong> for each package (label printers), and <strong>Print on Letter paper</strong> for all packages at once (office printer). The shop's usual format is the highlighted button; it is set in Setup → Shipping carrier.</li>
-                    <li><strong>Printing again never buys again.</strong> LabelShop keeps the label files, so a jammed or lost label is reprinted from the shipment at no cost.</li>
-                </ul>
 
                 <h3 class="docs-subtitle">I have the tracking numbers</h3>
                 <ol class="docs-list docs-list--ordered">
@@ -561,24 +543,6 @@
                     <li>Either way the shipment stays on file as <strong>Voided</strong> with its tracking numbers, who voided it, when and why. Its jobs go back to ready to ship (unless another shipment still carries them), the order goes back to In production if it is no longer fully shipped, and the draft invoice's shipping is worked out again.</li>
                     <li><strong>Not while the invoice is out:</strong> if the order's invoice is in QuickBooks (or on its way there) or was sent to the customer, the page says which invoice and links to it. Void that invoice first.</li>
                     <li>A voided label can't be printed again. Voided shipments are under <strong>Shipping → all shipments → History</strong> with the status filter set to Voided.</li>
-                </ul>
-
-                <h3 class="docs-subtitle">Tracking</h3>
-                <ul class="docs-list">
-                    <li>A shipment with a label bought in LabelShop shows a <strong>Tracking</strong> line, a status per package and a <strong>Tracking history</strong>. <strong>Check tracking now</strong> asks Worldwide Express on the spot. A label bought a minute ago may not be listed yet; try again in a few minutes.</li>
-                    <li>LabelShop also asks by itself every few hours until the boxes arrive, and turns the shipment <strong>Delivered</strong> once every package is. The switch is in Setup → Shipping carrier.</li>
-                    <li><strong>A label voided in SpeedShip</strong> instead of in LabelShop shows a red banner on the shipment: LabelShop doesn't take a shipment back by itself. Press <strong>Void label</strong> there to finish it.</li>
-                    <li>Shipments recorded with typed tracking numbers aren't tracked by LabelShop; use the carrier's own tracking page.</li>
-                </ul>
-
-                <h3 class="docs-subtitle">Setting up the shipping carrier (administrators)</h3>
-                <ul class="docs-list">
-                    <li><a asp-page="/Settings/Carrier">Setup → Shipping carrier</a> holds the shop's <strong>Worldwide Express</strong> keys (Client ID and Client secret). The secret is stored encrypted and is never shown again; only its last four characters are.</li>
-                    <li><strong>Keys are for</strong> says whether they are <strong>staging</strong> or <strong>production</strong> keys. Staging labels are samples: they print SAMPLE, can't ship and nothing is billed. Real labels need production keys.</li>
-                    <li><strong>Test connection</strong> signs in and rates a 1 lb box from the shop, which proves the whole path and shows the UPS account labels bill to.</li>
-                    <li><strong>Ship-from</strong>: the address is the company address in General settings; the contact and phone printed on labels are set here.</li>
-                    <li><strong>Defaults for Record shipment</strong>: the service selected first, the label file to print from, the shop's usual boxes, and the background tracking switch.</li>
-                    <li><strong>Carrier activity</strong> lists every call to Worldwide Express: who, what, the outcome and their call ID, which is what their support asks for.</li>
                 </ul>
 
                 <h3 class="docs-subtitle">Mark shipped / picked up (no packages)</h3>
@@ -615,6 +579,131 @@
                         recorded, so later edits to your company address don't change historical shipments.
                     </p>
                 </div>
+            </section>
+
+            <section class="docs-section docs-section--workflows" id="carrier-labels">
+                <div class="docs-section-header">
+                    <h2 class="docs-section-title">UPS labels (Worldwide Express)</h2>
+                    @if (Model.CanSetUpCarrier)
+                    {
+                        <a class="docs-section-action" asp-page="/Settings/Carrier">Open shipping carrier</a>
+                    }
+                </div>
+                <p>
+                    LabelShop is connected to the shop's <strong>Worldwide Express</strong> account (their SpeedShip
+                    system), which is how the shop ships with UPS. From <strong>Record shipment</strong> it gets the
+                    UPS rates for the boxes, buys the label, and records the shipment with its tracking numbers and
+                    cost. Nothing is retyped from speedship.com.
+                </p>
+
+                <div class="docs-walkthroughs" id="carrier-walkthroughs">
+                    <div class="docs-walkthrough">
+                        <span class="docs-walkthrough-for">For administrators · about 5 minutes</span>
+                        <h3>Set up the shipping carrier</h3>
+                        <p>The keys, the connection test, the ship-from details and the defaults, on the setup page itself. Nothing is bought.</p>
+                        @if (Model.CanSetUpCarrier)
+                        {
+                            <button type="button" class="btn btn-sm btn-primary" id="walkthrough-setup" data-walkthrough-start="carrier-setup">Start the walkthrough</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="walkthrough-setup" disabled>Start the walkthrough</button>
+                            <p class="docs-walkthrough-note" id="walkthrough-setup-note">The setup page is for administrators.</p>
+                        }
+                    </div>
+                    <div class="docs-walkthrough">
+                        <span class="docs-walkthrough-for">For shipping · about 5 minutes</span>
+                        <h3>Ship an order with a UPS label</h3>
+                        <p>Rates, buying, printing, tracking and voiding, on the real pages with a real order. You decide whether a label is bought.</p>
+                        @if (Model.CanShip && Model.CarrierConnected)
+                        {
+                            <button type="button" class="btn btn-sm btn-primary" id="walkthrough-usage" data-walkthrough-start="carrier-usage">Start the walkthrough</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="walkthrough-usage" disabled>Start the walkthrough</button>
+                            <p class="docs-walkthrough-note" id="walkthrough-usage-note">
+                                @(Model.CanShip
+                                    ? "Available once the carrier is connected: an administrator saves the keys in Setup → Shipping carrier."
+                                    : "Record shipment is for Shipping and administrators.")
+                            </p>
+                        }
+                    </div>
+                </div>
+                <p class="small" id="carrier-guide-state">@Model.CarrierStateText</p>
+
+                <h3 class="docs-subtitle">How it works</h3>
+                <ol class="docs-list docs-list--ordered">
+                    <li><strong>Connected once.</strong> An administrator saves the keys Worldwide Express issued. From then on LabelShop signs in to Worldwide Express by itself.</li>
+                    <li><strong>Rates.</strong> On Record shipment, <strong>Get rates</strong> sends the shop's address, the ship-to address and the boxes to Worldwide Express, which answers with every UPS service, its cost to the shop and the day it arrives. Nothing is bought.</li>
+                    <li><strong>Buying.</strong> <strong>Buy label</strong> books the service that was picked, at the price on the screen. Worldwide Express answers with the tracking numbers and the labels.</li>
+                    <li><strong>Recorded for you.</strong> The shipment is saved with those tracking numbers and that cost, the jobs go to Shipped, the order rolls up, and the invoice gets its shipping. It is the same shipment a hand-entered one would be.</li>
+                    <li><strong>Printing.</strong> LabelShop keeps the label files. They print from the shipment page, as often as needed, without buying again.</li>
+                    <li><strong>Tracking.</strong> LabelShop asks Worldwide Express where the boxes are and turns the shipment Delivered when they have arrived.</li>
+                    <li><strong>Voiding.</strong> A label bought by mistake is voided from the shipment page, which also takes the shipment back.</li>
+                </ol>
+
+                <h3 class="docs-subtitle">Good to know</h3>
+                <ul class="docs-list">
+                    <li><strong>UPS small package only.</strong> Anything else (another carrier, a label made on speedship.com) is recorded with <strong>I have the tracking numbers</strong>, as before: see <a href="#shipping">Shipping</a>.</li>
+                    <li><strong>Staging and production.</strong> Worldwide Express issues staging keys for trying things out and production keys for real labels. With staging keys every label is a sample: it can't ship and nothing is billed. Record shipment and the shipment page say so in yellow.</li>
+                    <li><strong>Who the labels are billed to.</strong> The UPS account that <strong>Test connection</strong> shows on the setup page. It is also shown beside Buy label.</li>
+                    <li><strong>Who can do what.</strong> Shipping and administrators buy, print and void labels. Administrators set the carrier up. Everyone who can open a shipment sees its tracking.</li>
+                    <li><strong>One label per purchase.</strong> A purchase that was sent is never sent twice: if the answer is lost, the shipment waits as <strong>Label not confirmed</strong> until <strong>Check with carrier</strong> settles it.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Buying a UPS label</h3>
+                <ol class="docs-list docs-list--ordered">
+                    <li>On the Shipping workspace, click <strong>Record shipment</strong> for an order and leave <strong>Buy a UPS label</strong> selected.</li>
+                    <li>Check the <strong>ship-to</strong> address, contact and phone, and tick <strong>A home, not a business</strong> when it is one (UPS adds a residential charge).</li>
+                    <li>Check the <strong>items</strong> to ship and the quantity for each. Partial shipments are allowed.</li>
+                    <li>Add a <strong>package</strong> per box: weight, and the size or one of the shop's usual boxes. A box without a size is rated on its weight alone, and UPS may bill more later.</li>
+                    <li>Click <strong>Get rates</strong>. Each UPS service is listed with the carrier cost, the arrival date and what the customer will be billed (carrier cost × the multiplier in General settings). Nothing is bought yet.</li>
+                    <li>Pick a service and click <strong>Buy label</strong>. The shipment is recorded with its tracking numbers and carrier cost, the jobs advance to <strong>Shipped</strong>, and the draft invoice takes the billed shipping. Nothing is typed.</li>
+                </ol>
+                <ul class="docs-list">
+                    <li>If the address, the ship date or a box is changed after the rates came back, or the rates are more than 30 minutes old, <strong>Buy label</strong> asks for <strong>Get rates again</strong> first. The price bought is always a price that was on screen.</li>
+                    <li><strong>Label not confirmed</strong> — if Worldwide Express doesn't answer the purchase, the shipment is kept with that badge and nothing counts as shipped. Open it and press <strong>Check with carrier</strong>: it either completes the purchase or clears it, and it never leaves a label that is paid for and not recorded. No other label can be bought for the order until it is settled.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Printing labels</h3>
+                <ul class="docs-list">
+                    <li>On the shipment page: <strong>Print 4 × 6</strong> and <strong>ZPL</strong> for each package (label printers), and <strong>Print on Letter paper</strong> for all packages at once (office printer). The shop's usual format is the highlighted button; it is set in Setup → Shipping carrier.</li>
+                    <li><strong>Printing again never buys again.</strong> LabelShop keeps the label files, so a jammed or lost label is reprinted from the shipment at no cost.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Tracking</h3>
+                <ul class="docs-list">
+                    <li>A shipment with a label bought in LabelShop shows a <strong>Tracking</strong> line, a status per package and a <strong>Tracking history</strong>. <strong>Check tracking now</strong> asks Worldwide Express on the spot. A label bought a minute ago may not be listed yet; try again in a few minutes.</li>
+                    <li>LabelShop also asks by itself every few hours until the boxes arrive, and turns the shipment <strong>Delivered</strong> once every package is. The switch is in Setup → Shipping carrier.</li>
+                    <li><strong>A label voided in SpeedShip</strong> instead of in LabelShop shows a red banner on the shipment: LabelShop doesn't take a shipment back by itself. Press <strong>Void label</strong> there to finish it.</li>
+                    <li>Shipments recorded with typed tracking numbers aren't tracked by LabelShop; use the carrier's own tracking page.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Voiding a label</h3>
+                <ul class="docs-list">
+                    <li><strong>Void label</strong>, at the bottom of the shipment page, voids the label with Worldwide Express so it isn't billed, then takes the shipment back. Do it before the box leaves the building.</li>
+                    <li>Void in LabelShop, not on speedship.com: LabelShop takes a shipment back only when it is voided from its own page.</li>
+                    <li>The rest (what happens to the jobs, the order and the invoice, and when voiding is held) is the same for every shipment: see <strong>Voiding a shipment</strong> under <a href="#shipping">Shipping</a>.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Setting up the shipping carrier (administrators)</h3>
+                <ul class="docs-list">
+                    <li><a asp-page="/Settings/Carrier">Setup → Shipping carrier</a> holds the shop's <strong>Worldwide Express</strong> keys (Client ID and Client secret). The secret is stored encrypted and is never shown again; only its last four characters are.</li>
+                    <li><strong>Keys are for</strong> says whether they are <strong>staging</strong> or <strong>production</strong> keys. Staging labels are samples: they can't ship and nothing is billed. Real labels need production keys.</li>
+                    <li><strong>Test connection</strong> signs in and rates a 1 lb box from the shop, which proves the whole path and shows the UPS account labels bill to.</li>
+                    <li><strong>Ship-from</strong>: the address is the company address in General settings; the contact and phone printed on labels are set here.</li>
+                    <li><strong>Defaults for Record shipment</strong>: the service selected first, the label file to print from, the shop's usual boxes, and the background tracking switch.</li>
+                    <li><strong>Carrier activity</strong> lists every call to Worldwide Express: who, what, the outcome and their call ID, which is what their support asks for.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">When something goes wrong</h3>
+                <ul class="docs-list">
+                    <li><strong>Rates or a label are refused.</strong> The reason Worldwide Express gave is shown at the top of Record shipment (an address UPS can't find, a missing phone number, a box over the weight limit). Fix it and get rates again. Nothing was bought.</li>
+                    <li><strong>Label not confirmed.</strong> Worldwide Express didn't answer the purchase. Open the shipment and press <strong>Check with carrier</strong>.</li>
+                    <li><strong>A red banner saying the carrier voided the label.</strong> It was voided on speedship.com. Press <strong>Void label</strong> on the shipment to finish it.</li>
+                    <li><strong>Calling Worldwide Express.</strong> Setup → Shipping carrier → <strong>Carrier activity</strong> lists every call with their call ID, which is what their support asks for.</li>
+                </ul>
             </section>
 
             <section class="docs-section docs-section--workflows" id="invoicing">
