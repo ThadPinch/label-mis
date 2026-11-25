@@ -22,7 +22,8 @@ public record ShipmentListItem(
 public record ShipmentDetail(
     Shipment Shipment,
     string CustomerName,
-    string? LatestTrackingStatus);
+    string? LatestTrackingStatus,
+    string? VoidedBy = null);
 
 public record ReadyJobRef(Guid JobId, string JobNumber);
 
@@ -131,6 +132,19 @@ public record ManualShipmentInput(
     IReadOnlyList<ManualShipmentLineInput> Lines,
     IReadOnlyList<ManualPackageInput> Packages,
     decimal? CarrierCost = null);
+
+/// <summary>Why a shipment can't be voided right now. When an invoice is in the way it is named,
+/// so the page can link to it.</summary>
+public record ShipmentVoidBlocker(string Message, Guid? InvoiceId = null, string? InvoiceNumber = null);
+
+/// <summary>What voiding a shipment put back.</summary>
+public record ShipmentVoidResult(
+    string ShipmentNumber,
+    string OrderNumber,
+    IReadOnlyList<string> JobsBackToReady,
+    bool OrderReopened,
+    string? DraftInvoiceNumber,
+    decimal? DraftInvoiceShipping);
 
 /// <summary>A shipment whose label purchase the carrier never answered.</summary>
 public record UnconfirmedShipmentRef(Guid Id, string ShipmentNumber);
@@ -267,10 +281,18 @@ public class ShipmentService(
             .OrderByDescending(e => e.EventAt)
             .FirstOrDefault();
 
+        var voidedBy = shipment.VoidedById is { } voidedById
+            ? await db.Users.AsNoTracking()
+                .Where(u => u.Id == voidedById)
+                .Select(u => u.Email ?? u.UserName)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+
         return new ShipmentDetail(
             shipment,
             shipment.SalesOrder.Customer.Name,
-            latestEvent?.StatusDescription);
+            latestEvent?.StatusDescription,
+            voidedBy);
     }
 
     /// <summary>Sales orders that have at least one job sitting at the Rewound (ready-to-ship) stage.</summary>
@@ -356,7 +378,7 @@ public class ShipmentService(
             .ToListAsync(cancellationToken);
 
         var shipped = await db.ShipmentLines.AsNoTracking()
-            .Where(l => lineIds.Contains(l.SalesOrderLineId) && l.Shipment.Status != ShipmentStatus.Pending)
+            .Where(l => lineIds.Contains(l.SalesOrderLineId) && l.Shipment.Status != ShipmentStatus.Pending && l.Shipment.Status != ShipmentStatus.Voided)
             .GroupBy(l => l.SalesOrderLineId)
             .Select(g => new { Id = g.Key, Qty = g.Sum(x => x.QuantityShipped) })
             .ToDictionaryAsync(x => x.Id, x => x.Qty, cancellationToken);
@@ -732,6 +754,131 @@ public class ShipmentService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Why this shipment can't be voided right now, or null when it can. Only a shipment that is in
+    /// transit can be taken back, and only while the order's invoice is still a draft that has not
+    /// gone to QuickBooks: an invoice the customer or the books already have is voided first.
+    /// </summary>
+    public async Task<ShipmentVoidBlocker?> GetVoidBlockerAsync(Guid shipmentId, CancellationToken cancellationToken = default)
+    {
+        var shipment = await db.Shipments.AsNoTracking()
+            .Where(s => s.Id == shipmentId)
+            .Select(s => new { s.Status, s.SalesOrderId })
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new InvalidOperationException("Shipment not found.");
+        if (shipment.Status is not ShipmentStatus.InTransit)
+        {
+            return new ShipmentVoidBlocker(shipment.Status switch
+            {
+                ShipmentStatus.Voided => "This shipment is already voided.",
+                ShipmentStatus.Delivered => "A delivered shipment can't be voided.",
+                ShipmentStatus.Pending => "This shipment was never recorded as shipped, so there is nothing to void.",
+                _ => "This shipment can't be voided."
+            });
+        }
+
+        var invoices = await db.Invoices.AsNoTracking()
+            .Where(i => i.SalesOrderId == shipment.SalesOrderId && i.Status != InvoiceStatus.Void)
+            .OrderBy(i => i.InvoiceNumber)
+            .Select(i => new { i.Id, i.InvoiceNumber, i.Status, i.QbExportedAt, i.QbInvoiceId, i.QbExportStatus })
+            .ToListAsync(cancellationToken);
+        foreach (var invoice in invoices)
+        {
+            if (invoice.QbExportStatus is QuickBooksExportStatus.Queued or QuickBooksExportStatus.Sending)
+            {
+                return new ShipmentVoidBlocker(
+                    $"Invoice {invoice.InvoiceNumber} for this order is on its way to QuickBooks right now. Try again in a minute.",
+                    invoice.Id, invoice.InvoiceNumber);
+            }
+
+            if (invoice.QbExportedAt is not null || invoice.QbInvoiceId is not null)
+            {
+                return new ShipmentVoidBlocker(
+                    $"Invoice {invoice.InvoiceNumber} for this order is already in QuickBooks. Void that invoice first; then this shipment can be voided.",
+                    invoice.Id, invoice.InvoiceNumber);
+            }
+
+            if (invoice.Status is not InvoiceStatus.Draft)
+            {
+                return new ShipmentVoidBlocker(
+                    $"Invoice {invoice.InvoiceNumber} for this order has already gone to the customer. Void that invoice first; then this shipment can be voided.",
+                    invoice.Id, invoice.InvoiceNumber);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Takes a recorded shipment back, all of it or nothing: the shipment is voided (it stays on
+    /// file, with its tracking numbers), jobs it moved to Shipped go back to ready to ship unless
+    /// another shipment still carries their line, an order that is no longer fully shipped goes
+    /// back to In production, and the draft invoice's shipping is re-derived. A label bought from
+    /// the carrier is voided there first, by the caller.
+    /// </summary>
+    public async Task<ShipmentVoidResult> VoidShipmentAsync(
+        Guid shipmentId,
+        string? reason,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = RequireUserId();
+        var now = DateTime.UtcNow;
+        if (await GetVoidBlockerAsync(shipmentId, cancellationToken) is { } blocker)
+        {
+            throw new InvalidOperationException(blocker.Message);
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var shipment = await db.Shipments
+            .Include(s => s.Lines)
+            .Include(s => s.Packages)
+            .SingleAsync(s => s.Id == shipmentId, cancellationToken);
+        shipment.Void(reason, userId, now);
+
+        // Saved first, so the shipped quantities read below no longer count this shipment.
+        await db.SaveChangesAsync(cancellationToken);
+        var shippedByLine = await ShippedByLineAsync(shipment.SalesOrderId, cancellationToken);
+
+        var jobIds = shipment.Lines
+            .Where(l => l.JobId.HasValue && shippedByLine.GetValueOrDefault(l.SalesOrderLineId) <= 0)
+            .Select(l => l.JobId!.Value)
+            .Distinct()
+            .ToList();
+        var backToReady = new List<string>();
+        if (jobIds.Count > 0)
+        {
+            var jobs = await db.Jobs.Where(j => jobIds.Contains(j.Id)).ToListAsync(cancellationToken);
+            foreach (var job in jobs.Where(j => j.Status == JobStatus.Shipped))
+            {
+                job.SetStatus(JobStatus.Rewound, userId, now);
+                backToReady.Add(job.JobNumber);
+            }
+        }
+
+        var order = await db.SalesOrders
+            .Include(o => o.Lines)
+            .SingleAsync(o => o.Id == shipment.SalesOrderId, cancellationToken);
+        var fullyShipped = order.Lines.Count > 0
+            && order.Lines.All(l => shippedByLine.GetValueOrDefault(l.Id) >= l.Quantity);
+        var reopened = !fullyShipped && order.ReopenAfterShipmentVoid(userId, now);
+        await db.SaveChangesAsync(cancellationToken);
+
+        await invoiceService.SyncDraftShippingAsync(shipment.SalesOrderId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        var draft = await db.Invoices.AsNoTracking()
+            .Where(i => i.SalesOrderId == shipment.SalesOrderId && i.Status == InvoiceStatus.Draft && i.QbExportedAt == null)
+            .Select(i => new { i.InvoiceNumber, i.ShippingAmount })
+            .FirstOrDefaultAsync(cancellationToken);
+        return new ShipmentVoidResult(
+            shipment.ShipmentNumber,
+            order.OrderNumber,
+            backToReady.Order(StringComparer.Ordinal).ToList(),
+            reopened,
+            draft?.InvoiceNumber,
+            draft?.ShippingAmount);
+    }
+
     /// <summary>A package-less shipment of the order this recent is added to rather than starting a
     /// new one, so lines marked shipped one at a time on the same day go out as one shipment — one
     /// local delivery fee, not one per line. A rolling window, so a late-afternoon hand-off doesn't
@@ -880,7 +1027,7 @@ public class ShipmentService(
         }
 
         var shipped = await db.ShipmentLines.AsNoTracking()
-            .Where(l => l.SalesOrderLineId == row.SalesOrderLineId && l.Shipment.Status != ShipmentStatus.Pending)
+            .Where(l => l.SalesOrderLineId == row.SalesOrderLineId && l.Shipment.Status != ShipmentStatus.Pending && l.Shipment.Status != ShipmentStatus.Voided)
             .SumAsync(l => (int?)l.QuantityShipped, cancellationToken) ?? 0;
         return new JobShippingState(
             row.SalesOrderId, row.OrderNumber, row.MethodName, row.RequiresRecord, row.Quantity, shipped);
@@ -1017,7 +1164,7 @@ public class ShipmentService(
 
     private async Task<Dictionary<Guid, int>> ShippedByLineAsync(Guid salesOrderId, CancellationToken cancellationToken) =>
         await db.ShipmentLines.AsNoTracking()
-            .Where(l => l.Shipment.SalesOrderId == salesOrderId && l.Shipment.Status != ShipmentStatus.Pending)
+            .Where(l => l.Shipment.SalesOrderId == salesOrderId && l.Shipment.Status != ShipmentStatus.Pending && l.Shipment.Status != ShipmentStatus.Voided)
             .GroupBy(l => l.SalesOrderLineId)
             .Select(g => new { SalesOrderLineId = g.Key, Quantity = g.Sum(l => l.QuantityShipped) })
             .ToDictionaryAsync(x => x.SalesOrderLineId, x => x.Quantity, cancellationToken);
@@ -1065,7 +1212,7 @@ public class ShipmentService(
 
         var shippedByLine = await db.ShipmentLines.AsNoTracking()
             .Where(l => l.Shipment.SalesOrderId == salesOrderId
-                && l.Shipment.Status != ShipmentStatus.Pending)
+                && l.Shipment.Status != ShipmentStatus.Pending && l.Shipment.Status != ShipmentStatus.Voided)
             .GroupBy(l => l.SalesOrderLineId)
             .Select(g => new { SalesOrderLineId = g.Key, Quantity = g.Sum(l => l.QuantityShipped) })
             .ToDictionaryAsync(x => x.SalesOrderLineId, x => x.Quantity, cancellationToken);

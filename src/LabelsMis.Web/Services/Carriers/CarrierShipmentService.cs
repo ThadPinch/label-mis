@@ -372,6 +372,88 @@ public class CarrierShipmentService(
             shipment, package, format, gateway.CallerFor(shipment.SalesOrderId, shipment.Id), cancellationToken);
     }
 
+    /// <summary>
+    /// Voids a recorded shipment. A label bought here is voided with the carrier first, and the
+    /// shipment is only taken back once the carrier has said so: a void that was not confirmed
+    /// changes nothing, and trying again is harmless (the carrier answers "already voided"). A
+    /// shipment recorded by hand has nothing at the carrier and is simply taken back.
+    /// </summary>
+    /// <returns>What happened, for the person who pressed the button.</returns>
+    public async Task<string> VoidAsync(Guid shipmentId, string? reason, CancellationToken cancellationToken = default)
+    {
+        var shipment = await db.Shipments.AsNoTracking().SingleOrDefaultAsync(s => s.Id == shipmentId, cancellationToken)
+            ?? throw new InvalidOperationException("Shipment not found.");
+        if (await shipments.GetVoidBlockerAsync(shipmentId, cancellationToken) is { } blocker)
+        {
+            throw new InvalidOperationException(blocker.Message);
+        }
+
+        var lead = "Shipment voided.";
+        if (shipment.LabelState is ShipmentLabelState.Purchased)
+        {
+            if (shipment.CarrierQuoteId is null || shipment.CarrierEnvironment is null)
+            {
+                throw new InvalidOperationException("This label has nothing on file to void it by with the carrier.");
+            }
+
+            CarrierVoidOutcome outcome;
+            try
+            {
+                outcome = await gateway.VoidAsync(
+                    shipment.CarrierEnvironment.Value,
+                    shipment.CarrierQuoteId,
+                    gateway.CallerFor(shipment.SalesOrderId, shipment.Id),
+                    CancellationToken.None);
+            }
+            catch (CarrierException ex) when (ex.OutcomeUnknown)
+            {
+                throw new InvalidOperationException(
+                    $"{ex.Message} Worldwide Express did not confirm the void, so nothing was changed here. Try again: voiding twice does no harm.");
+            }
+
+            lead = outcome is CarrierVoidOutcome.AlreadyVoided
+                ? "Worldwide Express had already voided this label."
+                : "Label voided with Worldwide Express.";
+        }
+
+        var result = await shipments.VoidShipmentAsync(shipmentId, reason, CancellationToken.None);
+        await DeleteStoredLabelsAsync(shipmentId);
+
+        var message = new StringBuilder($"{lead} {result.ShipmentNumber} no longer counts as shipped.");
+        if (result.JobsBackToReady.Count > 0)
+        {
+            message.Append($" {string.Join(", ", result.JobsBackToReady)} {(result.JobsBackToReady.Count == 1 ? "is" : "are")} back at ready to ship.");
+        }
+
+        if (result.OrderReopened)
+        {
+            message.Append($" {result.OrderNumber} is back in production.");
+        }
+
+        if (result.DraftInvoiceNumber is not null)
+        {
+            message.Append($" Draft invoice {result.DraftInvoiceNumber} now bills {CarrierGateway.Money(result.DraftInvoiceShipping ?? 0m)} shipping.");
+        }
+
+        return message.ToString();
+    }
+
+    /// <summary>A voided label must not be printed again, so the copies kept here go too.</summary>
+    private async Task DeleteStoredLabelsAsync(Guid shipmentId)
+    {
+        try
+        {
+            foreach (var file in await storage.ListAsync(LabelFolder(shipmentId), CancellationToken.None))
+            {
+                await storage.DeleteAsync(file.Key, CancellationToken.None);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Stored labels of voided shipment {Shipment} could not be removed", shipmentId);
+        }
+    }
+
     public static string UnconfirmedMessage(string shipmentNumber) =>
         $"Shipment {shipmentNumber} for this order is still waiting on the carrier: a label was being bought and "
         + "Worldwide Express never answered. Open it and use Check with carrier before buying another.";

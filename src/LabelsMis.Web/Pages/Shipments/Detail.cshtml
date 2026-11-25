@@ -127,6 +127,15 @@
     </div>
 }
 
+@if (s.Status == ShipmentStatus.Voided)
+{
+    <div class="alert alert-secondary py-2 small" id="shipment-voided">
+        <strong>Voided</strong> @Model.Local(s.VoidedAt)@(Model.Detail.VoidedBy is { } who ? $" by {who}" : "")@(s.VoidReason is { } why ? $": {why}." : ".")
+        It no longer counts toward what the order has shipped@(s.LabelState == ShipmentLabelState.Voided ? ", and its label was voided with Worldwide Express" : "").
+        The tracking numbers stay on file in case the label is ever billed.
+    </div>
+}
+
 @if (s.LabelState is ShipmentLabelState.Purchased or ShipmentLabelState.Voided)
 {
     <div class="card mb-3" id="shipment-label">
@@ -288,3 +297,50 @@
     }
     </tbody>
 </table>
+
+@if (Model.CanVoid)
+{
+    var boughtHere = s.LabelState == ShipmentLabelState.Purchased;
+    <div class="card mb-3" id="shipment-void">
+        <div class="card-header py-1 small fw-semibold">@(boughtHere ? "Void label" : "Void shipment")</div>
+        <div class="card-body py-2 small">
+            @if (Model.VoidBlocker is { } blocker)
+            {
+                <div id="void-blocked">
+                    @blocker.Message
+                    @if (blocker.InvoiceId is { } invoiceId)
+                    {
+                        <a asp-page="/Invoices/Detail" asp-route-id="@invoiceId">Open @blocker.InvoiceNumber</a>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="mb-2" id="void-explained">
+                    @if (boughtHere)
+                    {
+                        <text>Voids the label with Worldwide Express, so it isn't billed, and takes this shipment back: its
+                        items are ready to ship again and its shipping comes off the order's draft invoice. Do it before the
+                        box leaves the building.</text>
+                    }
+                    else
+                    {
+                        <text>Takes this shipment back: its items are ready to ship again and its shipping comes off the
+                        order's draft invoice. Nothing is sent to the carrier: a label made outside LabelShop is voided where
+                        it was made.</text>
+                    }
+                </p>
+                <form method="post" asp-page-handler="Void" class="row g-2 align-items-end"
+                      onsubmit="return confirm('@(boughtHere ? "Void this label with Worldwide Express and take the shipment back?" : "Take this shipment back?")');">
+                    <div class="col-md-6">
+                        <label class="form-label small mb-0" for="voidReason">Why (optional)</label>
+                        <input id="voidReason" name="voidReason" class="form-control form-control-sm" maxlength="300" />
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-sm btn-outline-danger w-100" id="void-shipment">@(boughtHere ? "Void label" : "Void shipment")</button>
+                    </div>
+                </form>
+            }
+        </div>
+    </div>
+}

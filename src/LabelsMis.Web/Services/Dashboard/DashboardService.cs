@@ -414,7 +414,7 @@ public class DashboardService(LabelsMisDbContext db)
         var pending = await db.Shipments.CountAsync(s => s.Status == ShipmentStatus.Pending, ct);
         var inTransit = await db.Shipments.CountAsync(s => s.Status == ShipmentStatus.InTransit, ct);
         var shippedLast7 = await db.Shipments
-            .CountAsync(s => s.Status != ShipmentStatus.Pending && s.ShipDate >= weekAgo, ct);
+            .CountAsync(s => s.Status != ShipmentStatus.Pending && s.Status != ShipmentStatus.Voided && s.ShipDate >= weekAgo, ct);
         return new ShippingSection(pending, inTransit, shippedLast7);
     }
 

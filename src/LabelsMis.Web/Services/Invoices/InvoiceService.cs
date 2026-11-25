@@ -239,7 +239,7 @@ public class InvoiceService(
                 l.SalesOrderId,
                 l.Quantity,
                 Shipped = db.ShipmentLines
-                    .Where(sl => sl.SalesOrderLineId == l.Id && sl.Shipment.Status != ShipmentStatus.Pending)
+                    .Where(sl => sl.SalesOrderLineId == l.Id && sl.Shipment.Status != ShipmentStatus.Pending && sl.Shipment.Status != ShipmentStatus.Voided)
                     .Sum(sl => (int?)sl.QuantityShipped) ?? 0
             })
             .ToListAsync(cancellationToken);
@@ -708,7 +708,7 @@ public class InvoiceService(
         }
 
         var shipped = await db.Shipments.AsNoTracking()
-            .Where(s => s.SalesOrderId == salesOrderId && s.Status != ShipmentStatus.Pending)
+            .Where(s => s.SalesOrderId == salesOrderId && s.Status != ShipmentStatus.Pending && s.Status != ShipmentStatus.Voided)
             .OrderBy(s => s.ShipmentNumber)
             .Select(s => new { s.ShipmentNumber, s.BilledShipping, s.CarrierCost, s.TotalShippingCost })
             .ToListAsync(cancellationToken);
@@ -819,7 +819,7 @@ public class InvoiceService(
                     l.SalesOrderId,
                     l.Quantity,
                     Shipped = db.ShipmentLines
-                        .Where(sl => sl.SalesOrderLineId == l.Id && sl.Shipment.Status != ShipmentStatus.Pending)
+                        .Where(sl => sl.SalesOrderLineId == l.Id && sl.Shipment.Status != ShipmentStatus.Pending && sl.Shipment.Status != ShipmentStatus.Voided)
                         .Sum(sl => (int?)sl.QuantityShipped) ?? 0
                 })
                 .ToListAsync(cancellationToken))
@@ -832,7 +832,7 @@ public class InvoiceService(
                     .SelectMany(x => shippedJobsByLine[x.Id])
                     .ToList()));
         var shipments = (await db.Shipments.AsNoTracking()
-                .Where(s => orderIds.Contains(s.SalesOrderId) && s.Status != ShipmentStatus.Pending)
+                .Where(s => orderIds.Contains(s.SalesOrderId) && s.Status != ShipmentStatus.Pending && s.Status != ShipmentStatus.Voided)
                 .OrderBy(s => s.ShipmentNumber)
                 .Select(s => new { s.SalesOrderId, s.ShipmentNumber, s.BilledShipping, s.CarrierCost, s.TotalShippingCost })
                 .ToListAsync(cancellationToken))

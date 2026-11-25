@@ -38,6 +38,13 @@ public class DetailModel(
     /// <summary>The label file the shop prints from (Setup → Shipping carrier); its button comes first.</summary>
     public CarrierLabelFormat DefaultLabelFormat { get; private set; } = CarrierLabelFormat.Pdf4x6;
 
+    /// <summary>Why the shipment can't be voided right now (its order's invoice is already out);
+    /// null when it can.</summary>
+    public ShipmentVoidBlocker? VoidBlocker { get; private set; }
+
+    /// <summary>A recorded shipment that hasn't been delivered can be taken back by the people who ship.</summary>
+    public bool CanVoid => CanShip && Detail?.Shipment.Status is ShipmentStatus.InTransit;
+
     /// <summary>Shipping staff record the carrier cost; accounting enters it from the WWEX bill.</summary>
     public bool CanEditCarrierCost =>
         User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Shipping) || User.IsInRole(AppRoles.Accounting);
@@ -127,6 +134,23 @@ public class DetailModel(
         return RedirectToPage(new { id = Id });
     }
 
+    /// <summary>Voids the shipment: the label with the carrier first when one was bought here,
+    /// then the shipment itself, its jobs, its order and the invoice's shipping.</summary>
+    public async Task<IActionResult> OnPostVoidAsync(string? voidReason, CancellationToken cancellationToken)
+    {
+        if (!CanShip) return Forbid();
+        try
+        {
+            TempData["ShipmentStatus"] = await carrierShipments.VoidAsync(Id, voidReason, cancellationToken);
+        }
+        catch (Exception ex) when (ex is CarrierException or CarrierNotConfiguredException or InvalidOperationException)
+        {
+            TempData["ShipmentWarning"] = ex.Message;
+        }
+
+        return RedirectToPage(new { id = Id });
+    }
+
     /// <summary>A bought label's file: PDFs open in the browser to print, ZPL downloads.</summary>
     public async Task<IActionResult> OnGetLabelAsync(Guid? packageId, CarrierLabelFormat format, CancellationToken cancellationToken)
     {
@@ -154,15 +178,20 @@ public class DetailModel(
         Detail = await shipmentService.GetDetailAsync(Id, cancellationToken);
         if (Detail is null) return false;
         Billing = await shipmentService.GetBillingContextAsync(Detail.Shipment.SalesOrderId, cancellationToken);
-        OrderProgress = Detail.Shipment.Status is ShipmentStatus.Pending
-            ? null
-            : await shipmentService.GetOrderShipProgressAsync(Detail.Shipment.SalesOrderId, cancellationToken);
+        OrderProgress = Detail.Shipment.CountsAsShipped
+            ? await shipmentService.GetOrderShipProgressAsync(Detail.Shipment.SalesOrderId, cancellationToken)
+            : null;
 
         CanInvoice = (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting))
             && Detail.Shipment.Status is ShipmentStatus.InTransit or ShipmentStatus.Delivered;
         if (Detail.Shipment.LabelState is ShipmentLabelState.Purchased)
         {
             DefaultLabelFormat = (await carrierSettings.GetViewAsync(cancellationToken)).DefaultLabelFormat;
+        }
+
+        if (CanVoid)
+        {
+            VoidBlocker = await shipmentService.GetVoidBlockerAsync(Id, cancellationToken);
         }
 
         return true;

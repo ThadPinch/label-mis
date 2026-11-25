@@ -280,7 +280,7 @@ public class SalesOrderService(
         }
 
         var shipments = await db.Shipments.AsNoTracking()
-            .Where(s => s.SalesOrderId == id)
+            .Where(s => s.SalesOrderId == id && s.Status != ShipmentStatus.Pending && s.Status != ShipmentStatus.Voided)
             .Select(s => new { s.ShipDate, PackageCount = s.Packages.Count })
             .ToListAsync(cancellationToken);
         var boxCount = shipments.Sum(s => s.PackageCount);
