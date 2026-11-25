@@ -1,3 +1,4 @@
+using LabelsMis.Domain.Carriers;
 using LabelsMis.Domain.Entities;
 using LabelsMis.Domain.Enums;
 
@@ -30,7 +31,7 @@ public class ShippingMethodTests
             DateTime.UtcNow, "  flat fee  ");
         method.Notes.Should().Be("flat fee");
 
-        method.Update("Courier", ShippingMethodType.Delivery, 25m, true, false, "   ", UserId, DateTime.UtcNow);
+        method.Update("Courier", ShippingMethodType.Delivery, 25m, true, false, "   ", null, UserId, DateTime.UtcNow);
 
         method.Notes.Should().BeNull();
     }
@@ -62,7 +63,7 @@ public class ShippingMethodTests
             DateTime.UtcNow, requiresShipmentRecord: false);
         method.RequiresShipmentRecord.Should().BeFalse();
 
-        method.Update("UPS", ShippingMethodType.Carrier, 0m, true, true, null, UserId, DateTime.UtcNow);
+        method.Update("UPS", ShippingMethodType.Carrier, 0m, true, true, null, null, UserId, DateTime.UtcNow);
 
         method.RequiresShipmentRecord.Should().BeTrue();
     }
@@ -74,5 +75,50 @@ public class ShippingMethodTests
             DateTime.UtcNow, new string('x', ShippingMethod.NotesMaxLength + 1));
 
         act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Carrier_IsKeptOnACarrierMethod_AndDroppedOnAnyOther()
+    {
+        var ups = ShippingMethod.Create(Guid.NewGuid(), "UPS Ground", ShippingMethodType.Carrier, 0m, true, UserId,
+            DateTime.UtcNow, carrier: Carrier.Ups);
+        ups.Carrier.Should().Be(Carrier.Ups);
+
+        ups.Update("FedEx Ground", ShippingMethodType.Carrier, 0m, true, true, null, Carrier.Fedex, UserId, DateTime.UtcNow);
+        ups.Carrier.Should().Be(Carrier.Fedex);
+
+        ups.Update("Will call", ShippingMethodType.Pickup, 0m, false, false, null, Carrier.Fedex, UserId, DateTime.UtcNow);
+        ups.Carrier.Should().BeNull("a pickup has no carrier");
+
+        ShippingMethod.Create(Guid.NewGuid(), "Courier", ShippingMethodType.Delivery, 25m, true, UserId, DateTime.UtcNow,
+            carrier: Carrier.Ups).Carrier.Should().BeNull();
+    }
+
+    [Fact]
+    public void SeededMethods_TheCarrierOneIsFedEx_TheOthersHaveNone()
+    {
+        var seeded = ShippingMethod.CreateDefaults(UserId, DateTime.UtcNow).ToList();
+
+        seeded.Single(m => m.Id == ShippingMethod.FedexId).Carrier.Should().Be(Carrier.Fedex);
+        seeded.Where(m => m.Id != ShippingMethod.FedexId).Should().OnlyContain(m => m.Carrier == null);
+    }
+
+    [Theory]
+    // method type, the method's carrier, starts on the label, carrier selected for typed tracking
+    [InlineData(ShippingMethodType.Carrier, Carrier.Ups, true, Carrier.Ups)]
+    [InlineData(ShippingMethodType.Carrier, null, true, Carrier.Ups)]
+    [InlineData(ShippingMethodType.Carrier, Carrier.Fedex, false, Carrier.Fedex)]
+    [InlineData(ShippingMethodType.Carrier, Carrier.Usps, false, Carrier.Usps)]
+    [InlineData(ShippingMethodType.Carrier, Carrier.Dhl, false, Carrier.Dhl)]
+    [InlineData(ShippingMethodType.Carrier, Carrier.Other, false, Carrier.Other)]
+    [InlineData(null, null, true, Carrier.Ups)]
+    [InlineData(ShippingMethodType.Pickup, null, false, Carrier.Ups)]
+    [InlineData(ShippingMethodType.Delivery, null, false, Carrier.Ups)]
+    [InlineData(ShippingMethodType.CustomerAccount, null, false, Carrier.Ups)]
+    public void RecordShipment_StartsFromTheOrdersShippingMethod(
+        ShippingMethodType? type, Carrier? methodCarrier, bool startsOnLabel, Carrier typedCarrier)
+    {
+        RecordShipmentDefaults.StartsOnLabel(type, methodCarrier).Should().Be(startsOnLabel);
+        RecordShipmentDefaults.CarrierFor(methodCarrier).Should().Be(typedCarrier);
     }
 }

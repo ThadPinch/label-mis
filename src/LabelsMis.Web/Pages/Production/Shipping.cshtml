@@ -63,7 +63,8 @@ else
                 <td class="text-end text-nowrap">
                     @if (Model.CanShip)
                     {
-                        <a asp-page="/Shipments/Record" asp-route-salesOrderId="@order.SalesOrderId" class="btn btn-sm btn-success">Record shipment</a>
+                        <a asp-page="/Shipments/Record" asp-route-salesOrderId="@order.SalesOrderId" class="btn btn-sm btn-success"
+                           data-starts-on="@(order.StartsOnLabel ? "label" : "manual")">Record shipment</a>
                     }
                 </td>
             </tr>

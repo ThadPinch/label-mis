@@ -86,7 +86,9 @@ public class RecordModel(
         if (!await LoadAsync(cancellationToken)) return NotFound();
 
         var shipTo = Order!.DefaultShipTo;
-        var buysLabel = CanBuyLabel && Order.ShippingMethodType is null or ShippingMethodType.Carrier;
+        // The order's shipping method decides where the page starts: an order set to FedEx is not
+        // offered a UPS label first, and its typed-tracking carrier is FedEx.
+        var buysLabel = CanBuyLabel && RecordShipmentDefaults.StartsOnLabel(Order.ShippingMethodType, Order.ShippingMethodCarrier);
         var contact = buysLabel
             ? await shipmentService.GetShipToContactAsync(SalesOrderId, cancellationToken)
             : new ShipToContactDefault(null, null);
@@ -95,7 +97,7 @@ public class RecordModel(
         {
             Mode = buysLabel ? ModeLabel : ModeManual,
             ShipDate = clock.Today,
-            Carrier = Carrier.Ups,
+            Carrier = RecordShipmentDefaults.CarrierFor(Order.ShippingMethodCarrier),
             ShipToName = shipTo.RecipientName,
             ShipToStreet1 = shipTo.Street1,
             ShipToStreet2 = shipTo.Street2,

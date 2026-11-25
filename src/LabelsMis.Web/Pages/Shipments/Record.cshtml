@@ -20,7 +20,10 @@
 </style>
 
 <h1 class="h3 mb-1">Record shipment</h1>
-<p class="text-muted">@order.OrderNumber — @order.CustomerName</p>
+<p class="text-muted">
+    @order.OrderNumber — @order.CustomerName ·
+    <span id="record-method">@(order.ShippingMethodName is { } method ? $"Shipping method: {method}" : "No shipping method on the order")</span>
+</p>
 
 @if (TempData["RecordNotice"] is string notice)
 {
@@ -73,7 +76,7 @@
             <label asp-for="Input.CarrierCost" class="form-label">Carrier cost</label>
             <div class="input-group">
                 <span class="input-group-text">$</span>
-                <input asp-for="Input.CarrierCost" class="form-control" placeholder="WWEX cost" inputmode="decimal" />
+                <input asp-for="Input.CarrierCost" class="form-control" placeholder="What the carrier billed" inputmode="decimal" />
             </div>
             <span asp-validation-for="Input.CarrierCost" class="text-danger"></span>
             <div class="form-text">What the carrier billed us for the whole shipment. Leave blank if not known yet (package costs below are used when entered); it can be added later on the shipment.</div>

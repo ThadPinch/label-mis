@@ -188,6 +188,24 @@ public static class CarrierRequestRules
 
 /// <summary>How a carrier is written on screens and documents. UPS leads the list: it is the
 /// carrier the shop ships with.</summary>
+/// <summary>What Record shipment starts from for an order, given its shipping method. The person can
+/// always change it on the page: these are the defaults, not rules.</summary>
+public static class RecordShipmentDefaults
+{
+    /// <summary>The carrier LabelShop buys labels for.</summary>
+    public const Carrier LabelCarrier = Carrier.Ups;
+
+    /// <summary>The carrier selected for typed tracking numbers: the method's, or UPS when the
+    /// method doesn't say (or the order has no method).</summary>
+    public static Carrier CarrierFor(Carrier? methodCarrier) => methodCarrier ?? LabelCarrier;
+
+    /// <summary>True when the page should start on Buy a UPS label (given that the shop can buy
+    /// labels at all): a carrier method, or no method, that is not set to another carrier. An order
+    /// set to FedEx starts on typed tracking numbers.</summary>
+    public static bool StartsOnLabel(ShippingMethodType? methodType, Carrier? methodCarrier) =>
+        methodType is null or ShippingMethodType.Carrier && methodCarrier is null or LabelCarrier;
+}
+
 public static class CarrierNames
 {
     public static readonly IReadOnlyList<Carrier> InPickOrder =

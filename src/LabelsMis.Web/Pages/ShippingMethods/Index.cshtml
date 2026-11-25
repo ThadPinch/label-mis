@@ -30,6 +30,7 @@
         <tr>
             <th>Name</th>
             <th>Type</th>
+            <th>Carrier</th>
             <th class="text-end">Price</th>
             <th>Notes</th>
             <th>Address</th>
@@ -44,6 +45,7 @@
         <tr>
             <td>@item.Name</td>
             <td>@item.MethodType</td>
+            <td>@(item.Carrier is { } carrier ? LabelsMis.Domain.Carriers.CarrierNames.For(carrier) : item.MethodType == LabelsMis.Domain.Enums.ShippingMethodType.Carrier ? "Not said" : "")</td>
             <td class="text-end">@item.Price.ToString("C2")</td>
             <td class="small text-muted">@item.Notes</td>
             <td>@(item.RequiresAddress ? "Required" : "Not needed")</td>

@@ -26,7 +26,11 @@ public class ShippingMethodFormInput
     [Display(Name = "Needs a shipment record (packages, tracking, carrier cost)")]
     public bool RequiresShipmentRecord { get; set; }
 
-    public ShippingMethodForm ToForm() => new(Name, MethodType, Price, RequiresAddress, Notes, RequiresShipmentRecord);
+    /// <summary>Which carrier ships it (carrier methods). Blank = not said.</summary>
+    [Display(Name = "Carrier")]
+    public Carrier? Carrier { get; set; }
+
+    public ShippingMethodForm ToForm() => new(Name, MethodType, Price, RequiresAddress, Notes, RequiresShipmentRecord, Carrier);
 
     public static ShippingMethodFormInput FromEntity(Domain.Entities.ShippingMethod method) => new()
     {
@@ -35,7 +39,8 @@ public class ShippingMethodFormInput
         Price = method.Price,
         RequiresAddress = method.RequiresAddress,
         Notes = method.Notes,
-        RequiresShipmentRecord = method.RequiresShipmentRecord
+        RequiresShipmentRecord = method.RequiresShipmentRecord,
+        Carrier = method.Carrier
     };
 
     public static ShippingMethodFormInput ForDuplicate(Domain.Entities.ShippingMethod method)

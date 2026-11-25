@@ -2,7 +2,7 @@
 
 The shop's UPS account is resold by Worldwide Express (WWEX). Labels, rates, voids and tracking for it go through
 WWEX's own **SpeedShip API**, not through UPS's developer API: it is the one that returns the WWEX price, which is
-what billed shipping is derived from (carrier cost × the multiplier in Settings → General).
+what billed shipping is derived from (carrier cost × the multiplier in Setup → Shipping carrier).
 
 This file has two parts: what the API does, as proven on WWEX's staging environment on 2026-11-24 (task U1), and how
 LabelShop uses it (tasks U2 to U7).
@@ -94,8 +94,8 @@ sample labels were booked there and all four are voided (`verify_voided.py`).
 | Background tracking | `LabelsMis.Web/Background/ShipmentTrackingPoller.cs` | See Tracking below. |
 | Pages | Setup → Shipping carrier (`/settings/carrier`, administrators), Record shipment, the shipment page | |
 
-Two migrations: `AddCarrierSettingsAndLog` (two new tables) and `AddCarrierLabels` (nullable or defaulted columns on
-`Shipment`, `ShipmentPackage`, `TrackingEvent`, `CarrierSettings`, and two partial unique indexes). Both are additive.
+Three migrations: `AddCarrierSettingsAndLog` (two new tables), `AddShippingMethodCarrier` (one nullable column, below) and `AddCarrierLabels` (nullable or defaulted columns on
+`Shipment`, `ShipmentPackage`, `TrackingEvent`, `CarrierSettings`, and two partial unique indexes). All are additive.
 
 ### Keys and environments
 
@@ -108,10 +108,31 @@ Two migrations: `AddCarrierSettingsAndLog` (two new tables) and `AddCarrierLabel
 - With no keys saved nothing changes for the shop: Record shipment is the typed-tracking form alone, and no
   background work calls anyone.
 
+### Which price, and what the customer is billed
+
+- The carrier cost is `totalOfferPrice` of the offer that was bought: the sum of its `chargeItemList[].customerPrice`
+  lines (freight, fuel, surcharges). It is the price WWEX quotes the account that signed in. Every offer names its
+  contract as `primaryVendorContractType: VENDOR_CSP_CONTRACT`, and the answer carries no UPS list or retail price.
+  (`traMinCharge` / `traMaxCharge` are a band of about 1.08 to 1.54 times the price; LabelShop does not read them.)
+- Staging signs in as WWEX's shared test account, so those prices are not Hey Lucky's. What Hey Lucky's production
+  keys return is checked on go-live day against a WWEX invoice line (step 5 of Going live).
+- Billed shipping = carrier cost × `GeneralSettings.CarrierCostMultiplier` (default 1.5), rounded to cents, for
+  every shipment on a carrier method or no method, bought or typed. The multiplier is edited on Setup → Shipping
+  carrier (it is still stored on `GeneralSettings`; Settings → General shows it and links there).
+
+### Which orders start on a label
+
+`ShippingMethod.Carrier` (nullable `Carrier` enum, carrier methods only) says who ships a method's orders, and
+`RecordShipmentDefaults` turns it into where Record shipment starts: label mode for UPS or "not said" (when keys
+are saved), typed tracking with that carrier selected for FedEx, USPS, DHL and Other. Either can be switched on the
+page. Migration `AddShippingMethodCarrier` adds the column and sets it once from each carrier method's name
+(`FedEx…` → FedEx, `UPS…` → UPS, `USPS…`, `DHL…`; anything else stays not said). After that it is a setting on the
+method, never read off the name. Setup → Shipping carrier lists the carrier methods and where each one starts.
+
 ### Buying a label
 
 1. **Get rates** sends the boxes to `shopFlow` and shows every UPS service with the carrier cost, the arrival date
-   and the billed shipping (cost × the multiplier in General settings).
+   and the billed shipping (cost × the multiplier in Setup → Shipping carrier).
 2. The rates are sealed with the app's secret key and carried by the page. **Buy label** trusts only that sealed
    copy for the price, and refuses it when the address, the ship date or a box changed since, when it is more than
    30 minutes old, or when the keys changed between staging and production.
@@ -208,8 +229,11 @@ run on the real pages.
 
 1. Deploy. With no keys saved, production behaves as it did, apart from the wording changes and the void buttons.
 2. Tell WWEX Integration Support that development is complete; they issue production keys.
-3. An administrator saves them in Setup → Shipping carrier with **Keys are for: Production**, sets the ship-from
+3. In Setup → Shipping methods, set the **Carrier** of the method the shop ships UPS on to UPS (the seeded method is
+   named FedEx and is set to FedEx by the migration; rename it too). Until then orders on it open Record shipment on
+   typed tracking numbers, as they do today.
+4. An administrator saves them in Setup → Shipping carrier with **Keys are for: Production**, sets the ship-from
    contact and phone, and presses **Test connection**. That is the first time the production addresses are used:
    it has to sign in, return rates, and show Hey Lucky's own UPS account.
-4. Rate a shipment the shop has already been billed for and compare it with that WWEX invoice line.
-5. Buy one real label for a real order, print it in the shop's format, and watch it track to Delivered.
+5. Rate a shipment the shop has already been billed for and compare it with that WWEX invoice line.
+6. Buy one real label for a real order, print it in the shop's format, and watch it track to Delivered.

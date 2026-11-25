@@ -17,6 +17,7 @@ public class ShippingMethodConfiguration : IEntityTypeConfiguration<ShippingMeth
         builder.Property(m => m.RequiresAddress).IsRequired().HasDefaultValue(true);
         builder.Property(m => m.Notes).HasMaxLength(ShippingMethod.NotesMaxLength);
         builder.Property(m => m.RequiresShipmentRecord).HasDefaultValue(false);
+        builder.Property(m => m.Carrier).HasConversion<int?>();
 
         builder.HasIndex(m => m.Name).IsUnique();
     }

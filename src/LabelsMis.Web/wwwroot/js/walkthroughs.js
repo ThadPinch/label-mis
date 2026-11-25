@@ -28,7 +28,8 @@
                 title: 'Connect LabelShop to Worldwide Express',
                 body: '<p>This page connects LabelShop to the shop\'s Worldwide Express account, so that Record shipment '
                     + 'can get UPS rates and buy labels.</p>'
-                    + '<p>There are four parts: the keys, a test, the ship-from details and the defaults. '
+                    + '<p>There are six parts: the keys, a test, the ship-from details, the defaults, what the customer is billed, '
+                    + 'and which shipping methods are UPS. '
                     + '<strong>Nothing on this page buys anything.</strong></p>'
                     + '<p>The page stays usable while the walkthrough is open: fill things in as you go.</p>'
             },
@@ -92,6 +93,28 @@
             },
             {
                 page: setupPage,
+                target: '#carrier-billing',
+                title: '5. What the customer is billed',
+                body: '<p>The customer is billed the <strong>carrier cost × this multiplier</strong>. The example under the box '
+                    + 'shows what a $20.00 label goes on the invoice at.</p>'
+                    + '<p>The carrier cost is what Worldwide Express charges the shop for the label on its own account '
+                    + '(freight, fuel and surcharges), not UPS\'s published retail rate.</p>'
+                    + '<p>It applies to every carrier shipment, including ones recorded with typed tracking numbers. '
+                    + 'Changing it affects shipments recorded from then on.</p>'
+            },
+            {
+                page: setupPage,
+                target: '#carrier-methods',
+                title: '6. Which orders get UPS labels',
+                body: '<p>Each order has a shipping method, and each carrier method says which carrier ships it.</p>'
+                    + '<ul><li>An order on a <strong>UPS</strong> method opens Record shipment on <strong>Buy a UPS label</strong>.</li>'
+                    + '<li>An order on a <strong>FedEx</strong> (or USPS, DHL, other) method opens on typed tracking numbers with that carrier selected.</li></ul>'
+                    + '<p>If the shop ships UPS on a method that says FedEx, press <strong>Change</strong>, set its carrier to UPS and '
+                    + 'rename it. Every order on that method follows.</p>'
+                    + '<p>Either way, Shipping can switch between the two on any order.</p>'
+            },
+            {
+                page: setupPage,
                 target: '#carrier-log',
                 title: 'Carrier activity',
                 body: '<p>Every call LabelShop makes to Worldwide Express is listed here: who did it, what it was, how it went, '
@@ -132,11 +155,11 @@
             {
                 page: '/production/shipping',
                 url: '/production/shipping',
-                target: ['#shipping-ready a[href*="/shipments/record"]', '#shipping-ready', '#shipping-empty'],
+                target: ['#shipping-ready a[data-starts-on="label"]', '#shipping-ready a[href*="/shipments/record"]', '#shipping-ready', '#shipping-empty'],
                 title: 'Start from Production → Shipping',
                 body: '<p>Every order with items finished and ready to ship is listed here.</p>'
                     + '<p>Press <strong>Record shipment</strong> on the order you are shipping. '
-                    + '<strong>Next</strong> opens the first one in the list, to look around: nothing is saved or bought until you say so.</p>',
+                    + '<strong>Next</strong> opens the highlighted one, to look around: nothing is saved or bought until you say so.</p>',
                 alt: [{
                     when: '#shipping-empty',
                     body: '<p>Orders with items finished and ready to ship are listed here, each with a '
@@ -145,10 +168,18 @@
             },
             {
                 page: recordPage,
-                link: '#shipping-ready a[href*="/shipments/record"]',
+                link: ['#shipping-ready a[data-starts-on="label"]', '#shipping-ready a[href*="/shipments/record"]'],
                 here: recordAddress,
                 target: '#ship-mode',
                 title: 'Two ways to record a shipment',
+                alt: [{
+                    when: '#record-form.ship-mode-manual #ship-mode',
+                    body: '<p>The order\'s <strong>shipping method</strong> (under the page title) decides where this page starts. '
+                        + 'This order\'s method isn\'t UPS, so it started on <strong>I have the tracking numbers</strong>, with that carrier selected.</p>'
+                        + '<p>An order on a UPS method starts on <strong>Buy a UPS label</strong>: LabelShop gets the rates, buys the label '
+                        + 'and fills in the tracking numbers and the cost.</p>'
+                        + '<p>To follow the rest of this walkthrough, press <strong>Buy a UPS label</strong> now. Nothing is bought until you press Buy label.</p>'
+                }],
                 body: '<ul><li><strong>Buy a UPS label</strong>: LabelShop gets the rates, buys the label and fills in the tracking numbers and the cost.</li>'
                     + '<li><strong>I have the tracking numbers</strong>: for a label made somewhere else. You type the numbers in, as before.</li></ul>'
                     + '<p>Leave <strong>Buy a UPS label</strong> selected. A yellow badge beside it means the shop is on staging keys and labels are samples.</p>',
@@ -204,7 +235,7 @@
                 body: '<p>Each row is a UPS service with:</p>'
                     + '<ul><li><strong>Arrives</strong>: the day UPS expects to deliver.</li>'
                     + '<li><strong>Carrier cost</strong>: what the shop pays.</li>'
-                    + '<li><strong>Billed shipping</strong>: what goes on the customer\'s invoice.</li></ul>'
+                    + '<li><strong>Billed shipping</strong>: what goes on the customer\'s invoice (the carrier cost × the shop\'s multiplier).</li></ul>'
                     + '<p>Tick the one you want. If you change the address, the date or a box after this, LabelShop asks you to get rates again before buying.</p>',
                 alt: [{
                     whenNot: '#rates-table',

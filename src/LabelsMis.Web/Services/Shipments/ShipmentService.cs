@@ -40,7 +40,9 @@ public record ReadyToShipOrder(
     IReadOnlyList<ReadyJobRef> ReadyJobs,
     /// <summary>The order's method needs the shipment recorded with packages (or it has no method):
     /// no one-click Mark shipped.</summary>
-    bool RequiresShipmentRecord = false);
+    bool RequiresShipmentRecord = false,
+    /// <summary>Record shipment would start on Buy a UPS label for it (when labels can be bought).</summary>
+    bool StartsOnLabel = false);
 
 /// <summary>Where a job's order line stands for shipping: what the job page and the jobs list need
 /// to offer Mark shipped, Record shipment, or the fix for a job marked shipped with no shipment.</summary>
@@ -87,7 +89,8 @@ public record ManualShipmentOrderView(
     ShippingAddress DefaultShipTo,
     IReadOnlyList<ManualShipmentLineView> Lines,
     string? ShippingMethodName = null,
-    ShippingMethodType? ShippingMethodType = null);
+    ShippingMethodType? ShippingMethodType = null,
+    Carrier? ShippingMethodCarrier = null);
 
 /// <summary>How a shipment's billed shipping is derived: the order's method and the shop's settings.</summary>
 public record ShipmentBillingContext(
@@ -347,7 +350,10 @@ public class ShipmentService(
                     .OrderBy(j => j.JobNumber)
                     .Select(j => new ReadyJobRef(j.Id, j.JobNumber))
                     .ToList(),
-                o.ShippingMethod == null || o.ShippingMethod.RequiresShipmentRecord))
+                o.ShippingMethod == null || o.ShippingMethod.RequiresShipmentRecord,
+                o.ShippingMethod == null
+                    || (o.ShippingMethod.MethodType == ShippingMethodType.Carrier
+                        && (o.ShippingMethod.Carrier == null || o.ShippingMethod.Carrier == RecordShipmentDefaults.LabelCarrier))))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<ReadyToShipOrder>(items, page, pageSize, total);
@@ -432,7 +438,8 @@ public class ShipmentService(
             defaultShipTo.Normalized(),
             lineViews,
             order.ShippingMethod?.Name,
-            order.ShippingMethod?.MethodType);
+            order.ShippingMethod?.MethodType,
+            order.ShippingMethod?.Carrier);
     }
 
     /// <summary>

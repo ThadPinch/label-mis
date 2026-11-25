@@ -1,9 +1,12 @@
 using LabelsMis.Domain.Carriers;
 using LabelsMis.Domain.Enums;
 using LabelsMis.Domain.Security;
+using LabelsMis.Domain.Shipping;
 using LabelsMis.Infrastructure.Identity;
 using LabelsMis.Web.Services;
 using LabelsMis.Web.Services.Carriers;
+using LabelsMis.Web.Services.Settings;
+using LabelsMis.Web.Services.Shipping;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -18,6 +21,8 @@ public class CarrierModel(
     CarrierSettingsService settings,
     CarrierConnectionTest connectionTest,
     CarrierLogger log,
+    GeneralSettingsService generalSettings,
+    ShippingMethodService shippingMethods,
     ClientClock clock) : PageModel
 {
     private const string StatusKey = "CarrierStatus";
@@ -43,6 +48,12 @@ public class CarrierModel(
             .Concat(Enumerable.Range(0, BlankPresetRows).Select(_ => new BoxPresetInput()))
             .ToList();
 
+    /// <summary>Billed shipping = carrier cost × this, for every carrier shipment.</summary>
+    public decimal CostMultiplier { get; private set; } = ShippingBillingSettings.DefaultCarrierCostMultiplier;
+
+    /// <summary>The shop's carrier methods and where Record shipment starts for an order on each.</summary>
+    public IReadOnlyList<CarrierMethodRow> Methods { get; private set; } = [];
+
     /// <summary>What still stops a label from being bought, in the words Record shipment would use.</summary>
     public IReadOnlyList<string> ShipFromProblems { get; private set; } = [];
 
@@ -55,6 +66,12 @@ public class CarrierModel(
     {
         Carrier = await settings.GetViewAsync(cancellationToken);
         Log = await log.GetRecentAsync(ShowAllLog ? AllLogRows : RecentLogRows, null, cancellationToken);
+        CostMultiplier = (await generalSettings.GetOrCreateAsync(cancellationToken)).CarrierCostMultiplier;
+        Methods = (await shippingMethods.GetSelectableAsync(null, cancellationToken))
+            .Where(m => m.MethodType == ShippingMethodType.Carrier)
+            .Select(m => new CarrierMethodRow(
+                m.Id, m.Name, m.Carrier, Carrier.IsReady && RecordShipmentDefaults.StartsOnLabel(m.MethodType, m.Carrier)))
+            .ToList();
 
         // The same check a label goes through, on the shop's end only.
         var probe = new CarrierRateRequest(
@@ -140,6 +157,33 @@ public class CarrierModel(
 
         return RedirectToPage();
     }
+
+    public async Task<IActionResult> OnPostSaveBillingAsync(
+        [FromForm(Name = "Billing.CostMultiplier")] decimal? costMultiplier,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (costMultiplier is not { } multiplier || multiplier is < 0m or > 10m)
+            {
+                throw new ArgumentException("The multiplier has to be a number from 0 to 10, for example 1.5.");
+            }
+
+            var current = await generalSettings.GetOrCreateAsync(cancellationToken);
+            await generalSettings.UpdateShippingBillingAsync(current.LocalDeliveryFee, multiplier, cancellationToken);
+            TempData[StatusKey] = $"Carrier cost multiplier saved: billed shipping is the carrier cost × {multiplier:0.####}. "
+                + "Shipments already recorded keep what they were billed.";
+        }
+        catch (ArgumentException ex)
+        {
+            TempData[ErrorKey] = ex.Message;
+        }
+
+        return RedirectToPage(pageName: null, pageHandler: null, routeValues: null, fragment: "carrier-billing");
+    }
+
+    /// <summary>A carrier shipping method on the setup page.</summary>
+    public sealed record CarrierMethodRow(Guid Id, string Name, Carrier? Carrier, bool StartsOnLabel);
 
     public sealed class BoxPresetInput
     {

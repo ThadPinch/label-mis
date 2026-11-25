@@ -1,4 +1,5 @@
 @model LabelsMis.Web.Pages.ShippingMethods.ShippingMethodFormInput
+@using LabelsMis.Domain.Carriers
 @using LabelsMis.Domain.Enums
 
 <div class="row g-3">
@@ -10,7 +11,19 @@
     <div class="col-md-4">
         <label asp-for="MethodType" class="form-label"></label>
         <select asp-for="MethodType" asp-items="Html.GetEnumSelectList<ShippingMethodType>()" class="form-select"></select>
-        <span class="form-text">Carrier = shipped by a parcel carrier on our own account (UPS), billed at the carrier's cost × the multiplier. Customer account = shipped on the customer's own carrier account, billed $0.</span>
+        <span class="form-text">Carrier = shipped by a parcel carrier on our own account (UPS), billed at the carrier's cost × the multiplier (Setup → Shipping carrier). Customer account = shipped on the customer's own carrier account, billed $0.</span>
+    </div>
+    <div class="col-md-5" id="method-carrier">
+        <label asp-for="Carrier" class="form-label"></label>
+        <select asp-for="Carrier" class="form-select"
+                asp-items="@(CarrierNames.InPickOrder.Select(c => new SelectListItem(CarrierNames.For(c), ((int)c).ToString())))">
+            <option value="">Not said</option>
+        </select>
+        <span class="form-text">
+            For carrier methods: who ships these orders. <strong>Record shipment</strong> starts from it. A UPS method
+            starts on <em>Buy a UPS label</em> (when the shipping carrier is connected); FedEx, USPS, DHL and Other start
+            on typed tracking numbers with that carrier selected. Not said works like UPS.
+        </span>
     </div>
     <div class="col-md-3">
         <label asp-for="Price" class="form-label"></label>

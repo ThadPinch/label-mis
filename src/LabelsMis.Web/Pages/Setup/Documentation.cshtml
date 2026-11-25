@@ -67,7 +67,7 @@
                     <li><strong>Send to QuickBooks</strong> — with QuickBooks connected (<a asp-page="/Settings/QuickBooks">Setup → QuickBooks</a>), Ready invoices go into QuickBooks from the Invoices page or the invoice's own page. The QuickBooks column shows each one's progress; anything QuickBooks turns down lands on a new <strong>Needs attention</strong> tab with the reason and a <em>Fix it</em> link.</li>
                     <li><strong>QuickBooks lists</strong> — Setup → QuickBooks reads the company's products and services, classes and payment terms, so the mapping is picked from QuickBooks' own names. It also sets the QuickBooks term for each LabelShop term, the PO number field, which invoice number QuickBooks gets (the full LabelShop number or only the number at the end), and what happens to the invoice email.</li>
                     <li><strong>Customers linked to QuickBooks</strong> — search QuickBooks and link, or create the customer in QuickBooks, from the customer's page; <strong>Customers → Match QuickBooks customers</strong> links many at once.</li>
-                    <li><strong>Shipping is billed from the shipments</strong> — no more unlocking the order to type it in: pickup and customer account $0, local delivery a flat fee, carrier shipments the carrier cost × a multiplier (General settings).</li>
+                    <li><strong>Shipping is billed from the shipments</strong> — no more unlocking the order to type it in: pickup and customer account $0, local delivery a flat fee, carrier shipments the carrier cost × a multiplier (Setup → Shipping carrier).</li>
                     <li><strong>Bill before shipping</strong> for deposits and prepay, and <strong>Non-billable</strong> for $0 samples.</li>
                     <li><strong>Invoice date</strong> — an invoice is now dated the day it is sent to QuickBooks, not the day its order was entered, so a Due on Receipt customer no longer shows past due the moment it arrives. Invoices already in QuickBooks keep the date they have.</li>
                     <li><strong>Customer set-up for billing</strong> — <strong>Tax setup complete</strong> (the new-client form is back) and a <strong>Billing</strong> tick on the contact who receives invoices (the primary contact stands in when none is ticked). The Billing tick replaces typing "Billing" into a contact's role.</li>
@@ -529,7 +529,7 @@
                 <h3 class="docs-subtitle">I have the tracking numbers</h3>
                 <ol class="docs-list docs-list--ordered">
                     <li>For a label made somewhere else (SpeedShip, another carrier's site), pick <strong>I have the tracking numbers</strong>.</li>
-                    <li>Set the <strong>ship date</strong>, <strong>carrier</strong> (UPS, FedEx, USPS, DHL, or Other), and <strong>ship-to</strong> address.</li>
+                    <li>Set the <strong>ship date</strong>, <strong>carrier</strong> (UPS, FedEx, USPS, DHL, or Other; it starts on the carrier of the order's shipping method), and <strong>ship-to</strong> address.</li>
                     <li>Check the <strong>items</strong> to ship and the quantity for each.</li>
                     <li>Add one or more <strong>packages</strong> with weight, dimensions, declared value, <strong>tracking number</strong>, and cost. Every package needs a tracking number.</li>
                     <li>Click <strong>Record shipment</strong>. The shipment is created as <strong>In transit</strong>, the shipped jobs advance to <strong>Shipped</strong>, and the sales order rolls up to Shipped once all lines are out.</li>
@@ -556,7 +556,7 @@
                 <h3 class="docs-subtitle">Shipping charges</h3>
                 <ul class="docs-list">
                     <li>The price on a shipping method is the <strong>quote</strong> used on estimates and orders. The invoice bills what each shipment works out to:</li>
-                    <li><strong>Pickup</strong> and <strong>Customer account</strong> (shipped on the customer's own carrier account): $0. <strong>Local delivery</strong>: the flat fee in <a asp-page="/Settings/General">General settings</a>. <strong>Carrier</strong> (UPS, FedEx, or no method): the shipment's carrier cost × the carrier multiplier in General settings.</li>
+                    <li><strong>Pickup</strong> and <strong>Customer account</strong> (shipped on the customer's own carrier account): $0. <strong>Local delivery</strong>: the flat fee in <a asp-page="/Settings/General">General settings</a>. <strong>Carrier</strong> (UPS, FedEx, or no method): the shipment's carrier cost × the carrier cost multiplier in <a asp-page="/Settings/Carrier">Setup → Shipping carrier</a>.</li>
                     <li>A label bought in LabelShop brings its carrier cost with it. A carrier shipment recorded by hand without a carrier cost holds its invoice on "Waiting on carrier cost" — enter the cost on the shipment's <strong>Shipping charges</strong> card when the bill arrives.</li>
                 </ul>
 
@@ -647,6 +647,8 @@
                 <ul class="docs-list">
                     <li><strong>UPS small package only.</strong> Anything else (another carrier, a label made on speedship.com) is recorded with <strong>I have the tracking numbers</strong>, as before: see <a href="#shipping">Shipping</a>.</li>
                     <li><strong>Staging and production.</strong> Worldwide Express issues staging keys for trying things out and production keys for real labels. With staging keys every label is a sample: it can't ship and nothing is billed. Record shipment and the shipment page say so in yellow.</li>
+                    <li><strong>The order's shipping method decides where Record shipment starts.</strong> Each carrier <a asp-page="/ShippingMethods/Index">shipping method</a> has a <strong>Carrier</strong>. An order on a UPS method (or with no method) opens on <strong>Buy a UPS label</strong>; an order on a FedEx, USPS, DHL or Other method opens on typed tracking numbers with that carrier selected. Shipping can switch on the page either way.</li>
+                    <li><strong>What the cost is.</strong> The carrier cost of a bought label is what Worldwide Express charges the shop for it on the shop's own account, with fuel and surcharges, not UPS's published retail rate. The customer is billed that cost × the multiplier in Setup → Shipping carrier.</li>
                     <li><strong>Who the labels are billed to.</strong> The UPS account that <strong>Test connection</strong> shows on the setup page. It is also shown beside Buy label.</li>
                     <li><strong>Who can do what.</strong> Shipping and administrators buy, print and void labels. Administrators set the carrier up. Everyone who can open a shipment sees its tracking.</li>
                     <li><strong>One label per purchase.</strong> A purchase that was sent is never sent twice: if the answer is lost, the shipment waits as <strong>Label not confirmed</strong> until <strong>Check with carrier</strong> settles it.</li>
@@ -654,11 +656,11 @@
 
                 <h3 class="docs-subtitle">Buying a UPS label</h3>
                 <ol class="docs-list docs-list--ordered">
-                    <li>On the Shipping workspace, click <strong>Record shipment</strong> for an order and leave <strong>Buy a UPS label</strong> selected.</li>
+                    <li>On the Shipping workspace, click <strong>Record shipment</strong> for an order. An order on a UPS method opens with <strong>Buy a UPS label</strong> selected; on any other order, select it.</li>
                     <li>Check the <strong>ship-to</strong> address, contact and phone, and tick <strong>A home, not a business</strong> when it is one (UPS adds a residential charge).</li>
                     <li>Check the <strong>items</strong> to ship and the quantity for each. Partial shipments are allowed.</li>
                     <li>Add a <strong>package</strong> per box: weight, and the size or one of the shop's usual boxes. A box without a size is rated on its weight alone, and UPS may bill more later.</li>
-                    <li>Click <strong>Get rates</strong>. Each UPS service is listed with the carrier cost, the arrival date and what the customer will be billed (carrier cost × the multiplier in General settings). Nothing is bought yet.</li>
+                    <li>Click <strong>Get rates</strong>. Each UPS service is listed with the carrier cost, the arrival date and what the customer will be billed (carrier cost × the multiplier in Setup → Shipping carrier). Nothing is bought yet.</li>
                     <li>Pick a service and click <strong>Buy label</strong>. The shipment is recorded with its tracking numbers and carrier cost, the jobs advance to <strong>Shipped</strong>, and the draft invoice takes the billed shipping. Nothing is typed.</li>
                 </ol>
                 <ul class="docs-list">
@@ -694,6 +696,8 @@
                     <li><strong>Test connection</strong> signs in and rates a 1 lb box from the shop, which proves the whole path and shows the UPS account labels bill to.</li>
                     <li><strong>Ship-from</strong>: the address is the company address in General settings; the contact and phone printed on labels are set here.</li>
                     <li><strong>Defaults for Record shipment</strong>: the service selected first, the label file to print from, the shop's usual boxes, and the background tracking switch.</li>
+                    <li><strong>What the customer is billed</strong>: the <strong>carrier cost multiplier</strong>. Billed shipping is the carrier cost × this, for every carrier shipment. It used to be in General settings.</li>
+                    <li><strong>Shipping methods</strong>: each carrier method and where Record shipment starts for its orders, with a link to change the method's carrier.</li>
                     <li><strong>Carrier activity</strong> lists every call to Worldwide Express: who, what, the outcome and their call ID, which is what their support asks for.</li>
                 </ul>
 

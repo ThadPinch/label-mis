@@ -111,11 +111,11 @@
                 <div class="small text-muted">
                     @if (Model.CanEditGeneral)
                     {
-                        <span>Change the fee and multiplier on <a asp-page="/Settings/General">General settings</a>.</span>
+                        <span>Change the fee on <a asp-page="/Settings/General">General settings</a> and the multiplier on <a asp-page="/Settings/Carrier" asp-fragment="carrier-billing">Shipping carrier</a>.</span>
                     }
                     else
                     {
-                        <span>An admin changes the fee and multiplier on General settings.</span>
+                        <span>An admin changes the fee on General settings and the multiplier on Shipping carrier.</span>
                     }
                 </div>
             </fieldset>

@@ -33,6 +33,15 @@ public class ShippingMethod : MasterDataEntity
     /// account), so the order and its invoice still see it shipped.</summary>
     public bool RequiresShipmentRecord { get; private set; }
 
+    /// <summary>Which carrier ships orders on this method (carrier methods only; null = not said).
+    /// Record shipment starts from it: a UPS method starts on Buy a UPS label, any other carrier on
+    /// typed tracking numbers with that carrier selected. An explicit setting, not read off the name.</summary>
+    public Carrier? Carrier { get; private set; }
+
+    /// <summary>Only a carrier method has a carrier.</summary>
+    public static Carrier? CarrierFor(ShippingMethodType methodType, Carrier? carrier) =>
+        methodType == ShippingMethodType.Carrier ? carrier : null;
+
     /// <summary>The flag a method gets when none is chosen: carrier methods need the shipment record
     /// (their billed shipping comes from its carrier cost); hand-offs don't.</summary>
     public static bool DefaultRequiresShipmentRecord(ShippingMethodType methodType) =>
@@ -47,7 +56,8 @@ public class ShippingMethod : MasterDataEntity
         Guid createdById,
         DateTime createdAt,
         string? notes = null,
-        bool? requiresShipmentRecord = null)
+        bool? requiresShipmentRecord = null,
+        Carrier? carrier = null)
     {
         Validate(name, price);
 
@@ -58,7 +68,8 @@ public class ShippingMethod : MasterDataEntity
             Price = price,
             RequiresAddress = requiresAddress,
             Notes = NormalizeNotes(notes),
-            RequiresShipmentRecord = requiresShipmentRecord ?? DefaultRequiresShipmentRecord(methodType)
+            RequiresShipmentRecord = requiresShipmentRecord ?? DefaultRequiresShipmentRecord(methodType),
+            Carrier = CarrierFor(methodType, carrier)
         };
         method.SetCreated(id, createdById, createdAt);
         return method;
@@ -71,6 +82,7 @@ public class ShippingMethod : MasterDataEntity
         bool requiresAddress,
         bool requiresShipmentRecord,
         string? notes,
+        Carrier? carrier,
         Guid modifiedById,
         DateTime modifiedAt)
     {
@@ -82,6 +94,7 @@ public class ShippingMethod : MasterDataEntity
         RequiresAddress = requiresAddress;
         RequiresShipmentRecord = requiresShipmentRecord;
         Notes = NormalizeNotes(notes);
+        Carrier = CarrierFor(methodType, carrier);
         SetModified(modifiedById, modifiedAt);
     }
 
@@ -92,7 +105,8 @@ public class ShippingMethod : MasterDataEntity
     [
         Create(PickupId, "Pickup", ShippingMethodType.Pickup, 0m, requiresAddress: false, createdById, createdAt),
         Create(DeliveryId, "Delivery", ShippingMethodType.Delivery, 25m, requiresAddress: true, createdById, createdAt),
-        Create(FedexId, "FedEx", ShippingMethodType.Carrier, 35m, requiresAddress: true, createdById, createdAt, FedexNotes),
+        Create(FedexId, "FedEx", ShippingMethodType.Carrier, 35m, requiresAddress: true, createdById, createdAt, FedexNotes,
+            carrier: Enums.Carrier.Fedex),
         Create(CustomerAccountId, "Customer account", ShippingMethodType.CustomerAccount, 0m, requiresAddress: true,
             createdById, createdAt, CustomerAccountNotes)
     ];

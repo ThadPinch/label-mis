@@ -82,14 +82,13 @@
                     <span asp-validation-for="Input.LocalDeliveryFee" class="text-danger"></span>
                     <div class="form-text">Shipping billed for a local delivery.</div>
                 </div>
-                <div class="col-md-4">
-                    <label asp-for="Input.CarrierCostMultiplier" class="form-label"></label>
-                    <div class="input-group">
-                        <span class="input-group-text">×</span>
-                        <input asp-for="Input.CarrierCostMultiplier" class="form-control" type="number" step="0.01" min="0" max="10" />
+                <div class="col-md-4" id="general-carrier-multiplier">
+                    <label class="form-label">Carrier cost multiplier</label>
+                    <div class="form-control-plaintext">× @Model.CarrierCostMultiplier.ToString("0.####")</div>
+                    <div class="form-text">
+                        Carrier shipments bill the carrier's actual cost × this. It is set in
+                        <a asp-page="/Settings/Carrier" asp-fragment="carrier-billing">Setup → Shipping carrier</a>.
                     </div>
-                    <span asp-validation-for="Input.CarrierCostMultiplier" class="text-danger"></span>
-                    <div class="form-text">Carrier shipments bill the carrier's actual cost × this. Pickup and customer-account shipments bill $0.</div>
                 </div>
                 <div class="col-12">
                     <label asp-for="Input.TermsText" class="form-label"></label>
