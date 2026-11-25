@@ -144,6 +144,11 @@
             <div class="card-body py-2 small">
                 <div class="d-flex justify-content-between"><span class="text-muted">Invoice date</span><span>@invoice.InvoiceDate.ToString("yyyy-MM-dd")</span></div>
                 <div class="d-flex justify-content-between"><span class="text-muted">Due date</span><span>@invoice.DueDate.ToString("yyyy-MM-dd")</span></div>
+                @if (Model.QuickBooksCard is { Connected: true } && invoice.IsDatedWhenSent
+                     && invoice.QbExportStatus is QuickBooksExportStatus.None or QuickBooksExportStatus.NeedsAttention)
+                {
+                    <div class="text-muted" id="invoice-date-note">Both dates become the day it is sent to QuickBooks, plus the customer's terms.</div>
+                }
                 <hr class="my-1" />
                 <div class="d-flex justify-content-between"><span class="text-muted">Subtotal</span><span>@invoice.Subtotal.ToString("C2")</span></div>
                 <div class="d-flex justify-content-between"><span class="text-muted">Tax</span><span>@invoice.TaxAmount.ToString("C2")</span></div>

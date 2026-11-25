@@ -25,6 +25,14 @@ public class QuickBooksModel(
     public bool CanEdit => User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Accounting);
     public bool CanEditOverrides => CanEdit && Preview?.CanEditOverrides == true;
 
+    /// <summary>The invoice date QuickBooks gets: today for an invoice that is new to QuickBooks
+    /// (it is dated the day it is sent), the invoice's own date once it is in line or there.</summary>
+    public DateOnly TxnDate => Preview is { DatedWhenSent: true } ? clock.Today : Preview!.TxnDate;
+
+    public DateOnly DueDate => Preview is { DatedWhenSent: true } p
+        ? LabelsMis.Domain.Entities.Invoice.DueDateFor(clock.Today, p.CustomerTerms)
+        : Preview!.DueDate;
+
     /// <summary>Status and Send / Retry / Cancel for this invoice (compact: no link or email options).</summary>
     public QuickBooksCardModel? QuickBooksCard { get; private set; }
 

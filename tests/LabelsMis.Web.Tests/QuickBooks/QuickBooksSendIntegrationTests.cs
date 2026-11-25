@@ -180,6 +180,122 @@ public class QuickBooksSendIntegrationTests : QuickBooksTestHost, IAsyncLifetime
     }
 
     [Fact]
+    public async Task Send_DatesTheInvoiceTheDayItIsSent_NotTheDayItWasEntered()
+    {
+        await ConnectAsync();
+        var invoice = await SeedReadyInvoiceAsync(PaymentTerms.DueOnReceipt);
+        var entered = (await ReadInvoiceAsync(invoice.Id)).InvoiceDate;
+        var sentOn = DateOnly.FromDateTime(Time.GetUtcNow().UtcDateTime.ToLocalTime());
+        sentOn.Should().NotBe(entered, "the test clock is set to a day other than the one the draft is made on");
+
+        (await QueueAsync(invoice.Id)).Queued.Should().BeTrue();
+        await Worker.RunOnceAsync(default);
+
+        var body = JsonNode.Parse(Api.Writes.Should().ContainSingle().Subject.Body!)!;
+        body["TxnDate"]!.GetValue<string>().Should().Be(sentOn.ToString("yyyy-MM-dd"));
+        body["DueDate"]!.GetValue<string>().Should().Be(sentOn.ToString("yyyy-MM-dd"), "due on receipt is due the day it is sent");
+        var saved = await ReadInvoiceAsync(invoice.Id);
+        saved.InvoiceDate.Should().Be(sentOn, "LabelShop shows the date QuickBooks has");
+        saved.DueDate.Should().Be(sentOn);
+    }
+
+    [Fact]
+    public async Task Send_Net30_CountsTheTermsFromTheDayItIsSent()
+    {
+        await ConnectAsync();
+        var invoice = await SeedReadyInvoiceAsync();
+        var sentOn = DateOnly.FromDateTime(Time.GetUtcNow().UtcDateTime.ToLocalTime());
+
+        await QueueAsync(invoice.Id);
+        await Worker.RunOnceAsync(default);
+
+        var body = JsonNode.Parse(Api.Writes.Single().Body!)!;
+        body["TxnDate"]!.GetValue<string>().Should().Be(sentOn.ToString("yyyy-MM-dd"));
+        body["DueDate"]!.GetValue<string>().Should().Be(sentOn.AddDays(30).ToString("yyyy-MM-dd"));
+    }
+
+    [Fact]
+    public async Task Send_AChangeToAnInvoiceAlreadyInQuickBooks_KeepsItsDate()
+    {
+        await ConnectAsync();
+        var invoice = await SeedReadyInvoiceAsync();
+        await SendAsync(invoice.Id);
+        var sentOn = (await ReadInvoiceAsync(invoice.Id)).InvoiceDate;
+
+        Time.Advance(TimeSpan.FromDays(9));
+        await WithInvoiceServiceAsync(s => s.UnmarkExportedAsync(invoice.Id));
+        await WithInvoiceServiceAsync(s => s.SetShippingOverrideAsync(invoice.Id, 42.5m));
+        await QueueAsync(invoice.Id);
+        await Worker.RunOnceAsync(default);
+
+        var update = JsonNode.Parse(Api.Writes.Last().Body!)!;
+        update["Id"]!.GetValue<string>().Should().Be("200");
+        update["TxnDate"]!.GetValue<string>().Should().Be(sentOn.ToString("yyyy-MM-dd"));
+        update["DueDate"]!.GetValue<string>().Should().Be(sentOn.AddDays(30).ToString("yyyy-MM-dd"));
+        (await ReadInvoiceAsync(invoice.Id)).InvoiceDate.Should().Be(sentOn);
+    }
+
+    [Fact]
+    public async Task Send_RetriedOnALaterDay_IsDatedTheDayItGoes()
+    {
+        await ConnectAsync();
+        var invoice = await SeedReadyInvoiceAsync();
+        _qb.CreateFailures.Enqueue(Fault(400, "6000", "A business validation error has occurred"));
+        await QueueAsync(invoice.Id);
+        await Worker.RunOnceAsync(default);
+        (await ReadInvoiceAsync(invoice.Id)).QbExportStatus.Should().Be(QuickBooksExportStatus.NeedsAttention);
+
+        Time.Advance(TimeSpan.FromDays(2));
+        var retriedOn = DateOnly.FromDateTime(Time.GetUtcNow().UtcDateTime.ToLocalTime());
+        await WithSendServiceAsync(s => s.RetryAsync(invoice.Id));
+        await Worker.RunOnceAsync(default);
+
+        var body = JsonNode.Parse(Api.Writes.Last().Body!)!;
+        body["TxnDate"]!.GetValue<string>().Should().Be(retriedOn.ToString("yyyy-MM-dd"));
+        (await ReadInvoiceAsync(invoice.Id)).InvoiceDate.Should().Be(retriedOn);
+    }
+
+    [Fact]
+    public async Task Send_LinkedToAnInvoiceKeyedInByHand_TakesQuickBooksDates()
+    {
+        await ConnectAsync();
+        var invoice = await SeedReadyInvoiceAsync();
+        _qb.Add("77", invoice.Number, invoice.QbCustomerId, 535m);
+        _qb.Get("77")!["TxnDate"] = "2026-10-30";
+        _qb.Get("77")!["DueDate"] = "2026-11-29";
+
+        await QueueAsync(invoice.Id);
+        await Worker.RunOnceAsync(default);
+
+        var saved = await ReadInvoiceAsync(invoice.Id);
+        saved.QbInvoiceId.Should().Be("77");
+        saved.InvoiceDate.Should().Be(new DateOnly(2026, 10, 30));
+        saved.DueDate.Should().Be(new DateOnly(2026, 11, 29));
+        Api.Writes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Preview_SaysAnUnsentInvoiceIsDatedWhenSent_AndStopsOnceItIsInLine()
+    {
+        await ConnectAsync();
+        var invoice = await SeedReadyInvoiceAsync(PaymentTerms.Net15);
+
+        var before = await InSendAppAsync(sp => sp.GetRequiredService<QuickBooksInvoiceService>().GetPreviewAsync(invoice.Id));
+        before!.DatedWhenSent.Should().BeTrue();
+        before.CustomerTerms.Should().Be(PaymentTerms.Net15);
+
+        await QueueAsync(invoice.Id);
+        var queued = await InSendAppAsync(sp => sp.GetRequiredService<QuickBooksInvoiceService>().GetPreviewAsync(invoice.Id));
+        queued!.DatedWhenSent.Should().BeFalse("it has its date now");
+        queued.DueDate.Should().Be(queued.TxnDate.AddDays(15));
+
+        await Worker.RunOnceAsync(default);
+        var sent = await InSendAppAsync(sp => sp.GetRequiredService<QuickBooksInvoiceService>().GetPreviewAsync(invoice.Id));
+        sent!.DatedWhenSent.Should().BeFalse();
+        sent.TxnDate.Should().Be(queued.TxnDate);
+    }
+
+    [Fact]
     public async Task Send_AfterUnmarkAndEdit_UpdatesTheSameQuickBooksInvoice()
     {
         await ConnectAsync();
@@ -719,6 +835,8 @@ public class QuickBooksSendIntegrationTests : QuickBooksTestHost, IAsyncLifetime
         services.AddScoped<QuickBooksMappingService>();
         services.AddScoped<QuickBooksInvoiceService>();
         services.AddScoped<QuickBooksCatalogService>();
+        services.AddHttpContextAccessor();
+        services.AddScoped<ClientClock>();
         services.AddScoped<QuickBooksSendService>();
         services.AddScoped<QuickBooksInvoiceSender>();
         services.AddSingleton<QuickBooksSendWorker>();
@@ -815,7 +933,9 @@ public class QuickBooksSendIntegrationTests : QuickBooksTestHost, IAsyncLifetime
 
     /// <summary>A customer linked to QuickBooks with a Billing contact, an order of 1,000 labels at
     /// 0.50 with $35 shipping quoted, and its invoice flagged bill-before-ship so it is Ready.</summary>
-    private async Task<SeededInvoice> SeedReadyInvoiceAsync(bool billBeforeShip = true)
+    private Task<SeededInvoice> SeedReadyInvoiceAsync(PaymentTerms terms) => SeedReadyInvoiceAsync(true, terms);
+
+    private async Task<SeededInvoice> SeedReadyInvoiceAsync(bool billBeforeShip = true, PaymentTerms terms = PaymentTerms.Net30)
     {
         var now = DateTime.UtcNow;
         var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
@@ -829,7 +949,7 @@ public class QuickBooksSendIntegrationTests : QuickBooksTestHost, IAsyncLifetime
         {
             db.Suppliers.Add(Supplier.Create(supplierId, $"Send Sup {suffix}", $"SS{suffix}"[..10], "Net 30", 7, null, TestUserId, now));
             var customer = Customer.Create(customerId, $"Send Customer {suffix}", $"SC{suffix}"[..10],
-                PaymentTerms.Net30, false, 0.45m, CustomerStatus.Active, null, null, TestUserId, now);
+                terms, false, 0.45m, CustomerStatus.Active, null, null, TestUserId, now);
             customer.SetQuickBooksSetup(qbCustomerId, true, null, TestUserId, now);
             db.Customers.Add(customer);
             db.Contacts.Add(Contact.Create(Guid.NewGuid(), customerId, "Bea", "Biller", $"ap-{suffix}@example.com",

@@ -305,6 +305,44 @@ public class Invoice : EntityBase
         SetModified(modifiedById, modifiedAt);
     }
 
+    /// <summary>The due date that goes with an invoice date under the customer's terms.</summary>
+    public static DateOnly DueDateFor(DateOnly invoiceDate, PaymentTerms terms) => invoiceDate.AddDays(terms.ToDueDays());
+
+    /// <summary>True while sending this invoice would create it in QuickBooks, which is when it
+    /// takes the day's date (<see cref="DateForQuickBooks"/>).</summary>
+    public bool IsDatedWhenSent => Status is not InvoiceStatus.Void && !NonBillable && QbInvoiceId is null && QbExportedAt is null;
+
+    /// <summary>An invoice is dated the day it is sent to QuickBooks, and its terms count from that
+    /// day. The draft exists from the day the order was entered, so the date it was made with
+    /// would put a Due on Receipt customer past due before the order has shipped. An invoice that is
+    /// already in QuickBooks keeps its date: sending a change must not move a date the customer
+    /// has seen. Returns whether the dates were set.</summary>
+    public bool DateForQuickBooks(DateOnly today, PaymentTerms terms)
+    {
+        if (!IsDatedWhenSent)
+        {
+            return false;
+        }
+
+        InvoiceDate = today;
+        DueDate = DueDateFor(today, terms);
+        return true;
+    }
+
+    /// <summary>Linked to an invoice that was already in QuickBooks (keyed in by hand, or created
+    /// by a send that was cut off): its dates are the ones the customer and the books have, so
+    /// LabelShop shows the same ones. A date QuickBooks did not send is left as it was.</summary>
+    public void TakeQuickBooksDates(DateOnly? invoiceDate, DateOnly? dueDate)
+    {
+        if (Status is InvoiceStatus.Void)
+        {
+            return;
+        }
+
+        InvoiceDate = invoiceDate ?? InvoiceDate;
+        DueDate = dueDate ?? DueDate;
+    }
+
     /// <summary>Puts the invoice in line for the background worker. What it does there follows
     /// from the invoice: a void one is voided in QuickBooks, one with a QuickBooks id is updated,
     /// any other is created (after a look for its number). Whether the invoice is Ready is the

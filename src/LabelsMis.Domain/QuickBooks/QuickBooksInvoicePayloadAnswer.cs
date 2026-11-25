@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 namespace LabelsMis.Domain.QuickBooks;
@@ -17,6 +18,11 @@ public sealed record QuickBooksInvoiceAnswer(
     decimal? Balance,
     string? PrivateNote)
 {
+    /// <summary>QuickBooks' invoice date and due date, when the answer carries them.</summary>
+    public DateOnly? TxnDate { get; init; }
+
+    public DateOnly? DueDate { get; init; }
+
     /// <summary>QuickBooks has voided it: a void zeroes the total and the balance and sets the
     /// private note to "Voided".</summary>
     public bool IsVoided =>
@@ -104,8 +110,17 @@ public sealed record QuickBooksInvoiceAnswer(
             Number(invoice, "TotalAmt"),
             totalTax,
             Number(invoice, "Balance"),
-            Text(invoice, "PrivateNote"));
+            Text(invoice, "PrivateNote"))
+        {
+            TxnDate = Date(invoice, "TxnDate"),
+            DueDate = Date(invoice, "DueDate")
+        };
     }
+
+    private static DateOnly? Date(JsonElement element, string name) =>
+        DateOnly.TryParseExact(Text(element, name), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? date
+            : null;
 
     private static string? Text(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;

@@ -139,8 +139,12 @@
             <div class="col-md-4">
                 <div class="row g-1">
                     <div class="col-6 text-muted">Terms</div><div class="col-6" id="qb-terms">@p.Terms</div>
-                    <div class="col-6 text-muted">Invoice date</div><div class="col-6" id="qb-txn-date">@p.TxnDate.ToString("MM/dd/yyyy")</div>
-                    <div class="col-6 text-muted">Due date</div><div class="col-6" id="qb-due-date">@p.DueDate.ToString("MM/dd/yyyy")</div>
+                    <div class="col-6 text-muted">Invoice date</div><div class="col-6" id="qb-txn-date">@Model.TxnDate.ToString("MM/dd/yyyy")</div>
+                    <div class="col-6 text-muted">Due date</div><div class="col-6" id="qb-due-date">@Model.DueDate.ToString("MM/dd/yyyy")</div>
+                    @if (p.DatedWhenSent)
+                    {
+                        <div class="col-12 text-muted small" id="qb-date-note">Dated the day it is sent to QuickBooks.</div>
+                    }
                 </div>
             </div>
             <div class="col-md-4">

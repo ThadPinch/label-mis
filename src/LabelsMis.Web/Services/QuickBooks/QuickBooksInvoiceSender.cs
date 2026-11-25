@@ -384,6 +384,7 @@ public class QuickBooksInvoiceSender(
         }
 
         invoice.RecordInQuickBooks(found.Id, found.SyncToken, found.TotalAmt, found.TotalTax, null, actorId, Now);
+        invoice.TakeQuickBooksDates(found.TxnDate, found.DueDate);
         await db.SaveChangesAsync(CancellationToken.None);
         return new QuickBooksSendResult(QuickBooksSendOutcome.Linked);
     }

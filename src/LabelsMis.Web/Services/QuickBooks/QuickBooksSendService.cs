@@ -54,6 +54,9 @@ public sealed record QuickBooksLinkResult(bool Linked, string Message);
 /// and the per-invoice send options only change the invoice row; the background
 /// <c>QuickBooksSendWorker</c> does the sending. <see cref="LinkExistingAsync"/> is the one call
 /// that talks to QuickBooks directly (through <see cref="QuickBooksGateway"/>).
+/// An invoice that is new to QuickBooks is dated here, the day the person presses Send, in their
+/// own time zone: the worker runs on the server's clock (UTC), where a late afternoon in the
+/// shop is already tomorrow.
 /// Every method throws <see cref="InvalidOperationException"/> or <see cref="ArgumentException"/>
 /// with a message fit to show the user when the request can't be done.
 /// </summary>
@@ -61,7 +64,8 @@ public class QuickBooksSendService(
     LabelsMisDbContext db,
     InvoiceService invoiceService,
     QuickBooksGateway gateway,
-    ICurrentUserService currentUser)
+    ICurrentUserService currentUser,
+    ClientClock clock)
 {
     private readonly LabelsMisDbContext _db = db;
     private readonly InvoiceService _invoiceService = invoiceService;
@@ -89,6 +93,11 @@ public class QuickBooksSendService(
             ? await _invoiceService.GetWaitingReasonsAsync(cancellationToken)
             : [];
         var now = DateTime.UtcNow;
+        var today = clock.Today;
+        var customerIds = invoices.Values.Select(i => i.CustomerId).Distinct().ToList();
+        var terms = await _db.Customers.AsNoTracking()
+            .Where(c => customerIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Terms, cancellationToken);
         var outcomes = new List<QuickBooksQueueOutcome>();
         foreach (var id in ids)
         {
@@ -104,6 +113,7 @@ public class QuickBooksSendService(
                 try
                 {
                     invoice.QueueForQuickBooks(userId, now);
+                    invoice.DateForQuickBooks(today, terms[invoice.CustomerId]);
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -143,6 +153,11 @@ public class QuickBooksSendService(
         }
 
         invoice.QueueForQuickBooks(userId, DateTime.UtcNow);
+        var terms = await _db.Customers.AsNoTracking()
+            .Where(c => c.Id == invoice.CustomerId)
+            .Select(c => c.Terms)
+            .SingleAsync(cancellationToken);
+        invoice.DateForQuickBooks(clock.Today, terms);
         await _db.SaveChangesAsync(cancellationToken);
     }
 
@@ -299,6 +314,7 @@ public class QuickBooksSendService(
         }
 
         invoice.RecordInQuickBooks(found.Id, found.SyncToken, found.TotalAmt, found.TotalTax, null, userId, DateTime.UtcNow);
+        invoice.TakeQuickBooksDates(found.TxnDate, found.DueDate);
         await _db.SaveChangesAsync(cancellationToken);
         return new QuickBooksLinkResult(
             true,

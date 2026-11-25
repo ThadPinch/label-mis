@@ -164,6 +164,10 @@ what supplies the token and writes the log row.
   `docs/architecture.md`). Changing the setting renames nothing by itself: an invoice already in QuickBooks keeps its
   number until it is sent again (Unmark exported → Send updates the same QuickBooks invoice, `DocNumber` included).
   LabelShop's own screens, PDFs, emails and the CSV download keep the full number.
+- **Dates:** an invoice new to QuickBooks is dated the day the person presses Send, in their own time zone
+  (`Invoice.DateForQuickBooks`, called when it is queued; the worker runs in UTC), and the due date counts the
+  customer's terms from that day. The LabelShop invoice is given the same dates, so the two always agree. An update
+  keeps the date; a link to an invoice already in QuickBooks takes QuickBooks' dates.
 - **Payload rules:** `DocNumber`, `TxnDate`, `DueDate` always; `SalesTermRef` only when the terms map names a term the
   lists have; lines carry `ItemRef`, `ClassRef`, `TaxCodeRef` TAX/NON from the item's own taxable flag; Qty +
   UnitPrice only when Qty × UnitPrice rounded half up equals the line amount, else Qty + Amount; shipping as a line

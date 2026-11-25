@@ -79,7 +79,12 @@ public record QbInvoicePreview(
     IReadOnlyList<string> ItemOptions,
     IReadOnlyList<string> ClassOptions,
     /// <summary>No contact is ticked Billing, so <see cref="BillingEmail"/> is the primary contact's.</summary>
-    bool BillingEmailIsPrimaryFallback = false)
+    bool BillingEmailIsPrimaryFallback = false,
+    /// <summary>The customer's terms, for working out a due date.</summary>
+    PaymentTerms CustomerTerms = PaymentTerms.Net30,
+    /// <summary>Sending will create it in QuickBooks, dated that day: <see cref="TxnDate"/> and
+    /// <see cref="DueDate"/> are still the draft's and will be replaced.</summary>
+    bool DatedWhenSent = false)
 {
     public bool IsReady => Status == QbInvoiceStatus.Ready;
     public bool CanEditOverrides => Status is QbInvoiceStatus.Ready or QbInvoiceStatus.Waiting;
@@ -290,6 +295,9 @@ public class QuickBooksInvoiceService(
             exportedBy,
             options.Items,
             options.Classes,
-            billingEmail?.IsPrimaryFallback ?? false);
+            billingEmail?.IsPrimaryFallback ?? false,
+            customer.Terms,
+            invoice.IsDatedWhenSent
+                && invoice.QbExportStatus is QuickBooksExportStatus.None or QuickBooksExportStatus.NeedsAttention);
     }
 }
