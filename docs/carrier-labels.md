@@ -80,6 +80,96 @@ The scripts and every saved answer are outside the repo, in the project folder:
 `~/Documents/LabelShop/smoke/2026-11-24-wwex-spike/` (`wwex.py` refuses any host but the two staging ones). Four
 sample labels were booked there and all four are voided (`verify_voided.py`).
 
+## How LabelShop uses it (as built, U2 to U7)
+
+### Where the code is
+
+| Piece | Where | What it does |
+|---|---|---|
+| Request bodies, answer readers | `LabelsMis.Domain/Carriers/Wwex/` (`WwexRequests`, `WwexAnswers`) | Pure functions, tested against the staging answers saved in `tests/LabelsMis.Domain.Tests/Carriers/Fixtures/`. An answer in a shape that was not expected throws `CarrierException`; nothing is half-read. |
+| The seam | `LabelsMis.Domain/Carriers/ICarrierClient.cs` | Sign in, rates, book, label, void, track. One implementation. Nothing above it names WWEX. |
+| The client | `LabelsMis.Infrastructure/Carriers/` (`WwexCarrierClient`, `WwexTokenCache`, `WwexOptions`) | HTTP, the 24-hour token, a 30 second limit per call. |
+| The one door | `LabelsMis.Web/Services/Carriers/CarrierGateway.cs` | Every call goes through it: the saved keys, the staging/production check, and one `CarrierLog` row per attempt. |
+| Labels on shipments | `LabelsMis.Web/Services/Carriers/CarrierShipmentService.cs` | Rates, buy, settle an unanswered purchase, print, void, tracking. |
+| Background tracking | `LabelsMis.Web/Background/ShipmentTrackingPoller.cs` | See Tracking below. |
+| Pages | Setup → Shipping carrier (`/settings/carrier`, administrators), Record shipment, the shipment page | |
+
+Two migrations: `AddCarrierSettingsAndLog` (two new tables) and `AddCarrierLabels` (nullable or defaulted columns on
+`Shipment`, `ShipmentPackage`, `TrackingEvent`, `CarrierSettings`, and two partial unique indexes). Both are additive.
+
+### Keys and environments
+
+- The keys are saved in Setup → Shipping carrier, not in app settings. The client secret is encrypted with the app's
+  secret protector (`Secrets__Key`); only its last four characters are kept readable.
+- The page says whether the keys are staging or production keys. Each shipment remembers which kind bought its
+  label (`Shipment.CarrierEnvironment`), and a label is only ever printed, voided or tracked with keys of that kind.
+  Switching the shop to production keys therefore leaves the staging samples readable and unreachable, which is
+  what is wanted.
+- With no keys saved nothing changes for the shop: Record shipment is the typed-tracking form alone, and no
+  background work calls anyone.
+
+### Buying a label
+
+1. **Get rates** sends the boxes to `shopFlow` and shows every UPS service with the carrier cost, the arrival date
+   and the billed shipping (cost × the multiplier in General settings).
+2. The rates are sealed with the app's secret key and carried by the page. **Buy label** trusts only that sealed
+   copy for the price, and refuses it when the address, the ship date or a box changed since, when it is more than
+   30 minutes old, or when the keys changed between staging and production.
+3. The shipment is saved as pending **before** WWEX is asked to book.
+   - Booked: the shipment is recorded through the same path as a hand-entered one (jobs to Shipped, the order
+     rolled up, the draft invoice's shipping updated), with the tracking numbers and the carrier cost filled in.
+   - Refused: the pending shipment is removed and the reason is shown.
+   - No answer (timeout, `5xx`): it is kept as **Label not confirmed**. Nothing counts as shipped and no other
+     label can be bought for the order. **Check with carrier** asks for the same booking again: booked now means
+     recorded; "already has order placed" means the first answer was lost, and since the tracking numbers went with
+     it, that order is voided at WWEX and the shipment removed.
+4. A WWEX request is booked once: unique index on `Shipment.CarrierQuoteId`.
+
+### Printing
+
+4 × 6 PDF and ZPL per package, Letter PDF for all packages. The shop's usual format is fetched when the label is
+bought and kept in file storage under `carrier-labels/<shipment id>/` (Spaces in production, like artwork; the local
+disk in development). Any other format is fetched once, the first time it is printed, and kept. Reprinting never
+asks WWEX to buy anything.
+
+### Voiding
+
+- **Void label** (a label bought here) asks WWEX first and touches the shipment only once WWEX has confirmed. An
+  unconfirmed void changes nothing and can be repeated; WWEX answers a repeat with "already voided", which counts.
+- **Void shipment** (recorded by hand) calls no one.
+- The shipment becomes `Voided` (`ShipmentStatus` 5) and stays on file. Its jobs go back to ready to ship unless
+  another shipment still carries their line, an order that is no longer fully shipped goes back to In production,
+  and the draft invoice's shipping is derived again, in one transaction.
+- Refused, before WWEX is asked, while the order's invoice is in QuickBooks, on its way there, or sent to the
+  customer.
+- The stored label files are removed and a voided label is never served again, although WWEX would still send it.
+- Every "shipped" count in the app leaves out voided shipments.
+
+### Tracking
+
+- **Check tracking now** on the shipment page makes one `searchShipmentsFlow` call, which covers every box. Each
+  box keeps its status; each event is stored once (unique index on box, WWEX's code and its time); the shipment
+  turns Delivered once every box is.
+- WWEX's tracking runs behind its booking: a label bought seconds ago is "not found" for about ten seconds on
+  staging. That answer changes nothing and says so.
+- A label voided in SpeedShip rather than in LabelShop is **flagged, not reversed**: a banner on the shipment asks
+  for Void label, which then completes on WWEX's "already voided".
+- A status word LabelShop doesn't know is kept and shown as WWEX sent it.
+- `ShipmentTrackingPoller` asks in the background every 30 minutes, about real labels only: bought with production
+  keys, still in transit, at least 30 minutes old, not asked about in the last 4 hours, shipped within the last 30
+  days. At most 25 shipments a pass, one call a second, and the pass stops at the first sign WWEX is down. An
+  answer with nothing new writes no log row. Staging samples never move, so they are never polled. The switch is
+  in Setup → Shipping carrier.
+
+### How it was checked
+
+- Unit and integration tests: Domain (parsers against the saved staging answers, shipment rules), Web
+  (`Carriers/` : settings, purchase, void, tracking and the poller, against a scripted fake carrier and a real
+  PostgreSQL database).
+- Through the real pages against WWEX staging, with scripts kept outside the repo in
+  `~/Documents/LabelShop/smoke/2026-11-24-carrier-labels/`: `s3_setup.py`, `s4_buy.py`, `s6_void.py`,
+  `s7_track.py`. Every sample label they bought is voided, except the one two-box sample kept for printing checks.
+
 ## Not proven
 
 - **Hey Lucky's own rates.** Staging signs in as WWEX's test account. Rating a shipment the shop has already been
@@ -91,3 +181,13 @@ sample labels were booked there and all four are voided (`verify_voided.py`).
 - **How long WWEX keeps a label downloadable**, and until when a label can be voided. LabelShop stores the label
   files itself for that reason.
 - **Rate limits.** None were hit and none are documented.
+
+## Going live
+
+1. Deploy. With no keys saved, production behaves as it did, apart from the wording changes and the void buttons.
+2. Tell WWEX Integration Support that development is complete; they issue production keys.
+3. An administrator saves them in Setup → Shipping carrier with **Keys are for: Production**, sets the ship-from
+   contact and phone, and presses **Test connection**. That is the first time the production addresses are used:
+   it has to sign in, return rates, and show Hey Lucky's own UPS account.
+4. Rate a shipment the shop has already been billed for and compare it with that WWEX invoice line.
+5. Buy one real label for a real order, print it in the shop's format, and watch it track to Delivered.

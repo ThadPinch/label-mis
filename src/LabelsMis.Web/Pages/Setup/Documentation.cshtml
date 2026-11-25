@@ -73,9 +73,12 @@
 
                 <h3 class="docs-subtitle">Shipping</h3>
                 <ul class="docs-list">
-                    <li><strong>Mark shipped always leaves a shipment behind</strong>, so the order and its invoice see it shipped. On pickup, delivery and customer-account orders it records the shipment by itself; FedEx orders are shipped with <strong>Record shipment</strong> (packages, tracking, carrier cost). Each shipping method has a <strong>Needs a shipment record</strong> setting.</li>
+                    <li><strong>Mark shipped always leaves a shipment behind</strong>, so the order and its invoice see it shipped. On pickup, delivery and customer-account orders it records the shipment by itself; carrier orders (UPS, FedEx) are shipped with <strong>Record shipment</strong> (packages, tracking, carrier cost). Each shipping method has a <strong>Needs a shipment record</strong> setting.</li>
                     <li><strong>Jobs marked shipped earlier without a shipment</strong> show a warning on the job page with the fix, and the invoice's Waiting reason names the job.</li>
                     <li><strong>Mark order shipped</strong> on a shipment finishes an order that under-ran (shipped short).</li>
+                    <li><strong>UPS labels from Record shipment</strong> — with the shop's Worldwide Express keys saved (<a asp-page="/Settings/Carrier">Setup → Shipping carrier</a>), Record shipment gets rates for the boxes, buys the label, and fills in the tracking numbers and the carrier cost by itself. Labels print as 4 × 6, ZPL or on Letter paper, and can be reprinted from the shipment.</li>
+                    <li><strong>Void label / Void shipment</strong> on a shipment takes it back: the items are ready to ship again and the shipping comes off the draft invoice. A label bought in LabelShop is voided with Worldwide Express first.</li>
+                    <li><strong>Tracking</strong> — shipments with a label bought in LabelShop show where each box is, and turn <strong>Delivered</strong> by themselves.</li>
                 </ul>
             </section>
 
@@ -489,7 +492,7 @@
                     <strong>Production → Shipping</strong> is the shipping workspace. It lists sales orders that have
                     items finished and ready to ship (jobs at the <strong>Rewound</strong> stage), each with an
                     <strong>“N of M items ready”</strong> badge. Recording a shipment here captures packages and tracking
-                    and posts the shipment to the shipments list.
+                    and posts the shipment to the shipments list. UPS labels can be bought on the same page.
                 </p>
 
                 <h3 class="docs-subtitle">Prerequisites</h3>
@@ -497,7 +500,8 @@
                     <li>Jobs must progress through production to the <strong>Rewound</strong> (ready-to-ship) stage to appear here.</li>
                     <li>The <strong>ship-from address</strong> is taken from your company address in <a asp-page="/Settings/General">General settings</a> — set it before shipping.</li>
                     <li>The order's customer needs a <strong>shipping address</strong> for the ship-to selection.</li>
-                    <li>Each <a asp-page="/ShippingMethods/Index">shipping method</a> says whether it <strong>needs a shipment record</strong> — see below. FedEx does; Pickup, Delivery and Customer account don't.</li>
+                    <li>Each <a asp-page="/ShippingMethods/Index">shipping method</a> says whether it <strong>needs a shipment record</strong> — see below. Carrier methods (UPS, FedEx) do; Pickup, Delivery and Customer account don't.</li>
+                    <li>To <strong>buy UPS labels</strong>, an administrator saves the shop's Worldwide Express keys once in <a asp-page="/Settings/Carrier">Setup → Shipping carrier</a> — see <em>Setting up the shipping carrier</em> below. Without keys, Record shipment works as before: tracking numbers are typed in.</li>
                 </ul>
 
                 <h3 class="docs-subtitle">How a job gets marked shipped</h3>
@@ -508,18 +512,73 @@
                 </p>
                 <ul class="docs-list">
                     <li><strong>Methods that don't need a shipment record</strong> (pickup, local delivery, customer account): <strong>Mark shipped</strong> on the job page or the Jobs list records a shipment without packages by itself. Jobs on the same order marked shipped within 12 hours go on one shipment, so a local delivery is billed one fee, not one per line.</li>
-                    <li><strong>Methods that need a shipment record</strong> (FedEx), and <strong>orders with no shipping method</strong>: there is no Mark shipped. Production can still <strong>Record counts</strong>; the job waits at Ready to ship until shipping uses <strong>Record shipment</strong> with the packages, tracking numbers and carrier cost.</li>
+                    <li><strong>Methods that need a shipment record</strong> (carrier methods: UPS, FedEx), and <strong>orders with no shipping method</strong>: there is no Mark shipped. Production can still <strong>Record counts</strong>; the job waits at Ready to ship until shipping uses <strong>Record shipment</strong> with the packages, tracking numbers and carrier cost.</li>
                     <li>Setting a job to <strong>Shipped</strong> or <strong>Closed</strong> from the status dropdown follows the same rule.</li>
                 </ul>
 
                 <h3 class="docs-subtitle">Recording a shipment</h3>
+                <p>
+                    With carrier keys saved, Record shipment has two ways to work, picked at the top of the page:
+                    <strong>Buy a UPS label</strong> and <strong>I have the tracking numbers</strong>. Without keys
+                    only the second one is shown.
+                </p>
+
+                <h3 class="docs-subtitle">Buying a UPS label</h3>
                 <ol class="docs-list docs-list--ordered">
-                    <li>On the Shipping workspace, click <strong>Record shipment</strong> for an order.</li>
-                    <li>Set the <strong>ship date</strong>, <strong>carrier</strong> (FedEx, UPS, USPS, DHL, or Other), and <strong>ship-to</strong> address.</li>
-                    <li>Check the <strong>items</strong> to ship and the quantity for each. Partial shipments are allowed — ship what's ready and the rest of the order stays open.</li>
+                    <li>On the Shipping workspace, click <strong>Record shipment</strong> for an order and leave <strong>Buy a UPS label</strong> selected.</li>
+                    <li>Check the <strong>ship-to</strong> address, contact and phone, and tick <strong>A home, not a business</strong> when it is one (UPS adds a residential charge).</li>
+                    <li>Check the <strong>items</strong> to ship and the quantity for each. Partial shipments are allowed.</li>
+                    <li>Add a <strong>package</strong> per box: weight, and the size or one of the shop's usual boxes. A box without a size is rated on its weight alone, and UPS may bill more later.</li>
+                    <li>Click <strong>Get rates</strong>. Each UPS service is listed with the carrier cost, the arrival date and what the customer will be billed (carrier cost × the multiplier in General settings). Nothing is bought yet.</li>
+                    <li>Pick a service and click <strong>Buy label</strong>. The shipment is recorded with its tracking numbers and carrier cost, the jobs advance to <strong>Shipped</strong>, and the draft invoice takes the billed shipping. Nothing is typed.</li>
+                </ol>
+                <ul class="docs-list">
+                    <li>If the address, the ship date or a box is changed after the rates came back, or the rates are more than 30 minutes old, <strong>Buy label</strong> asks for <strong>Get rates again</strong> first. The price bought is always a price that was on screen.</li>
+                    <li><strong>Label not confirmed</strong> — if Worldwide Express doesn't answer the purchase, the shipment is kept with that badge and nothing counts as shipped. Open it and press <strong>Check with carrier</strong>: it either completes the purchase or clears it, and it never leaves a label that is paid for and not recorded. No other label can be bought for the order until it is settled.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Printing labels</h3>
+                <ul class="docs-list">
+                    <li>On the shipment page: <strong>Print 4 × 6</strong> and <strong>ZPL</strong> for each package (label printers), and <strong>Print on Letter paper</strong> for all packages at once (office printer). The shop's usual format is the highlighted button; it is set in Setup → Shipping carrier.</li>
+                    <li><strong>Printing again never buys again.</strong> LabelShop keeps the label files, so a jammed or lost label is reprinted from the shipment at no cost.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">I have the tracking numbers</h3>
+                <ol class="docs-list docs-list--ordered">
+                    <li>For a label made somewhere else (SpeedShip, another carrier's site), pick <strong>I have the tracking numbers</strong>.</li>
+                    <li>Set the <strong>ship date</strong>, <strong>carrier</strong> (UPS, FedEx, USPS, DHL, or Other), and <strong>ship-to</strong> address.</li>
+                    <li>Check the <strong>items</strong> to ship and the quantity for each.</li>
                     <li>Add one or more <strong>packages</strong> with weight, dimensions, declared value, <strong>tracking number</strong>, and cost. Every package needs a tracking number.</li>
                     <li>Click <strong>Record shipment</strong>. The shipment is created as <strong>In transit</strong>, the shipped jobs advance to <strong>Shipped</strong>, and the sales order rolls up to Shipped once all lines are out.</li>
                 </ol>
+
+                <h3 class="docs-subtitle">Voiding a shipment</h3>
+                <ul class="docs-list">
+                    <li>At the bottom of a shipment that is In transit, Shipping and administrators have <strong>Void label</strong> (a label bought in LabelShop) or <strong>Void shipment</strong> (one recorded by hand), with an optional reason.</li>
+                    <li><strong>Void label</strong> voids the label with Worldwide Express first, so it isn't billed, and only then takes the shipment back. Do it before the box leaves the building. If Worldwide Express doesn't confirm, nothing changes and the button can be pressed again.</li>
+                    <li><strong>Void shipment</strong> sends nothing to a carrier: a label made outside LabelShop is voided where it was made.</li>
+                    <li>Either way the shipment stays on file as <strong>Voided</strong> with its tracking numbers, who voided it, when and why. Its jobs go back to ready to ship (unless another shipment still carries them), the order goes back to In production if it is no longer fully shipped, and the draft invoice's shipping is worked out again.</li>
+                    <li><strong>Not while the invoice is out:</strong> if the order's invoice is in QuickBooks (or on its way there) or was sent to the customer, the page says which invoice and links to it. Void that invoice first.</li>
+                    <li>A voided label can't be printed again. Voided shipments are under <strong>Shipping → all shipments → History</strong> with the status filter set to Voided.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Tracking</h3>
+                <ul class="docs-list">
+                    <li>A shipment with a label bought in LabelShop shows a <strong>Tracking</strong> line, a status per package and a <strong>Tracking history</strong>. <strong>Check tracking now</strong> asks Worldwide Express on the spot. A label bought a minute ago may not be listed yet; try again in a few minutes.</li>
+                    <li>LabelShop also asks by itself every few hours until the boxes arrive, and turns the shipment <strong>Delivered</strong> once every package is. The switch is in Setup → Shipping carrier.</li>
+                    <li><strong>A label voided in SpeedShip</strong> instead of in LabelShop shows a red banner on the shipment: LabelShop doesn't take a shipment back by itself. Press <strong>Void label</strong> there to finish it.</li>
+                    <li>Shipments recorded with typed tracking numbers aren't tracked by LabelShop; use the carrier's own tracking page.</li>
+                </ul>
+
+                <h3 class="docs-subtitle">Setting up the shipping carrier (administrators)</h3>
+                <ul class="docs-list">
+                    <li><a asp-page="/Settings/Carrier">Setup → Shipping carrier</a> holds the shop's <strong>Worldwide Express</strong> keys (Client ID and Client secret). The secret is stored encrypted and is never shown again; only its last four characters are.</li>
+                    <li><strong>Keys are for</strong> says whether they are <strong>staging</strong> or <strong>production</strong> keys. Staging labels are samples: they print SAMPLE, can't ship and nothing is billed. Real labels need production keys.</li>
+                    <li><strong>Test connection</strong> signs in and rates a 1 lb box from the shop, which proves the whole path and shows the UPS account labels bill to.</li>
+                    <li><strong>Ship-from</strong>: the address is the company address in General settings; the contact and phone printed on labels are set here.</li>
+                    <li><strong>Defaults for Record shipment</strong>: the service selected first, the label file to print from, the shop's usual boxes, and the background tracking switch.</li>
+                    <li><strong>Carrier activity</strong> lists every call to Worldwide Express: who, what, the outcome and their call ID, which is what their support asks for.</li>
+                </ul>
 
                 <h3 class="docs-subtitle">Mark shipped / picked up (no packages)</h3>
                 <ul class="docs-list">
@@ -532,20 +591,20 @@
                 <h3 class="docs-subtitle">Shipping charges</h3>
                 <ul class="docs-list">
                     <li>The price on a shipping method is the <strong>quote</strong> used on estimates and orders. The invoice bills what each shipment works out to:</li>
-                    <li><strong>Pickup</strong> and <strong>Customer account</strong> (shipped on the customer's own carrier account): $0. <strong>Local delivery</strong>: the flat fee in <a asp-page="/Settings/General">General settings</a>. <strong>Carrier</strong> (FedEx, or no method): the shipment's carrier cost × the carrier multiplier in General settings.</li>
-                    <li>A carrier shipment recorded without a carrier cost holds its invoice on "Waiting on carrier cost" — enter the cost on the shipment's <strong>Shipping charges</strong> card when the bill arrives.</li>
+                    <li><strong>Pickup</strong> and <strong>Customer account</strong> (shipped on the customer's own carrier account): $0. <strong>Local delivery</strong>: the flat fee in <a asp-page="/Settings/General">General settings</a>. <strong>Carrier</strong> (UPS, FedEx, or no method): the shipment's carrier cost × the carrier multiplier in General settings.</li>
+                    <li>A label bought in LabelShop brings its carrier cost with it. A carrier shipment recorded by hand without a carrier cost holds its invoice on "Waiting on carrier cost" — enter the cost on the shipment's <strong>Shipping charges</strong> card when the bill arrives.</li>
                 </ul>
 
                 <h3 class="docs-subtitle">Short shipments and jobs marked shipped without a shipment</h3>
                 <ul class="docs-list">
                     <li><strong>Under-runs</strong> — if a line shipped short (950 of 1,000), open its shipment and use <strong>Mark order shipped</strong>; the order then counts as shipped.</li>
-                    <li><strong>Jobs marked shipped before a shipment was recorded</strong> (how Mark shipped worked before November 2026) show a warning on the job page: <strong>Record shipment now</strong> for hand-off methods, or <strong>Record shipment</strong> for FedEx orders, which now accepts those lines. The invoice's Waiting reason names the job.</li>
+                    <li><strong>Jobs marked shipped before a shipment was recorded</strong> (how Mark shipped worked before November 2026) show a warning on the job page: <strong>Record shipment now</strong> for hand-off methods, or <strong>Record shipment</strong> for carrier orders, which now accepts those lines. The invoice's Waiting reason names the job.</li>
                 </ul>
 
                 <h3 class="docs-subtitle">Usage</h3>
                 <ul class="docs-list">
                     <li>Recorded shipments appear under <a asp-page="/Shipments/Index">Shipping → all shipments</a> and on each shipment's detail page (ship-from/ship-to, carrier, packages, and tracking).</li>
-                    <li>Tracking numbers are <strong>entered manually</strong>; there is no live carrier label generation.</li>
+                    <li>Labels are bought and tracked for <strong>UPS through the shop's Worldwide Express account</strong>. Other carriers are recorded with typed tracking numbers.</li>
                 </ul>
 
                 <div class="docs-callout">
