@@ -45,10 +45,20 @@ public class CarrierTrackingTests : CarrierShipmentTestHost
             .ThenBy(e => e.ShipmentPackage.PackageNumber)
             .ToListAsync());
 
+    private int _bought;
+
     private async Task<Guid> BuyOneAsync(params LabelBoxInput[] boxes)
     {
         var order = await SeedOrderAsync(ShippingMethodType.Carrier, 500);
-        return (await BuyAsync(order, "GND", boxes.Length == 0 ? [Box(5m)] : boxes)).ShipmentId;
+        var shipmentId = (await BuyAsync(order, "GND", boxes.Length == 0 ? [Box(5m)] : boxes)).ShipmentId;
+
+        // The purchase is stamped by the machine's clock and the poller reads the test clock: put
+        // the purchase on the test clock too, or these tests pass or fail by the time of day. Each
+        // one a second after the one before, because the poller asks in the order they were bought.
+        var boughtAt = Now.AddSeconds(_bought++);
+        await InDbAsync(db => db.Shipments.Where(s => s.Id == shipmentId)
+            .ExecuteUpdateAsync(set => set.SetProperty(s => s.LabelPurchasedAt, boughtAt)));
+        return shipmentId;
     }
 
     [Fact]
