@@ -85,6 +85,11 @@ public sealed record LabelCheckResult(LabelCheckOutcome Outcome, string Message,
 
 public sealed record LabelFile(byte[] Content, string ContentType, string FileName);
 
+/// <summary>What asking the carrier about one shipment's boxes brought back.
+/// <see cref="VoidedAtCarrier"/>: the carrier says the label is void while the shipment still
+/// counts as shipped here (it was voided in the carrier's own portal).</summary>
+public sealed record TrackingRefreshResult(bool Found, bool Changed, bool Delivered, bool VoidedAtCarrier, string Message);
+
 /// <summary>Carrier labels for shipments: rates for an order's boxes, buying the label, settling a
 /// purchase the carrier never answered, and the label files. What a recorded shipment does to
 /// jobs, orders and invoices stays in <see cref="ShipmentService"/>; this class adds the carrier.</summary>
@@ -452,6 +457,176 @@ public class CarrierShipmentService(
         {
             logger.LogWarning(ex, "Stored labels of voided shipment {Shipment} could not be removed", shipmentId);
         }
+    }
+
+    /// <summary>A label this new is not asked about in the background: the carrier's tracking runs
+    /// behind its booking (a label bought seconds ago is "not found").</summary>
+    public static readonly TimeSpan TrackingSettleTime = TimeSpan.FromMinutes(30);
+
+    /// <summary>How long the background check leaves a shipment alone after asking about it.</summary>
+    public static readonly TimeSpan TrackingRecheckAfter = TimeSpan.FromHours(4);
+
+    /// <summary>A shipment that has not been delivered this many days after its ship date is no
+    /// longer asked about in the background.</summary>
+    public const int TrackingGiveUpAfterDays = 30;
+
+    /// <summary>Asks the carrier where the shipment's boxes are, now, for the person at the screen.</summary>
+    public Task<TrackingRefreshResult> RefreshTrackingAsync(Guid shipmentId, CancellationToken cancellationToken = default) =>
+        RefreshTrackingAsync(shipmentId, null, cancellationToken);
+
+    /// <summary>
+    /// Asks the carrier where the shipment's boxes are and keeps what is new: each box's status,
+    /// each event once (the carrier's word and time identify it), and Delivered on the shipment
+    /// once every box is. One call covers every box. With a <paramref name="background"/> caller
+    /// the answer is only written to the carrier log when it brought news.
+    /// </summary>
+    public async Task<TrackingRefreshResult> RefreshTrackingAsync(
+        Guid shipmentId,
+        CarrierCaller? background,
+        CancellationToken cancellationToken = default)
+    {
+        var shipment = await db.Shipments
+            .Include(s => s.Packages).ThenInclude(p => p.TrackingEvents)
+            .SingleOrDefaultAsync(s => s.Id == shipmentId, cancellationToken)
+            ?? throw new InvalidOperationException("Shipment not found.");
+        if (shipment.LabelState is not ShipmentLabelState.Purchased || shipment.CarrierEnvironment is null)
+        {
+            throw new InvalidOperationException(
+                "Tracking is checked for labels bought through LabelShop. For this shipment, use the carrier's own tracking page.");
+        }
+
+        var packages = shipment.Packages.OrderBy(p => p.PackageNumber).ToList();
+        var asked = packages.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.TrackingNumber))
+            ?? throw new InvalidOperationException("This shipment has no tracking number.");
+        var caller = background ?? gateway.CallerFor(shipment.SalesOrderId, shipment.Id);
+        var environment = shipment.CarrierEnvironment.Value;
+        var tracking = await gateway.TrackAsync(
+            environment, asked.TrackingNumber!, caller, cancellationToken, logSuccess: !caller.Automatic);
+        var now = Now();
+
+        if (!tracking.Found)
+        {
+            // Not news and not a verdict: the check is noted so the background doesn't ask again at once.
+            shipment.ApplyTracking(caller.ActorId, now);
+            await db.SaveChangesAsync(cancellationToken);
+            return new TrackingRefreshResult(
+                false, false, false, false,
+                "Worldwide Express doesn't list this label yet. Its tracking runs a little behind a new label: check again in a few minutes.");
+        }
+
+        var news = new List<string>();
+        foreach (var box in tracking.Boxes)
+        {
+            var package = packages.FirstOrDefault(p =>
+                    string.Equals(p.CarrierPackageId, box.CarrierPackageId, StringComparison.OrdinalIgnoreCase))
+                ?? (packages.Count == 1 && tracking.Boxes.Count == 1 ? packages[0] : null);
+            if (package is null)
+            {
+                continue;
+            }
+
+            foreach (var carrierEvent in box.Events)
+            {
+                var code = carrierEvent.Code.Trim().ToUpperInvariant();
+                if (package.TrackingEvents.Any(e => e.CarrierCode == code && e.EventAt == carrierEvent.OccurredAtUtc))
+                {
+                    continue;
+                }
+
+                var stored = TrackingEvent.Create(
+                    Guid.NewGuid(), package.Id, carrierEvent.OccurredAtUtc, CarrierTrackingCodes.Describe(carrierEvent.Code),
+                    null, null, caller.ActorId, now, code);
+                package.AddTrackingEvent(stored);
+                db.TrackingEvents.Add(stored);
+            }
+
+            if (package.SetTrackingStatus(box.Status))
+            {
+                var words = CarrierTrackingCodes.Describe(box.StatusCode);
+                news.Add(packages.Count == 1 ? words : $"package {package.PackageNumber} {words.ToLowerInvariant()}");
+            }
+        }
+
+        var delivered = shipment.ApplyTracking(caller.ActorId, now);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException?.Message.Contains("IX_TrackingEvent_ShipmentPackageId_CarrierCode_EventAt", StringComparison.Ordinal) == true)
+        {
+            // Another check stored the same events a moment ago (unique index): its work stands.
+            db.ChangeTracker.Clear();
+            return new TrackingRefreshResult(true, false, false, false, "Tracking was checked a moment ago. Nothing new.");
+        }
+
+        var voidedAtCarrier = shipment.Status is ShipmentStatus.InTransit
+            && packages.Any(p => p.TrackingStatus == CarrierTrackingStatus.Voided);
+        var changed = news.Count > 0 || delivered;
+        if (changed && caller.Automatic)
+        {
+            await gateway.NoteAsync(
+                CarrierOperations.Track, caller, environment,
+                $"{shipment.ShipmentNumber}: {(news.Count > 0 ? string.Join("; ", news) : "delivered")}", tracking.CorrelationId);
+        }
+
+        var message = voidedAtCarrier
+            ? "Worldwide Express reports this label as voided, but the shipment still counts as shipped here. If the label was voided in SpeedShip, void it here too so the order can ship again."
+            : delivered
+                ? (packages.Count == 1 ? "Delivered." : "Every package is delivered.")
+                : news.Count > 0
+                    ? $"Tracking updated: {string.Join("; ", news)}."
+                    : $"Nothing new: {string.Join("; ", packages.Select(p => packages.Count == 1 ? CarrierTrackingCodes.Describe(p.TrackingStatus ?? CarrierTrackingStatus.Unknown).ToLowerInvariant() : $"package {p.PackageNumber} {CarrierTrackingCodes.Describe(p.TrackingStatus ?? CarrierTrackingStatus.Unknown).ToLowerInvariant()}"))}.";
+        return new TrackingRefreshResult(true, changed, delivered, voidedAtCarrier, message);
+    }
+
+    /// <summary>
+    /// The shipments the background check should ask about now, oldest check first: real labels
+    /// (bought with production keys, which are the keys saved now) that are still in transit,
+    /// have had time to show up in the carrier's tracking, and were not asked about in the last
+    /// few hours. Empty when tracking is switched off or no keys are saved. Staging samples never
+    /// move, so they are never in it.
+    /// </summary>
+    public async Task<List<Guid>> GetTrackingDueAsync(int max, CancellationToken cancellationToken = default)
+    {
+        if (!await settings.TrackingEnabledAsync(cancellationToken))
+        {
+            return [];
+        }
+
+        var view = await settings.GetViewAsync(cancellationToken);
+        if (!view.IsReady || view.Environment != CarrierEnvironment.Production)
+        {
+            return [];
+        }
+
+        var now = Now();
+        var settled = now - TrackingSettleTime;
+        var recheck = now - TrackingRecheckAfter;
+        var oldest = DateOnly.FromDateTime(now).AddDays(-TrackingGiveUpAfterDays);
+        return await db.Shipments.AsNoTracking()
+            .Where(s => s.LabelState == ShipmentLabelState.Purchased
+                && s.Status == ShipmentStatus.InTransit
+                && s.CarrierEnvironment == CarrierEnvironment.Production
+                && s.LabelPurchasedAt <= settled
+                && s.ShipDate >= oldest
+                && (s.TrackingCheckedAt == null || s.TrackingCheckedAt <= recheck))
+            .OrderBy(s => s.TrackingCheckedAt != null)
+            .ThenBy(s => s.TrackingCheckedAt)
+            .ThenBy(s => s.LabelPurchasedAt)
+            .Select(s => s.Id)
+            .Take(Math.Clamp(max, 1, 200))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>Notes that a shipment was asked about although the carrier refused the question,
+    /// so the background check moves on to the others instead of asking about it every time.</summary>
+    public async Task NoteTrackingAskedAsync(Guid shipmentId, CancellationToken cancellationToken = default)
+    {
+        var now = Now();
+        await db.Shipments
+            .Where(s => s.Id == shipmentId)
+            .ExecuteUpdateAsync(set => set.SetProperty(s => s.TrackingCheckedAt, now), cancellationToken);
     }
 
     public static string UnconfirmedMessage(string shipmentNumber) =>

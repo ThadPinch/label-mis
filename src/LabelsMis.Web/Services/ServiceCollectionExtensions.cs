@@ -105,6 +105,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<TempPdfPurgeService>();
         services.AddHostedService<QuickBooksKeepAliveService>();
         services.AddHostedService<QuickBooksSendWorker>();
+        services.AddHostedService<ShipmentTrackingPoller>();
         return services;
     }
 

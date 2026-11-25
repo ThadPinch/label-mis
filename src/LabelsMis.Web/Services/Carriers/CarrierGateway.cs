@@ -98,8 +98,15 @@ public class CarrierGateway(
             outcome => (outcome == CarrierVoidOutcome.AlreadyVoided ? "Already voided at the carrier" : "Voided", null),
             cancellationToken);
 
+    /// <summary><paramref name="logSuccess"/> false is for background checks: an answer that
+    /// works is not logged here, and the caller files a line only when it brought news
+    /// (<see cref="NoteAsync"/>). A failure is always logged.</summary>
     public Task<CarrierTracking> TrackAsync(
-        CarrierEnvironment boughtIn, string trackingNumber, CarrierCaller caller, CancellationToken cancellationToken = default) =>
+        CarrierEnvironment boughtIn,
+        string trackingNumber,
+        CarrierCaller caller,
+        CancellationToken cancellationToken = default,
+        bool logSuccess = true) =>
         SendAsync(
             CarrierOperations.Track,
             caller,
@@ -111,7 +118,16 @@ public class CarrierGateway(
                     ? string.Join(", ", tracking.Boxes.Select(b => CarrierTrackingCodes.Describe(b.StatusCode)))
                     : "The carrier does not know this tracking number",
                 tracking.CorrelationId),
-            cancellationToken);
+            cancellationToken,
+            logSuccess);
+
+    /// <summary>Files a line in the carrier log for something learned from a call that was not
+    /// logged by itself.</summary>
+    public Task NoteAsync(
+        string operation, CarrierCaller caller, CarrierEnvironment environment, string detail, string? correlationId = null) =>
+        log.WriteAsync(new CarrierLogEntry(
+            operation, true, caller.ActorId, environment, caller.Automatic, caller.SalesOrderId, caller.ShipmentId,
+            detail, CorrelationId: correlationId));
 
     private async Task<T> SendAsync<T>(
         string operation,
@@ -120,7 +136,8 @@ public class CarrierGateway(
         string? detail,
         Func<CarrierCredentials, Task<T>> call,
         Func<T, (string? Outcome, string? CorrelationId)> describe,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool logSuccess = true)
     {
         var environment = boughtIn ?? CarrierEnvironment.Staging;
         var started = Stopwatch.GetTimestamp();
@@ -138,10 +155,14 @@ public class CarrierGateway(
 
             environment = credentials.Environment;
             var result = await call(credentials);
-            var (outcome, correlationId) = describe(result);
-            await log.WriteAsync(new CarrierLogEntry(
-                operation, true, caller.ActorId, environment, caller.Automatic, caller.SalesOrderId, caller.ShipmentId,
-                Join(detail, outcome), CorrelationId: correlationId, DurationMs: Elapsed(started)));
+            if (logSuccess)
+            {
+                var (outcome, correlationId) = describe(result);
+                await log.WriteAsync(new CarrierLogEntry(
+                    operation, true, caller.ActorId, environment, caller.Automatic, caller.SalesOrderId, caller.ShipmentId,
+                    Join(detail, outcome), CorrelationId: correlationId, DurationMs: Elapsed(started)));
+            }
+
             return result;
         }
         catch (CarrierException ex)

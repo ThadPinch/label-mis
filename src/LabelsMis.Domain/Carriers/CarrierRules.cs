@@ -31,8 +31,16 @@ public static class CarrierTrackingCodes
         };
     }
 
-    /// <summary>What the shipment page prints for an event.</summary>
+    /// <summary>What the shipment page prints for an event. A word LabelShop doesn't know is
+    /// shown as the carrier sent it.</summary>
     public static string Describe(string? code) => Parse(code) switch
+    {
+        CarrierTrackingStatus.Unknown => string.IsNullOrWhiteSpace(code) ? "Unknown" : code.Trim(),
+        var status => Describe(status)
+    };
+
+    /// <summary>What the shipment page prints for where a box stands.</summary>
+    public static string Describe(CarrierTrackingStatus status) => status switch
     {
         CarrierTrackingStatus.LabelCreated => "Label created",
         CarrierTrackingStatus.PendingPickup => "Waiting for pickup",
@@ -41,7 +49,7 @@ public static class CarrierTrackingCodes
         CarrierTrackingStatus.Delivered => "Delivered",
         CarrierTrackingStatus.Exception => "Delivery exception",
         CarrierTrackingStatus.Voided => "Voided at the carrier",
-        _ => string.IsNullOrWhiteSpace(code) ? "Unknown" : code.Trim()
+        _ => "Unknown"
     };
 }
 

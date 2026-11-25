@@ -11,6 +11,12 @@
 @{
     var s = Model.Detail.Shipment;
     var canPrint = s.LabelState == ShipmentLabelState.Purchased && Model.CanShip;
+    var hasTracking = s.Packages.Any(p => p.TrackingStatus is not null);
+    var trackingEvents = s.Packages
+        .SelectMany(p => p.TrackingEvents.Select(e => (Package: p, Event: e)))
+        .OrderByDescending(x => x.Event.EventAt)
+        .ThenBy(x => x.Package.PackageNumber)
+        .ToList();
     string PrintClass(CarrierLabelFormat format) => format == Model.DefaultLabelFormat ? "btn-primary" : "btn-outline-secondary";
 }
 
@@ -102,6 +108,15 @@
 }
 <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
 
+@if (Model.VoidedAtCarrier)
+{
+    <div class="alert alert-danger py-2 small" id="voided-at-carrier">
+        Worldwide Express reports this label as <strong>voided</strong>, but the shipment still counts as shipped here.
+        If the label was voided in SpeedShip, use <strong>Void label</strong> at the bottom of this page so the order can
+        ship again.
+    </div>
+}
+
 @if (s.LabelState == ShipmentLabelState.Unconfirmed)
 {
     <div class="card border-warning mb-3" id="label-unconfirmed">
@@ -167,6 +182,24 @@
                         Print on Letter paper (@(s.Packages.Count == 1 ? "1 label" : $"{s.Packages.Count} labels"))
                     </a>
                     <span class="text-muted">4 × 6 labels and ZPL files are per package, below. Printing again never buys again.</span>
+                </div>
+            }
+            @if (s.LabelState == ShipmentLabelState.Purchased)
+            {
+                <div class="d-flex flex-wrap align-items-center gap-2 mt-2" id="label-tracking">
+                    <span>
+                        Tracking: <span class="fw-semibold" id="tracking-summary">@Model.TrackingSummary</span>
+                        @if (s.TrackingCheckedAt is not null)
+                        {
+                            <span class="text-muted" id="tracking-checked">· asked @Model.Local(s.TrackingCheckedAt)</span>
+                        }
+                    </span>
+                    @if (Model.CanCheckTracking)
+                    {
+                        <form method="post" asp-page-handler="Track" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary" id="check-tracking">Check tracking now</button>
+                        </form>
+                    }
                 </div>
             }
         </div>
@@ -255,7 +288,12 @@
 <table class="table table-sm table-striped align-middle" id="shipment-packages">
     <thead>
         <tr>
-            <th>#</th><th>Weight</th><th>Size</th><th>Tracking</th><th>Cost</th>
+            <th>#</th><th>Weight</th><th>Size</th><th>Tracking</th>
+            @if (hasTracking)
+            {
+                <th>Status</th>
+            }
+            <th>Cost</th>
             @if (canPrint)
             {
                 <th>Label</th>
@@ -283,6 +321,10 @@
                     <text>@pkg.TrackingNumber</text>
                 }
             </td>
+            @if (hasTracking)
+            {
+                <td data-tracking-status="@pkg.TrackingStatus">@(pkg.TrackingStatus is { } boxStatus ? CarrierTrackingCodes.Describe(boxStatus) : "—")</td>
+            }
             <td>@pkg.ShippingCost.ToString("C2")</td>
             @if (canPrint)
             {
@@ -297,6 +339,24 @@
     }
     </tbody>
 </table>
+
+@if (trackingEvents.Count > 0)
+{
+    <h2 class="h6">Tracking history</h2>
+    <table class="table table-sm align-middle mb-3" id="tracking-events">
+        <thead><tr><th>When</th><th>Package</th><th>What</th></tr></thead>
+        <tbody>
+        @foreach (var (package, trackingEvent) in trackingEvents)
+        {
+            <tr>
+                <td class="text-nowrap">@Model.Local(trackingEvent.EventAt)</td>
+                <td>@package.PackageNumber</td>
+                <td>@trackingEvent.StatusDescription@(string.IsNullOrWhiteSpace(trackingEvent.Location) ? "" : $" · {trackingEvent.Location}")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
 
 @if (Model.CanVoid)
 {

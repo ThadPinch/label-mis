@@ -195,6 +195,11 @@
                         <div class="form-check">
                             <input type="checkbox" class="form-check-input" id="Defaults_TrackingEnabled" name="Defaults.TrackingEnabled" value="true" checked="@c.TrackingEnabled" />
                             <label class="form-check-label small" for="Defaults_TrackingEnabled">Check tracking in the background for labels bought here</label>
+                            <div class="form-text mt-0" id="carrier-tracking-help">
+                                Labels bought with production keys are asked about every few hours until they are delivered,
+                                and the shipment turns Delivered by itself. Staging samples never move, so they are only
+                                asked about when someone presses Check tracking on the shipment.
+                            </div>
                         </div>
                     </div>
                 </div>

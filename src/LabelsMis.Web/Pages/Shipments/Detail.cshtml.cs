@@ -45,6 +45,35 @@ public class DetailModel(
     /// <summary>A recorded shipment that hasn't been delivered can be taken back by the people who ship.</summary>
     public bool CanVoid => CanShip && Detail?.Shipment.Status is ShipmentStatus.InTransit;
 
+    /// <summary>The carrier is asked about labels bought here that are still on their way.</summary>
+    public bool CanCheckTracking =>
+        CanShip && Detail?.Shipment is { LabelState: ShipmentLabelState.Purchased, Status: ShipmentStatus.InTransit };
+
+    /// <summary>The carrier says the label is void while the shipment still counts as shipped here.</summary>
+    public bool VoidedAtCarrier =>
+        Detail?.Shipment is { Status: ShipmentStatus.InTransit } shipment
+        && shipment.Packages.Any(p => p.TrackingStatus == CarrierTrackingStatus.Voided);
+
+    /// <summary>Where the boxes stand, in a few words.</summary>
+    public string TrackingSummary
+    {
+        get
+        {
+            var boxes = Detail?.Shipment.Packages.OrderBy(p => p.PackageNumber).ToList() ?? [];
+            if (boxes.Count == 0 || boxes.All(b => b.TrackingStatus is null))
+            {
+                return "not checked yet";
+            }
+
+            var words = boxes
+                .Select(b => b.TrackingStatus is { } status ? CarrierTrackingCodes.Describe(status) : "Not checked yet")
+                .ToList();
+            return words.Distinct().Count() == 1
+                ? words[0]
+                : string.Join(", ", boxes.Select((b, i) => $"package {b.PackageNumber} {words[i].ToLowerInvariant()}"));
+        }
+    }
+
     /// <summary>Shipping staff record the carrier cost; accounting enters it from the WWEX bill.</summary>
     public bool CanEditCarrierCost =>
         User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Shipping) || User.IsInRole(AppRoles.Accounting);
@@ -142,6 +171,27 @@ public class DetailModel(
         try
         {
             TempData["ShipmentStatus"] = await carrierShipments.VoidAsync(Id, voidReason, cancellationToken);
+        }
+        catch (Exception ex) when (ex is CarrierException or CarrierNotConfiguredException or InvalidOperationException)
+        {
+            TempData["ShipmentWarning"] = ex.Message;
+        }
+
+        return RedirectToPage(new { id = Id });
+    }
+
+    /// <summary>Check tracking now: asks the carrier where the boxes are.</summary>
+    public async Task<IActionResult> OnPostTrackAsync(CancellationToken cancellationToken)
+    {
+        if (!CanShip) return Forbid();
+        try
+        {
+            var result = await carrierShipments.RefreshTrackingAsync(Id, cancellationToken);
+            if (!result.VoidedAtCarrier)
+            {
+                // A label voided at the carrier has its own banner on the page, for as long as it stands.
+                TempData[result.Found ? "ShipmentStatus" : "ShipmentWarning"] = result.Message;
+            }
         }
         catch (Exception ex) when (ex is CarrierException or CarrierNotConfiguredException or InvalidOperationException)
         {
